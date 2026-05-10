@@ -253,7 +253,7 @@ def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_
     assert 'aeo1_aroi_relays_count{state="configured_unchecked"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_checked_invalid"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_checked_valid"} 1' in content
-    # B7.2: aeo1_aroi_relays_count_by_version emits all 16 (4 state × 4
+    # B7.2: aeo1_aroi_relays_count_by_version emits all 16 (4 state x 4
     # ciissversion) cells with the correct counts.
     assert 'aeo1_aroi_relays_count_by_version{state="configured_checked_valid",ciissversion="2"} 1' in content
     assert 'aeo1_aroi_relays_count_by_version{state="configured_checked_invalid",ciissversion="2"} 1' in content

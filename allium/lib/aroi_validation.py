@@ -368,17 +368,22 @@ SHARED_ERROR_CATEGORIES = frozenset({
 })
 
 # v3-only error categories (no v2 analog because v2 has no family_ids /
-# secret_family_key concepts).
+# secret_family_key / ciissversion-aware concepts).
+#
+# Reviewer-flagged correction: dns_txt_missing / dns_content_mismatch /
+# uri_file_missing / uri_content_mismatch were previously listed here but
+# they fire for BOTH v2 (RSA-fingerprint proof file/TXT) and v3 (ed25519
+# happy-family proof file/TXT). Including them in v3-only caused
+# _build_error_rollup() to mis-bucket every v2 proof-file failure as
+# v3-only. Removed; those four categories now flow through
+# SHARED_ERROR_CATEGORIES handling and are counted correctly in both
+# v2 and v3 rollups.
 V3_ONLY_ERROR_CATEGORIES = frozenset({
-    'missing_family_ids',
-    'dns_txt_missing',
-    'dns_content_mismatch',
-    'uri_file_missing',
-    'uri_content_mismatch',
-    'wrong_proof_type_rsa',
-    'missing_proof_field',
-    'secret_key_leaked',
-    'ciissversion_unsupported',
+    'missing_family_ids',       # only v3: there are no family_ids in v2
+    'wrong_proof_type_rsa',     # only v3: a v3 contact accidentally declares uri-rsa
+    'missing_proof_field',      # only v3: v3 has the proof: field; v2 doesn't
+    'secret_key_leaked',        # only v3: v2 has no secret_family_key concept
+    'ciissversion_unsupported', # only v3: v2 doesn't carry ciissversion at all
 })
 
 
@@ -1059,6 +1064,18 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         metrics['relays_no_contact_percentage'] = _calc_percentage(metrics['relays_no_contact'], total_relays)
         metrics['relays_no_aroi_info_percentage'] = _calc_percentage(metrics['relays_no_aroi_info'], total_relays)
         metrics['relays_missing_two_aroi_percentage'] = _calc_percentage(metrics['relays_missing_two_aroi'], total_relays)
+        # Reviewer-flagged: previously these two newly-added counters
+        # were incremented in the early-return fallback branch but
+        # their *_percentage companions were never computed. Compute
+        # them here alongside the rest so downstream code (templates,
+        # network-health dashboard, prometheus) can rely on the
+        # _percentage field always being present.
+        metrics['relays_version_proof_mismatch_percentage'] = _calc_percentage(
+            metrics['relays_version_proof_mismatch'], total_relays
+        )
+        metrics['relays_v3_informational_percentage'] = _calc_percentage(
+            metrics['relays_v3_informational'], total_relays
+        )
         
         # Add operator-level metrics even without validation data
         if calculate_operator_metrics:

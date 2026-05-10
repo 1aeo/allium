@@ -951,10 +951,14 @@ class TestAROIValidationV3(unittest.TestCase):
 
     def test_schema_version_handshake_unknown(self):
         """A.1: schema version outside tested set logs a warning, doesn't crash."""
+        # Use the existing public reset helper instead of poking at
+        # the private _warned_schema_versions set directly.
+        # reset_aroi_warnings_log() already clears every per-warning
+        # dedupe set including _warned_schema_versions.
         from allium.lib.aroi_validation import (
-            check_schema_version, _warned_schema_versions
+            check_schema_version, reset_aroi_warnings_log,
         )
-        _warned_schema_versions.clear()  # Test isolation
+        reset_aroi_warnings_log()  # Test isolation
         warnings = []
 
         def capture(msg):

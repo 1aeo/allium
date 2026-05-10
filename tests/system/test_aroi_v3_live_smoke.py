@@ -18,8 +18,8 @@ Or with pytest, opt-in via the marker:
     pytest -m system tests/system/test_aroi_v3_live_smoke.py
 """
 import hashlib
+import os
 import sys
-from unittest.mock import patch
 
 import pytest
 
@@ -37,7 +37,13 @@ def test_aroi_v3_a10_smoke_against_live_apis():
     pytest.importorskip("requests")
     import requests
 
-    target_hash = "592c6ac73b6520aabeaed46dacbbb914"
+    # Allow operators running this against a different test contact
+    # without code changes (e.g. when 1aeo.com's hash rotates or for
+    # local debugging of a specific operator).
+    target_hash = os.getenv(
+        "ALLIUM_A10_SMOKE_HASH",
+        "592c6ac73b6520aabeaed46dacbbb914",
+    )
     ua = {"User-Agent": "Allium-V3-Smoke-Test/1.0"}
 
     aroi_data = requests.get(
@@ -47,15 +53,20 @@ def test_aroi_v3_a10_smoke_against_live_apis():
     onionoo_data = requests.get(
         "https://onionoo.torproject.org/details"
         "?fields=fingerprint,nickname,contact,country,first_seen",
-        timeout=60,
+        headers=ua, timeout=60,
     ).json()
 
     from allium.lib.relays import Relays
     from allium.lib.aroi_validation import get_contact_validation_status
 
-    with patch.object(Relays, "__init__", lambda x, **kwargs: None):
-        relays_obj = Relays()
-        parser = relays_obj._simple_aroi_parsing
+    # _simple_aroi_parsing is a pure parsing method that doesn't touch
+    # `self` (the regexes it uses are module-level constants). Bind it
+    # directly off the class instead of constructing a half-initialised
+    # Relays instance via patch.object("__init__", ...) — simpler and
+    # avoids relying on patch internals. We pass `None` for the unused
+    # self argument since the method's signature still requires it.
+    def parser(contact_str):
+        return Relays._simple_aroi_parsing(None, contact_str)
 
     matching = []
     for relay in onionoo_data["relays"]:
@@ -110,8 +121,8 @@ def test_aroi_v3_a10_smoke_against_live_apis():
 if __name__ == "__main__":
     # Allow direct invocation outside pytest. Need to add the repo
     # root to sys.path so the `allium.lib.*` imports resolve.
-    import os, sys as _sys
-    _sys.path.insert(
+    # Module-level `os` and `sys` imports are reused here.
+    sys.path.insert(
         0,
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     )

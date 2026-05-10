@@ -25,7 +25,7 @@ class TestV3TierLeaderboardPropagation:
         # _classify_v3_tier_local is the imported alias used in aroileaders.
         assert _classify_v3_tier_local is classify_v3_tier
 
-    @pytest.mark.parametrize("v3,total,expected_tier", [
+    @pytest.mark.parametrize(("v3", "total", "expected_tier"), [
         (0, 50, 'none'),
         (1, 50, 'explorer'),     # 2% — 1 relay, < 25%
         (12, 50, 'explorer'),    # 24%

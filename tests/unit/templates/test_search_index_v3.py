@@ -103,15 +103,15 @@ class TestSearchIndexV3Fields(unittest.TestCase):
             'sorted': {'family': {}},
             'relays_published': '2026-05-05 00:00:00',
         }
-        with tempfile.NamedTemporaryFile(suffix='.json', mode='w', delete=False) as f:
-            output_path = f.name
-        try:
+        # TemporaryDirectory is auto-cleaned on context exit — no
+        # explicit os.unlink needed (cleaner than NamedTemporaryFile +
+        # finally + os.unlink).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, 'index.json')
             generate_search_index(relays_data, output_path)
             with open(output_path) as f:
                 index = json.load(f)
             self.assertEqual(index['meta']['version'], '1.6')
-        finally:
-            os.unlink(output_path)
 
     def test_lookups_v3_thresholds_present(self):
         """B5.1: lookups block exposes v3_thresholds map."""
@@ -120,9 +120,8 @@ class TestSearchIndexV3Fields(unittest.TestCase):
             'sorted': {'family': {}},
             'relays_published': '2026-05-05 00:00:00',
         }
-        with tempfile.NamedTemporaryFile(suffix='.json', mode='w', delete=False) as f:
-            output_path = f.name
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, 'index.json')
             generate_search_index(relays_data, output_path)
             with open(output_path) as f:
                 index = json.load(f)
@@ -136,8 +135,6 @@ class TestSearchIndexV3Fields(unittest.TestCase):
                 'mostly': 75,
                 'complete': 100,
             })
-        finally:
-            os.unlink(output_path)
 
 
 if __name__ == '__main__':

@@ -885,3 +885,100 @@ class TestCiissversionNumericSort:
         from allium.lib.api_diagnostics import _format_ciissversion_rows
         rows = _format_ciissversion_rows({'2': 1, 'none': 1, 'unknown': 1})
         assert [r['key'] for r in rows] == ['2', 'none', 'unknown']
+
+
+# ============================================================================
+# Reviewer follow-up #2: 17 hardening fixes
+# ============================================================================
+
+
+class TestV3OnlyCategoriesCorrection:
+    """F1: V3_ONLY_ERROR_CATEGORIES used to wrongly include
+    proof-file/TXT-related categories. _build_error_rollup() then
+    treated every v2 URI-RSA / DNS-RSA failure as v3-only."""
+
+    def test_uri_content_mismatch_not_v3_only(self):
+        from allium.lib.aroi_validation import V3_ONLY_ERROR_CATEGORIES
+        # These four MUST NOT be in V3_ONLY — they fire for both v2 and v3.
+        for cat in (
+            'uri_content_mismatch', 'uri_file_missing',
+            'dns_content_mismatch', 'dns_txt_missing',
+        ):
+            assert cat not in V3_ONLY_ERROR_CATEGORIES
+
+    def test_v2_uri_content_mismatch_routes_to_v2_bucket(self):
+        from allium.lib.aroi_validation import _build_error_rollup
+        results = [
+            {'fingerprint': 'A', 'valid': False, 'ciissversion': '2',
+             'error_category': 'uri_content_mismatch'},
+            {'fingerprint': 'B', 'valid': False, 'ciissversion': '3',
+             'error_category': 'uri_content_mismatch'},
+        ]
+        shared, v2_only, v3_only = _build_error_rollup(results)
+        # v2 relay's failure must appear in v2_only — not silently
+        # misclassified as v3-only by the legacy bug.
+        assert any('uri_content_mismatch' == row[0] for row in v2_only)
+        assert any('uri_content_mismatch' == row[0] for row in v3_only)
+
+
+class TestContactVariantSetCleanup:
+    """F2: _contact_variant_set is a Python set and would break
+    json.dumps if it survived past categorisation. It must be removed
+    by the calculate_contact_derived_data finalisation pass."""
+
+    def test_set_removed_after_finalisation(self):
+        import json
+        from allium.lib.categorization import (
+            sort_relay, calculate_contact_derived_data,
+        )
+        rs = MagicMock()
+        rs.json = {'relays': [], 'sorted': {'contact': {}}}
+        base = {
+            'fingerprint': 'F' * 40, 'flags': [], 'observed_bandwidth': 100,
+            'consensus_weight': 1, 'consensus_weight_fraction': 0.0,
+            'guard_consensus_weight_fraction': 0.0,
+            'middle_consensus_weight_fraction': 0.0,
+            'exit_consensus_weight_fraction': 0.0,
+            'first_seen': '2025-01-01 00:00:00', 'country': 'US',
+            'platform': 'Linux', 'as': '111', 'as_name': '',
+            'effective_family': [], 'aroi_domain': 'x.com',
+        }
+        for raw in ('A', 'B', 'A'):
+            r = dict(base, contact=raw, contact_md5='h1')
+            rs.json['relays'].append(r)
+            sort_relay(rs, r, len(rs.json['relays']) - 1, 'contact', 'h1', 1, 0.0)
+        rs.json['sorted']['contact']['h1']['bandwidth'] = 300
+        calculate_contact_derived_data(rs)
+
+        cd = rs.json['sorted']['contact']['h1']
+        # Count survives.
+        assert cd['contact_variant_count'] == 2
+        # Live set is gone.
+        assert '_contact_variant_set' not in cd
+        # And the dict is JSON-serialisable end-to-end.
+        json.dumps(cd, default=str)
+
+
+class TestEarlyReturnPercentageFields:
+    """F19: the early-return fallback branch in
+    calculate_aroi_validation_metrics increments
+    relays_version_proof_mismatch / relays_v3_informational counters
+    but used to forget to compute their _percentage companions —
+    leaving downstream templates with KeyError or None."""
+
+    def test_fallback_branch_populates_new_percentages(self):
+        from allium.lib.aroi_validation import calculate_aroi_validation_metrics
+        m = calculate_aroi_validation_metrics(
+            [{
+                'fingerprint': 'A' * 40,
+                'contact': 'ciissversion:2 proof:uri-rsa url:foo.com',
+                'aroi_domain': 'foo.com', 'aroi_version': '2',
+                'aroi_proof_type': 'uri-rsa', 'aroi_configured': True,
+            }],
+            None,  # validation_data None -> early-return fallback
+        )
+        # Both new percentage keys MUST be present (not missing).
+        assert 'relays_version_proof_mismatch_percentage' in m
+        assert 'relays_v3_informational_percentage' in m
+        assert isinstance(m['relays_version_proof_mismatch_percentage'], float)
+        assert isinstance(m['relays_v3_informational_percentage'], float)

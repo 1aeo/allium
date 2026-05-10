@@ -293,7 +293,14 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
             # _log_aroi_build_summary can stay logger-agnostic.
             _logger_obj = getattr(relay_set, 'progress_logger', None)
             if _logger_obj is not None and hasattr(_logger_obj, 'log'):
-                log_callable = lambda m: _logger_obj.log(m, increment_step=False)
+                # Wrap the ProgressLogger.log(msg, increment_step=False)
+                # call in a named function instead of a lambda — Ruff E731
+                # flags the lambda assignment, and a def is just as
+                # readable while playing nicer with traceback output if
+                # the wrapped call ever raises.
+                def _progress_log(m, _logger=_logger_obj):
+                    _logger.log(m, increment_step=False)
+                log_callable = _progress_log
             elif relay_set.progress:
                 log_callable = print
             else:

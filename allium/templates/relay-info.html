@@ -132,22 +132,12 @@
     {%- endif -%}
     | 
 {% endif -%}
-{# B3.1 (re-opened): explicit one-line pending-Onionoo note when this
-   relay's contact declared ciissversion:3 but family_ids hasn't
-   propagated yet. Plan called for a "same explicit ⏳ note as on
-   the contact page" — operators landing on a v3 relay page with
-   no validation should immediately understand it's transient. #}
-{%- if has_aroi and contact_validation_status -%}
-    {%- set _fp = relay['fingerprint'] -%}
-    {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
-    {%- if _fp in _pend_fps %}
-<div style="margin: 4px 0 8px 0; padding: 6px 10px; background-color: #d1ecf1; border-left: 3px dotted #17a2b8; font-size: 11px; color: #0c5460;">
-    ⏳ <strong>Pending Onionoo refresh:</strong> this relay declared <code>ciissversion:3</code> but
-    Onionoo hasn't picked up <code>family_ids</code> yet. Typically resolves within 24h after
-    restarting Tor with the happy-family directive. No action needed unless still pending after 24h.
-</div>
-    {%- endif %}
-{%- endif %}
+{# Pending-Onionoo callout previously lived here, INSIDE the <h4>
+   (open at line 49, close at line 170). Browsers auto-close the
+   <h4> before a block-level <div>, which silently re-parents the
+   div and breaks the planned layout. Moved to right after the
+   </h4> below — same condition, same content, just at a valid
+   point in the document tree. #}
 {% if relay['effective_family']|length > 1 -%}
     <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/" title="View family members">Family: {{ relay['effective_family']|length }} relays</a>
 {% else -%}
@@ -168,6 +158,26 @@ Country: unknown
 {% endif -%} | 
 <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{ relay['platform']|escape }}</a>
 </h4>
+
+{# B3.1 (re-opened): explicit one-line pending-Onionoo note when this
+   relay's contact declared ciissversion:3 but family_ids hasn't
+   propagated yet. Plan called for a "same explicit ⏳ note as on
+   the contact page" — operators landing on a v3 relay page with
+   no validation should immediately understand it's transient.
+   Reviewer-flagged: previously rendered INSIDE the <h4>, which is
+   invalid HTML (block-level <div> in heading) and got auto-reparented
+   by browsers. Now placed after </h4>. #}
+{%- if has_aroi and contact_validation_status -%}
+    {%- set _fp = relay['fingerprint'] -%}
+    {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
+    {%- if _fp in _pend_fps %}
+<div style="margin: 4px 0 8px 0; padding: 6px 10px; background-color: #d1ecf1; border-left: 3px dotted #17a2b8; font-size: 11px; color: #0c5460;">
+    ⏳ <strong>Pending Onionoo refresh:</strong> this relay declared <code>ciissversion:3</code> but
+    Onionoo hasn't picked up <code>family_ids</code> yet. Typically resolves within 24h after
+    restarting Tor with the happy-family directive. No action needed unless still pending after 24h.
+</div>
+    {%- endif %}
+{%- endif %}
 
 {# ============== HEALTH STATUS SUMMARY (Enhanced) ============== #}
 {# Displays 14 metrics in 8 cells using responsive 2-column layout #}

@@ -75,7 +75,13 @@
                     {%- else %}
                     <li><strong>ContactInfo variants:</strong>
                         {{ _variant_count }} distinct ContactInfo strings across this operator's
-                        {{ contact_validation_status.validation_summary.total_relays if contact_validation_status else 'all' }} relays
+                        {# Reviewer-flagged grammar fix: when
+                           contact_validation_status is falsy, the prior
+                           literal 'all' produced "across this operator's
+                           all relays" which is ungrammatical. Fall back
+                           to the count derived from the variants
+                           collection itself instead. #}
+                        {{ contact_validation_status.validation_summary.total_relays if contact_validation_status else (_variants|sum(attribute='count')) }} relays
                         (grouped by AROI domain).
                         <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 4px;">
                         {%- for v in _variants %}

@@ -61,9 +61,17 @@ groups:
       # ----------------------------------------------------------------
       # B7.2: per-version alerts (CIISS v2 + v3 dual-spec)
       # Sourced from aeo1_aroi_relays_count_by_version (B7.2 metric) +
-      # the aeo1_aroi_v3_*_derived recording rules (optional).
+      # the aeo1_aroi_v3_*_derived recording rules.
       # ----------------------------------------------------------------
 
+      # IMPORTANT: AroiV3SuccessRateLow depends on the recording rule
+      # `aeo1_aroi_v3_success_ratio_derived` defined in
+      # docs/prometheus/recording_rules.yml. If you have NOT installed
+      # recording_rules.yml alongside this file, the alert query will
+      # never match anything (silent no-op) — same precedent as
+      # AroiCheckedCoverageLow above. Either install recording_rules.yml
+      # before relying on this alert, or comment it out until you do.
+      #
       # v3 success rate dropped sharply — possible upstream regression
       # (validator broke a rule, schema bumped, or operators
       # mass-mismigrated). Threshold deliberately permissive to avoid

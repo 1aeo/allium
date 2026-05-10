@@ -654,9 +654,11 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         td_sums['5_years'] += td.get('5_years', 0)
 
     # Sort variants by count desc, then raw string for stable output.
+    # Lambda parameter is renamed from 'v' to 'variant' to avoid shadowing
+    # the outer 'v' (contact_hash) function parameter.
     contact_variants = sorted(
         variants.values(),
-        key=lambda v: (-v['count'], v['raw']),
+        key=lambda variant: (-variant['count'], variant['raw']),
     )
     display_data['contact_variants'] = contact_variants
     display_data['contact_variant_count'] = len(contact_variants)

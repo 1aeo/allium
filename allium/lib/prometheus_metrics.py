@@ -170,7 +170,7 @@ def _build_aroi_relay_rows(relays: List[dict], fp_to_family: Callable[[str], str
     state_counts = {state: 0 for state in _AROI_STATE_VALUES}
     configured_count = 0
     # B7.1: per-version state count (state, ciissversion) -> count.
-    # Cardinality bounded: |state| × |ciissversion| ≤ 4 × 5 = 20 series.
+    # Cardinality bounded: |state| x |ciissversion| <= 4 x 5 = 20 series.
     version_state_counts: Dict[tuple, int] = {}
 
     for relay in sorted(relays, key=lambda r: r.get("fingerprint", "")):
@@ -546,7 +546,7 @@ def _write_aroi_section(lines: _LineAppender, relay_set,
 
     # B7.2: New aggregate metric — per-version split of state counts so
     # dashboards can chart migration progress without scraping label
-    # cardinality. Cardinality bound: 4 states × 5 ciissversion values
+    # cardinality. Cardinality bound: 4 states x 5 ciissversion values
     # = 20 series (plus the 4 we already have, = 24 max).
     _emit_help_type(lines, "aeo1_aroi_relays_count_by_version",
                     "Relay count by AROI state and declared ciissversion. "

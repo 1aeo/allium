@@ -355,10 +355,26 @@
    error_category counts; does not duplicate the network-wide rollup
    that B2.4 will surface on the dashboard.
    ============================================================================= #}
-{%- set error_relays = (contact_validation_status.unauthorized_relays or [])
+{# Dedupe by fingerprint: pending_onionoo_relays is intentionally
+   dual-bucketed into misconfigured_relays for cascade purposes, and a
+   secret-key-leaked relay also lands in misconfigured. Naïvely
+   concatenating those four lists therefore double- or triple-counts
+   the same relay in this rollup table and inflates the
+   "N affected" header. Fix: collect unique relay objects keyed by
+   fingerprint before counting. #}
+{%- set _all_error_relays = (contact_validation_status.unauthorized_relays or [])
     + (contact_validation_status.misconfigured_relays or [])
     + (contact_validation_status.pending_onionoo_relays or [])
     + (contact_validation_status.security_incident_relays or []) -%}
+{%- set _seen_fps = namespace(s=[]) -%}
+{%- set error_relays = [] -%}
+{%- for r in _all_error_relays -%}
+    {%- set _fp = r.fingerprint -%}
+    {%- if _fp and _fp not in _seen_fps.s -%}
+        {%- set _ = _seen_fps.s.append(_fp) -%}
+        {%- set _ = error_relays.append(r) -%}
+    {%- endif -%}
+{%- endfor -%}
 {%- if error_relays|length >= 3 -%}
     {%- set ns = namespace(rollup={}) -%}
     {%- for r in error_relays -%}

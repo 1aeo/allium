@@ -379,7 +379,7 @@ Network Health Dashboard
                 </div>
                 <!-- B2.1: v2 (RSA-fingerprint) proof types -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at <fingerprint>.<domain>.{% if relays.json.network_health.dns_error_top5 %}
+                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at &lt;fingerprint&gt;.&lt;domain&gt;.{% if relays.json.network_health.dns_error_top5 %}
 &#10;&#10;Top DNS failure reasons:{% for error, count in relays.json.network_health.dns_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>
@@ -405,7 +405,7 @@ Network Health Dashboard
                 {% set _v3_cats = relays.json.network_health.v3_failure_categories or {} %}
                 {% set _v3_top = _v3_cats.items()|sort(attribute=1, reverse=true)|list %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-FamilyID (v3): {{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_total) }} relays validated. CIISS v3 — DNS TXT at we-run-this-tor-ed25519-family-id.<domain>. Single shared family-ID proof for all relays.{% if _v3_top %}
+                    <div class="metric-item" title="DNS-FamilyID (v3): {{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_total) }} relays validated. CIISS v3 — DNS TXT at we-run-this-tor-ed25519-family-id.&lt;domain&gt;. Single shared family-ID proof for all relays.{% if _v3_top %}
 &#10;&#10;Top v3 failure categories (network-wide):{% for cat, count in _v3_top[:5] %}{% if count > 0 %}
 &#10;• {{ cat }} — {{ count }} relays{% endif %}{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_familyid_ed25519_success_rate) }})</span>
