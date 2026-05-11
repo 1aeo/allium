@@ -23,46 +23,156 @@ from .bandwidth_utils import (
 )
 
 
+def _build_contact_rankings_index(relay_set):
+    """Build a contact_hash -> rankings list dict in a SINGLE pass over the
+    leaderboard categories.
+
+    Optimization (item A from feedback): the legacy
+    generate_contact_rankings(contact_hash, relay_set) scans every
+    category × every top-25 entry per contact, costing
+    O(N_contacts * N_categories * 25). For ~3,000 contacts × ~14
+    categories that's ~1M iterations of category scanning per build,
+    even though the underlying leaderboard data only changes once
+    when the leaderboards are computed.
+
+    This helper inverts the iteration: ONE pass over (category, top-25
+    entries) builds the full {contact_hash: [ranking dict, ...]} map.
+    Each contact's rankings list is already pre-sorted by rank ascending
+    because we visit ranks 1..25 in order.
+
+    Returns:
+        dict: contact_hash -> list of ranking dicts (same shape as the
+              legacy output)
+    """
+    if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
+        return {}
+
+    leaderboards = relay_set.json['aroi_leaderboards'].get('leaderboards', {})
+    # Cache get_leaderboard_category_info() results — same category info
+    # is reused across all contacts that win that category.
+    _category_info_cache = {}
+
+    def _category_info(category):
+        info = _category_info_cache.get(category)
+        if info is None:
+            info = get_leaderboard_category_info(category)
+            _category_info_cache[category] = info
+        return info
+
+    index = {}
+    for category, leaders in leaderboards.items():
+        # Bind once per category to avoid repeated dict lookups inside
+        # the inner loop.
+        info = _category_info(category)
+        category_name = info['name']
+        emoji = info['emoji']
+        title = info['title']
+        link = f"aroi-leaderboards.html#{category}"
+
+        # P2 (legacy-parity dedupe): the legacy
+        # generate_contact_rankings() called `break` after the first
+        # match per (contact, category) so a malformed leaderboard
+        # repeating the same contact within one category never
+        # produced duplicate rankings. Mirror that contract here with
+        # a per-category seen-set; the FIRST (lowest rank) occurrence
+        # wins because we visit in rank-ascending order.
+        seen_in_category = set()
+
+        for rank, entry in enumerate(leaders, 1):
+            if rank > 25:
+                # Same cap as the legacy implementation. Stop early.
+                break
+            # Entry can be a dict (formatted) or a (contact_hash, data)
+            # tuple — handle both shapes.
+            if isinstance(entry, dict):
+                leader_contact = entry.get('contact_hash')
+            else:
+                leader_contact = entry[0] if entry else None
+            if not leader_contact:
+                continue
+            if leader_contact in seen_in_category:
+                # Legacy `break`-after-first-match equivalent for the
+                # corner case where one contact appears multiple times
+                # in the SAME category's top-25.
+                continue
+            seen_in_category.add(leader_contact)
+
+            ranking = {
+                'category': category,
+                'category_name': category_name,
+                'rank': rank,
+                'emoji': emoji,
+                'title': title,
+                'statement': f"#{rank} {category_name}",
+                'link': link,
+            }
+            bucket = index.setdefault(leader_contact, [])
+            bucket.append(ranking)
+
+    # Each contact's bucket is sorted by category-iteration order; the
+    # legacy implementation sorted by rank ascending. Apply the same
+    # final sort to preserve identical output for downstream templates.
+    for rankings in index.values():
+        rankings.sort(key=lambda x: x['rank'])
+    return index
+
+
+def _get_contact_rankings_index(relay_set):
+    """Lazy-build and cache the rankings index on the relay_set.
+
+    Cache key is a deterministic monotonic counter
+    (relay_set.leaderboards_version) instead of id(leaderboards_obj).
+    Reviewer-flagged: id()-based keys can theoretically collide if an
+    old leaderboards dict is GC'd and a new one happens to land at the
+    same memory address. Switching to a monotonic counter makes
+    invalidation explicit: every code path that rebuilds or replaces
+    aroi_leaderboards (the only call site is _generate_aroi_leaderboards
+    in relays.py) bumps relay_set.leaderboards_version, which guarantees
+    the cached index is rebuilt from the fresh leaderboards.
+    """
+    if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
+        cache_key = 0
+    else:
+        cache_key = getattr(relay_set, 'leaderboards_version', 0)
+
+    cached = getattr(relay_set, '_contact_rankings_index_cache', None)
+    if cached is not None and cached.get('key') == cache_key:
+        return cached['index']
+
+    index = _build_contact_rankings_index(relay_set)
+    relay_set._contact_rankings_index_cache = {
+        'key': cache_key,
+        'index': index,
+    }
+    return index
+
+
 def generate_contact_rankings(contact_hash, relay_set):
     """
     Generate AROI leaderboard rankings for a specific contact hash.
     Returns list of ranking achievements for display on contact pages.
+
+    Uses the precomputed contact_hash -> rankings index from
+    _get_contact_rankings_index. The first call per build does the
+    full O(N_categories * 25) walk; subsequent calls are O(1) per
+    contact (dict lookup + list/dict copy).
+
+    Mutation-safety contract (P1):
+      Callers receive a fresh list AND fresh dict copies of each
+      ranking, so neither list-level nor dict-level mutation can
+      leak back into the cached index. Cost: ~14 small dict copies
+      per call worst-case (one per ranking); cheap relative to the
+      template render that consumes them.
     """
     if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
         return []
-    
-    leaderboards = relay_set.json['aroi_leaderboards'].get('leaderboards', {})
-    rankings = []
-    
-    # Check each leaderboard category for this contact
-    for category, leaders in leaderboards.items():
-        for rank, entry in enumerate(leaders, 1):
-            # Handle both formatted entries (dict) and raw tuples
-            if isinstance(entry, dict):
-                leader_contact = entry.get('contact_hash')
-            else:
-                # Handle tuple format (leader_contact, data)
-                leader_contact, data = entry
-            
-            if leader_contact == contact_hash:
-                # Only show top 25 rankings
-                if rank <= 25:
-                    category_info = get_leaderboard_category_info(category)
-                    rankings.append({
-                        'category': category,
-                        'category_name': category_info['name'],
-                        'rank': rank,
-                        'emoji': category_info['emoji'],
-                        'title': category_info['title'],
-                        'statement': f"#{rank} {category_info['name']}",
-                        'link': f"aroi-leaderboards.html#{category}"
-                    })
-                break
-    
-    # Sort rankings by rank (1st place first, 25th place last)
-    rankings.sort(key=lambda x: x['rank'])
-    
-    return rankings
+    index = _get_contact_rankings_index(relay_set)
+    cached = index.get(contact_hash, [])
+    # P1: shallow-copy each ranking dict so dict-level mutation
+    # (e.g. callers adding a 'highlighted: True' flag) doesn't
+    # reach the cached index. Each ranking is a flat dict of
+    # primitives — shallow copy is sufficient (no nested objects).
+    return [dict(r) for r in cached]
 
 def get_leaderboard_category_info(category):
     """
@@ -512,20 +622,61 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         dict: Contact-specific display data for template rendering
     """
     display_data = {}
-    
-    # 1. Bandwidth breakdown by role
-    display_data['bandwidth_breakdown'] = _format_bandwidth_breakdown(i, bandwidth_unit, relay_set)
-    
-    # 2. Consensus weight breakdown by role
-    display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
-    
-    # 2b. Total data transferred (single-pass period sums + best-period selection)
-    from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period
+
+    # 0+2b. Single-pass over members[] for BOTH:
+    #   - source-faithful ContactInfo variants (Phase 1) — distinct raw
+    #     contact strings + per-string relay count + parsed version/proof
+    #   - total_data sums per period (1mo / 6mo / 1y / 5y)
+    #
+    # Optimization (item B): merging the two former passes eliminates a
+    # second iteration over every relay in the operator. For ~3,000
+    # operators × an average of ~3 relays each, that's ~9k fewer dict
+    # lookups; for the largest operators (1aeo.com with 952 relays)
+    # the saving is ~952 dict accesses per page render.
+    variants = {}
     td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
     for r in members:
+        # Variant collection
+        raw = r.get('contact', '') or ''
+        v_entry = variants.get(raw)
+        if v_entry is None:
+            variants[raw] = {
+                'raw': raw,
+                'count': 1,
+                'aroi_version': r.get('aroi_version'),
+                'aroi_proof_type': r.get('aroi_proof_type'),
+                'aroi_domain': r.get('aroi_domain') or 'none',
+                'has_complete_aroi': bool(r.get('aroi_configured')),
+            }
+        else:
+            v_entry['count'] += 1
+
+        # Total-data period sums (folded in from the former second loop)
         td = r.get('total_data', {})
-        for p in td_sums:
-            td_sums[p] += td.get(p, 0)
+        td_sums['1_month'] += td.get('1_month', 0)
+        td_sums['6_months'] += td.get('6_months', 0)
+        td_sums['1_year'] += td.get('1_year', 0)
+        td_sums['5_years'] += td.get('5_years', 0)
+
+    # Sort variants by count desc, then raw string for stable output.
+    # Lambda parameter is renamed from 'v' to 'variant' to avoid shadowing
+    # the outer 'v' (contact_hash) function parameter.
+    contact_variants = sorted(
+        variants.values(),
+        key=lambda variant: (-variant['count'], variant['raw']),
+    )
+    display_data['contact_variants'] = contact_variants
+    display_data['contact_variant_count'] = len(contact_variants)
+
+    # 1. Bandwidth breakdown by role
+    display_data['bandwidth_breakdown'] = _format_bandwidth_breakdown(i, bandwidth_unit, relay_set)
+
+    # 2. Consensus weight breakdown by role
+    display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
+
+    # 2b. Total data transferred — best-period selection from the sums
+    # we already accumulated in the merged pass above.
+    from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period
     td_total, td_period = pick_best_period(td_sums)
     display_data['total_data_formatted'] = format_data_volume_with_unit(td_total)
     net_by_period = relay_set.json.get('network_health', {}).get('network_total_data_by_period', {}) if hasattr(relay_set, 'json') else {}

@@ -241,14 +241,26 @@ def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_
         tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
     )
     assert stats["aroi_relays"] == 3
-    assert 'aeo1_aroi_relay_state{fingerprint="AAAA",familyid="",state="configured_checked_valid"} 1' in content
-    assert 'aeo1_aroi_relay_state{fingerprint="BBBB",familyid="",state="configured_checked_invalid"} 1' in content
-    assert 'aeo1_aroi_relay_state{fingerprint="CCCC",familyid="",state="configured_unchecked"} 1' in content
-    assert 'aeo1_aroi_relay_state{fingerprint="DDDD",familyid="",state="not_configured"} 1' in content
+    # B7.1: aeo1_aroi_relay_state labelset extended with ciissversion +
+    # proof_type_family. All test fixture relays declare ciissversion:2
+    # with rsa proof types via the contact string.
+    assert 'aeo1_aroi_relay_state{fingerprint="AAAA",familyid="",state="configured_checked_valid",ciissversion="2",proof_type_family="rsa"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="BBBB",familyid="",state="configured_checked_invalid",ciissversion="2",proof_type_family="rsa"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="CCCC",familyid="",state="configured_unchecked",ciissversion="2",proof_type_family="rsa"} 1' in content
+    # DDDD has plain contact (no ciissversion) — labels: none/none.
+    assert 'aeo1_aroi_relay_state{fingerprint="DDDD",familyid="",state="not_configured",ciissversion="none",proof_type_family="none"} 1' in content
     assert 'aeo1_aroi_relays_count{state="not_configured"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_unchecked"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_checked_invalid"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_checked_valid"} 1' in content
+    # B7.2: aeo1_aroi_relays_count_by_version emits all 16 (4 state x 4
+    # ciissversion) cells with the correct counts.
+    assert 'aeo1_aroi_relays_count_by_version{state="configured_checked_valid",ciissversion="2"} 1' in content
+    assert 'aeo1_aroi_relays_count_by_version{state="configured_checked_invalid",ciissversion="2"} 1' in content
+    assert 'aeo1_aroi_relays_count_by_version{state="configured_unchecked",ciissversion="2"} 1' in content
+    assert 'aeo1_aroi_relays_count_by_version{state="not_configured",ciissversion="none"} 1' in content
+    # Zero-cell present (no v3 in this fixture).
+    assert 'aeo1_aroi_relays_count_by_version{state="configured_checked_valid",ciissversion="3"} 0' in content
 
 
 def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
@@ -269,15 +281,19 @@ def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, 
         "DDDD": "not_configured",
     }
     for fp, expected_state in expected_states.items():
+        # B7.1: regex updated for new labelset (ciissversion + proof_type_family).
         matches = re.findall(
-            rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+"\}} 1$',
+            rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+",ciissversion="[^"]+",proof_type_family="[^"]+"\}} 1$',
             content,
             re.MULTILINE,
         )
         assert len(matches) == 1, f"expected exactly one state for {fp}"
-        assert (
-            f'aeo1_aroi_relay_state{{fingerprint="{fp}",familyid="",state="{expected_state}"}} 1' in content
-        ), f"expected state {expected_state} for {fp}"
+        # State assertion — accept any ciissversion/proof_type_family combo.
+        state_match = re.search(
+            rf'aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="{expected_state}",ciissversion="[^"]+",proof_type_family="[^"]+"\}} 1',
+            content,
+        )
+        assert state_match is not None, f"expected state {expected_state} for {fp}"
 
 
 def test_aroi_legacy_metrics_removed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,

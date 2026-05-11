@@ -4,7 +4,49 @@ Tests for reliability_masters and legacy_titans categories
 """
 import pytest
 
-from allium.lib.aroileaders import _calculate_reliability_score
+from allium.lib.aroileaders import _calculate_reliability_score, _classify_v3_tier_local
+
+
+class TestV3TierLeaderboardPropagation:
+    """B4.test (re-opened): verify aroileaders.py uses the same tier
+    classifier as contact-page pills + misc-contacts icons.
+
+    Unit-level coverage of the tier-boundary contract that the
+    Validation Champions table cells (B4.2) consume. classify_v3_tier
+    itself is exhaustively tested in test_aroi_validation.py; here we
+    just confirm the leaderboard side imports the same function and
+    its output flows correctly across boundary thresholds.
+    """
+
+    def test_imports_shared_classifier(self):
+        """The leaderboard module imports the canonical classifier from
+        aroi_validation, NOT a local re-implementation."""
+        from allium.lib.aroi_validation import classify_v3_tier
+        # _classify_v3_tier_local is the imported alias used in aroileaders.
+        assert _classify_v3_tier_local is classify_v3_tier
+
+    @pytest.mark.parametrize(("v3", "total", "expected_tier"), [
+        (0, 50, 'none'),
+        (1, 50, 'explorer'),     # 2% — 1 relay, < 25%
+        (12, 50, 'explorer'),    # 24%
+        (13, 50, 'migrating'),   # 26%
+        (37, 50, 'migrating'),   # 74%
+        (38, 50, 'mostly'),      # 76%
+        (49, 50, 'mostly'),      # 98%
+        (50, 50, 'complete'),    # 100%
+        # Single-relay operator edge case — 1/1 = 100% complete.
+        (1, 1, 'complete'),
+        # Empty operator (defensive — should not crash).
+        (0, 0, 'none'),
+    ])
+    def test_tier_boundary_propagation(self, v3, total, expected_tier):
+        """Every tier boundary classifier output matches the constants
+        in aroi_validation.py. If thresholds are tuned, this test must
+        be updated alongside the constants."""
+        assert _classify_v3_tier_local(v3, total) == expected_tier
+
+
+
 
 
 class TestReliabilityScoring:

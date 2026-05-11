@@ -13,6 +13,8 @@ import html
 
 # Import centralized IP parsing from ip_utils (canonical home)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+# B4.1: shared classifier so leaderboard tier matches contact-page pill tier.
+from .aroi_validation import classify_v3_tier as _classify_v3_tier_local
 
 # Import centralized country utilities
 from .country_utils import (
@@ -501,6 +503,11 @@ def _collect_operator_metrics(relays_instance):
         validated_bandwidth = 0
         validated_consensus_weight = 0.0
         validated_countries = set()
+        # B4.1: per-version split (used by leaderboard tier badge + new columns)
+        validated_v2_relay_count = 0
+        validated_v3_relay_count = 0
+        v2_relay_count = 0  # ANY ciissversion:2 declaration (valid or not)
+        v3_relay_count = 0  # ANY ciissversion:3 declaration
         td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
         
         for relay in operator_relays:
@@ -571,6 +578,15 @@ def _collect_operator_metrics(relays_instance):
             
             # Validation tracking (merged into same loop)
             fp = relay.get('fingerprint')
+            # B4.1: tally per-version DECLARATIONS (any v2 or v3 contact)
+            # so we can compute v3_relay_percentage even for operators
+            # whose v3 relays haven't been validated yet.
+            relay_aroi_version = relay.get('aroi_version')
+            if relay_aroi_version == '2':
+                v2_relay_count += 1
+            elif relay_aroi_version == '3':
+                v3_relay_count += 1
+
             if fp in validation_map:
                 result = validation_map[fp]
                 if result.get('valid', False):
@@ -578,12 +594,20 @@ def _collect_operator_metrics(relays_instance):
                     validated_relay_count += 1
                     validated_bandwidth += relay_bandwidth
                     validated_consensus_weight += relay_consensus_weight
-                    
+
+                    # B4.1: per-version validated counts so the leaderboard
+                    # can show "v2: N validated, v3: N validated".
+                    val_version = result.get('ciissversion') or relay_aroi_version
+                    if val_version == '2':
+                        validated_v2_relay_count += 1
+                    elif val_version == '3':
+                        validated_v3_relay_count += 1
+
                     # Track country for validated relays
                     country = relay.get('country', '')
                     if country:
                         validated_countries.add(country)
-                    
+
                     # Count by role (Exit > Guard > Middle priority)
                     if 'Exit' in relay_flags:
                         validated_exit_count += 1
@@ -847,6 +871,16 @@ def _collect_operator_metrics(relays_instance):
             'validated_bandwidth': validated_bandwidth,
             'validated_consensus_weight': validated_consensus_weight,
             'validated_country_count': validated_country_count,
+
+            # === B4.1: v2/v3 migration metadata for tier badge + columns ===
+            'validated_v2_relay_count': validated_v2_relay_count,
+            'validated_v3_relay_count': validated_v3_relay_count,
+            'v2_relay_count': v2_relay_count,
+            'v3_relay_count': v3_relay_count,
+            'v3_relay_percentage': (
+                v3_relay_count / total_relays * 100 if total_relays > 0 else 0.0
+            ),
+            'v3_tier': _classify_v3_tier_local(v3_relay_count, total_relays),
             
             # === TOTAL DATA TRANSFERRED (NEW) ===
             'total_data_transferred': operator_total_data,
@@ -1317,6 +1351,15 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'validated_consensus_weight': metrics['validated_consensus_weight'],
                 'validated_consensus_weight_pct': f"{metrics['validated_consensus_weight'] * 100:.2f}%",
                 'validated_country_count': metrics['validated_country_count'],
+
+                # === B4.1: v2/v3 migration metadata propagated to row dict ===
+                'validated_v2_relay_count': metrics['validated_v2_relay_count'],
+                'validated_v3_relay_count': metrics['validated_v3_relay_count'],
+                'v2_relay_count': metrics['v2_relay_count'],
+                'v3_relay_count': metrics['v3_relay_count'],
+                'v3_relay_percentage': metrics['v3_relay_percentage'],
+                'v3_relay_pct_str': f"{metrics['v3_relay_percentage']:.0f}%",
+                'v3_tier': metrics['v3_tier'],
                 
                 # === TOTAL DATA TRANSFERRED (NEW) ===
                 'total_data_transferred': formatted_total_data_transferred,

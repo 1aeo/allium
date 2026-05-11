@@ -169,6 +169,9 @@ def _build_aroi_relay_rows(relays: List[dict], fp_to_family: Callable[[str], str
     rows = []
     state_counts = {state: 0 for state in _AROI_STATE_VALUES}
     configured_count = 0
+    # B7.1: per-version state count (state, ciissversion) -> count.
+    # Cardinality bounded: |state| x |ciissversion| <= 4 x 5 = 20 series.
+    version_state_counts: Dict[tuple, int] = {}
 
     for relay in sorted(relays, key=lambda r: r.get("fingerprint", "")):
         fp = relay.get("fingerprint", "")
@@ -196,7 +199,34 @@ def _build_aroi_relay_rows(relays: List[dict], fp_to_family: Callable[[str], str
             domain = aroi_entry.get("domain", "") or relay_domain
             proof_type = aroi_entry.get("proof_type", "")
 
+        # B7.1: derive ciissversion + proof_type_family for new labels.
+        # Bounded enums to keep label cardinality flat:
+        #   ciissversion       ∈ {none, 2, 3, unknown}
+        #   proof_type_family  ∈ {none, rsa, familyid, unknown}
+        relay_version = relay.get("aroi_version")
+        if relay_version in ("2", "3"):
+            ciissversion_label = relay_version
+        elif relay_version is None and not configured:
+            ciissversion_label = "none"
+        else:
+            ciissversion_label = "unknown"
+
+        # Prefer validator's reported proof_type when present; fall back to
+        # locally-parsed aroi_proof_type from _simple_aroi_parsing.
+        effective_pt = proof_type or relay.get("aroi_proof_type") or ""
+        if not effective_pt:
+            proof_type_family = "none"
+        elif effective_pt in ("dns-rsa", "uri-rsa"):
+            proof_type_family = "rsa"
+        elif effective_pt in ("dns-familyid-ed25519", "uri-familyid-ed25519"):
+            proof_type_family = "familyid"
+        else:
+            proof_type_family = "unknown"
+
         state_counts[state] += 1
+        version_state_counts[(state, ciissversion_label)] = (
+            version_state_counts.get((state, ciissversion_label), 0) + 1
+        )
         rows.append({
             "fingerprint": fp,
             "familyid": familyid,
@@ -205,9 +235,11 @@ def _build_aroi_relay_rows(relays: List[dict], fp_to_family: Callable[[str], str
             "configured": configured,
             "domain": domain,
             "proof_type": proof_type,
+            "ciissversion": ciissversion_label,
+            "proof_type_family": proof_type_family,
         })
 
-    return rows, state_counts, configured_count
+    return rows, state_counts, configured_count, version_state_counts
 
 
 def _get_verified_aroi(relay: dict, aroi_map: Dict[str, dict],
@@ -488,16 +520,21 @@ def _write_aroi_section(lines: _LineAppender, relay_set,
 
     # --- Relay-state classification (single pass precompute) ---
     all_relays = relay_set.json.get("relays", [])
-    relay_rows, state_counts, configured_count = _build_aroi_relay_rows(
-        all_relays, fp_to_family, aroi_map)
+    relay_rows, state_counts, configured_count, version_state_counts = (
+        _build_aroi_relay_rows(all_relays, fp_to_family, aroi_map)
+    )
 
     _emit_help_type(lines, "aeo1_aroi_relay_state",
-                    "Canonical AROI relay state in schema v2 (always 1 for emitted state)")
+                    "Canonical AROI relay state in schema v2 (always 1 for emitted state). "
+                    "ciissversion ∈ {none,2,3,unknown}; proof_type_family ∈ {none,rsa,familyid,unknown}")
     for row in relay_rows:
         _emit(lines, "aeo1_aroi_relay_state", {
             "fingerprint": row["fingerprint"],
             "familyid": row["familyid"],
             "state": row["state"],
+            # B7.1: bounded-cardinality version labels.
+            "ciissversion": row["ciissversion"],
+            "proof_type_family": row["proof_type_family"],
         }, 1)
     lines.append("")
 
@@ -505,6 +542,23 @@ def _write_aroi_section(lines: _LineAppender, relay_set,
                     "Relay count by canonical AROI state in schema v2")
     for state in _AROI_STATE_VALUES:
         _emit(lines, "aeo1_aroi_relays_count", {"state": state}, state_counts[state])
+    lines.append("")
+
+    # B7.2: New aggregate metric — per-version split of state counts so
+    # dashboards can chart migration progress without scraping label
+    # cardinality. Cardinality bound: 4 states x 5 ciissversion values
+    # = 20 series (plus the 4 we already have, = 24 max).
+    _emit_help_type(lines, "aeo1_aroi_relays_count_by_version",
+                    "Relay count by AROI state and declared ciissversion. "
+                    "ciissversion ∈ {none,2,3,unknown}")
+    # Emit ALL combinations (not just observed) so consumers don't have
+    # to rate() to handle the absence-→-presence transition.
+    _ciissversion_values = ("none", "2", "3", "unknown")
+    for state in _AROI_STATE_VALUES:
+        for cv in _ciissversion_values:
+            _emit(lines, "aeo1_aroi_relays_count_by_version",
+                  {"state": state, "ciissversion": cv},
+                  version_state_counts.get((state, cv), 0))
     lines.append("")
 
     # Scan timestamp

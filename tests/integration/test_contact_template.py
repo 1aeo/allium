@@ -1015,5 +1015,260 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
 
+class TestB3V3RelayInfoRendering(unittest.TestCase):
+    """B3.2 (re-opened): integration tests for v3 awareness in
+    relay-info / contact macros. Focused on the new B1 + B3 rendering
+    contract — does NOT duplicate the data-layer tests in
+    test_aroi_validation.py.
+
+    Verifies that the macros emit:
+    - aroi_v2v3_pills strip when v2_relay_count + v3_relay_count > 0
+    - 🚨 SECURITY badge when security_incident_count > 0
+    - ⏳ Pending badge when pending_onionoo_count > 0
+    - 🏆 v3 complete pill when 100% v3 + not mixed
+    - 🔁 migration percentage when is_mixed_migration
+    - relay-info v2/v3 version label per relay
+    """
+
+    def setUp(self):
+        import os
+        from jinja2 import Environment, FileSystemLoader
+        template_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            'allium', 'templates'
+        )
+        self.jinja_env = Environment(
+            loader=FileSystemLoader(template_dir), autoescape=True,
+        )
+
+    def _render_pills(self, validation_summary):
+        """Render the aroi_v2v3_pills macro with a fake validation status."""
+        template_str = (
+            "{% from 'macros.html' import aroi_v2v3_pills %}"
+            "{{ aroi_v2v3_pills(contact_validation_status) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        return template.render(contact_validation_status={
+            'validation_summary': validation_summary,
+        })
+
+    def test_pills_hidden_when_no_aroi_relays(self):
+        """No pill strip when operator has 0 v2 + 0 v3 relays."""
+        rendered = self._render_pills({
+            'v2_relay_count': 0, 'v3_relay_count': 0,
+            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_tier': 'none', 'is_v3_adopter': False,
+        })
+        self.assertNotIn('v2:', rendered)
+        self.assertNotIn('v3:', rendered)
+
+    def test_v2_only_pill(self):
+        """Operator with only v2 relays: gray v2 pill, no v3 pill."""
+        rendered = self._render_pills({
+            'v2_relay_count': 5, 'v3_relay_count': 0,
+            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_tier': 'none', 'is_v3_adopter': False,
+        })
+        self.assertIn('v2: 5', rendered)
+        self.assertNotIn('v3:', rendered)
+
+    def test_v3_complete_marker(self):
+        """100% v3 operator: pill + 🏆 v3 complete badge."""
+        rendered = self._render_pills({
+            'v2_relay_count': 0, 'v3_relay_count': 10,
+            'v3_relay_percentage': 100.0, 'is_mixed_migration': False,
+            'v3_tier': 'complete', 'is_v3_adopter': True,
+        })
+        self.assertIn('v3: 10', rendered)
+        self.assertIn('🏆 v3 complete', rendered)
+        self.assertNotIn('🔁', rendered)
+
+    def test_mixed_migration_marker(self):
+        """Mixed v2/v3 operator: shows 🔁 migration percentage."""
+        rendered = self._render_pills({
+            'v2_relay_count': 7, 'v3_relay_count': 3,
+            'v3_relay_percentage': 30.0, 'is_mixed_migration': True,
+            'v3_tier': 'migrating', 'is_v3_adopter': True,
+        })
+        self.assertIn('v2: 7', rendered)
+        self.assertIn('v3: 3', rendered)
+        self.assertIn('🔁 30% v3', rendered)
+
+    def test_security_badge_renders_alongside_validated(self):
+        """B1.1: 🚨 SECURITY badge appears AT THE TOP of badge group
+        when security_incident_count > 0, not replacing cascade."""
+        template_str = (
+            "{% from 'macros.html' import aroi_validation_badge %}"
+            "{{ aroi_validation_badge(contact_validation_status) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(contact_validation_status={
+            'validation_status': 'validated',
+            'validation_summary': {
+                'validated_count': 5,
+                'unauthorized_count': 0,
+                'misconfigured_count': 1,
+                'incomplete_count': 0,
+                'not_configured_count': 0,
+                'security_incident_count': 1,
+                'pending_onionoo_count': 0,
+            },
+        })
+        # Both badges visible (not exclusive).
+        self.assertIn('🚨 SECURITY', rendered)
+        self.assertIn('Validated', rendered)
+
+    def test_pending_onionoo_badge_NOT_rendered_in_header(self):
+        """UX-fix: ⏳ Pending peer badge intentionally REMOVED from
+        aroi_validation_badge header to avoid the confusing
+        "✓ Validated ⏳ Pending" dual presentation. Pending relays
+        are dual-bucketed into 'misconfigured' so the cascade badge
+        already conveys "something needs attention", and the section
+        anchor (#misconfigured-relays) drills into the per-relay
+        error_category for actionable detail.
+        """
+        template_str = (
+            "{% from 'macros.html' import aroi_validation_badge %}"
+            "{{ aroi_validation_badge(contact_validation_status) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(contact_validation_status={
+            'validation_status': 'validated',
+            'validation_summary': {
+                'validated_count': 5,
+                'unauthorized_count': 0,
+                'misconfigured_count': 1,
+                'incomplete_count': 0,
+                'not_configured_count': 0,
+                'security_incident_count': 0,
+                'pending_onionoo_count': 6,
+            },
+        })
+        # Cascade badge IS rendered.
+        self.assertIn('Validated', rendered)
+        # ⏳ Pending peer badge is NO LONGER rendered in the header.
+        self.assertNotIn('⏳ Pending', rendered)
+
+    def test_aroi_validation_icon_v3_label(self):
+        """B1.5: aroi_validation_icon appends 'v3' badge for v3 relays."""
+        template_str = (
+            "{% from 'macros.html' import aroi_validation_icon %}"
+            "{{ aroi_validation_icon('AAAA', 'v3.example.com', "
+            "validated_fps, [], [], [], [], '3') }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(validated_fps={'AAAA'})
+        self.assertIn('v3</span>', rendered)
+        # v3 label uses blue background (matches B1.6 styling).
+        self.assertIn('background-color: #007bff', rendered)
+
+    def test_aroi_validation_icon_pending_takes_precedence(self):
+        """B1.5: ⏳ icon takes visual precedence over the cascade icon."""
+        template_str = (
+            "{% from 'macros.html' import aroi_validation_icon %}"
+            "{{ aroi_validation_icon('AAAA', 'v3.example.com', "
+            "validated_fps, [], [], [], pending_fps, '3') }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(
+            validated_fps={'AAAA'},
+            pending_fps={'AAAA'},
+        )
+        # Pending icon present; validated checkmark absent in same span group.
+        self.assertIn('⏳', rendered)
+        # Validated checkmark not emitted because pending branch ran first.
+        self.assertNotIn('AROI Validated:', rendered)
+
+    def test_relay_detail_box_renders_fix_and_paste_when_distinct(self):
+        """B-final pasteable contract: aroi_relay_detail_box renders both
+        💡 Fix: (upstream hint) AND 📋 Paste: (V3_CATEGORY_LABELS example)
+        when they differ, ensuring operators always see a literally-pasteable
+        line even when upstream hint is multi-sentence prose."""
+        template_str = (
+            "{% from 'macros.html' import aroi_relay_detail_box %}"
+            "{{ aroi_relay_detail_box(relays, 'misconfigured', page_ctx, ts) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(
+            relays=[{
+                'fingerprint': 'A' * 40,
+                'nickname': 'TestRelay',
+                'aroi_domain': 'foo.bar',
+                'aroi_version': '3',
+                'proof_type': 'uri-familyid-ed25519',
+                'error': 'URI-FamilyID: family_id not found at foo.bar',
+                'hint': 'Multi-sentence upstream prose. Confirm content. Never paste secrets.',
+                'pasteable_example': '# /.well-known/tor-relay/ed25519-family-id.txt must list family_id',
+                'error_category': 'uri_content_mismatch',
+            }],
+            page_ctx={'path_prefix': ''},
+            ts='2026-05-06 03:00 UTC',
+        )
+        # Both 💡 Fix: and 📋 Paste: render
+        self.assertIn('💡 Fix:', rendered)
+        self.assertIn('📋 Paste:', rendered)
+        # Upstream hint visible in 💡 Fix: block
+        self.assertIn('Multi-sentence upstream prose', rendered)
+        # V3_CATEGORY_LABELS example visible in 📋 Paste: block
+        self.assertIn('.well-known/tor-relay', rendered)
+        # v3 version label appended next to nickname
+        self.assertIn('v3</span>', rendered)
+
+    def test_relay_detail_box_dedups_paste_when_identical_to_hint(self):
+        """B-final pasteable contract: when hint == pasteable_example
+        (e.g. parse-time errors that share the V3_CATEGORY_LABELS source),
+        skip the 📋 Paste: block to avoid duplication."""
+        template_str = (
+            "{% from 'macros.html' import aroi_relay_detail_box %}"
+            "{{ aroi_relay_detail_box(relays, 'not_configured', page_ctx, ts) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        same_text = '# pick consistent pair: ciissversion:3 + proof:uri-familyid-ed25519'
+        rendered = template.render(
+            relays=[{
+                'fingerprint': 'B' * 40,
+                'nickname': 'MismatchRelay',
+                'aroi_domain': None,
+                'missing': 'ciissversion:2 declared but proof:uri-familyid-ed25519',
+                'hint': same_text,
+                'pasteable_example': same_text,
+                'error_category': 'version_proof_mismatch',
+            }],
+            page_ctx={'path_prefix': ''},
+            ts='2026-05-06 03:00 UTC',
+        )
+        # 💡 Fix: renders (hint is set)
+        self.assertIn('💡 Fix:', rendered)
+        # 📋 Paste: NOT rendered because hint == pasteable_example (dedup guard)
+        self.assertNotIn('📋 Paste:', rendered)
+
+    def test_relay_detail_box_security_incident_box_type(self):
+        """B1.1: 'security_incident' box type renders red border + 🚨 +
+        rotation guidance."""
+        template_str = (
+            "{% from 'macros.html' import aroi_relay_detail_box %}"
+            "{{ aroi_relay_detail_box(relays, 'security_incident', page_ctx, ts) }}"
+        )
+        template = self.jinja_env.from_string(template_str)
+        rendered = template.render(
+            relays=[{
+                'fingerprint': 'C' * 40,
+                'nickname': 'LeakedRelay',
+                'aroi_domain': 'leak.bar',
+                'aroi_version': '3',
+                'error': 'SECURITY: published .secret_family_key',
+                'hint': 'Rotate immediately',
+                'pasteable_example': 'tor --keygen-family <newfile>',
+                'error_category': 'secret_key_leaked',
+            }],
+            page_ctx={'path_prefix': ''},
+            ts=None,
+        )
+        self.assertIn('SECURITY INCIDENT', rendered)
+        self.assertIn('🚨', rendered)
+        # Pasteable rotation command surfaced
+        self.assertIn('tor --keygen-family', rendered)
+
+
 if __name__ == '__main__':
     unittest.main()

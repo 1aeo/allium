@@ -58,6 +58,50 @@ groups:
       #   annotations:
       #     summary: "AROI checked coverage is low ({{ $value | humanizePercentage }})"
 
+      # ----------------------------------------------------------------
+      # B7.2: per-version alerts (CIISS v2 + v3 dual-spec)
+      # Sourced from aeo1_aroi_relays_count_by_version (B7.2 metric) +
+      # the aeo1_aroi_v3_*_derived recording rules.
+      # ----------------------------------------------------------------
+
+      # IMPORTANT: AroiV3SuccessRateLow depends on the recording rule
+      # `aeo1_aroi_v3_success_ratio_derived` defined in
+      # docs/prometheus/recording_rules.yml. If you have NOT installed
+      # recording_rules.yml alongside this file, the alert query will
+      # never match anything (silent no-op) — same precedent as
+      # AroiCheckedCoverageLow above. Either install recording_rules.yml
+      # before relying on this alert, or comment it out until you do.
+      #
+      # v3 success rate dropped sharply — possible upstream regression
+      # (validator broke a rule, schema bumped, or operators
+      # mass-mismigrated). Threshold deliberately permissive to avoid
+      # noise during the migration funnel; tighten once v3 stabilises.
+      - alert: AroiV3SuccessRateLow
+        expr: aeo1_aroi_v3_success_ratio_derived < 0.80
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI v3 success rate low ({{ $value | humanizePercentage }})"
+          description: "Possible upstream regression or mass operator misconfig. Investigate aroivalidator schema + recent v3 declarations."
+
+      # SECURITY: any relay leaking .secret_family_key. Always page.
+      # If aeo1_aroi_relays_count_by_version emits a non-zero count with
+      # ciissversion="3" + state="configured_checked_invalid", and the
+      # operator's relay-info metric has secret_key_leaked error
+      # category, this is a credential incident.
+      # NOTE: this requires a future per-error-category metric; for now,
+      # operators should subscribe to allium build logs which warn on
+      # the secret_key_leaked category via _warn_unknown_error_categories
+      # observability path. Documenting here as planned future work.
+      # - alert: AroiSecretKeyLeaked
+      #   expr: aeo1_aroi_secret_key_leaked_count > 0
+      #   for: 0m
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: "{{ $value }} relays appear to have leaked .secret_family_key"
+
   - name: aeo1_freshness
     interval: 1m
     rules:

@@ -12,6 +12,8 @@ def make_relay(
     dns_timing=1000,
     dns_consecutive=0,
     aroi_domain="none",
+    aroi_version=None,
+    aroi_proof_type=None,
 ):
     if dns_status == "success":
         health_status = "success"
@@ -20,12 +22,37 @@ def make_relay(
     else:
         health_status = "fail"
 
+    # B7.1: derive aroi_version + aroi_proof_type from contact string when
+    # not explicitly provided. Mirrors what _simple_aroi_parsing does in
+    # production so test fixtures don't have to know about the new fields.
+    #
+    # Each field is derived INDEPENDENTLY (was previously only derived
+    # when aroi_version was None — that meant a fixture passing an
+    # explicit aroi_version but NO aroi_proof_type would silently leave
+    # the proof type at None). Now version and proof_type are filled
+    # in separately based on whichever is missing.
+    if contact:
+        import re as _re
+        if aroi_version is None:
+            v_match = _re.search(r'\bciissversion:(\d+)\b', contact, _re.IGNORECASE)
+            if v_match:
+                aroi_version = v_match.group(1) if v_match.group(1) in ('2', '3') else None
+        if aroi_proof_type is None:
+            p_match = _re.search(
+                r'\bproof:(dns-rsa|uri-rsa|dns-familyid-ed25519|uri-familyid-ed25519)\b',
+                contact, _re.IGNORECASE,
+            )
+            if p_match:
+                aroi_proof_type = p_match.group(1).lower()
+
     return {
         "fingerprint": fingerprint,
         "nickname": nickname,
         "flags": flags or ["Exit", "Fast", "Guard", "Running", "Stable", "Valid"],
         "contact": contact,
         "aroi_domain": aroi_domain,
+        "aroi_version": aroi_version,
+        "aroi_proof_type": aroi_proof_type,
         "exit_dns_health_status": health_status,
         "exit_dns_health_detail": dns_status,
         "exit_dns_health_timing_ms": dns_timing,

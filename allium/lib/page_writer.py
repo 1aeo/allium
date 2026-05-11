@@ -467,6 +467,15 @@ def write_misc(
                 contact_data["aroi_validation_status"] = validation_status["validation_status"]
                 # Store full validation status for operator pages to reuse
                 contact_data["aroi_validation_full"] = validation_status
+                # B1.6: surface peer-issue counts + v3 tier on the listing
+                # row so misc-contacts.html can render \U0001f6a8 / \u23f3 / \U0001f3c6
+                # markers without re-loading the full validation_status.
+                _summary = validation_status.get('validation_summary', {}) or {}
+                contact_data['aroi_security_count'] = _summary.get('security_incident_count', 0)
+                contact_data['aroi_pending_count'] = _summary.get('pending_onionoo_count', 0)
+                contact_data['aroi_v3_tier'] = _summary.get('v3_tier', 'none')
+                contact_data['aroi_is_v3_adopter'] = _summary.get('is_v3_adopter', False)
+                contact_data['aroi_v3_pct'] = _summary.get('v3_relay_percentage', 0.0)
     
     # Pre-compute family statistics for misc-families templates
     template_vars = {
@@ -487,6 +496,29 @@ def write_misc(
             'large_family_count': 0
         })
         template_vars.update(family_stats)
+
+        # B5.2: precompute v3 tier per family so misc-families.html can
+        # render a tier badge inline. Compute once here (vs. doing it
+        # in the template loop) — ~6,300 families × 1 tier classifier
+        # call beats inline Jinja arithmetic, and matches the
+        # precompute pattern already used for misc-contacts.
+        from .aroi_validation import classify_v3_tier
+        all_relays_list = relay_set.json.get('relays', [])
+        for fam_hash, fam_data in (relay_set.json.get('sorted', {})
+                                                  .get('family', {}).items()):
+            if 'aroi_v3_tier' in fam_data:
+                continue  # already computed
+            relay_idxs = fam_data.get('relays', [])
+            total = len(relay_idxs)
+            if total == 0:
+                fam_data['aroi_v3_tier'] = 'none'
+                fam_data['aroi_v3_pct'] = 0.0
+                continue
+            v3 = sum(1 for ix in relay_idxs
+                     if ix < len(all_relays_list)
+                     and all_relays_list[ix].get('aroi_version') == '3')
+            fam_data['aroi_v3_tier'] = classify_v3_tier(v3, total)
+            fam_data['aroi_v3_pct'] = (v3 / total * 100) if total else 0.0
     elif template.name == "misc-authorities.html":
         # Reuse existing authority uptime data from consolidated processing
         authorities_data = get_directory_authorities_data(relay_set)

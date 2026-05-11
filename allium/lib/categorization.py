@@ -256,6 +256,28 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         relay_set.json["sorted"][k][v]["contact"] = relay.get("contact", "")
         relay_set.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
         relay_set.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
+
+        # Item 3 (variant-aware list views): track distinct raw ContactInfo
+        # strings per contact group so list-view tooltips can stop showing
+        # one representative string and instead say "N distinct ContactInfo
+        # strings — see operator page". A single set.add() per relay is
+        # the cheapest way to count without a second pass; we keep it
+        # ONLY for contact groups (the only listing where the operator-
+        # detail page is the authoritative variant view).
+        if k == "contact":
+            cv_set = relay_set.json["sorted"][k][v].get("_contact_variant_set")
+            if cv_set is None:
+                cv_set = set()
+                relay_set.json["sorted"][k][v]["_contact_variant_set"] = cv_set
+            cv_set.add(relay.get("contact", "") or "")
+            relay_set.json["sorted"][k][v]["contact_variant_count"] = len(cv_set)
+            # NOTE: _contact_variant_set is a Python set — not JSON-
+            # serialisable. It's removed by calculate_contact_derived_data()
+            # in a single finalisation pass after categorisation completes,
+            # so the long-lived sorted.contact data structure never carries
+            # the live set. Keeping it ONLY across the categorisation loop
+            # is what lets us count distinct contacts in O(N) without
+            # rescanning members.
         
         # Track country counts for contacts (primary country calculation)
         # relay["country"] is already UPPERCASE from _preprocess_template_data()
@@ -675,6 +697,13 @@ def calculate_contact_derived_data(relay_set):
             
         # Clean up temporary country_counts to save memory
         del contact_data["country_counts"]
+
+        # Drop the temporary _contact_variant_set inserted by sort_relay()
+        # so downstream code can json.dumps(sorted.contact) — Python sets
+        # are not JSON-serialisable. The accumulated count survives in
+        # contact_data["contact_variant_count"]; the set itself is no
+        # longer needed.
+        contact_data.pop("_contact_variant_set", None)
         
         # BANDWIDTH MEANS CALCULATION (optimized from _calculate_bandwidth_means)
         relays = contact_data.get("relays", [])

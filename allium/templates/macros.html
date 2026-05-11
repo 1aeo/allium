@@ -246,15 +246,25 @@
 </ul>
 {%- endmacro %}
 
-{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps) -%}
-    {% if fingerprint in validated_fps -%}
-        <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps, security_fps=none, pending_fps=none, aroi_version=none) -%}
+    {# B1.5: peer issue icons take visual precedence over cascade icons —
+       a leaked-key relay shows 🚨 even if the operator's other relays
+       validated. aroi_version (str|None) appended as a small label. #}
+    {% if security_fps and fingerprint in security_fps -%}
+        <a href="#security_incident-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="🚨 SECURITY: This relay appears to have published .secret_family_key. Rotate the family key immediately.">🚨</a>
+    {% elif pending_fps and fingerprint in pending_fps -%}
+        <a href="#pending_onionoo-relays" class="al-status-info al-link-plain" style="margin-left: 4px;" title="⏳ Pending: Onionoo hasn't refreshed family_ids yet. Typically resolves within 24h after restarting Tor with the happy-family directive.">⏳</a>
+    {% elif fingerprint in validated_fps -%}
+        <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's identity has been cryptographically verified via the operator's AROI proof">✓</span>
     {% elif fingerprint in unauthorized_fps -%}
-        <a href="#unauthorized-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</a>
+        <a href="#unauthorized-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but is NOT in the AROI proof">🚫</a>
     {% elif fingerprint in misconfigured_fps -%}
         <a href="#misconfigured-relays" class="al-status-warning al-link-plain" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
     {% elif aroi_domain and aroi_domain != 'none' -%}
         <span class="al-status-danger" style="margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
+    {% endif -%}
+    {%- if aroi_version and aroi_domain and aroi_domain != 'none' %}
+        <span style="font-size: 9px; padding: 0px 3px; border-radius: 2px; background-color: {{ '#007bff' if aroi_version == '3' else '#6c757d' }}; color: white; vertical-align: middle; margin-left: 2px;" title="ciissversion:{{ aroi_version }}">v{{ aroi_version }}</span>
     {% endif -%}
 {%- endmacro %}
 
@@ -274,6 +284,13 @@
 {% if contact_validation_status -%}
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
+    {# B1.1: peer security badge ALWAYS rendered first when present, regardless of cascade.
+       It does not replace the cascade badge below — both surface concurrently
+       so a "validated" operator with one leaked-key relay still shows
+       "✓ Validated" but ALSO sees "🚨 SECURITY" right next to it. #}
+    {% if summary.security_incident_count > 0 -%}
+        <a href="#security_incident-relays" class="al-status-danger-bold al-link-plain" style="margin-left: 5px; padding: 1px 6px; background-color: #f8d7da; border-radius: 3px;" title="{{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} appear to have leaked .secret_family_key. Rotate the family key immediately.">🚨 SECURITY{% if show_count %} ({{ summary.security_incident_count }}){% endif %}</a>
+    {% endif -%}
     {% if status == 'validated' -%}
         <span class="al-status-success-bold"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
     {% elif status == 'unauthorized' -%}
@@ -284,6 +301,41 @@
         <a href="#not_configured-relays" class="al-status-muted al-link-plain" style="font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
     {# not_configured status shows no badge #}
     {% endif -%}
+    {# UX-fix: pending_onionoo peer badge REMOVED from the header.
+       Per UX feedback ('it's confusing to say validated and pending at
+       the same time'), pending-Onionoo is dual-bucketed in cascade as
+       'misconfigured' already, so the cascade badge already conveys
+       "something needs attention". Operators can drill into
+       #misconfigured-relays to see the per-relay error category. #}
+{% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI v2/v3 STATUS PILLS (B1.2)
+   Compact dual-version summary rendered above the validation badge.
+   Only shown when operator has at least one v2 or v3 declaring relay.
+   ============================================================================= #}
+{% macro aroi_v2v3_pills(contact_validation_status) -%}
+{% if contact_validation_status and contact_validation_status.validation_summary -%}
+{%- set summary = contact_validation_status.validation_summary -%}
+{%- set v2_count = summary.v2_relay_count -%}
+{%- set v3_count = summary.v3_relay_count -%}
+{% if v2_count > 0 or v3_count > 0 -%}
+<span style="font-size: 11px; margin-left: 6px;">
+    {%- if v2_count > 0 -%}
+    <span title="ciissversion:2 (RSA-fingerprint proofs, legacy)" style="padding: 1px 5px; background-color: #6c757d; color: white; border-radius: 3px;">v2: {{ v2_count }}</span>
+    {%- endif -%}
+    {%- if v2_count > 0 and v3_count > 0 %} {% endif -%}
+    {%- if v3_count > 0 -%}
+    <span title="ciissversion:3 (ed25519 happy-family proofs, recommended)" style="padding: 1px 5px; background-color: #007bff; color: white; border-radius: 3px;">v3: {{ v3_count }}</span>
+    {%- endif -%}
+    {%- if summary.is_mixed_migration %}
+    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_relay_percentage) }}% of relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_relay_percentage) }}% v3</span>
+    {%- elif summary.v3_tier == 'complete' %}
+    <span title="100% v3 — all relays on ciissversion:3" style="padding: 1px 5px; background-color: #ffc107; color: #212529; border-radius: 3px;">🏆 v3 complete</span>
+    {%- endif -%}
+</span>
+{%- endif -%}
 {% endif -%}
 {%- endmacro %}
 
@@ -295,13 +347,48 @@
 {% if contact_validation_status -%}
 {% set summary = contact_validation_status.validation_summary -%}
 {% set status = contact_validation_status.validation_status -%}
-{# Only show sub-bullets for categories OTHER than the main status #}
+{# UX-fix (condensed v2/v3 line): merge what used to be two sub-bullets
+   ('ciissversion:2: N relays (X% valid)' + 'ciissversion:3: M relays
+   (Y% valid) — v3 Mostly') into ONE summary line of the form:
+     'N total relays, X% valid, Y% v3, Z% v2'
+   For v3-only operators we collapse to just 'N relays, X% valid, 100% v3'.
+   For v2-only we use 'N relays, X% valid, 100% v2'.
+   The v3-tier label (Explorer/Migrating/Mostly/Complete) is dropped
+   from the operator overview because the percentage already conveys
+   the same meaning more concisely; tier is still surfaced on listings
+   and leaderboards where ranking is relevant. #}
+{% set v2_count = summary.v2_relay_count -%}
+{% set v3_count = summary.v3_relay_count -%}
+{% set v_total = v2_count + v3_count -%}
+{% set show_v2v3 = (v_total > 0) -%}
+{# Show peer issue categories (B1.1) FIRST when present — they
+   represent active problems regardless of cascade. #}
+{% set show_security = summary.security_incident_count > 0 -%}
+{# UX-fix: pending_onionoo sub-bullet REMOVED. Pending relays are
+   dual-bucketed into 'misconfigured' already, so the misconfigured
+   sub-bullet (or section header) covers the same relays. #}
+{# Only show cascade sub-bullets for categories OTHER than the main status #}
 {% set show_unauthorized = summary.unauthorized_count > 0 and status != 'unauthorized' -%}
 {% set show_misconfigured = summary.misconfigured_count > 0 and status != 'misconfigured' -%}
 {% set show_incomplete = summary.incomplete_count > 0 and status != 'incomplete' -%}
 {% set show_not_configured = summary.not_configured_count > 0 -%}
-{% if show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
+{% if show_v2v3 or show_security or show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
 <ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+{# Condensed single-line v2/v3 summary. #}
+{% if show_v2v3 -%}
+{% set _validated_total = (summary.v2_validated_count|default(0)) + (summary.v3_validated_count|default(0)) -%}
+{% set _valid_pct = (100.0 * _validated_total / v_total) if v_total > 0 else 0.0 -%}
+{% set _v3_pct = (100.0 * v3_count / v_total) if v_total > 0 else 0.0 -%}
+{% set _v2_pct = (100.0 * v2_count / v_total) if v_total > 0 else 0.0 -%}
+<li>{{ v_total }} relay{{ 's' if v_total != 1 else '' }}, {{ '%.0f'|format(_valid_pct) }}% valid,
+{%- if v3_count > 0 and v2_count > 0 %} {{ '%.0f'|format(_v3_pct) }}% v3, {{ '%.0f'|format(_v2_pct) }}% v2
+{%- elif v3_count > 0 %} 100% v3
+{%- elif v2_count > 0 %} 100% v2
+{%- endif -%}</li>
+{% endif -%}
+{% if show_security -%}
+<li><a href="#security_incident-relays" class="al-status-danger al-link-plain">🚨 SECURITY: {{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} — rotate family key now</a></li>
+{% endif -%}
 {% if show_unauthorized -%}
 <li><a href="#unauthorized-relays" class="al-status-danger al-link-plain">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
 {% endif -%}
@@ -324,7 +411,8 @@
    Shows per-relay status details in a styled box below each table
    ============================================================================= #}
 {% macro aroi_relay_detail_box(relays, box_type, page_ctx, aroi_validation_timestamp) -%}
-{# box_type: 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{# box_type: 'misconfigured' | 'unauthorized' | 'not_configured'
+            | 'security_incident' | 'pending_onionoo' #}
 {% if relays %}
     {# Style configuration based on box type #}
     {% if box_type == 'misconfigured' -%}
@@ -343,6 +431,24 @@
         {% set title = 'UNAUTHORIZED RELAY DETAILS' -%}
         {% set description = 'These relays claim this domain but their fingerprints are NOT in the AROI proof file. This could be someone falsely claiming your domain.' -%}
         {% set help_text = 'If this is YOUR relay: Add the fingerprint to your AROI proof file.' -%}
+    {% elif box_type == 'security_incident' -%}
+        {# B1.1: secret_family_key leaked. Highest urgency. #}
+        {% set box_class = 'al-box-danger' -%}
+        {% set border_color = '#c82333' -%}
+        {% set text_color = '#721c24' -%}
+        {% set icon = '🚨' -%}
+        {% set title = 'SECURITY INCIDENT — KEY ROTATION REQUIRED' -%}
+        {% set description = 'These relays appear to have published .secret_family_key contents instead of .public_family_id. The key MUST be rotated immediately.' -%}
+        {% set help_text = 'Rotate now: tor --keygen-family /path/newfile  → publish the new .public_family_id, then redeploy newfile.secret_family_key to every relay.' -%}
+    {% elif box_type == 'pending_onionoo' -%}
+        {# B1.1: missing_family_ids — Onionoo lag, transient. #}
+        {% set box_class = 'al-box-info' -%}
+        {% set border_color = '#17a2b8' -%}
+        {% set text_color = '#0c5460' -%}
+        {% set icon = '⏳' -%}
+        {% set title = 'WAITING FOR ONIONOO TO REFRESH' -%}
+        {% set description = "These relays declared ciissversion:3 but Onionoo hasn't picked up family_ids yet. This is transient — Onionoo refreshes hourly; expect resolution within 24 hours of restarting Tor with the happy-family directive." -%}
+        {% set help_text = 'No action needed if you recently changed torrc; wait < 24h. If still pending after 24h: verify FamilyId line in torrc and that .secret_family_key is in Tor KeyDir.' -%}
     {% else -%}
         {% set box_class = 'al-box-muted' -%}
         {% set border_color = '#6c757d' -%}
@@ -350,7 +456,8 @@
         {% set icon = '○' -%}
         {% set title = 'NOT CONFIGURED RELAY DETAILS' -%}
         {% set description = 'These relays have no AROI configuration or incomplete setup.' -%}
-        {% set help_text = 'To add AROI: Set contact info with ciissversion:2, proof:dns-rsa or proof:uri-rsa, and url:yourdomain.com' -%}
+        {# B1.3: pasteable v2 + v3 examples — operator chooses one. v3 listed FIRST as recommended. #}
+        {% set help_text = 'Add to torrc ContactInfo line (pick one):  v3 (recommended): ciissversion:3 url:yourdomain.com proof:uri-familyid-ed25519  ·  v2 (legacy): ciissversion:2 url:yourdomain.com proof:uri-rsa' -%}
     {% endif -%}
     
 <div class="{{ box_class }}" style="margin-top: 15px; padding: 15px; border-left-width: 4px; border-left-style: solid; border-radius: 4px;">
@@ -372,6 +479,9 @@
         {% for relay_info in relays %}
         <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid {{ border_color }}40;">
             <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay_info.fingerprint }}/">{{ relay_info.nickname|escape }}</a></strong>
+            {%- if relay_info.aroi_version %}
+                <span style="font-size: 10px; padding: 1px 5px; border-radius: 3px; background-color: {{ '#007bff' if relay_info.aroi_version == '3' else '#6c757d' }}; color: white; vertical-align: middle;">v{{ relay_info.aroi_version }}</span>
+            {% endif -%}
             <span style="color: #666;">•</span>
             {% if relay_info.error -%}
                 <span class="al-status-danger">{{ relay_info.error|escape }}</span>
@@ -382,6 +492,26 @@
                 <span style="color: #666;">• Proof: {{ relay_info.proof_type }}</span>
             {% endif %}
             <span style="color: #666;">• FP: <code style="font-size: 11px;">{{ relay_info.fingerprint }}</code></span>
+            {%- if relay_info.hint %}
+            {# B1.3: Pasteable fix example from upstream's `hint` field
+               (or our V3_CATEGORY_LABELS lookup for parse-time errors).
+               Surfaced verbatim so operators get spec-grade actionable
+               text rather than paraphrased prose. #}
+            <div style="margin-top: 4px; font-size: 12px;">
+                <span style="color: {{ text_color }};">💡 Fix:</span>
+                <code style="background: #f8f9fa; padding: 2px 5px; border-radius: 3px; font-size: 11px; display: inline-block; word-break: break-all;">{{ relay_info.hint|escape }}</code>
+            </div>
+            {% endif -%}
+            {%- if relay_info.pasteable_example and relay_info.pasteable_example != relay_info.hint %}
+            {# B-final: pasteable one-line example from V3_CATEGORY_LABELS.
+               Rendered separately from `hint` because the upstream `hint`
+               may be multi-sentence prose; this is always a single
+               copy-paste-able line. #}
+            <div style="margin-top: 2px; font-size: 11px;">
+                <span style="color: {{ text_color }};">📋 Paste:</span>
+                <code style="background: #fff; padding: 2px 5px; border-radius: 3px; font-size: 11px; display: inline-block; word-break: break-all; border: 1px dashed {{ border_color }}80;">{{ relay_info.pasteable_example|escape }}</code>
+            </div>
+            {% endif -%}
         </li>
         {% endfor %}
     </ul>
@@ -396,9 +526,11 @@
 
 {# =============================================================================
    AROI SECTION HEADER MACRO (DRY - reused by all section macros)
+   Supports both v2-era cascade categories and B1.1 peer issue categories.
    ============================================================================= #}
 {% macro aroi_section_header(title, count, style_type) -%}
-{# style_type: 'validated' | 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{# style_type: 'validated' | 'misconfigured' | 'unauthorized' | 'not_configured'
+              | 'security_incident' | 'pending_onionoo' | 'v3_migration' #}
 {% if style_type == 'validated' -%}
     {% set border_style = '3px solid #28a745' -%}
     {% set icon = '✓' -%}
@@ -411,6 +543,23 @@
     {% set border_style = '3px dashed #dc3545' -%}
     {% set icon = '🚫' -%}
     {% set link_class = 'al-status-danger al-link-plain' -%}
+{% elif style_type == 'security_incident' -%}
+    {# B1.1: highest visual priority — secret_family_key was leaked. #}
+    {% set border_style = '4px solid #c82333' -%}
+    {% set icon = '🚨' -%}
+    {% set link_class = 'al-status-danger al-link-plain' -%}
+{% elif style_type == 'pending_onionoo' -%}
+    {# B1.1: Onionoo lag — operator changed torrc but family_ids
+       haven't propagated yet. Transient (< 24h). #}
+    {% set border_style = '3px dotted #17a2b8' -%}
+    {% set icon = '⏳' -%}
+    {% set link_class = 'al-status-info al-link-plain' -%}
+{% elif style_type == 'v3_migration' -%}
+    {# B1.1: operator has both v2 + v3 declarations. Informational only;
+       neither alarming nor an issue. #}
+    {% set border_style = '3px dotted #007bff' -%}
+    {% set icon = '🔁' -%}
+    {% set link_class = 'al-status-info al-link-plain' -%}
 {% else -%}
     {% set border_style = '3px solid #6c757d' -%}
     {% set icon = '○' -%}

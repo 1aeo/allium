@@ -104,10 +104,11 @@ Authenticated Relay Operator Identification system ranking verified operators:
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
 **Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
 **Diversity**: Most Diverse, Platform Diversity (non-Linux), Non-EU Leaders, Frontier Builders (rare countries)  
-**Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions
+**Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions (with v2/v3 split columns + tiered migration badges 🔍/🔁/🚀/🏆)
 
 - Paginated rankings (Top 10, 11-20, 21-25) with CSS-only navigation
 - Champion badge system for top performers
+- Dual CIISS spec support: tracks both ciissversion:2 (RSA-fingerprint proofs) and ciissversion:3 (ed25519 happy-family proofs) with operator-level migration tier classification
 
 </details>
 
@@ -131,7 +132,7 @@ Real-time metrics at `network-health.html`:
 - Relay counts by role (exit/guard/middle) with percentages
 - Bandwidth distribution (total, by role, mean/median per category)
 - Uptime statistics (1mo mean/median by role, multi-period series)
-- AROI validation status (validated/invalid/unconfigured counts)
+- AROI validation status (CIISS spec v2 + v3 dual-spec): per-version success rates, ciissversion adoption, peer-issue alerts (🚨 leaked-key incidents, ⏳ pending Onionoo refresh)
 - IPv4/IPv6 adoption rates
 - Flag distribution (Fast, Stable, HSDir, V2Dir, Authority)
 - New relay tracking (24h, 30d, 6mo, 1yr)

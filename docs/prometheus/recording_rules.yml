@@ -38,3 +38,74 @@ groups:
           aeo1_aroi_relays_count{state="configured_checked_valid"}
           /
           clamp_min(aeo1_aroi_configured_relays_count_derived, 1)
+
+      # ----------------------------------------------------------------
+      # B7.2: per-version recording rules (CIISS v2 + v3 dual-spec)
+      # Sourced from aeo1_aroi_relays_count_by_version{state, ciissversion}.
+      # Cardinality bound: 4 states × 4 ciissversion = 16 series per scrape.
+      # ----------------------------------------------------------------
+
+      # v2 declared (configured) relay count.
+      # NOTE: every operand is wrapped in sum(...) so both sides of the
+      # subtraction have an EMPTY label set. Mixing a sum() result with
+      # a labeled vector (e.g. aeo1_aroi_relays_count_by_version{...})
+      # would yield no-match vector arithmetic and emit nothing.
+      - record: aeo1_aroi_v2_configured_relays_count_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="2"})
+          -
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="2",state="not_configured"})
+
+      # v3 declared (configured) relay count
+      - record: aeo1_aroi_v3_configured_relays_count_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="3"})
+          -
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="3",state="not_configured"})
+
+      # v3 success ratio (over v3 configured). sum() on the numerator
+      # for the same label-matching reason as above.
+      #
+      # The previous version used clamp_min(..., 1) to avoid divide-
+      # by-zero, but that caused installations with zero v3-configured
+      # relays to emit a misleading 0% series. Switched to `unless` to
+      # DROP the series entirely when configured count is zero —
+      # cleaner for dashboards (no fake 0% line) and for AroiV3SuccessRateLow
+      # alerting (no spurious "v3 success rate is 0%" page when the
+      # operator simply hasn't migrated to v3 yet).
+      - record: aeo1_aroi_v3_success_ratio_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="3",state="configured_checked_valid"})
+          /
+          aeo1_aroi_v3_configured_relays_count_derived
+          unless aeo1_aroi_v3_configured_relays_count_derived == 0
+
+      # v2 success ratio (over v2 configured) — same drop-on-zero
+      # behaviour as v3 for symmetry.
+      - record: aeo1_aroi_v2_success_ratio_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="2",state="configured_checked_valid"})
+          /
+          aeo1_aroi_v2_configured_relays_count_derived
+          unless aeo1_aroi_v2_configured_relays_count_derived == 0
+
+      # v3 migration adoption ratio: v3 declared / total declared.
+      # Network-wide migration progress KPI for dashboards.
+      #
+      # Same drop-on-zero guard as the success-ratio rules above:
+      # `unless ... == 0` omits the series entirely when the network has
+      # zero AROI-configured relays (rather than emitting a misleading
+      # 0/1 = 0% line that would imply v3 adoption is collapsing when
+      # actually nothing is configured).
+      - record: aeo1_aroi_v3_adoption_ratio_derived
+        expr: >
+          aeo1_aroi_v3_configured_relays_count_derived
+          /
+          (
+            aeo1_aroi_v2_configured_relays_count_derived
+            + aeo1_aroi_v3_configured_relays_count_derived
+          )
+          unless (
+            aeo1_aroi_v2_configured_relays_count_derived
+            + aeo1_aroi_v3_configured_relays_count_derived
+          ) == 0
