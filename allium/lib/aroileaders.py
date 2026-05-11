@@ -27,8 +27,62 @@ from .country_utils import (
 )
 
 # Import HTML escaping utility
-from .string_utils import safe_html_escape
+from .string_utils import safe_html_escape, extract_contact_display_name
 
+
+# Pre-compiled url-token regex for the Option A incomplete-AROI fallback.
+# Matches the CIISS `url:` field token in a raw contact string. We intentionally
+# accept any plausible domain (we are not validating CIISS conformance here —
+# the caller already confirmed AROI parsing FAILED, we just want a recognisable
+# display name).
+_URL_FIELD_FALLBACK_RE = re.compile(
+    r'\burl:(?:https?://)?([^,\s]+)',
+    re.IGNORECASE,
+)
+
+
+def _incomplete_aroi_display_name(contact_info, contact_hash):
+    """Build a friendly display name for an operator whose AROI parsing
+    failed but whose ContactInfo still contains a recognisable identifier.
+
+    Cascade:
+      1. If contact contains `url:<domain>`, return
+         "<domain> (incomplete AROI)" so the row is attributable to the
+         operator's domain even when the relay forgot to declare
+         ciissversion. Domain is normalised (drops https:// prefix and
+         trailing path/query if present).
+      2. Else fall back to extract_contact_display_name() (email/name/url
+         derivation used by the contact-listing tooltip code).
+      3. Else truncated raw contact string (legacy behaviour).
+      4. Else contact_hash prefix (last-resort fallback).
+    """
+    if contact_info and contact_info.strip():
+        clean_contact = contact_info.strip()
+        url_match = _URL_FIELD_FALLBACK_RE.search(clean_contact)
+        if url_match:
+            domain = url_match.group(1)
+            # Normalise: drop scheme if present, then trailing path/query.
+            if '://' in domain:
+                domain = domain.split('://', 1)[1]
+            domain = domain.split('/', 1)[0].split('?', 1)[0]
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            domain = domain.rstrip('.,;:')
+            if domain:
+                return f"{domain} (incomplete AROI)"
+
+        # Cascade 2: email/name/url-derivation helper.
+        derived = extract_contact_display_name(clean_contact, None)
+        if derived and derived != 'none' and len(derived) <= 60:
+            return derived
+
+        # Cascade 3: truncated raw contact (preserved legacy behaviour).
+        if len(clean_contact) > 30:
+            return clean_contact[:30] + '...'
+        return clean_contact
+
+    # Cascade 4: contact-hash prefix.
+    return f"contact_{contact_hash[:8]}"
 
 
 def _top_n(operators, metric, n=50, filter_fn=None):
@@ -439,20 +493,28 @@ def _collect_operator_metrics(relays_instance):
         if len(contact_info.strip()) < 3:
             continue
             
-        # Use AROI domain as key if available, otherwise use first 24 chars of contact_info
+        # Use AROI domain as key if available, otherwise build a
+        # friendlier fallback display name from the raw contact info.
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            # Use first 30 characters of contact info for better readability (extended from 24)
-            if contact_info and len(contact_info.strip()) > 0:
-                clean_contact = contact_info.strip()
-                if len(clean_contact) > 30:
-                    operator_key = clean_contact[:30] + '...'
-                else:
-                    operator_key = clean_contact
-            else:
-                # Fallback to contact hash only if no contact info available
-                operator_key = f"contact_{contact_hash[:8]}"
+            # Option A (incomplete-AROI fallback): when an operator has a
+            # parseable `url:<domain>` token in their contact string but
+            # is missing one of the other AROI fields (typically
+            # ciissversion), aroi_domain is None — but we can still
+            # derive a recognisable display name from the url token and
+            # tag it as "(incomplete AROI)" so the leaderboard row is
+            # still attributable to the operator's domain instead of
+            # rendering as a truncated raw blob like
+            # 'email:tor[]foo.com url:https:...'.
+            #
+            # Falls back through two earlier layers when no url: token
+            # is present:
+            #   1. extract_contact_display_name() — same email/name/url
+            #      derivation used elsewhere in the site
+            #   2. raw contact-info string truncated to 30 chars
+            #   3. contact_hash prefix as last resort
+            operator_key = _incomplete_aroi_display_name(contact_info, contact_hash)
         
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data

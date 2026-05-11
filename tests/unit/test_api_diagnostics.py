@@ -1383,3 +1383,150 @@ class TestDashboardTileValidityAccuracy:
         assert 'ciissversion_validated' in m
         assert isinstance(m['ciissversion_declared'], dict)
         assert isinstance(m['ciissversion_validated'], dict)
+
+
+# ============================================================================
+# Option A: friendlier display name for incomplete-AROI fallback rows
+# ============================================================================
+
+
+class TestIncompleteAROIDisplayName:
+    """Option A: leaderboard rows for relays with a parseable url: token
+    but failed AROI parsing now render as '<domain> (incomplete AROI)'
+    instead of a truncated raw blob."""
+
+    def _name(self, contact, contact_hash='aaaaaaaa'):
+        from allium.lib.aroileaders import _incomplete_aroi_display_name
+        return _incomplete_aroi_display_name(contact, contact_hash)
+
+    def test_url_token_extracted_and_tagged(self):
+        # The actual real-world case: 60 1aeo relays missing
+        # ciissversion. Display must surface their AROI domain.
+        result = self._name(
+            'email:tor[]1aeo.com url:https://www.1aeo.com '
+            'proof:uri-familyid-ed25519 abuse:abuse[]1aeo.com',
+        )
+        assert result == '1aeo.com (incomplete AROI)'
+
+    def test_bare_url_token_normalised(self):
+        result = self._name('contact:foo url:bar.example')
+        assert result == 'bar.example (incomplete AROI)'
+
+    def test_falls_back_to_email_or_name_when_no_url(self):
+        result = self._name(
+            'Brandon Kuschel <tor AT NOSPAM brandonkuschel dot com>'
+        )
+        assert '(incomplete AROI)' not in result
+        # Falls back through extract_contact_display_name.
+        assert 'brandonkuschel' in result.lower()
+
+    def test_empty_contact_uses_hash_fallback(self):
+        result = self._name(None, 'deadbeef00')
+        assert result == 'contact_deadbeef'
+
+    def test_truncates_when_no_url_no_email_no_name(self):
+        long_contact = 'random_unparseable_blob_of_text_far_too_long_for_a_display_name'
+        result = self._name(long_contact)
+        # Truncated to 30 chars + '...' as legacy fallback (cascade 3).
+        assert len(result) <= 35
+        assert result.endswith('...')
+
+    def test_url_with_path_drops_path(self):
+        result = self._name('email:foo[]bar.com url:https://bar.com/some/path?q=1')
+        assert result == 'bar.com (incomplete AROI)'
+
+
+# ============================================================================
+# Option B: incomplete-AROI sibling map + per-operator count
+# ============================================================================
+
+
+class TestIncompleteAROISiblingMap:
+    """Option B: categorization builds a global map of relays that
+    declare a url:<domain> token but failed AROI parsing, and
+    cross-references it against AROI-complete operators so the
+    operator detail page can surface 'N sibling relays missing
+    ciissversion' hints."""
+
+    def test_sibling_map_groups_by_normalised_url_domain(self):
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                # Two ciissversion-less v3-proof relays under 1aeo.com:
+                {'fingerprint': 'A' * 40, 'aroi_configured': False,
+                 'contact': 'email:tor[]1aeo.com url:https://www.1aeo.com '
+                            'proof:uri-familyid-ed25519'},
+                {'fingerprint': 'B' * 40, 'aroi_configured': False,
+                 'contact': 'email:abuse[]1aeo.com url:1aeo.com proof:uri-rsa'},
+                # An AROI-complete relay (must NOT appear in the map):
+                {'fingerprint': 'C' * 40, 'aroi_configured': True,
+                 'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:1aeo.com'},
+                # An unrelated incomplete relay under a different url:
+                {'fingerprint': 'D' * 40, 'aroi_configured': False,
+                 'contact': 'url:other.example proof:dns-rsa'},
+            ]
+        }
+        siblings = _build_incomplete_aroi_sibling_map(rs)
+        # Both 1aeo.com fingerprints land in the same bucket regardless
+        # of the url-prefix differences (https://www. vs bare).
+        assert set(siblings.get('1aeo.com', [])) == {'A' * 40, 'B' * 40}
+        # AROI-complete relay (fp C) is excluded from the sibling map.
+        assert 'C' * 40 not in siblings.get('1aeo.com', [])
+        # Other domain still tracked separately.
+        assert siblings.get('other.example') == ['D' * 40]
+
+    def test_calculate_contact_derived_data_propagates_sibling_count(self):
+        """End-to-end: when a contact group is the AROI-validated one
+        for 1aeo.com AND there are sibling incomplete relays under
+        the same url:, calculate_contact_derived_data attaches the
+        count + fingerprint list to contact_data."""
+        from allium.lib.categorization import (
+            sort_relay, calculate_contact_derived_data,
+        )
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                # AROI-complete 1aeo.com relay (the operator group):
+                {
+                    'fingerprint': 'A' * 40, 'flags': [],
+                    'observed_bandwidth': 100, 'consensus_weight': 1,
+                    'consensus_weight_fraction': 0.0,
+                    'guard_consensus_weight_fraction': 0.0,
+                    'middle_consensus_weight_fraction': 0.0,
+                    'exit_consensus_weight_fraction': 0.0,
+                    'first_seen': '2025-01-01 00:00:00',
+                    'country': 'US', 'platform': 'Linux',
+                    'as': '111', 'as_name': '', 'effective_family': [],
+                    'aroi_domain': '1aeo.com', 'aroi_configured': True,
+                    'contact': ('ciissversion:3 url:1aeo.com '
+                                'proof:uri-familyid-ed25519'),
+                    'contact_md5': '1aeohash',
+                },
+                # Sibling missing ciissversion (NOT in the operator group):
+                {
+                    'fingerprint': 'B' * 40, 'flags': [],
+                    'observed_bandwidth': 50, 'consensus_weight': 1,
+                    'consensus_weight_fraction': 0.0,
+                    'guard_consensus_weight_fraction': 0.0,
+                    'middle_consensus_weight_fraction': 0.0,
+                    'exit_consensus_weight_fraction': 0.0,
+                    'first_seen': '2025-01-01 00:00:00',
+                    'country': 'US', 'platform': 'Linux',
+                    'as': '111', 'as_name': '', 'effective_family': [],
+                    'aroi_domain': 'none', 'aroi_configured': False,
+                    'contact': 'email:tor[]1aeo.com url:1aeo.com '
+                               'proof:uri-familyid-ed25519',
+                    'contact_md5': 'sibling_hash',
+                },
+            ],
+            'sorted': {'contact': {}},
+        }
+        # Categorise just the AROI-complete relay.
+        sort_relay(rs, rs.json['relays'][0], 0, 'contact', '1aeohash', 1, 0.0)
+        rs.json['sorted']['contact']['1aeohash']['bandwidth'] = 100
+        calculate_contact_derived_data(rs)
+
+        cd = rs.json['sorted']['contact']['1aeohash']
+        assert cd.get('incomplete_sibling_count') == 1
+        assert 'B' * 40 in cd.get('incomplete_sibling_fingerprints', [])

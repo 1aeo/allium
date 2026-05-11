@@ -668,6 +668,16 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     display_data['contact_variants'] = contact_variants
     display_data['contact_variant_count'] = len(contact_variants)
 
+    # Option B: surface the incomplete-AROI sibling count on the
+    # operator detail page. Categorisation (categorization.py) attaches
+    # this to the contact's sorted-data dict (i) when at least one
+    # relay published `url:<this-aroi-domain>` but failed AROI
+    # parsing. Forward the count + capped fingerprint list verbatim.
+    display_data['incomplete_sibling_count'] = i.get('incomplete_sibling_count', 0)
+    display_data['incomplete_sibling_fingerprints'] = i.get(
+        'incomplete_sibling_fingerprints', []
+    )
+
     # 1. Bandwidth breakdown by role
     display_data['bandwidth_breakdown'] = _format_bandwidth_breakdown(i, bandwidth_unit, relay_set)
 

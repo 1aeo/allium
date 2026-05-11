@@ -653,6 +653,47 @@ def propagate_as_rarity(relay_set):
         cw = e.get('consensus_weight_fraction', 0)
         relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
+_INCOMPLETE_URL_RE = re.compile(
+    r'\burl:(?:https?://)?([^,\s]+)',
+    re.IGNORECASE,
+)
+
+
+def _build_incomplete_aroi_sibling_map(relay_set):
+    """Option B: build a {normalised_url_domain: [fingerprints, ...]} map
+    of relays that DECLARE a url: token but failed AROI parsing
+    (typically because they're missing ciissversion or have a
+    version/proof mismatch). Used by the operator detail page to
+    surface 'N sibling relays appear to share your domain but are
+    misconfigured' hints.
+    """
+    siblings = {}
+    for relay in relay_set.json.get("relays", []):
+        # AROI-complete relays don't go in this map.
+        if relay.get("aroi_configured"):
+            continue
+        contact = relay.get("contact", "") or ""
+        if not contact:
+            continue
+        m = _INCOMPLETE_URL_RE.search(contact)
+        if not m:
+            continue
+        domain = m.group(1)
+        if "://" in domain:
+            domain = domain.split("://", 1)[1]
+        domain = domain.split("/", 1)[0].split("?", 1)[0]
+        if domain.startswith("www."):
+            domain = domain[4:]
+        domain = domain.rstrip(".,;:").lower()
+        if not domain:
+            continue
+        fp = relay.get("fingerprint")
+        if not fp:
+            continue
+        siblings.setdefault(domain, []).append(fp)
+    return siblings
+
+
 def calculate_contact_derived_data(relay_set):
     """
     Calculate derived contact data: primary countries and bandwidth means in single pass.
@@ -660,6 +701,11 @@ def calculate_contact_derived_data(relay_set):
     """
     if "contact" not in relay_set.json["sorted"]:
         return
+
+    # Option B: pre-compute the global incomplete-AROI sibling map ONCE
+    # before the per-contact loop, then attach the count to each
+    # contact_data whose aroi_domain matches.
+    incomplete_siblings = _build_incomplete_aroi_sibling_map(relay_set)
         
     for contact_hash, contact_data in relay_set.json["sorted"]["contact"].items():
         # PRIMARY COUNTRIES CALCULATION (from _calculate_primary_countries)
@@ -704,6 +750,26 @@ def calculate_contact_derived_data(relay_set):
         # contact_data["contact_variant_count"]; the set itself is no
         # longer needed.
         contact_data.pop("_contact_variant_set", None)
+
+        # Option B: cross-reference this AROI-complete operator against
+        # the incomplete-AROI sibling map built above. Sibling relays
+        # are those that declare the same `url:<domain>` token in their
+        # contact string but failed AROI parsing (typically because
+        # they're missing ciissversion). The contact-page template
+        # surfaces this as an actionable "N sibling relays appear to
+        # share your domain but are misconfigured" hint pointing
+        # operators to the specific relays that need ContactInfo
+        # fixes.
+        aroi_domain = (contact_data.get("aroi_domain") or "").lower().strip()
+        if aroi_domain and aroi_domain != "none":
+            sibling_fps = incomplete_siblings.get(aroi_domain, [])
+            if sibling_fps:
+                contact_data["incomplete_sibling_count"] = len(sibling_fps)
+                # Cap the rendered list to a reasonable count to avoid
+                # blowing out the operator page when an operator has
+                # hundreds of misconfigured siblings — the count
+                # itself is the actionable signal.
+                contact_data["incomplete_sibling_fingerprints"] = sibling_fps[:25]
         
         # BANDWIDTH MEANS CALCULATION (optimized from _calculate_bandwidth_means)
         relays = contact_data.get("relays", [])
