@@ -653,44 +653,83 @@ def propagate_as_rarity(relay_set):
         cw = e.get('consensus_weight_fraction', 0)
         relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
-_INCOMPLETE_URL_RE = re.compile(
-    r'\burl:(?:https?://)?([^,\s]+)',
-    re.IGNORECASE,
-)
-
-
 def _build_incomplete_aroi_sibling_map(relay_set):
-    """Option B: build a {normalised_url_domain: [fingerprints, ...]} map
-    of relays that DECLARE a url: token but failed AROI parsing
-    (typically because they're missing ciissversion or have a
-    version/proof mismatch). Used by the operator detail page to
-    surface 'N sibling relays appear to share your domain but are
-    misconfigured' hints.
+    """Option B (security-hardened): build a sibling map keyed by the
+    AROI-complete operator's ``aroi_domain`` -> [fingerprints of
+    incomplete-AROI relays whose attribution is CRYPTOGRAPHICALLY
+    AUTHENTICATED via Tor's mutual family-declaration mechanism].
+
+    Background — why we don't trust ``url:<domain>`` claims:
+        Earlier versions of this map keyed by the raw ``url:`` token
+        in the incomplete relay's ContactInfo, then attached those
+        relays to whichever validated operator's ``aroi_domain``
+        matched. That trusted the claiming relay's unauthenticated
+        ContactInfo string — any rogue operator could publish
+        ``url:victim.example`` and inject a "sibling relays missing
+        AROI fields" warning onto victim.example's operator page,
+        damaging the victim's reputation without any actual
+        relationship. (Reported as a medium-severity finding in
+        review round 7.)
+
+    Fix — use effective_family instead:
+        Tor relays declare family membership in two directions; only
+        relays that BOTH list each other in their family configuration
+        appear in each other's ``effective_family`` field. That makes
+        ``effective_family`` an authenticated signal — relay X cannot
+        unilaterally claim to be in relay Y's family.
+
+        For each AROI-complete operator we collect the union of their
+        validated relays' ``effective_family`` fingerprints. Any
+        incomplete-AROI relay whose own fingerprint appears in that
+        union is then a safe attribution; the validated operator
+        chose to mutually-declare family with that relay.
+
+    Returns:
+        dict aroi_domain -> list of fingerprints (incomplete-AROI
+        relays in the operator's authenticated family pool).
     """
-    siblings = {}
+    # Step 1: build aroi_domain -> set of validated-relay family
+    # members, and aroi_domain -> set of validated-relay fingerprints
+    # (for the exclusion check below).
+    family_pool = {}
+    validated_fps_by_domain = {}
     for relay in relay_set.json.get("relays", []):
-        # AROI-complete relays don't go in this map.
+        if not relay.get("aroi_configured"):
+            continue
+        domain = (relay.get("aroi_domain") or "").lower().strip()
+        if not domain or domain == "none":
+            continue
+        fp = relay.get("fingerprint")
+        if fp:
+            validated_fps_by_domain.setdefault(domain, set()).add(fp)
+        ef = relay.get("effective_family") or []
+        if ef:
+            family_pool.setdefault(domain, set()).update(ef)
+
+    # Step 2: collect fingerprints of incomplete-AROI relays.
+    incomplete_fps = set()
+    for relay in relay_set.json.get("relays", []):
         if relay.get("aroi_configured"):
-            continue
-        contact = relay.get("contact", "") or ""
-        if not contact:
-            continue
-        m = _INCOMPLETE_URL_RE.search(contact)
-        if not m:
-            continue
-        domain = m.group(1)
-        if "://" in domain:
-            domain = domain.split("://", 1)[1]
-        domain = domain.split("/", 1)[0].split("?", 1)[0]
-        if domain.startswith("www."):
-            domain = domain[4:]
-        domain = domain.rstrip(".,;:").lower()
-        if not domain:
             continue
         fp = relay.get("fingerprint")
         if not fp:
             continue
-        siblings.setdefault(domain, []).append(fp)
+        contact = relay.get("contact", "") or ""
+        if not contact.strip():
+            continue
+        incomplete_fps.add(fp)
+
+    # Step 3: intersect — for each operator's authenticated family pool,
+    # keep only the fingerprints that are themselves incomplete-AROI.
+    # We exclude validated-self fingerprints from the pool so an
+    # operator's own validated relays don't get mistakenly counted as
+    # "incomplete siblings".
+    siblings = {}
+    for domain, pool in family_pool.items():
+        own_validated = validated_fps_by_domain.get(domain, set())
+        attributable = sorted(pool & incomplete_fps - own_validated)
+        if attributable:
+            siblings[domain] = attributable
     return siblings
 
 

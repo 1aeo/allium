@@ -101,31 +101,34 @@
                         </ul>
                     </li>
                     {%- endif %}
-                    {# Option B (incomplete-AROI sibling hint): when an
-                       operator's AROI domain (e.g. 1aeo.com) is properly
-                       resolved here BUT some of their relays out there
-                       publish a `url:<this-domain>` token without
-                       declaring `ciissversion:` (or with a mismatched
-                       version/proof pair), categorisation flagged them
-                       as 'incomplete sibling relays'. They appear on
-                       leaderboards as a separate, fragmented entry
-                       (now shown as '<domain> (incomplete AROI)' per
-                       Option A). Surface the count here so this
-                       operator is told what to fix in the misconfigured
-                       relays' ContactInfo. #}
+                    {# Option B (incomplete-AROI sibling hint, security-
+                       hardened): only attributes incomplete relays that
+                       this operator's validated relays mutually-declared
+                       in their effective_family. Tor's family mechanism
+                       requires both relays to list each other, so a
+                       rogue relay cannot inject a "sibling missing
+                       AROI" warning onto this operator's page just by
+                       publishing url:<this-domain> in its own
+                       ContactInfo. Reviewer-flagged as a medium-severity
+                       reputation-tampering vector when keyed by the
+                       unauthenticated url: claim alone. #}
                     {%- set _sibling_count = (contact_display_data.get('incomplete_sibling_count', 0) if contact_display_data else 0) -%}
                     {%- if _sibling_count > 0 %}
-                    <li><strong>⚠ Sibling relays missing AROI fields:</strong>
+                    <li><strong>⚠ Family relays missing AROI fields:</strong>
                         <span style="color: #856404;">{{ _sibling_count }}</span>
-                        relay{{ 's' if _sibling_count != 1 else '' }} declare
-                        <code style="font-size: 11px; padding: 1px 4px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 2px;">url:{{ relay_subset[0]['aroi_domain']|escape if relay_subset and relay_subset[0].get('aroi_domain') else 'this domain' }}</code>
-                        in their ContactInfo but are missing
+                        relay{{ 's' if _sibling_count != 1 else '' }} that
+                        <em>this operator's validated relays mutually declare
+                        in their <code>effective_family</code></em>
+                        appear to be missing
                         <code style="font-size: 11px; padding: 1px 4px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 2px;">ciissversion:</code>
-                        (or have a version/proof mismatch). They show up on the
-                        leaderboard as a fragmented "{{ relay_subset[0]['aroi_domain']|escape if relay_subset and relay_subset[0].get('aroi_domain') else '' }} (incomplete AROI)" entry instead of being
-                        grouped under this operator. Add the missing
+                        in their ContactInfo (or have a version/proof mismatch).
+                        They show up on the leaderboard as a fragmented
+                        "{{ relay_subset[0]['aroi_domain']|escape if relay_subset and relay_subset[0].get('aroi_domain') else '' }} (incomplete AROI)" entry
+                        instead of being grouped under this operator.
+                        Add the missing
                         <code style="font-size: 11px; padding: 1px 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 2px;">ciissversion:3</code>
-                        (or :2 for legacy RSA proofs) to those relays' ContactInfo to merge them.
+                        (or <code>:2</code> for legacy RSA proofs) to those
+                        relays' ContactInfo to merge them.
                     </li>
                     {%- endif %}
                     <li><strong>Hash:</strong> {{ contact_hash }}</li>
