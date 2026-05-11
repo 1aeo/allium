@@ -379,7 +379,7 @@ Network Health Dashboard
                 </div>
                 <!-- B2.1: v2 (RSA-fingerprint) proof types -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at &lt;fingerprint&gt;.&lt;domain&gt;.{% if relays.json.network_health.dns_error_top5 %}
+                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at &lt;domain&gt; (per spec; the record value contains the fingerprint, NOT the host).{% if relays.json.network_health.dns_error_top5 %}
 &#10;&#10;Top DNS failure reasons:{% for error, count in relays.json.network_health.dns_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>

@@ -581,13 +581,17 @@ class TestContactRankingsIndex:
         rs = self._mock_relay_set({
             'bandwidth': [('OLD', {})],
         })
+        rs.leaderboards_version = 1
         first = generate_contact_rankings('OLD', rs)
         assert first  # populates cache
-        # Replace the leaderboards object — cache key (id of leaderboards
-        # dict) should differ, so a fresh build kicks in.
+        # Replace the leaderboards object AND bump the deterministic
+        # version counter — _generate_aroi_leaderboards in production
+        # bumps relay_set.leaderboards_version after every rebuild, so
+        # any cached rankings index is invalidated.
         rs.json['aroi_leaderboards']['leaderboards'] = {
             'bandwidth': [('NEW', {})],
         }
+        rs.leaderboards_version += 1
         assert generate_contact_rankings('NEW', rs)
         assert generate_contact_rankings('OLD', rs) == []
 
@@ -982,3 +986,113 @@ class TestEarlyReturnPercentageFields:
         assert 'relays_v3_informational_percentage' in m
         assert isinstance(m['relays_version_proof_mismatch_percentage'], float)
         assert isinstance(m['relays_v3_informational_percentage'], float)
+
+
+# ============================================================================
+# Reviewer follow-up #3: F1 (v3_informational counter), F6 (version counter)
+# ============================================================================
+
+
+class TestV3InformationalCounter:
+    """F1: the v3_informational branch must bump the dedicated
+    incomplete_v3_informational_count field — it was being missed
+    despite the field being initialised at construction time."""
+
+    def test_v3_informational_relay_increments_counter(self):
+        """A relay with ciissversion:3 + no url: should bump
+        validation_summary.incomplete_v3_informational_count
+        even though it routes to the not_configured bucket."""
+        from allium.lib.aroi_validation import get_contact_validation_status
+        relays = [{
+            'fingerprint': 'A' * 40,
+            # Spec-legal v3 informational form: ciissversion:3 + email
+            # but no url:.
+            'contact': 'ciissversion:3 email:owner[]example.com',
+            # _check_aroi_fields will see has_ciissversion=True,
+            # has_url=False, treat as v3_informational category.
+            'aroi_domain': 'none',
+            'aroi_version': '3',
+            'aroi_proof_type': None,
+            'aroi_configured': False,
+        }]
+        result = get_contact_validation_status(relays, {'results': []})
+        assert result['validation_summary']['incomplete_v3_informational_count'] == 1
+
+    def test_non_v3_informational_does_not_inflate_counter(self):
+        """An unrelated incomplete relay must NOT bump the
+        v3_informational counter."""
+        from allium.lib.aroi_validation import get_contact_validation_status
+        relays = [{
+            'fingerprint': 'B' * 40,
+            'contact': 'noreply@nowhere.invalid',  # plain contact, no AROI
+            'aroi_domain': 'none',
+            'aroi_version': None,
+            'aroi_proof_type': None,
+            'aroi_configured': False,
+        }]
+        result = get_contact_validation_status(relays, {'results': []})
+        assert result['validation_summary']['incomplete_v3_informational_count'] == 0
+
+
+class TestRankingsCacheVersionCounter:
+    """F6: cache key for _get_contact_rankings_index switched from
+    id(leaderboards_obj) to a deterministic monotonic counter
+    (relay_set.leaderboards_version) bumped by _generate_aroi_leaderboards.
+    """
+
+    def test_version_counter_invalidates_cache(self):
+        from allium.lib.operator_analysis import generate_contact_rankings
+        rs = MagicMock()
+        rs.json = {'aroi_leaderboards': {'leaderboards': {
+            'bandwidth': [('OLD', {})],
+        }}}
+        rs.leaderboards_version = 1
+        first = generate_contact_rankings('OLD', rs)
+        assert first
+        # Bump the counter — even WITHOUT replacing the leaderboards
+        # dict object, the cache must invalidate.
+        rs.leaderboards_version = 2
+        rs.json['aroi_leaderboards']['leaderboards'] = {
+            'bandwidth': [('NEW', {})],
+        }
+        new_rankings = generate_contact_rankings('NEW', rs)
+        assert new_rankings
+        assert generate_contact_rankings('OLD', rs) == []
+
+    def test_same_version_serves_cached_results(self):
+        """If leaderboards_version doesn't change, the cached index is
+        reused — even after the underlying leaderboards dict is
+        mutated in-place. This is intentional: the version counter is
+        the authoritative invalidation signal, not object identity."""
+        from allium.lib.operator_analysis import generate_contact_rankings
+        rs = MagicMock()
+        rs.json = {'aroi_leaderboards': {'leaderboards': {
+            'bandwidth': [('A', {})],
+        }}}
+        rs.leaderboards_version = 5
+        # First call populates cache.
+        first = generate_contact_rankings('A', rs)
+        assert first
+        # Mutate underlying data WITHOUT bumping the version. The cache
+        # MUST keep serving the original snapshot — production code is
+        # required to bump leaderboards_version on every rebuild.
+        rs.json['aroi_leaderboards']['leaderboards'] = {
+            'bandwidth': [('B', {})],
+        }
+        # 'A' still resolves (because cache wasn't invalidated).
+        second = generate_contact_rankings('A', rs)
+        assert second
+        # 'B' does NOT resolve (the new entry isn't in the cache).
+        assert generate_contact_rankings('B', rs) == []
+
+    def test_relays_generate_aroi_leaderboards_bumps_version(self):
+        """Source-level guarantee: _generate_aroi_leaderboards must
+        increment leaderboards_version. Locks the production-side
+        contract that the cache invalidation depends on."""
+        import inspect
+        from allium.lib.relays import Relays
+        src = inspect.getsource(Relays._generate_aroi_leaderboards)
+        assert 'leaderboards_version' in src, (
+            "_generate_aroi_leaderboards must bump leaderboards_version "
+            "to invalidate the rankings index cache"
+        )

@@ -120,15 +120,20 @@ def _build_contact_rankings_index(relay_set):
 def _get_contact_rankings_index(relay_set):
     """Lazy-build and cache the rankings index on the relay_set.
 
-    The cache key is the id() of the leaderboards object — invalidates
-    automatically if leaderboards are recomputed mid-build (defensive,
-    in practice they're built once and then read-only).
+    Cache key is a deterministic monotonic counter
+    (relay_set.leaderboards_version) instead of id(leaderboards_obj).
+    Reviewer-flagged: id()-based keys can theoretically collide if an
+    old leaderboards dict is GC'd and a new one happens to land at the
+    same memory address. Switching to a monotonic counter makes
+    invalidation explicit: every code path that rebuilds or replaces
+    aroi_leaderboards (the only call site is _generate_aroi_leaderboards
+    in relays.py) bumps relay_set.leaderboards_version, which guarantees
+    the cached index is rebuilt from the fresh leaderboards.
     """
-    leaderboards_obj = (
-        relay_set.json.get('aroi_leaderboards', {}).get('leaderboards', {})
-        if hasattr(relay_set, 'json') else None
-    )
-    cache_key = id(leaderboards_obj) if leaderboards_obj is not None else 0
+    if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
+        cache_key = 0
+    else:
+        cache_key = getattr(relay_set, 'leaderboards_version', 0)
 
     cached = getattr(relay_set, '_contact_rankings_index_cache', None)
     if cached is not None and cached.get('key') == cache_key:

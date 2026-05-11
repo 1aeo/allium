@@ -1240,6 +1240,12 @@ class Relays:
         """
         self._log_progress("Generating AROI operator leaderboards...")
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
+        # Bump the deterministic version counter consumed by
+        # operator_analysis._get_contact_rankings_index so any cached
+        # rankings index is invalidated and rebuilt from the fresh
+        # leaderboards. Cheaper + more reliable than id()-based
+        # invalidation (no risk of address reuse on GC'd dicts).
+        self.leaderboards_version = getattr(self, 'leaderboards_version', 0) + 1
         contact_count = len(self.json.get('sorted', {}).get('contact', {}))
         self._log_progress(f"AROI leaderboards generated for {contact_count} operators")
 

@@ -1684,6 +1684,13 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 # validate against.
                 summary['not_configured_count'] += 1
                 summary['not_configured_no_aroi_info_count'] += 1
+                # Reviewer-flagged: also bump the dedicated counter so
+                # the validation_summary's incomplete_v3_informational_count
+                # field (initialised to 0 at construction time) reflects
+                # the actual number of v3-informational-only relays.
+                # Without this, the field was always 0 even when v3
+                # informational relays existed.
+                summary['incomplete_v3_informational_count'] += 1
                 relay_info['missing'] = (
                     "ciissversion:3 with no url (spec-legal informational only)"
                 )

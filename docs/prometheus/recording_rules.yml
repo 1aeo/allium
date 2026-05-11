@@ -65,18 +65,29 @@ groups:
 
       # v3 success ratio (over v3 configured). sum() on the numerator
       # for the same label-matching reason as above.
+      #
+      # The previous version used clamp_min(..., 1) to avoid divide-
+      # by-zero, but that caused installations with zero v3-configured
+      # relays to emit a misleading 0% series. Switched to `unless` to
+      # DROP the series entirely when configured count is zero —
+      # cleaner for dashboards (no fake 0% line) and for AroiV3SuccessRateLow
+      # alerting (no spurious "v3 success rate is 0%" page when the
+      # operator simply hasn't migrated to v3 yet).
       - record: aeo1_aroi_v3_success_ratio_derived
         expr: >
           sum(aeo1_aroi_relays_count_by_version{ciissversion="3",state="configured_checked_valid"})
           /
-          clamp_min(aeo1_aroi_v3_configured_relays_count_derived, 1)
+          aeo1_aroi_v3_configured_relays_count_derived
+          unless aeo1_aroi_v3_configured_relays_count_derived == 0
 
-      # v2 success ratio (over v2 configured)
+      # v2 success ratio (over v2 configured) — same drop-on-zero
+      # behaviour as v3 for symmetry.
       - record: aeo1_aroi_v2_success_ratio_derived
         expr: >
           sum(aeo1_aroi_relays_count_by_version{ciissversion="2",state="configured_checked_valid"})
           /
-          clamp_min(aeo1_aroi_v2_configured_relays_count_derived, 1)
+          aeo1_aroi_v2_configured_relays_count_derived
+          unless aeo1_aroi_v2_configured_relays_count_derived == 0
 
       # v3 migration adoption ratio: v3 declared / total declared.
       # Network-wide migration progress KPI for dashboards.

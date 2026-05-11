@@ -434,7 +434,16 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
         # path errored out.
         if relay_set.progress:
             print(f"⚠️  AROI Validation: Error loading data: {e}")
-        from .aroi_validation import PROOF_TYPE_STAT_KEYS
+        # Protect the fallback import too — the original error may have
+        # been raised from inside aroi_validation itself, in which case
+        # re-importing here would re-raise and skip the rest of the
+        # zeroed fallback. Default PROOF_TYPE_STAT_KEYS to () so the
+        # subsequent comprehension simply produces no per-proof-type
+        # entries (callers tolerate missing keys via .get() with 0).
+        try:
+            from .aroi_validation import PROOF_TYPE_STAT_KEYS
+        except Exception:
+            PROOF_TYPE_STAT_KEYS = ()
         fallback = {
             'aroi_validated_count': 0,
             'aroi_unvalidated_count': 0,
