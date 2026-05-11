@@ -1442,68 +1442,84 @@ class TestIncompleteAROIDisplayName:
 
 
 class TestIncompleteAROISiblingMap:
-    """Option B (security-hardened): the sibling map keys by AROI-
-    complete operator's aroi_domain and only attributes incomplete
-    relays that appear in the validated relays' effective_family.
-    Trusting an unauthenticated url: token would let any rogue relay
-    publish 'url:victim.example' and inject a 'sibling relays missing
-    AROI fields' warning onto victim.example's operator page —
-    that's a reputation-tampering / spoofing vector. Tor's mutual
-    family-declaration mechanism gives us an authenticated signal
-    instead (a relay can't unilaterally claim to be in another
-    relay's family)."""
+    """Option B: two clearly-labelled buckets of incomplete-AROI relays
+    on the validated operator's detail page:
+      - authenticated_family: relays in mutual effective_family
+      - url_claim: relays self-asserting url:<this-domain> but NOT
+        in effective_family (operator gets visibility into spoofing
+        attempts and missing-family own-relays alike).
+    The contact-page template renders these under DISTINCT headings
+    with the second one explicitly labelled 'Self-asserted ... claims
+    (unverified)' so visitors don't conflate them with authenticated
+    relays. Importantly: neither bucket affects the operator's
+    validated metrics, bandwidth totals, relay counts, etc."""
 
-    def test_authenticated_sibling_attributed(self):
-        """Incomplete relay listed in validated relay's effective_family
-        is safely attributed to the validated operator's aroi_domain."""
+    def test_authenticated_family_bucket(self):
+        """Incomplete relay in validated relay's effective_family
+        lands in the authenticated_family bucket."""
         from allium.lib.categorization import _build_incomplete_aroi_sibling_map
         rs = MagicMock()
         rs.json = {
             'relays': [
-                # Validated 1aeo relay; mutually-declares family with B.
                 {'fingerprint': 'A' * 40, 'aroi_configured': True,
                  'aroi_domain': '1aeo.com',
                  'effective_family': ['B' * 40]},
-                # Incomplete v3-proof relay; missing ciissversion.
-                # Authenticated via mutual effective_family declaration.
                 {'fingerprint': 'B' * 40, 'aroi_configured': False,
                  'effective_family': ['A' * 40],
-                 'contact': 'email:tor[]1aeo.com url:1aeo.com '
-                            'proof:uri-familyid-ed25519'},
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519'},
             ]
         }
         siblings = _build_incomplete_aroi_sibling_map(rs)
-        assert siblings.get('1aeo.com') == ['B' * 40]
+        bucket = siblings.get('1aeo.com', {})
+        assert bucket.get('authenticated_family') == ['B' * 40]
+        # B was attributed via family, NOT also as a url_claim
+        # (we partition: family wins).
+        assert bucket.get('url_claim') == []
 
-    def test_unauthenticated_url_claim_NOT_attributed(self):
-        """A rogue relay claiming url:victim.example WITHOUT mutual
-        family declaration must NOT inject itself onto victim.example's
-        operator page. This is the reputation-tampering / spoofing
-        vector the security review flagged."""
+    def test_url_claim_bucket_keeps_unauthenticated_claims(self):
+        """A relay claiming url:victim.example WITHOUT mutual family
+        declaration lands in the url_claim bucket, NOT the
+        authenticated_family bucket. The operator gets visibility
+        into the unverified claim (could be misconfig OR spoofing)
+        without being told this relay is authenticated."""
         from allium.lib.categorization import _build_incomplete_aroi_sibling_map
         rs = MagicMock()
         rs.json = {
             'relays': [
-                # Validated victim.example relay — declares NO family.
                 {'fingerprint': 'V' * 40, 'aroi_configured': True,
                  'aroi_domain': 'victim.example', 'effective_family': []},
-                # Rogue relay claiming url:victim.example, NOT in
-                # victim's effective_family. Has v3-proof + missing
-                # ciissversion (the same pattern as legitimate
-                # misconfigured siblings).
                 {'fingerprint': 'R' * 40, 'aroi_configured': False,
                  'effective_family': [],
                  'contact': 'url:victim.example proof:uri-familyid-ed25519'},
             ]
         }
         siblings = _build_incomplete_aroi_sibling_map(rs)
-        # Rogue MUST NOT be attributed to victim.example.
-        assert siblings.get('victim.example', []) == []
+        bucket = siblings.get('victim.example', {})
+        # The unverified claim is preserved (operator wants visibility)
+        assert bucket.get('url_claim') == ['R' * 40]
+        # But NOT promoted to the authenticated bucket.
+        assert bucket.get('authenticated_family') == []
 
-    def test_validated_self_excluded_from_sibling_pool(self):
-        """An operator's own validated relays must NOT count as
-        'incomplete siblings' even when they appear in their own
-        effective_family."""
+    def test_buckets_are_partitioned_no_double_counting(self):
+        """A relay that's BOTH in the validated operator's family AND
+        publishes url:<domain> goes ONLY to authenticated_family."""
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                {'fingerprint': 'A' * 40, 'aroi_configured': True,
+                 'aroi_domain': '1aeo.com',
+                 'effective_family': ['B' * 40]},
+                {'fingerprint': 'B' * 40, 'aroi_configured': False,
+                 'effective_family': ['A' * 40],
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519'},
+            ]
+        }
+        bucket = _build_incomplete_aroi_sibling_map(rs)['1aeo.com']
+        assert bucket['authenticated_family'] == ['B' * 40]
+        assert bucket['url_claim'] == []  # NOT double-counted
+
+    def test_validated_self_excluded(self):
         from allium.lib.categorization import _build_incomplete_aroi_sibling_map
         rs = MagicMock()
         rs.json = {
@@ -1517,55 +1533,48 @@ class TestIncompleteAROISiblingMap:
             ]
         }
         siblings = _build_incomplete_aroi_sibling_map(rs)
-        assert siblings.get('1aeo.com', []) == []
+        # Both validated -> no incomplete siblings to attribute.
+        assert siblings == {} or all(
+            not v.get('authenticated_family') and not v.get('url_claim')
+            for v in siblings.values()
+        )
 
-    def test_calculate_contact_derived_data_propagates_sibling_count(self):
-        """End-to-end: contact_data['incomplete_sibling_count'] is set
-        for an AROI-validated operator when an authenticated family
-        member is misconfigured."""
+    def test_calculate_contact_derived_data_populates_both_counts(self):
+        """End-to-end: contact_data carries SEPARATE counts for each
+        bucket, ready for contact.html to render distinct hints."""
         from allium.lib.categorization import (
             sort_relay, calculate_contact_derived_data,
         )
         rs = MagicMock()
-        # Note: only the validated relay is sort_relay'd into the
-        # contact group; the incomplete sibling exists in the relays
-        # list but is unattributed by AROI.
+        base = {
+            'flags': [], 'observed_bandwidth': 100, 'consensus_weight': 1,
+            'consensus_weight_fraction': 0.0,
+            'guard_consensus_weight_fraction': 0.0,
+            'middle_consensus_weight_fraction': 0.0,
+            'exit_consensus_weight_fraction': 0.0,
+            'first_seen': '2025-01-01 00:00:00',
+            'country': 'US', 'platform': 'Linux',
+            'as': '111', 'as_name': '',
+        }
         rs.json = {
             'relays': [
-                {
-                    'fingerprint': 'A' * 40, 'flags': [],
-                    'observed_bandwidth': 100, 'consensus_weight': 1,
-                    'consensus_weight_fraction': 0.0,
-                    'guard_consensus_weight_fraction': 0.0,
-                    'middle_consensus_weight_fraction': 0.0,
-                    'exit_consensus_weight_fraction': 0.0,
-                    'first_seen': '2025-01-01 00:00:00',
-                    'country': 'US', 'platform': 'Linux',
-                    'as': '111', 'as_name': '',
-                    # Mutual family declaration with B.
-                    'effective_family': ['B' * 40],
-                    'aroi_domain': '1aeo.com', 'aroi_configured': True,
-                    'contact': ('ciissversion:3 url:1aeo.com '
-                                'proof:uri-familyid-ed25519'),
-                    'contact_md5': '1aeohash',
-                },
-                {
-                    'fingerprint': 'B' * 40, 'flags': [],
-                    'observed_bandwidth': 50, 'consensus_weight': 1,
-                    'consensus_weight_fraction': 0.0,
-                    'guard_consensus_weight_fraction': 0.0,
-                    'middle_consensus_weight_fraction': 0.0,
-                    'exit_consensus_weight_fraction': 0.0,
-                    'first_seen': '2025-01-01 00:00:00',
-                    'country': 'US', 'platform': 'Linux',
-                    'as': '111', 'as_name': '',
-                    # Mutual family declaration -> authenticated link.
-                    'effective_family': ['A' * 40],
-                    'aroi_domain': 'none', 'aroi_configured': False,
-                    'contact': 'email:tor[]1aeo.com url:1aeo.com '
-                               'proof:uri-familyid-ed25519',
-                    'contact_md5': 'sibling_hash',
-                },
+                {**base, 'fingerprint': 'A' * 40,
+                 'effective_family': ['B' * 40],
+                 'aroi_domain': '1aeo.com', 'aroi_configured': True,
+                 'contact': 'ciissversion:3 url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': '1aeohash'},
+                # Authenticated family member (in validated A's family).
+                {**base, 'fingerprint': 'B' * 40,
+                 'effective_family': ['A' * 40],
+                 'aroi_domain': 'none', 'aroi_configured': False,
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': 'famhash'},
+                # Unauthenticated url-claim relay (NOT in family).
+                {**base, 'fingerprint': 'R' * 40,
+                 'effective_family': [],
+                 'aroi_domain': 'none', 'aroi_configured': False,
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': 'rogue_hash'},
             ],
             'sorted': {'contact': {}},
         }
@@ -1574,5 +1583,7 @@ class TestIncompleteAROISiblingMap:
         calculate_contact_derived_data(rs)
 
         cd = rs.json['sorted']['contact']['1aeohash']
-        assert cd.get('incomplete_sibling_count') == 1
-        assert 'B' * 40 in cd.get('incomplete_sibling_fingerprints', [])
+        assert cd.get('incomplete_family_count') == 1
+        assert 'B' * 40 in cd.get('incomplete_family_fingerprints', [])
+        assert cd.get('incomplete_url_claim_count') == 1
+        assert 'R' * 40 in cd.get('incomplete_url_claim_fingerprints', [])

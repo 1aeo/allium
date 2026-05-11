@@ -653,44 +653,57 @@ def propagate_as_rarity(relay_set):
         cw = e.get('consensus_weight_fraction', 0)
         relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
+_INCOMPLETE_URL_RE = re.compile(
+    r'\burl:(?:https?://)?([^,\s]+)',
+    re.IGNORECASE,
+)
+
+
 def _build_incomplete_aroi_sibling_map(relay_set):
-    """Option B (security-hardened): build a sibling map keyed by the
-    AROI-complete operator's ``aroi_domain`` -> [fingerprints of
-    incomplete-AROI relays whose attribution is CRYPTOGRAPHICALLY
-    AUTHENTICATED via Tor's mutual family-declaration mechanism].
+    """Option B: surface BOTH authenticated and self-asserted incomplete-
+    AROI relays on the validated operator's detail page, in TWO
+    separately-labelled buckets so visitors and the operator can tell
+    them apart:
 
-    Background — why we don't trust ``url:<domain>`` claims:
-        Earlier versions of this map keyed by the raw ``url:`` token
-        in the incomplete relay's ContactInfo, then attached those
-        relays to whichever validated operator's ``aroi_domain``
-        matched. That trusted the claiming relay's unauthenticated
-        ContactInfo string — any rogue operator could publish
-        ``url:victim.example`` and inject a "sibling relays missing
-        AROI fields" warning onto victim.example's operator page,
-        damaging the victim's reputation without any actual
-        relationship. (Reported as a medium-severity finding in
-        review round 7.)
+      authenticated_family:
+        Incomplete relays that this operator's validated relays
+        MUTUALLY-DECLARE in their effective_family. Tor's family
+        mechanism requires both relays to list each other in their
+        family configuration, so this is a cryptographically
+        authenticated signal — relay X cannot unilaterally inject
+        itself into relay Y's family pool.
 
-    Fix — use effective_family instead:
-        Tor relays declare family membership in two directions; only
-        relays that BOTH list each other in their family configuration
-        appear in each other's ``effective_family`` field. That makes
-        ``effective_family`` an authenticated signal — relay X cannot
-        unilaterally claim to be in relay Y's family.
+      url_claim:
+        Incomplete relays that publish ``url:<this-domain>`` in their
+        own ContactInfo but are NOT in this operator's
+        effective_family. These are SELF-ASSERTED and unauthenticated.
+        They could be:
+          (a) the operator's own additional relays that forgot BOTH
+              ciissversion AND family declaration — actionable for
+              the operator (fix the ContactInfo to merge them); OR
+          (b) third parties spoofing the operator's domain — also
+              actionable (operator can investigate / report rogue
+              operators / contact the directory authorities).
 
-        For each AROI-complete operator we collect the union of their
-        validated relays' ``effective_family`` fingerprints. Any
-        incomplete-AROI relay whose own fingerprint appears in that
-        union is then a safe attribution; the validated operator
-        chose to mutually-declare family with that relay.
+    Both cases are useful for the operator to see; the page renders
+    them under separate, clearly-labelled headings so neither is
+    confused with the operator's authenticated relays.
+
+    Reviewed and intentionally restored after a brief detour where
+    the url-claim bucket was suppressed entirely. The operator's
+    visibility into spoofing claims is a feature, not a vulnerability,
+    provided the framing makes the unauthenticated nature explicit
+    (which contact.html does — the heading says "Self-asserted" and
+    the body explicitly notes the relays could be misconfigured
+    siblings OR spoofing attempts).
 
     Returns:
-        dict aroi_domain -> list of fingerprints (incomplete-AROI
-        relays in the operator's authenticated family pool).
+        dict aroi_domain -> {
+            'authenticated_family': sorted [fingerprints],
+            'url_claim': sorted [fingerprints],
+        }
+        Only includes operators where at least one bucket is non-empty.
     """
-    # Step 1: build aroi_domain -> set of validated-relay family
-    # members, and aroi_domain -> set of validated-relay fingerprints
-    # (for the exclusion check below).
     family_pool = {}
     validated_fps_by_domain = {}
     for relay in relay_set.json.get("relays", []):
@@ -706,8 +719,8 @@ def _build_incomplete_aroi_sibling_map(relay_set):
         if ef:
             family_pool.setdefault(domain, set()).update(ef)
 
-    # Step 2: collect fingerprints of incomplete-AROI relays.
     incomplete_fps = set()
+    incomplete_url_claims = {}  # domain -> set of fps
     for relay in relay_set.json.get("relays", []):
         if relay.get("aroi_configured"):
             continue
@@ -718,18 +731,33 @@ def _build_incomplete_aroi_sibling_map(relay_set):
         if not contact.strip():
             continue
         incomplete_fps.add(fp)
+        # Parse the url: token (if any) so we can attribute the relay
+        # to the unauthenticated bucket of whatever domain it claims.
+        m = _INCOMPLETE_URL_RE.search(contact)
+        if m:
+            domain = m.group(1)
+            if "://" in domain:
+                domain = domain.split("://", 1)[1]
+            domain = domain.split("/", 1)[0].split("?", 1)[0]
+            if domain.startswith("www."):
+                domain = domain[4:]
+            domain = domain.rstrip(".,;:").lower()
+            if domain:
+                incomplete_url_claims.setdefault(domain, set()).add(fp)
 
-    # Step 3: intersect — for each operator's authenticated family pool,
-    # keep only the fingerprints that are themselves incomplete-AROI.
-    # We exclude validated-self fingerprints from the pool so an
-    # operator's own validated relays don't get mistakenly counted as
-    # "incomplete siblings".
+    # Combine: every operator with EITHER bucket non-empty appears in
+    # the result.
+    all_domains = set(family_pool) | set(incomplete_url_claims) | set(validated_fps_by_domain)
     siblings = {}
-    for domain, pool in family_pool.items():
+    for domain in all_domains:
         own_validated = validated_fps_by_domain.get(domain, set())
-        attributable = sorted(pool & incomplete_fps - own_validated)
-        if attributable:
-            siblings[domain] = attributable
+        family_only = family_pool.get(domain, set()) & incomplete_fps - own_validated
+        url_only = incomplete_url_claims.get(domain, set()) - own_validated - family_only
+        if family_only or url_only:
+            siblings[domain] = {
+                'authenticated_family': sorted(family_only),
+                'url_claim': sorted(url_only),
+            }
     return siblings
 
 
@@ -791,24 +819,29 @@ def calculate_contact_derived_data(relay_set):
         contact_data.pop("_contact_variant_set", None)
 
         # Option B: cross-reference this AROI-complete operator against
-        # the incomplete-AROI sibling map built above. Sibling relays
-        # are those that declare the same `url:<domain>` token in their
-        # contact string but failed AROI parsing (typically because
-        # they're missing ciissversion). The contact-page template
-        # surfaces this as an actionable "N sibling relays appear to
-        # share your domain but are misconfigured" hint pointing
-        # operators to the specific relays that need ContactInfo
-        # fixes.
+        # the incomplete-AROI sibling map. Two separately-labelled
+        # buckets surface to the contact page:
+        #   - authenticated_family: incomplete relays mutually declared
+        #     in this operator's validated relays' effective_family
+        #     (Tor's bidirectional family mechanism — authenticated)
+        #   - url_claim: incomplete relays that publish url:<this-domain>
+        #     in their ContactInfo but are NOT in effective_family
+        #     (self-asserted, unauthenticated — could be the operator's
+        #     own misconfigured relays OR third-party spoofers; either
+        #     way the operator wants visibility)
+        # See _build_incomplete_aroi_sibling_map for the rationale.
         aroi_domain = (contact_data.get("aroi_domain") or "").lower().strip()
         if aroi_domain and aroi_domain != "none":
-            sibling_fps = incomplete_siblings.get(aroi_domain, [])
-            if sibling_fps:
-                contact_data["incomplete_sibling_count"] = len(sibling_fps)
-                # Cap the rendered list to a reasonable count to avoid
-                # blowing out the operator page when an operator has
-                # hundreds of misconfigured siblings — the count
-                # itself is the actionable signal.
-                contact_data["incomplete_sibling_fingerprints"] = sibling_fps[:25]
+            buckets = incomplete_siblings.get(aroi_domain) or {}
+            auth_fps = buckets.get('authenticated_family', [])
+            claim_fps = buckets.get('url_claim', [])
+            if auth_fps:
+                contact_data["incomplete_family_count"] = len(auth_fps)
+                # Cap the rendered list to keep the page bounded.
+                contact_data["incomplete_family_fingerprints"] = auth_fps[:25]
+            if claim_fps:
+                contact_data["incomplete_url_claim_count"] = len(claim_fps)
+                contact_data["incomplete_url_claim_fingerprints"] = claim_fps[:25]
         
         # BANDWIDTH MEANS CALCULATION (optimized from _calculate_bandwidth_means)
         relays = contact_data.get("relays", [])

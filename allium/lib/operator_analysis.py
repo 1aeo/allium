@@ -668,14 +668,22 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     display_data['contact_variants'] = contact_variants
     display_data['contact_variant_count'] = len(contact_variants)
 
-    # Option B: surface the incomplete-AROI sibling count on the
-    # operator detail page. Categorisation (categorization.py) attaches
-    # this to the contact's sorted-data dict (i) when at least one
-    # relay published `url:<this-aroi-domain>` but failed AROI
-    # parsing. Forward the count + capped fingerprint list verbatim.
-    display_data['incomplete_sibling_count'] = i.get('incomplete_sibling_count', 0)
-    display_data['incomplete_sibling_fingerprints'] = i.get(
-        'incomplete_sibling_fingerprints', []
+    # Option B: surface the incomplete-AROI sibling counts on the
+    # operator detail page. Categorisation (categorization.py)
+    # populates two separately-labelled buckets:
+    #   - authenticated_family (mutual effective_family declaration)
+    #   - url_claim (self-asserted url:<this-domain>; could be
+    #     operator's own misconfigured relays OR third-party spoofers)
+    # Forward both verbatim so contact.html can render them under
+    # distinct headings — never confuse self-asserted claims with
+    # the operator's authenticated relays.
+    display_data['incomplete_family_count'] = i.get('incomplete_family_count', 0)
+    display_data['incomplete_family_fingerprints'] = i.get(
+        'incomplete_family_fingerprints', []
+    )
+    display_data['incomplete_url_claim_count'] = i.get('incomplete_url_claim_count', 0)
+    display_data['incomplete_url_claim_fingerprints'] = i.get(
+        'incomplete_url_claim_fingerprints', []
     )
 
     # 1. Bandwidth breakdown by role
