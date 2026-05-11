@@ -379,15 +379,23 @@ Network Health Dashboard
                 </div>
                 <!-- B2.1: v2 (RSA-fingerprint) proof types -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at &lt;domain&gt; (per spec; the record value contains the fingerprint, NOT the host).{% if relays.json.network_health.dns_error_top5 %}
-&#10;&#10;Top DNS failure reasons:{% for error, count in relays.json.network_health.dns_error_top5 %}
-&#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
+                    {# F2a: dns_error_top5 / uri_error_top5 are
+                       categorised by 'dns' / 'uri' substring of the
+                       proof type, NOT by ciissversion — meaning they
+                       lump v2 (DNS-RSA / URI-RSA) and v3 (DNS-FamilyID /
+                       URI-FamilyID) failures together. Showing those
+                       lists in the v2 tile would surface v3 failures
+                       on a v2-labelled card, which is misleading.
+                       Drop the "Top failure reasons" block from the
+                       v2 tiles until v2-scoped failure rollups exist;
+                       the per-proof-type Top error categories on the
+                       API Diagnostics page already provides v2/v3
+                       split via _build_error_rollup. #}
+                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at &lt;domain&gt; (per spec; the record value contains the fingerprint, NOT the host).">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>
                         <span class="metric-label">DNS-RSA <span style="font-size: 9px; padding: 0 4px; background-color: #6c757d; color: white; border-radius: 2px;">v2</span></span>
                     </div>
-                    <div class="metric-item" title="URI-RSA (v2): {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays validated. CIISS v2 — file at /.well-known/tor-relay/rsa-fingerprint.txt.{% if relays.json.network_health.uri_error_top5 %}
-&#10;&#10;Top URI failure reasons:{% for error, count in relays.json.network_health.uri_error_top5 %}
-&#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
+                    <div class="metric-item" title="URI-RSA (v2): {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays validated. CIISS v2 — file at /.well-known/tor-relay/rsa-fingerprint.txt.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }})</span>
                         <span class="metric-label">URI-RSA <span style="font-size: 9px; padding: 0 4px; background-color: #6c757d; color: white; border-radius: 2px;">v2</span></span>
                     </div>
@@ -429,8 +437,23 @@ Network Health Dashboard
                 {%- set _v2_count = _decl.get('2', 0) -%}
                 {%- set _v3_count = _decl.get('3', 0) -%}
                 {%- set _none_count = _decl.get('none', 0) -%}
-                {%- set _v2_pct = relays.json.network_health.v2_success_rate -%}
-                {%- set _v3_pct = relays.json.network_health.v3_success_rate -%}
+                {# F2b: accurate validity calculation. Previously the
+                   tiles paired the declared count (_v{2,3}_count) with
+                   v{2,3}_success_rate which is the proof-attempt
+                   success rate (validated relays / total relays where
+                   the validator ran a proof attempt) — that ignored
+                   declared relays the validator hasn't yet processed
+                   and overstated validity. New ratio:
+                       validated('N') / declared('N')
+                   matches what the reader expects from a "X declared,
+                   Y% valid" tile: of the relays declaring ciissversion:N,
+                   Y% have a successful upstream validation. Uses
+                   ciissversion_validated (set by aroi_validation.py
+                   line 1141) and ciissversion_declared on the same
+                   network_health dict. #}
+                {%- set _val = relays.json.network_health.ciissversion_validated or {} -%}
+                {%- set _v2_pct = (_val.get('2', 0) / _v2_count * 100.0) if _v2_count > 0 else 0.0 -%}
+                {%- set _v3_pct = (_val.get('3', 0) / _v3_count * 100.0) if _v3_count > 0 else 0.0 -%}
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Relays declaring ciissversion:2 in their ContactInfo. v2 uses RSA-fingerprint proofs (dns-rsa, uri-rsa) and is the legacy spec.">
                         <span class="metric-value">{{ "{:,}".format(_v2_count) }} ({{ "%.0f%%"|format(_v2_pct) }} valid)</span>

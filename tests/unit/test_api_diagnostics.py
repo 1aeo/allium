@@ -1254,28 +1254,36 @@ class TestCheckAROIFieldsFirstWins:
         from allium.lib.aroi_validation import _check_aroi_fields
         return _check_aroi_fields(contact)
 
-    def test_unsupported_first_version_blocks_supported_later(self):
-        """ciissversion:99 first, ciissversion:2 second — first wins:
-        no supported version recognised."""
+    def test_unsupported_first_version_preserved_blocks_supported_later(self):
+        """ciissversion:99 first, ciissversion:2 second — first-wins
+        semantics: the v99 token wins. Per the latest hardening, the
+        raw '99' is PRESERVED in result['version'] so downstream code
+        can route the relay to the unsupported/mismatch bucket
+        instead of bucketing it as 'no ciissversion declared'.
+        """
         from allium.lib.aroi_validation import reset_aroi_warnings_log
         reset_aroi_warnings_log()
         result = self._check(
             'ciissversion:99 ciissversion:2 url:foo.com proof:uri-rsa'
         )
-        assert result['version'] is None
-        # has_ciissversion is True only if a SUPPORTED version was found.
-        assert result['has_ciissversion'] is False
+        # Raw token preserved (NOT silently overridden by the v2 that
+        # appears later in the contact string).
+        assert result['version'] == '99'
+        # has_ciissversion just reflects 'a version was declared'.
+        assert result['has_ciissversion'] is True
 
-    def test_unsupported_first_proof_type_blocks_supported_later(self):
+    def test_unsupported_first_proof_type_preserved_blocks_supported_later(self):
         """proof:rsa-extended-pq first, proof:uri-rsa second — first
-        wins: no supported proof_type recognised."""
+        wins: raw 'rsa-extended-pq' preserved so downstream sees the
+        explicit-but-unsupported declaration."""
         from allium.lib.aroi_validation import reset_aroi_warnings_log
         reset_aroi_warnings_log()
         result = self._check(
             'ciissversion:2 proof:rsa-extended-pq proof:uri-rsa url:foo.com'
         )
-        assert result['proof_type'] is None
-        assert result['has_proof'] is False
+        assert result['proof_type'] == 'rsa-extended-pq'
+        # has_proof flag tracks 'a proof was declared'.
+        assert result['has_proof'] is True
 
     def test_supported_first_version_still_works(self):
         from allium.lib.aroi_validation import reset_aroi_warnings_log
@@ -1292,3 +1300,86 @@ class TestCheckAROIFieldsFirstWins:
         result = self._check('ciissversion:2 proof:uri-rsa url:foo.com')
         assert result['proof_type'] == 'uri-rsa'
         assert result['has_proof'] is True
+
+
+# ============================================================================
+# Reviewer follow-up #5: F1 preserve raw unsupported tokens
+# ============================================================================
+
+
+class TestUnsupportedTokenPreservation:
+    """F1: when the FIRST declared ciissversion / proof_type is
+    unsupported, _check_aroi_fields preserves the raw token in
+    aroi_fields['version'] / aroi_fields['proof_type'] (was None
+    previously). This routes the relay through a different bucket
+    in _categorize_by_missing_fields than 'missing field' — the
+    operator-actionable distinction between 'didn't declare a version'
+    vs 'declared an unsupported version' is preserved."""
+
+    def _check(self, contact):
+        from allium.lib.aroi_validation import _check_aroi_fields, reset_aroi_warnings_log
+        reset_aroi_warnings_log()
+        return _check_aroi_fields(contact)
+
+    def test_unsupported_version_preserved_in_aroi_fields(self):
+        result = self._check(
+            'ciissversion:99 url:foo.com proof:uri-rsa'
+        )
+        assert result['version'] == '99'
+        assert result['has_ciissversion'] is True
+
+    def test_unsupported_proof_type_preserved_in_aroi_fields(self):
+        result = self._check(
+            'ciissversion:2 proof:rsa-extended-pq url:foo.com'
+        )
+        assert result['proof_type'] == 'rsa-extended-pq'
+        assert result['has_proof'] is True
+
+    def test_unsupported_version_does_not_route_to_no_aroi_info(self):
+        """With all 3 fields declared but ciissversion is unsupported,
+        the relay should NOT land in the 'no_aroi_info' bucket (which
+        is reserved for relays with NO AROI fields at all). The
+        unsupported-version case ends up routed via the
+        version_proof_mismatch branch because PROOF_TYPE_VERSION can't
+        match the unsupported value to any known proof type — that's a
+        more accurate signal than 'missing field'."""
+        from allium.lib.aroi_validation import (
+            _check_aroi_fields, _categorize_by_missing_fields,
+            reset_aroi_warnings_log,
+        )
+        reset_aroi_warnings_log()
+        result = _check_aroi_fields(
+            'ciissversion:99 url:foo.com proof:uri-rsa'
+        )
+        category = _categorize_by_missing_fields(result, has_contact=True)
+        # Anything OTHER than the missing-field buckets is acceptable —
+        # the explicit-but-unsupported declaration is no longer hidden.
+        assert category not in ('no_aroi_info', 'missing_two_aroi',
+                                'no_proof', 'no_domain', 'no_ciissversion')
+
+
+class TestDashboardTileValidityAccuracy:
+    """F2b: dashboard ciissversion v2/v3 tiles compute validity as
+    validated / declared (NOT the proof-attempt success rate which
+    the *_success_rate fields carry). The new template logic divides
+    ciissversion_validated[N] by ciissversion_declared[N]; this
+    test enforces the data shape the template depends on so a future
+    change in aroi_validation can't silently break the tile math."""
+
+    def test_ciissversion_validated_and_declared_keys_present(self):
+        """Both dicts must be populated by calculate_aroi_validation_metrics
+        even for the empty / fallback path the template can hit."""
+        from allium.lib.aroi_validation import calculate_aroi_validation_metrics
+        m = calculate_aroi_validation_metrics(
+            [{'fingerprint': 'A' * 40,
+              'contact': 'ciissversion:2 proof:uri-rsa url:foo.com',
+              'aroi_domain': 'foo.com', 'aroi_version': '2',
+              'aroi_proof_type': 'uri-rsa', 'aroi_configured': True}],
+            None,  # validation_data None -> early-return fallback
+        )
+        # Both dicts must exist (even if empty) so the template's
+        # dict.get(...) calls don't crash on undefined access.
+        assert 'ciissversion_declared' in m
+        assert 'ciissversion_validated' in m
+        assert isinstance(m['ciissversion_declared'], dict)
+        assert isinstance(m['ciissversion_validated'], dict)

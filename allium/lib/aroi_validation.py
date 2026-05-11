@@ -544,6 +544,20 @@ def _check_aroi_fields(contact: str) -> Dict:
     # the unsupported value once (for A.8 observability) and leave
     # version=None so the relay gets bucketed as "no AROI" until the
     # operator fixes the contact string.
+    # Reviewer-flagged: previously when the FIRST declared token was
+    # unsupported (e.g. 'ciissversion:99'), version was set to None and
+    # downstream _categorize_by_missing_fields() bucketed the relay as
+    # "missing field". That hid the operator-actionable distinction
+    # between "didn't declare any version" and "declared an unsupported
+    # version". Fix: keep the raw first token in `version` even when
+    # unsupported, while STILL calling _record_warning so the
+    # build-time observability log captures the unknown value. The
+    # existing has_ciissversion / complete computation below uses
+    # bool(version), so the relay now appears as "version present"
+    # in the aroi_fields dict — the explicit-but-unsupported case
+    # gets routed accordingly by the caller (typically lands in the
+    # version_proof_mismatch bucket because PROOF_TYPE_VERSION can't
+    # match the unsupported value).
     version = None
     any_match = _CIISS_ANY_VERSION_RE.search(contact)
     if any_match:
@@ -551,6 +565,8 @@ def _check_aroi_fields(contact: str) -> Dict:
         if first_v in SUPPORTED_CIISSVERSIONS:
             version = first_v
         else:
+            # Preserve the raw unsupported token (don't discard it).
+            version = first_v
             if first_v not in _warned_unsupported_ciissversion:
                 _warned_unsupported_ciissversion.add(first_v)
                 logger.info(
@@ -559,7 +575,8 @@ def _check_aroi_fields(contact: str) -> Dict:
                 )
                 _record_warning('unsupported_ciissversion', first_v)
 
-    # Same first-wins logic for proof_type.
+    # Same first-wins logic for proof_type — same preservation
+    # treatment for unsupported proof types.
     proof_type = None
     any_match = _PROOF_ANY_TYPE_RE.search(contact)
     if any_match:
@@ -567,6 +584,8 @@ def _check_aroi_fields(contact: str) -> Dict:
         if first_pt in ALL_PROOF_TYPES:
             proof_type = first_pt
         else:
+            # Preserve the raw unsupported proof type (don't discard).
+            proof_type = first_pt
             if first_pt not in _warned_unsupported_proof_type:
                 _warned_unsupported_proof_type.add(first_pt)
                 logger.warning(
