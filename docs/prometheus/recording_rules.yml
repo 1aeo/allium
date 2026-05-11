@@ -91,12 +91,21 @@ groups:
 
       # v3 migration adoption ratio: v3 declared / total declared.
       # Network-wide migration progress KPI for dashboards.
+      #
+      # Same drop-on-zero guard as the success-ratio rules above:
+      # `unless ... == 0` omits the series entirely when the network has
+      # zero AROI-configured relays (rather than emitting a misleading
+      # 0/1 = 0% line that would imply v3 adoption is collapsing when
+      # actually nothing is configured).
       - record: aeo1_aroi_v3_adoption_ratio_derived
         expr: >
           aeo1_aroi_v3_configured_relays_count_derived
           /
-          clamp_min(
+          (
             aeo1_aroi_v2_configured_relays_count_derived
-            + aeo1_aroi_v3_configured_relays_count_derived,
-            1
+            + aeo1_aroi_v3_configured_relays_count_derived
           )
+          unless (
+            aeo1_aroi_v2_configured_relays_count_derived
+            + aeo1_aroi_v3_configured_relays_count_derived
+          ) == 0

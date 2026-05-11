@@ -528,43 +528,52 @@ def _check_aroi_fields(contact: str) -> Dict:
             'version_proof_mismatch': False,
         }
 
-    # Supported version match. CIISS spec: keys MUST appear only once;
-    # re.search returns the FIRST match — matches upstream validator's
-    # "first wins" rule for duplicate fields.
-    ciiss_match = _CIISS_VERSION_RE.search(contact)
-    version = ciiss_match.group(1) if ciiss_match else None
-
-    # Detect (and remember) any unsupported ciissversion for one-time
-    # logging in A.8. We deliberately do NOT crash on these — older v1
-    # contacts and any future v4+ should be silently bucketed as
-    # "no AROI" until we explicitly support them.
-    if not version:
-        any_match = _CIISS_ANY_VERSION_RE.search(contact)
-        if any_match:
-            v = any_match.group(1)
-            if v not in SUPPORTED_CIISSVERSIONS and v not in _warned_unsupported_ciissversion:
-                _warned_unsupported_ciissversion.add(v)
+    # CIISS spec: keys MUST appear only once; if duplicates exist,
+    # FIRST wins (matches upstream validator).
+    #
+    # Reviewer-flagged: previous implementation searched with
+    # _CIISS_VERSION_RE first (matches only SUPPORTED versions: 2 or 3)
+    # and only fell back to _CIISS_ANY_VERSION_RE when no supported
+    # match existed. That hid the case where the FIRST declared token
+    # is unsupported (e.g. 'ciissversion:99 ciissversion:2 ...') —
+    # the supported-only search would skip the v99 and silently use
+    # v2, violating first-wins semantics.
+    #
+    # New logic: find the FIRST declared ciissversion regardless of
+    # support. If the first token is supported, use it. Otherwise log
+    # the unsupported value once (for A.8 observability) and leave
+    # version=None so the relay gets bucketed as "no AROI" until the
+    # operator fixes the contact string.
+    version = None
+    any_match = _CIISS_ANY_VERSION_RE.search(contact)
+    if any_match:
+        first_v = any_match.group(1)
+        if first_v in SUPPORTED_CIISSVERSIONS:
+            version = first_v
+        else:
+            if first_v not in _warned_unsupported_ciissversion:
+                _warned_unsupported_ciissversion.add(first_v)
                 logger.info(
                     "AROI: encountered unsupported ciissversion:%s — ignoring "
-                    "(supported: %s)", v, ','.join(SUPPORTED_CIISSVERSIONS)
+                    "(supported: %s)", first_v, ','.join(SUPPORTED_CIISSVERSIONS)
                 )
-                _record_warning('unsupported_ciissversion', v)
+                _record_warning('unsupported_ciissversion', first_v)
 
-    # Supported proof type match. Same first-wins semantics.
-    proof_match = _PROOF_TYPE_RE.search(contact)
-    proof_type = proof_match.group(1).lower() if proof_match else None
-
-    if not proof_type:
-        any_match = _PROOF_ANY_TYPE_RE.search(contact)
-        if any_match:
-            pt = any_match.group(1).lower()
-            if pt not in ALL_PROOF_TYPES and pt not in _warned_unsupported_proof_type:
-                _warned_unsupported_proof_type.add(pt)
+    # Same first-wins logic for proof_type.
+    proof_type = None
+    any_match = _PROOF_ANY_TYPE_RE.search(contact)
+    if any_match:
+        first_pt = any_match.group(1).lower()
+        if first_pt in ALL_PROOF_TYPES:
+            proof_type = first_pt
+        else:
+            if first_pt not in _warned_unsupported_proof_type:
+                _warned_unsupported_proof_type.add(first_pt)
                 logger.warning(
                     "AROI: unknown proof type '%s' — update ALL_PROOF_TYPES "
-                    "in aroi_validation.py to recognise new proof types", pt
+                    "in aroi_validation.py to recognise new proof types", first_pt
                 )
-                _record_warning('unsupported_proof_type', pt)
+                _record_warning('unsupported_proof_type', first_pt)
 
     has_url = bool(_URL_FIELD_RE.search(contact))
 
@@ -1682,14 +1691,19 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 # fields and no url. NOT incomplete; treat as
                 # "not_configured" because there's no domain claim to
                 # validate against.
+                #
+                # Reviewer-flagged: a v3_informational relay HAS declared
+                # ciissversion:3 — it is NOT a zero-AROI-field contact.
+                # Set result['has_aroi'] = True so downstream code that
+                # filters on 'operators with any AROI declaration' sees
+                # these relays. Drop the not_configured_no_aroi_info_count
+                # bump (that bucket is reserved for relays with NO AROI
+                # fields at all). Keep the not_configured_count and
+                # incomplete_v3_informational_count bumps so the cascade
+                # still flags 'no domain claim to validate' but the
+                # dedicated counter accurately reflects v3-informational.
+                result['has_aroi'] = True
                 summary['not_configured_count'] += 1
-                summary['not_configured_no_aroi_info_count'] += 1
-                # Reviewer-flagged: also bump the dedicated counter so
-                # the validation_summary's incomplete_v3_informational_count
-                # field (initialised to 0 at construction time) reflects
-                # the actual number of v3-informational-only relays.
-                # Without this, the field was always 0 even when v3
-                # informational relays existed.
                 summary['incomplete_v3_informational_count'] += 1
                 relay_info['missing'] = (
                     "ciissversion:3 with no url (spec-legal informational only)"

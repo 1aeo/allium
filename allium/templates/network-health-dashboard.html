@@ -440,7 +440,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ "{:,}".format(_v3_count) }} ({{ "%.0f%%"|format(_v3_pct) }} valid)</span>
                         <span class="metric-label">ciissversion v3</span>
                     </div>
-                    <div class="metric-item" title="Relays not declaring any ciissversion in their ContactInfo (no AROI configured).">
+                    <div class="metric-item" title="ContactInfo records with no declared ciissversion (ciissversion missing — may still include legacy or unspecified AROI entries).">
                         <span class="metric-value">{{ "{:,}".format(_none_count) }}</span>
                         <span class="metric-label">No ciissversion</span>
                     </div>
