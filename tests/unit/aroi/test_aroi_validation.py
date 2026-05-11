@@ -185,6 +185,23 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(result['validation_status'], 'unauthorized')
         self.assertEqual(len(result['unauthorized_relays']), 1)
         self.assertEqual(result['validation_summary']['unauthorized_count'], 1)
+
+    def test_contact_validation_status_handles_null_error(self):
+        """Malformed validator entries should not crash contact page rendering."""
+        relays = [
+            {'fingerprint': 'ABC123', 'nickname': 'test1', 'aroi_domain': 'example.com'}
+        ]
+        validation_data = {
+            'results': [
+                {'fingerprint': 'ABC123', 'valid': False, 'error': None, 'proof_type': 'uri-rsa'}
+            ]
+        }
+
+        result = get_contact_validation_status(relays, validation_data)
+
+        self.assertTrue(result['has_aroi'])
+        self.assertEqual(result['validation_status'], 'misconfigured')
+        self.assertEqual(result['misconfigured_relays'][0]['error'], 'Unknown error')
     
     def test_relay_with_aroi_not_in_validation_map(self):
         """Test that relays with AROI not in validation_map are added to misconfigured_relays.
@@ -286,6 +303,30 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(metrics['unique_aroi_domains_count'], 2)
         self.assertEqual(metrics['validated_aroi_domains_count'], 1)
         self.assertEqual(metrics['invalid_aroi_domains_count'], 1)
+
+    def test_operator_metrics_handle_null_error(self):
+        """Malformed validator entries should not crash network-health metrics."""
+        relays = [
+            {'fingerprint': 'ABC123', 'aroi_domain': 'example.com', 'country': 'us'}
+        ]
+        validation_data = {
+            'metadata': {'timestamp': '2025-11-30T00:00:00Z'},
+            'statistics': {
+                'proof_types': {
+                    'dns_rsa': {'total': 0, 'valid': 0, 'success_rate': 0.0},
+                    'uri_rsa': {'total': 1, 'valid': 0, 'success_rate': 0.0}
+                }
+            },
+            'results': [
+                {'fingerprint': 'ABC123', 'valid': False, 'error': None, 'proof_type': 'uri-rsa'}
+            ]
+        }
+
+        metrics = calculate_aroi_validation_metrics(relays, validation_data, calculate_operator_metrics=True)
+
+        self.assertEqual(metrics['invalid_aroi_domains_count'], 1)
+        self.assertIn(('Unknown error', 1), metrics['relay_error_top5'])
+        self.assertIn(('Unknown error', 1), metrics['operator_error_top5'])
     
     def test_relay_error_top5_calculation(self):
         """Test that relay_error_top5 is calculated correctly."""
