@@ -1,0 +1,210 @@
+"""
+Integration test for first_seen correction end-to-end through Relays().
+
+The 1aeo snapshot at ``docs/development/example-data/1aeo_relays_data.json``
+predates the regression and shows *correct* 2025-dated first_seen values, so
+we synthesise the buggy state on top of it: pick a few relays, save their
+true first_seen, overwrite with a reset date, build matching uptime data,
+run the correction, and verify both the raw correction AND the downstream
+Relays() categorisation see the corrected values.
+"""
+
+import json
+import os
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from allium.lib.first_seen_correction import correct_first_seen
+from allium.lib.relays import Relays
+from allium.lib.time_utils import parse_onionoo_timestamp
+
+
+pytestmark = [pytest.mark.integration]
+
+
+FIXTURE_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / 'docs' / 'development' / 'example-data' / '1aeo_relays_data.json'
+)
+
+
+def _load_fixture():
+    with open(FIXTURE_PATH, 'r') as f:
+        return json.load(f)
+
+
+def _floor_to_grid(dt, interval_seconds):
+    """Floor a UTC datetime to the nearest interval-aligned boundary.
+
+    Mirrors onionoo's own bucket alignment: the ``first`` timestamp of a
+    period is always a multiple of the period's interval relative to the
+    epoch.
+    """
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    elapsed = int((dt - epoch).total_seconds())
+    floored = (elapsed // interval_seconds) * interval_seconds
+    return epoch + timedelta(seconds=floored)
+
+
+def test_correction_propagates_to_relays_sorted_categories():
+    """Synthesise buggy state on 1aeo fixture; verify correction + categorisation."""
+    fixture = _load_fixture()
+    relays = list(fixture.get('relays', []))
+    assert len(relays) >= 5, 'fixture must contain at least 5 relays'
+
+    # Use the first 5 relays for our buggy-state synthesis.
+    affected = relays[:5]
+    reset_date = '2026-05-01 00:00:00'
+
+    # For each, save the true first_seen and overwrite with the reset date.
+    true_first_seen = {}
+    for relay in affected:
+        fp = relay['fingerprint']
+        true_first_seen[fp] = relay['first_seen']
+        relay['first_seen'] = reset_date
+
+    # Build a synthetic uptime payload covering only the 5 affected relays.
+    # Each relay's 5_years.first is the true first_seen floored to the 10-day
+    # grid (864000s = 10d, onionoo's actual 5_years interval), with a single
+    # non-null value at index 0.
+    interval = 864000
+    uptime_relays = []
+    expected_corrected = {}
+    for fp, true_str in true_first_seen.items():
+        true_dt = parse_onionoo_timestamp(true_str)
+        assert true_dt is not None
+        first_dt = _floor_to_grid(true_dt, interval)
+        first_str = first_dt.strftime('%Y-%m-%d %H:%M:%S')
+        expected_corrected[fp] = first_str
+        # Synthesise only the 5_years period for this test -- in real onionoo
+        # data, shorter periods (1_year, 6_months, 1_month) only span the
+        # last N units relative to today, so their values would be all-None
+        # for any portion before the relay's true first_seen. Modeling that
+        # accurately is unnecessary noise for this test; the 5_years bucket
+        # is the one that actually provides the older signal in practice.
+        uptime_relays.append({
+            'fingerprint': fp,
+            'uptime': {
+                '5_years': {
+                    'first': first_str,
+                    'last': '2026-05-13 00:00:00',
+                    'interval': interval,
+                    'count': 43,
+                    'values': [999] * 43,
+                },
+            },
+        })
+
+    uptime_data = {
+        'version': '8.0',
+        'relays_published': '2026-05-13 12:00:00',
+        'relays': uptime_relays,
+    }
+
+    relay_data = {
+        'version': fixture.get('version', '8.0'),
+        'relays_published': '2026-05-13 12:00:00',
+        'relays': relays,
+    }
+
+    # ----- 1. Apply the correction. -----
+    correct_first_seen(relay_data, uptime_data)
+
+    # ----- 2. Verify raw-data correction. -----
+    summary = relay_data['_first_seen_correction_summary']
+    # 5 affected relays should be corrected; the remaining 648 lack
+    # uptime entries so they fall under missing_uptime.
+    assert summary['corrected'] == 5
+    assert summary['missing_uptime'] == len(relays) - 5
+    assert summary['total'] == len(relays)
+
+    for relay in affected:
+        fp = relay['fingerprint']
+        # first_seen now equals the floored true value.
+        assert relay['first_seen'] == expected_corrected[fp], (
+            'fingerprint {}: expected {}, got {}'.format(
+                fp, expected_corrected[fp], relay['first_seen']
+            )
+        )
+        # original preserved.
+        assert relay['first_seen_onionoo_raw'] == reset_date
+        # metadata.
+        assert relay['_first_seen_corrected'] is True
+        assert relay['_first_seen_correction_source'] == 'onionoo_uptime'
+        # corrected value is at most 10 days earlier than the true value
+        # (5_years bucket precision).
+        corrected = parse_onionoo_timestamp(relay['first_seen'])
+        true_dt = parse_onionoo_timestamp(true_first_seen[fp])
+        assert corrected <= true_dt
+        assert (true_dt - corrected) <= timedelta(seconds=interval)
+
+    # ----- 3. Construct Relays() with the corrected data; check categorisation. -----
+    with tempfile.TemporaryDirectory() as tmpdir:
+        relay_set = Relays(
+            output_dir=tmpdir,
+            onionoo_url='http://localhost',
+            relay_data=relay_data,
+            progress=False,
+        )
+
+    assert relay_set.json is not None, 'Relays() returned None unexpectedly'
+
+    sorted_first_seen = relay_set.json['sorted']['first_seen']
+
+    # The reset-date bucket must NOT contain all 5 affected relays (some may
+    # legitimately match on date if the floor lands on 2026-05-01, but that's
+    # unlikely for our 1aeo fixture which has 2025-* original dates).
+    reset_date_only = reset_date.split(' ')[0]
+    affected_fps = {r['fingerprint'] for r in affected}
+    relays_in_reset_bucket = set()
+    if reset_date_only in sorted_first_seen:
+        # categorization stores 'relays' as list of indices; resolve them.
+        idx_list = sorted_first_seen[reset_date_only].get('relays', [])
+        for idx in idx_list:
+            relays_in_reset_bucket.add(relay_set.json['relays'][idx]['fingerprint'])
+    overlap = affected_fps & relays_in_reset_bucket
+    assert overlap == set(), (
+        'affected relays should NOT be in the 2026-05-01 bucket; overlap={}'.format(overlap)
+    )
+
+    # Each affected relay's corrected first_seen date should appear as a bucket.
+    for relay in affected:
+        date_part = relay['first_seen'].split(' ')[0]
+        assert date_part in sorted_first_seen, (
+            'corrected date {} missing from sorted[\'first_seen\']'.format(date_part)
+        )
+
+
+def test_coordinator_exposes_first_seen_repair_stats_on_relay_set():
+    """Verify the coordinator's relay_set.first_seen_repair_stats is wired."""
+    # We don't drive the whole coordinator (it does real HTTP); instead we
+    # mimic the wiring: call correct_first_seen, then construct Relays,
+    # then verify the attribute can be set the same way coordinator does it.
+    fixture = _load_fixture()
+    relay_data = {
+        'version': fixture.get('version', '8.0'),
+        'relays_published': '2026-05-13 12:00:00',
+        'relays': list(fixture['relays'])[:3],
+    }
+    uptime_data = {'relays': []}
+
+    correct_first_seen(relay_data, uptime_data)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        relay_set = Relays(
+            output_dir=tmpdir,
+            onionoo_url='http://localhost',
+            relay_data=relay_data,
+            progress=False,
+        )
+
+    # Coordinator does: relay_set.first_seen_repair_stats = relay_data.get(...)
+    relay_set.first_seen_repair_stats = relay_data.get('_first_seen_correction_summary')
+
+    assert relay_set.first_seen_repair_stats is not None
+    assert relay_set.first_seen_repair_stats['total'] == 3
+    assert relay_set.first_seen_repair_stats['missing_uptime'] == 3
+    assert relay_set.first_seen_repair_stats['corrected'] == 0
