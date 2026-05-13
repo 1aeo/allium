@@ -392,11 +392,13 @@ class Coordinator:
             self.progress_logger.start_section("Data Processing")
             self._log_progress_with_step_increment("Creating relay set with Details API data...")
 
-        # Workaround for onionoo's mass `first_seen` reset bug.
-        # Repair relay['first_seen'] from /uptime history BEFORE the Relays
-        # constructor runs, so categorization, leaderboards, intelligence engine,
-        # templates, and search index all see the corrected value with no rework.
-        # See allium/lib/first_seen_correction.py for details.
+        # Workaround for onionoo's mass `first_seen` reset bug (upstream
+        # issues #40018/#40028/#40033/#40042). Repair relay['first_seen']
+        # from /uptime history BEFORE the Relays constructor runs, so
+        # categorisation, leaderboards, intelligence engine, templates,
+        # and search index all see the corrected value with no rework.
+        # Silent no-op if uptime data is unavailable (e.g. --apis details).
+        # See allium/lib/first_seen_correction.py for full background.
         from .first_seen_correction import correct_first_seen
         correct_first_seen(
             relay_data,
