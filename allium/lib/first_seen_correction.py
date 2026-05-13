@@ -146,24 +146,29 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
             continue
 
         uptime_relay = uptime_index[fingerprint]
-        earliest = _earliest_uptime_timestamp(uptime_relay)
-        if earliest is None:
+        interval = _earliest_uptime_interval(uptime_relay)
+        if interval is None:
             summary['no_signal'] += 1
             continue
+        lower, upper = interval
 
-        if earliest < FIRST_SEEN_FLOOR:
+        if lower < FIRST_SEEN_FLOOR:
             summary['rejected_floor'] += 1
             continue
 
-        if earliest >= current_dt:
-            # Uptime says relay was first observed at the same time as, or
-            # later than, /details claims. Nothing to correct.
+        # Only correct if /details' first_seen is strictly *after* the latest
+        # possible time the relay could have been observed in uptime's
+        # earliest interval. Comparing against `upper` (not `lower`) avoids
+        # spurious "corrections" of a few days for relays whose first_seen
+        # is already consistent with uptime to within bucket precision.
+        if upper >= current_dt:
             summary['unchanged'] += 1
             continue
 
-        # Apply the correction.
+        # Apply the correction. Use `lower` so the corrected first_seen is
+        # guaranteed to be <= the true first_seen.
         relay['first_seen_onionoo_raw'] = raw_first_seen
-        relay['first_seen'] = earliest.strftime(_ONIONOO_TIMESTAMP_FORMAT)
+        relay['first_seen'] = lower.strftime(_ONIONOO_TIMESTAMP_FORMAT)
         relay['_first_seen_corrected'] = True
         relay['_first_seen_correction_source'] = 'onionoo_uptime'
         summary['corrected'] += 1
@@ -176,21 +181,29 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     return relay_data
 
 
-def _earliest_uptime_timestamp(uptime_relay):
-    # type: (Dict[str, Any]) -> Optional[datetime]
-    """Return UTC datetime of the earliest non-null observation in uptime
-    history across all available periods, or ``None`` if no period yields a
-    valid signal.
+def _earliest_uptime_interval(uptime_relay):
+    # type: (Dict[str, Any]) -> Optional[tuple]
+    """Return ``(lower_bound, upper_bound)`` UTC datetimes for the earliest
+    non-null observation in uptime history across all available periods, or
+    ``None`` if no period yields a valid signal.
+
+    The relay was observed *somewhere* in the interval
+    ``[lower_bound, upper_bound]``. ``lower_bound`` is used as the corrected
+    ``first_seen`` (conservative -- never later than truth). ``upper_bound``
+    is used in the "should we correct?" comparison: only if the current
+    onionoo /details first_seen falls *strictly later than* ``upper_bound``
+    do we have evidence the value is wrong.
 
     For each period in ``uptime_relay['uptime']``, find the first index ``i``
     where ``values[i] is not None`` (note: ``0`` is a valid observation
-    meaning "tracked but down"). Compute::
+    meaning "tracked but down"). Per onionoo's protocol spec, ``first`` is
+    the *midpoint* of interval 0, so interval N covers
+    ``[first + N*interval - interval/2, first + N*interval + interval/2]``.
 
-        ts = parse(period['first']) + i * period['interval'] seconds
-
-    Return the minimum ``ts`` across all valid periods. Periods missing
-    ``first``, ``interval``, or with an empty/all-null ``values`` array are
-    skipped silently.
+    Return the period whose ``upper_bound`` is earliest -- this is the
+    longest reliable history that contains the earliest observation.
+    Periods missing ``first``, ``interval``, or with an empty/all-null
+    ``values`` array are skipped silently.
     """
     if not isinstance(uptime_relay, dict):
         return None
@@ -198,24 +211,27 @@ def _earliest_uptime_timestamp(uptime_relay):
     if not isinstance(uptime_section, dict):
         return None
 
-    earliest = None  # type: Optional[datetime]
+    best = None  # type: Optional[tuple]
 
-    # We intentionally iterate over uptime_section.items() rather than the
-    # _UPTIME_PERIODS whitelist, so that any new period names onionoo
-    # introduces are picked up automatically without a code change.
-    for period_name, period_data in uptime_section.items():
-        ts = _earliest_in_period(period_data)
-        if ts is None:
+    # We intentionally iterate over all period_data values rather than a
+    # whitelist of period names, so that any new periods onionoo introduces
+    # are picked up automatically without a code change.
+    for period_data in uptime_section.values():
+        interval = _earliest_in_period(period_data)
+        if interval is None:
             continue
-        if earliest is None or ts < earliest:
-            earliest = ts
+        # Pick the period whose upper_bound is earliest (= relay was
+        # demonstrably observed at the latest a bit further back in time).
+        if best is None or interval[1] < best[1]:
+            best = interval
 
-    return earliest
+    return best
 
 
 def _earliest_in_period(period_data):
-    # type: (Any) -> Optional[datetime]
-    """Find the earliest non-null timestamp in a single uptime period dict.
+    # type: (Any) -> Optional[tuple]
+    """Find the (lower_bound, upper_bound) of the earliest non-null
+    observation in a single uptime period dict.
 
     Returns None for malformed/empty periods. Tolerant of:
 
@@ -249,12 +265,28 @@ def _earliest_in_period(period_data):
             # 0 is a valid observation (tracked but down); only None means
             # "no data for this interval".
             try:
-                return first_dt + timedelta(seconds=int(interval) * idx)
+                interval_int = int(interval)
+                half_interval = interval_int // 2
+                midpoint = first_dt + timedelta(seconds=interval_int * idx)
+                lower = midpoint - timedelta(seconds=half_interval)
+                upper = midpoint + timedelta(seconds=half_interval)
+                return (lower, upper)
             except (OverflowError, ValueError):
                 return None
 
     # All values were None.
     return None
+
+
+# Backwards-compatible wrapper for tests / external callers that only need
+# the lower-bound timestamp.
+def _earliest_uptime_timestamp(uptime_relay):
+    # type: (Dict[str, Any]) -> Optional[datetime]
+    """Return only the lower bound of the earliest uptime observation."""
+    interval = _earliest_uptime_interval(uptime_relay)
+    if interval is None:
+        return None
+    return interval[0]
 
 
 def _build_uptime_index(uptime_data):

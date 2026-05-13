@@ -70,6 +70,11 @@ def test_correction_propagates_to_relays_sorted_categories():
     # Each relay's 5_years.first is the true first_seen floored to the 10-day
     # grid (864000s = 10d, onionoo's actual 5_years interval), with a single
     # non-null value at index 0.
+    #
+    # The correction module returns the LOWER BOUND of the earliest non-null
+    # interval (= first - interval/2) per onionoo's spec ("first is the
+    # midpoint of interval 0"). So the expected corrected value is
+    # first_dt - 5 days.
     interval = 864000
     uptime_relays = []
     expected_corrected = {}
@@ -78,7 +83,8 @@ def test_correction_propagates_to_relays_sorted_categories():
         assert true_dt is not None
         first_dt = _floor_to_grid(true_dt, interval)
         first_str = first_dt.strftime('%Y-%m-%d %H:%M:%S')
-        expected_corrected[fp] = first_str
+        expected_lower_bound = first_dt - timedelta(seconds=interval // 2)
+        expected_corrected[fp] = expected_lower_bound.strftime('%Y-%m-%d %H:%M:%S')
         # Synthesise only the 5_years period for this test -- in real onionoo
         # data, shorter periods (1_year, 6_months, 1_month) only span the
         # last N units relative to today, so their values would be all-None
@@ -134,12 +140,19 @@ def test_correction_propagates_to_relays_sorted_categories():
         # metadata.
         assert relay['_first_seen_corrected'] is True
         assert relay['_first_seen_correction_source'] == 'onionoo_uptime'
-        # corrected value is at most 10 days earlier than the true value
-        # (5_years bucket precision).
+        # Corrected value is the lower bound of interval 0 = first - 5d,
+        # and first is at most `interval` (10 days) earlier than the true
+        # value due to grid-flooring. So corrected is in
+        # [true - interval - interval/2, true] = [true - 15d, true].
         corrected = parse_onionoo_timestamp(relay['first_seen'])
         true_dt = parse_onionoo_timestamp(true_first_seen[fp])
         assert corrected <= true_dt
-        assert (true_dt - corrected) <= timedelta(seconds=interval)
+        max_gap = timedelta(seconds=interval + interval // 2)
+        assert (true_dt - corrected) <= max_gap, (
+            'fingerprint {}: gap {} exceeds max {} (true={}, corrected={})'.format(
+                fp, true_dt - corrected, max_gap, true_dt, corrected
+            )
+        )
 
     # ----- 3. Construct Relays() with the corrected data; check categorisation. -----
     with tempfile.TemporaryDirectory() as tmpdir:

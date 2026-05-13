@@ -75,7 +75,10 @@ def test_corrects_when_uptime_predates_first_seen():
 
     correct_first_seen(data, uptime)
 
-    assert relay['first_seen'] == '2025-03-08 00:00:00'
+    # Per onionoo spec, `first` is the midpoint of interval 0; the strict
+    # lower bound for "earliest possible observation in interval 0" is
+    # `first - interval/2 = 2025-03-08 - 5d = 2025-03-03`.
+    assert relay['first_seen'] == '2025-03-03 00:00:00'
     assert relay['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
     assert relay['_first_seen_corrected'] is True
     assert relay['_first_seen_correction_source'] == 'onionoo_uptime'
@@ -167,8 +170,10 @@ def test_no_change_when_uptime_starts_after_first_seen():
 
 def test_uses_first_non_null_index_when_leading_nulls():
     relay = _make_relay(first_seen='2026-04-06 23:00:00')
-    # 3 leading Nones, then 999. Interval=864000s = 10 days.
-    # first=2025-03-08, idx=3 -> 2025-03-08 + 30 days = 2025-04-07.
+    # 3 leading Nones, then 999. Interval=864000s = 10 days, half = 5 days.
+    # first=2025-03-08 (midpoint of interval 0), idx=3 -> midpoint of interval 3
+    # is 2025-03-08 + 30 days = 2025-04-07; lower bound = 2025-04-07 - 5d
+    # = 2025-04-02.
     uptime = _make_uptime(periods={
         '5_years': {
             'first': '2025-03-08 00:00:00',
@@ -178,7 +183,7 @@ def test_uses_first_non_null_index_when_leading_nulls():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    assert relay['first_seen'] == '2025-04-07 00:00:00'
+    assert relay['first_seen'] == '2025-04-02 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +202,9 @@ def test_zero_value_counts_as_observation():
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
     # Should use idx=2 (the 0), not idx=3.
-    # 2025-03-08 + 20 days = 2025-03-28
-    assert relay['first_seen'] == '2025-03-28 00:00:00'
+    # Midpoint of interval 2 = 2025-03-08 + 20 days = 2025-03-28
+    # Lower bound = 2025-03-28 - 5d = 2025-03-23
+    assert relay['first_seen'] == '2025-03-23 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +227,9 @@ def test_picks_earliest_across_multiple_periods():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    assert relay['first_seen'] == '2024-02-20 00:00:00'
+    # idx=5 in 5_years bucket: midpoint = 2024-01-01 + 50d = 2024-02-20
+    # Lower bound = 2024-02-20 - 5d = 2024-02-15.
+    assert relay['first_seen'] == '2024-02-15 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -277,8 +285,9 @@ def test_handles_malformed_period_missing_interval():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    # 5_years skipped, 1_year used: 2025-05-13.
-    assert relay['first_seen'] == '2025-05-13 00:00:00'
+    # 5_years skipped (no interval), 1_year used: 2025-05-13 minus 1_year
+    # half-interval (172800s / 2 = 1d) = 2025-05-12.
+    assert relay['first_seen'] == '2025-05-12 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +310,9 @@ def test_handles_malformed_period_unparseable_first():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)  # must not crash
-    assert relay['first_seen'] == '2025-05-13 00:00:00'
+    # 5_years skipped (unparseable `first`), 1_year used: 2025-05-13 - 1d
+    # (half of 172800s interval).
+    assert relay['first_seen'] == '2025-05-12 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -403,8 +414,10 @@ def test_first_seen_onionoo_raw_only_added_when_changed():
     data = _make_relay_data(relay_a, relay_b)
     correct_first_seen(data, uptime)
 
-    # A: corrected -> raw preserved
-    assert relay_a['first_seen'] == '2025-03-08 00:00:00'
+    # A: corrected -> raw preserved.
+    # idx=0 with first=2025-03-08, interval=864000 (half=5d), lower bound
+    # = 2025-03-03.
+    assert relay_a['first_seen'] == '2025-03-03 00:00:00'
     assert relay_a['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
     assert relay_a['_first_seen_corrected'] is True
 
@@ -621,3 +634,54 @@ def test_earliest_uptime_timestamp_skips_negative_interval():
         },
     }
     assert _earliest_uptime_timestamp(uptime_relay) is None
+
+
+# ---------------------------------------------------------------------------
+# Upper-bound comparison: avoid spurious "corrections" when /details and
+# /uptime are already in agreement to within bucket precision.
+# ---------------------------------------------------------------------------
+
+def test_no_spurious_correction_when_first_seen_falls_inside_uptime_interval():
+    """If /details' first_seen falls inside the uptime interval, the relay
+    could have been first observed at that exact time -- /details and /uptime
+    don't disagree, so no correction.
+    """
+    # Uptime: first=2025-01-03 (midpoint), interval=864000 (10d, half=5d).
+    # Interval 0 covers [2024-12-29, 2025-01-08].
+    # /details first_seen=2025-01-05 falls INSIDE this interval -- consistent.
+    relay = _make_relay(first_seen='2025-01-05 00:00:00')
+    uptime = _make_uptime(periods={
+        '5_years': {
+            'first': '2025-01-03 00:00:00',
+            'interval': 864000,
+            'values': [999, 999],
+        },
+    })
+    data = _make_relay_data(relay)
+    correct_first_seen(data, uptime)
+    assert relay['first_seen'] == '2025-01-05 00:00:00'
+    assert 'first_seen_onionoo_raw' not in relay
+    assert data['_first_seen_correction_summary']['unchanged'] == 1
+
+
+def test_corrects_when_first_seen_just_past_upper_bound():
+    """When /details first_seen is just past the upper bound of uptime's
+    earliest non-null interval, correction must trigger and yield the lower
+    bound of that interval.
+    """
+    # Uptime: first=2025-01-03 (midpoint), interval=864000s (10d, half=5d).
+    # Interval 0 covers [2024-12-29, 2025-01-08].
+    # /details first_seen=2025-01-09 is 1 day past upper bound -> correct.
+    relay = _make_relay(first_seen='2025-01-09 00:00:00')
+    uptime = _make_uptime(periods={
+        '5_years': {
+            'first': '2025-01-03 00:00:00',
+            'interval': 864000,
+            'values': [999],
+        },
+    })
+    data = _make_relay_data(relay)
+    correct_first_seen(data, uptime)
+    # Corrected to lower bound = 2025-01-03 - 5d = 2024-12-29
+    assert relay['first_seen'] == '2024-12-29 00:00:00'
+    assert relay['first_seen_onionoo_raw'] == '2025-01-09 00:00:00'
