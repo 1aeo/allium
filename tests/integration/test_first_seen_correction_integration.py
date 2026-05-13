@@ -221,3 +221,131 @@ def test_coordinator_exposes_first_seen_repair_stats_on_relay_set():
     assert relay_set.first_seen_repair_stats['total'] == 3
     assert relay_set.first_seen_repair_stats['missing_uptime'] == 3
     assert relay_set.first_seen_repair_stats['corrected'] == 0
+
+
+def test_coordinator_create_relay_set_invokes_correction():
+    """End-to-end through Coordinator.create_relay_set without real HTTP.
+
+    Drives the full coordinator code path that wires correct_first_seen,
+    using a mocked worker_data dict for uptime. The downstream
+    `enrich_with_api_data` (network-health metrics, AROI leaderboards, etc.)
+    is patched to a no-op because building synthetic data complete enough
+    for it would not exercise anything additional that our other tests
+    don't already cover.
+
+    Verifies:
+    - correct_first_seen is invoked (relay's first_seen is repaired)
+    - relay_set.first_seen_repair_stats is set
+    - sorted['first_seen'] bucket reflects the corrected date
+    """
+    from unittest.mock import patch
+    from allium.lib.coordinator import Coordinator
+
+    fp = '0040E1791755D340BA8109F4C1849666582CF56C'
+    relay_data = {
+        'version': '8.0',
+        'relays_published': '2026-05-13 12:00:00',
+        'relays': [
+            {
+                'fingerprint': fp,
+                'nickname': 'testrelay',
+                'first_seen': '2026-04-06 23:00:00',
+                'last_seen': '2026-05-13 12:00:00',
+                'running': True,
+                'flags': ['Running', 'Valid'],
+                'or_addresses': ['10.0.0.1:9001'],
+                'observed_bandwidth': 100000,
+                'consensus_weight': 100,
+                'country': 'us',
+                'country_name': 'United States',
+            },
+        ],
+    }
+    uptime_data = {
+        'version': '8.0',
+        'relays': [
+            {
+                'fingerprint': fp,
+                'uptime': {
+                    '5_years': {
+                        'first': '2025-03-08 00:00:00',
+                        'last': '2026-05-13 00:00:00',
+                        'interval': 864000,
+                        'count': 43,
+                        'values': [999] * 43,
+                    },
+                },
+            },
+        ],
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coord = Coordinator(output_dir=tmpdir, progress=False)
+        coord.worker_data = {'onionoo_uptime': uptime_data}
+        # Patch enrich_with_api_data to a no-op; we're testing only the
+        # correction wiring and first_seen_repair_stats exposure here.
+        with patch.object(
+            type(coord),
+            'create_relay_set',
+            Coordinator.create_relay_set,
+        ):
+            with patch(
+                'allium.lib.relays.Relays.enrich_with_api_data',
+                return_value=None,
+            ):
+                relay_set = coord.create_relay_set(relay_data)
+
+    assert relay_set is not None
+    assert relay_set.first_seen_repair_stats['corrected'] == 1
+    assert relay_set.first_seen_repair_stats['total'] == 1
+
+    relay = relay_set.json['relays'][0]
+    # Lower bound = 2025-03-08 - 5d = 2025-03-03.
+    assert relay['first_seen'] == '2025-03-03 00:00:00'
+    assert relay['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
+    assert relay['_first_seen_corrected'] is True
+
+    assert '2025-03-03' in relay_set.json['sorted']['first_seen']
+    assert '2026-04-06' not in relay_set.json['sorted']['first_seen']
+
+
+def test_coordinator_create_relay_set_no_uptime_is_silent_noop():
+    """When --apis details (no uptime), correct_first_seen short-circuits."""
+    from unittest.mock import patch
+    from allium.lib.coordinator import Coordinator
+
+    fp = '0040E1791755D340BA8109F4C1849666582CF56C'
+    relay_data = {
+        'version': '8.0',
+        'relays_published': '2026-05-13 12:00:00',
+        'relays': [
+            {
+                'fingerprint': fp,
+                'nickname': 'testrelay',
+                'first_seen': '2026-04-06 23:00:00',
+                'last_seen': '2026-05-13 12:00:00',
+                'running': True,
+                'flags': ['Running', 'Valid'],
+                'or_addresses': ['10.0.0.1:9001'],
+                'observed_bandwidth': 100000,
+                'consensus_weight': 100,
+                'country': 'us',
+                'country_name': 'United States',
+            },
+        ],
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        coord = Coordinator(output_dir=tmpdir, progress=False)
+        coord.worker_data = {}  # no uptime
+        with patch(
+            'allium.lib.relays.Relays.enrich_with_api_data',
+            return_value=None,
+        ):
+            relay_set = coord.create_relay_set(relay_data)
+
+    assert relay_set is not None
+    assert relay_set.first_seen_repair_stats['corrected'] == 0
+    assert relay_set.first_seen_repair_stats['missing_uptime'] == 1
+    assert relay_set.json['relays'][0]['first_seen'] == '2026-04-06 23:00:00'
+    assert 'first_seen_onionoo_raw' not in relay_set.json['relays'][0]

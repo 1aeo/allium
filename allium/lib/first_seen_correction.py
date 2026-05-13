@@ -122,7 +122,7 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     if not isinstance(relay_data, dict):
         return relay_data
     relays = relay_data.get('relays')
-    if not relays:
+    if not relays or not isinstance(relays, list):
         # Nothing to correct; still stamp an empty summary so callers that
         # surface .first_seen_repair_stats don't have to special-case None.
         relay_data['_first_seen_correction_summary'] = _empty_summary(0)
@@ -133,6 +133,10 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     summary = _empty_summary(len(relays))
 
     for relay in relays:
+        if not isinstance(relay, dict):
+            # Defensive: a non-dict entry in the relays list. Skip silently
+            # (and don't bump any counter -- we don't know how to classify it).
+            continue
         fingerprint = relay.get('fingerprint')
         raw_first_seen = relay.get('first_seen')
         current_dt = parse_onionoo_timestamp(raw_first_seen) if raw_first_seen else None

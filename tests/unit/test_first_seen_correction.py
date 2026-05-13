@@ -664,6 +664,41 @@ def test_no_spurious_correction_when_first_seen_falls_inside_uptime_interval():
     assert data['_first_seen_correction_summary']['unchanged'] == 1
 
 
+def test_relays_list_with_non_dict_entries_is_robust():
+    """Defensive: a non-dict entry in relays must not crash anything."""
+    data = {'relays': [_make_relay(), 'garbage', None, 42]}
+    uptime = _make_uptime(periods={
+        '5_years': {'first': '2025-03-08 00:00:00', 'interval': 864000,
+                    'values': [999]},
+    })
+    correct_first_seen(data, uptime)
+    # The real relay was corrected; the garbage entries were silently skipped.
+    assert data['relays'][0]['_first_seen_corrected'] is True
+
+
+def test_relays_field_is_dict_not_list_is_robust():
+    """Defensive: relay_data['relays'] is a dict, not a list."""
+    data = {'relays': {'oops': 'this should be a list'}}
+    correct_first_seen(data, _make_uptime())
+    # Short-circuited; summary has total=0.
+    assert data['_first_seen_correction_summary']['total'] == 0
+
+
+def test_relay_data_none_returns_none():
+    """correct_first_seen(None, ...) must not crash."""
+    result = correct_first_seen(None, _make_uptime())
+    assert result is None
+
+
+def test_uptime_data_is_garbage_string():
+    """If uptime_data is not a dict at all, treat as missing."""
+    relay = _make_relay()
+    data = _make_relay_data(relay)
+    correct_first_seen(data, 'not a dict')
+    assert relay['first_seen'] == '2026-04-06 23:00:00'
+    assert data['_first_seen_correction_summary']['missing_uptime'] == 1
+
+
 def test_corrects_when_first_seen_just_past_upper_bound():
     """When /details first_seen is just past the upper bound of uptime's
     earliest non-null interval, correction must trigger and yield the lower
