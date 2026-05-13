@@ -391,7 +391,19 @@ class Coordinator:
         if self.progress:
             self.progress_logger.start_section("Data Processing")
             self._log_progress_with_step_increment("Creating relay set with Details API data...")
-        
+
+        # Workaround for onionoo's mass `first_seen` reset bug.
+        # Repair relay['first_seen'] from /uptime history BEFORE the Relays
+        # constructor runs, so categorization, leaderboards, intelligence engine,
+        # templates, and search index all see the corrected value with no rework.
+        # See allium/lib/first_seen_correction.py for details.
+        from .first_seen_correction import correct_first_seen
+        correct_first_seen(
+            relay_data,
+            self.get_uptime_data(),
+            progress_logger=self.progress_logger if self.progress else None,
+        )
+
         relay_set = Relays(
             output_dir=self.output_dir,
             onionoo_url=self.onionoo_details_url,
@@ -411,7 +423,14 @@ class Coordinator:
             if self.progress:
                 self._log_progress_with_step_increment("Failed to create relay set")
             return None
-        
+
+        # Surface first_seen correction stats for diagnostics (api_diagnostics,
+        # tests, future telemetry). Safe to access -- always stamped by
+        # correct_first_seen, even when no correction was applied.
+        relay_set.first_seen_repair_stats = relay_data.get(
+            '_first_seen_correction_summary'
+        )
+
         # Enrich with secondary API data (uptime, bandwidth, AROI, collector)
         # Processing order and dependencies are documented in enrich_with_api_data()
         relay_set.enrich_with_api_data(
