@@ -17,6 +17,7 @@ from .workers import (
 from .relays import Relays
 from .progress_logger import ProgressLogger
 from .error_handlers import handle_worker_errors, handle_calculation_errors
+from .first_seen_correction import correct_first_seen
 
 
 class Coordinator:
@@ -399,7 +400,6 @@ class Coordinator:
         # and search index all see the corrected value with no rework.
         # Silent no-op if uptime data is unavailable (e.g. --apis details).
         # See allium/lib/first_seen_correction.py for full background.
-        from .first_seen_correction import correct_first_seen
         correct_first_seen(
             relay_data,
             self.get_uptime_data(),

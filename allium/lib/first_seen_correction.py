@@ -143,21 +143,35 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
 
     summary = _empty_summary(len(relays))
 
+    # Fast path: when no uptime data is available (e.g. --apis details), every
+    # dict relay will fall through to `missing_uptime`. Short-circuit so we
+    # don't waste ~11k parse_onionoo_timestamp calls on a guaranteed-no-op
+    # main loop.
+    if not uptime_index:
+        for relay in relays:
+            if isinstance(relay, dict):
+                summary['missing_uptime'] += 1
+        relay_data['_first_seen_correction_summary'] = summary
+        _log(progress_logger, _format_summary_message(summary))
+        return relay_data
+
     for relay in relays:
         if not isinstance(relay, dict):
             # Defensive: a non-dict entry in the relays list. Skip silently
             # (and don't bump any counter -- we don't know how to classify it).
             continue
         fingerprint = relay.get('fingerprint')
-        raw_first_seen = relay.get('first_seen')
-        current_dt = parse_onionoo_timestamp(raw_first_seen) if raw_first_seen else None
 
-        if current_dt is None:
-            summary['invalid_first_seen'] += 1
-            continue
-
+        # Cheap dict-membership check first: skip parsing first_seen for
+        # relays that have no uptime entry (saves a strptime per skipped relay).
         if not fingerprint or fingerprint not in uptime_index:
             summary['missing_uptime'] += 1
+            continue
+
+        raw_first_seen = relay.get('first_seen')
+        current_dt = parse_onionoo_timestamp(raw_first_seen) if raw_first_seen else None
+        if current_dt is None:
+            summary['invalid_first_seen'] += 1
             continue
 
         uptime_relay = uptime_index[fingerprint]
@@ -260,6 +274,28 @@ def _earliest_in_period(period_data):
     if not isinstance(period_data, dict):
         return None
 
+    # Cheapest checks first: skip the parse_onionoo_timestamp call when the
+    # period has no usable values. This avoids ~hundreds of wasted parses
+    # in the `no_signal` path (relays with all-None uptime values).
+    values = period_data.get('values')
+    if not isinstance(values, list) or not values:
+        return None
+
+    first_nonnull_idx = -1
+    for idx, value in enumerate(values):
+        if value is not None:
+            # 0 is a valid observation (tracked but down); only None means
+            # "no data for this interval".
+            first_nonnull_idx = idx
+            break
+    if first_nonnull_idx < 0:
+        # All values were None.
+        return None
+
+    interval = period_data.get('interval')
+    if not isinstance(interval, (int, float)) or interval <= 0:
+        return None
+
     first_str = period_data.get('first')
     if not first_str:
         return None
@@ -267,30 +303,18 @@ def _earliest_in_period(period_data):
     if first_dt is None:
         return None
 
-    interval = period_data.get('interval')
-    if not isinstance(interval, (int, float)) or interval <= 0:
+    try:
+        interval_int = int(interval)
+        half_interval = interval_int // 2
+        offset = interval_int * first_nonnull_idx
+        # Compute lower and upper directly without the intermediate midpoint
+        # datetime -- saves one timedelta() construction and one datetime
+        # addition per matched period (~10k savings on a full run).
+        lower = first_dt + timedelta(seconds=offset - half_interval)
+        upper = first_dt + timedelta(seconds=offset + half_interval)
+        return (lower, upper)
+    except (OverflowError, ValueError):
         return None
-
-    values = period_data.get('values')
-    if not isinstance(values, list) or not values:
-        return None
-
-    for idx, value in enumerate(values):
-        if value is not None:
-            # 0 is a valid observation (tracked but down); only None means
-            # "no data for this interval".
-            try:
-                interval_int = int(interval)
-                half_interval = interval_int // 2
-                midpoint = first_dt + timedelta(seconds=interval_int * idx)
-                lower = midpoint - timedelta(seconds=half_interval)
-                upper = midpoint + timedelta(seconds=half_interval)
-                return (lower, upper)
-            except (OverflowError, ValueError):
-                return None
-
-    # All values were None.
-    return None
 
 
 # Backwards-compatible wrapper for tests / external callers that only need
