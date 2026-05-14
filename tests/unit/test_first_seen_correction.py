@@ -75,10 +75,11 @@ def test_corrects_when_uptime_predates_first_seen():
 
     correct_first_seen(data, uptime)
 
-    # Per onionoo spec, `first` is the midpoint of interval 0; the strict
-    # lower bound for "earliest possible observation in interval 0" is
-    # `first - interval/2 = 2025-03-08 - 5d = 2025-03-03`.
-    assert relay['first_seen'] == '2025-03-03 00:00:00'
+    # Per onionoo spec, `first` is the midpoint of interval 0 -- onionoo's
+    # documented point estimate for when the observation occurred. Allium
+    # displays first_seen as an exact date, so we use the midpoint rather
+    # than the lower bound that would predate the relay's existence.
+    assert relay['first_seen'] == '2025-03-08 00:00:00'
     assert relay['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
     assert relay['_first_seen_corrected'] is True
     assert relay['_first_seen_correction_source'] == 'onionoo_uptime'
@@ -170,10 +171,9 @@ def test_no_change_when_uptime_starts_after_first_seen():
 
 def test_uses_first_non_null_index_when_leading_nulls():
     relay = _make_relay(first_seen='2026-04-06 23:00:00')
-    # 3 leading Nones, then 999. Interval=864000s = 10 days, half = 5 days.
+    # 3 leading Nones, then 999. Interval=864000s = 10 days.
     # first=2025-03-08 (midpoint of interval 0), idx=3 -> midpoint of interval 3
-    # is 2025-03-08 + 30 days = 2025-04-07; lower bound = 2025-04-07 - 5d
-    # = 2025-04-02.
+    # is 2025-03-08 + 30 days = 2025-04-07.
     uptime = _make_uptime(periods={
         '5_years': {
             'first': '2025-03-08 00:00:00',
@@ -183,7 +183,7 @@ def test_uses_first_non_null_index_when_leading_nulls():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    assert relay['first_seen'] == '2025-04-02 00:00:00'
+    assert relay['first_seen'] == '2025-04-07 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +202,8 @@ def test_zero_value_counts_as_observation():
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
     # Should use idx=2 (the 0), not idx=3.
-    # Midpoint of interval 2 = 2025-03-08 + 20 days = 2025-03-28
-    # Lower bound = 2025-03-28 - 5d = 2025-03-23
-    assert relay['first_seen'] == '2025-03-23 00:00:00'
+    # Midpoint of interval 2 = 2025-03-08 + 20 days = 2025-03-28.
+    assert relay['first_seen'] == '2025-03-28 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -227,9 +226,8 @@ def test_picks_earliest_across_multiple_periods():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    # idx=5 in 5_years bucket: midpoint = 2024-01-01 + 50d = 2024-02-20
-    # Lower bound = 2024-02-20 - 5d = 2024-02-15.
-    assert relay['first_seen'] == '2024-02-15 00:00:00'
+    # idx=5 in 5_years bucket: midpoint = 2024-01-01 + 50d = 2024-02-20.
+    assert relay['first_seen'] == '2024-02-20 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -285,9 +283,9 @@ def test_handles_malformed_period_missing_interval():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    # 5_years skipped (no interval), 1_year used: 2025-05-13 minus 1_year
-    # half-interval (172800s / 2 = 1d) = 2025-05-12.
-    assert relay['first_seen'] == '2025-05-12 00:00:00'
+    # 5_years skipped (no interval), 1_year used: midpoint at idx=0 is
+    # exactly `first` = 2025-05-13.
+    assert relay['first_seen'] == '2025-05-13 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -310,9 +308,9 @@ def test_handles_malformed_period_unparseable_first():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)  # must not crash
-    # 5_years skipped (unparseable `first`), 1_year used: 2025-05-13 - 1d
-    # (half of 172800s interval).
-    assert relay['first_seen'] == '2025-05-12 00:00:00'
+    # 5_years skipped (unparseable `first`), 1_year used: midpoint at idx=0
+    # is exactly `first` = 2025-05-13.
+    assert relay['first_seen'] == '2025-05-13 00:00:00'
 
 
 # ---------------------------------------------------------------------------
@@ -415,9 +413,8 @@ def test_first_seen_onionoo_raw_only_added_when_changed():
     correct_first_seen(data, uptime)
 
     # A: corrected -> raw preserved.
-    # idx=0 with first=2025-03-08, interval=864000 (half=5d), lower bound
-    # = 2025-03-03.
-    assert relay_a['first_seen'] == '2025-03-03 00:00:00'
+    # idx=0 with first=2025-03-08 -- midpoint at idx=0 is exactly `first`.
+    assert relay_a['first_seen'] == '2025-03-08 00:00:00'
     assert relay_a['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
     assert relay_a['_first_seen_corrected'] is True
 
@@ -496,7 +493,13 @@ def test_summary_counters():
         'no_signal': 1,
         'rejected_floor': 1,
         'invalid_first_seen': 1,
+        'non_dict_skipped': 0,
     }
+    # The classification counters sum exactly to `total`.
+    classified = (summary['corrected'] + summary['unchanged']
+                  + summary['missing_uptime'] + summary['no_signal']
+                  + summary['rejected_floor'] + summary['invalid_first_seen'])
+    assert classified == summary['total']
 
 
 # ---------------------------------------------------------------------------
@@ -665,7 +668,8 @@ def test_no_spurious_correction_when_first_seen_falls_inside_uptime_interval():
 
 
 def test_relays_list_with_non_dict_entries_is_robust():
-    """Defensive: a non-dict entry in relays must not crash anything."""
+    """Defensive: a non-dict entry in relays must not crash anything; it's
+    counted under non_dict_skipped (outside ``total``)."""
     data = {'relays': [_make_relay(), 'garbage', None, 42]}
     uptime = _make_uptime(periods={
         '5_years': {'first': '2025-03-08 00:00:00', 'interval': 864000,
@@ -674,6 +678,10 @@ def test_relays_list_with_non_dict_entries_is_robust():
     correct_first_seen(data, uptime)
     # The real relay was corrected; the garbage entries were silently skipped.
     assert data['relays'][0]['_first_seen_corrected'] is True
+    summary = data['_first_seen_correction_summary']
+    assert summary['total'] == 1, 'total counts only dict relays'
+    assert summary['corrected'] == 1
+    assert summary['non_dict_skipped'] == 3, '3 garbage entries skipped'
 
 
 def test_relays_field_is_dict_not_list_is_robust():
@@ -701,8 +709,8 @@ def test_uptime_data_is_garbage_string():
 
 def test_corrects_when_first_seen_just_past_upper_bound():
     """When /details first_seen is just past the upper bound of uptime's
-    earliest non-null interval, correction must trigger and yield the lower
-    bound of that interval.
+    earliest non-null interval, correction must trigger and yield the
+    interval midpoint.
     """
     # Uptime: first=2025-01-03 (midpoint), interval=864000s (10d, half=5d).
     # Interval 0 covers [2024-12-29, 2025-01-08].
@@ -717,6 +725,6 @@ def test_corrects_when_first_seen_just_past_upper_bound():
     })
     data = _make_relay_data(relay)
     correct_first_seen(data, uptime)
-    # Corrected to lower bound = 2025-01-03 - 5d = 2024-12-29
-    assert relay['first_seen'] == '2024-12-29 00:00:00'
+    # Corrected to midpoint = 2025-01-03 (== `first` for idx=0).
+    assert relay['first_seen'] == '2025-01-03 00:00:00'
     assert relay['first_seen_onionoo_raw'] == '2025-01-09 00:00:00'

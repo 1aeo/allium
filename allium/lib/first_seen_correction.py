@@ -34,8 +34,10 @@ file removed with no other changes.
 Design rules
 ============
 
-- Only ever move `first_seen` *earlier*, never later. The original onionoo
-  value is always a lower bound on "earliest possible first_seen".
+- Only correct `first_seen` when uptime independently confirms an earlier
+  observation. Specifically: only when the current /details `first_seen` is
+  strictly later than the *upper bound* of uptime's earliest non-null
+  interval. This avoids spurious corrections within bucket precision.
 - Treat `None` in uptime `values` as "no data"; treat `0` as a valid
   observation ("tracked but down").
 - Defensive floor: reject any uptime-derived timestamp before 2004-01-01
@@ -48,23 +50,39 @@ Design rules
   timestamp of an uptime period is the *midpoint* of interval 0, so
   interval N covers ``[first + N*i - i/2, first + N*i + i/2]`` (where
   ``i`` = interval seconds). The corrected `first_seen` is set to the
-  lower bound of the earliest non-null interval, guaranteeing it is
-  always ``<=`` the true `first_seen`. Worst-case backwards error is
-  the period's full interval -- 10 days for the `5_years` bucket. We're
-  trading <=10 days backwards uncertainty for the >=365 day backwards
-  error in the raw data, a clear improvement.
+  **midpoint of the earliest non-null interval** (``first + N*i``). This is
+  onionoo's documented point estimate for when an observation occurred in
+  that interval; expected error is +/- interval/2 (~5 days for the
+  `5_years` bucket), with the truth equally likely to be earlier or later.
+  Allium renders `first_seen` to users as an exact date, so we use the
+  best point estimate rather than a strict lower bound that would place the
+  relay before it physically existed. The independent upper-bound *guard*
+  on whether to apply a correction prevents us from regressing relays
+  whose /details and /uptime already agree to within bucket precision.
 - Relays older than 5 years: the `5_years` bucket saturates at "5 years ago",
-  so corrected `first_seen` for very old relays is a lower bound capped at
-  5 years ago. The "only move earlier" rule prevents regression for relays
-  whose existing `first_seen` is already correctly older than 5 years.
+  so corrected `first_seen` for very old relays approximates "5 years ago".
+  The upper-bound guard prevents regressing relays whose existing
+  `first_seen` is already correctly older than 5 years.
+- Exact archive values (per-hour consensuses from CollecTor) are *not*
+  used: parsing them would require downloading gigabytes of `.tar.xz`
+  files per regen, and onionoo offers no "earliest consensus containing
+  fingerprint X" query. Bucketed uptime is the best practical signal we
+  already have cached.
 
 Performance
 ===========
 
 On a typical run (~11k relays, ~11k uptime entries), the correction adds
-roughly 0.5 seconds to the build -- a fraction of the ~7-minute total. The
+roughly 0.3 seconds to the build -- a fraction of the ~7-minute total. The
 correction runs once, sequentially, before the multiprocessing page-render
-phase, so there are no concurrency concerns.
+phase, so there are no concurrency concerns. When uptime data is absent
+(e.g. ``--apis details``) the function short-circuits in well under a
+millisecond.
+
+Logging note: the function always emits one summary log line (when a
+logger is provided) -- including the no-uptime fast path -- so operators
+can observe what happened. There is no "silent" path; "silent no-op"
+in earlier docs was misleading wording.
 
 Python 3.8 compatible: uses Optional[...]/Dict[...] (not `X | None`) and
 PEP 484 comment-style annotations for the public API.
@@ -94,13 +112,15 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     """Mutate ``relay_data`` in place, repairing ``first_seen`` from uptime history.
 
     For each relay in ``relay_data['relays']``, look up the corresponding entry
-    in ``uptime_data['relays']`` by fingerprint. Compute the earliest timestamp
-    at which onionoo's uptime endpoint observed the relay (the first non-null
-    value across all uptime periods; treats ``0`` as a legitimate observation
-    of "tracked but down"). If that timestamp is strictly earlier than
-    ``relay['first_seen']`` AND >= ``FIRST_SEEN_FLOOR``, the function:
+    in ``uptime_data['relays']`` by fingerprint. Compute the bounds of the
+    earliest interval in which onionoo's uptime endpoint observed the relay
+    (the first non-null value across all uptime periods; treats ``0`` as a
+    legitimate observation of "tracked but down"). If the current /details
+    ``first_seen`` falls *strictly later than* the upper bound of that
+    interval AND the midpoint is >= ``FIRST_SEEN_FLOOR``, the function:
 
-    * replaces ``first_seen`` with the onionoo-formatted string;
+    * replaces ``first_seen`` with the **midpoint** of that interval
+      (onionoo's documented point estimate, naive UTC string);
     * stamps ``first_seen_onionoo_raw`` with the original value;
     * stamps ``_first_seen_corrected`` = True and
       ``_first_seen_correction_source`` = "onionoo_uptime".
@@ -112,7 +132,7 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     ``relay_data['_first_seen_correction_summary']``::
 
         {
-            'total':              <N total relays>,
+            'total':              <N dict relays in relay_data['relays']>,
             'corrected':          <N where first_seen was moved earlier>,
             'unchanged':          <N where uptime existed but was not earlier>,
             'missing_uptime':     <N with no entry in uptime_data>,
@@ -120,13 +140,21 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
                                    non-null values>,
             'rejected_floor':     <N where uptime timestamp was < FIRST_SEEN_FLOOR>,
             'invalid_first_seen': <N where relay['first_seen'] was unparseable>,
+            'non_dict_skipped':   <N non-dict entries silently skipped>,
         }
 
-    The function is a safe no-op when:
+    The sum of (corrected + unchanged + missing_uptime + no_signal +
+    rejected_floor + invalid_first_seen) equals ``total``. ``non_dict_skipped``
+    is reported separately and is not part of ``total``.
+
+    The function applies no corrections when:
 
     * ``uptime_data`` is ``None`` or missing the ``relays`` key
     * ``uptime_data['relays']`` is empty
     * ``relay_data`` is ``None`` / missing ``relays`` / has an empty list
+
+    A summary is still stamped (and logged in progress mode) in these
+    cases so callers can observe the no-op classification.
 
     Returns the same ``relay_data`` dict (for chaining).
     """
@@ -141,24 +169,29 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
 
     uptime_index = _build_uptime_index(uptime_data)
 
-    summary = _empty_summary(len(relays))
+    # Count dict relays exactly so ``total`` equals the sum of classification
+    # counters. Non-dict entries are tracked under ``non_dict_skipped``
+    # outside ``total``.
+    dict_relay_count = sum(1 for r in relays if isinstance(r, dict))
+    non_dict_skipped = len(relays) - dict_relay_count
+
+    summary = _empty_summary(dict_relay_count)
+    summary['non_dict_skipped'] = non_dict_skipped
 
     # Fast path: when no uptime data is available (e.g. --apis details), every
     # dict relay will fall through to `missing_uptime`. Short-circuit so we
     # don't waste ~11k parse_onionoo_timestamp calls on a guaranteed-no-op
     # main loop.
     if not uptime_index:
-        for relay in relays:
-            if isinstance(relay, dict):
-                summary['missing_uptime'] += 1
+        summary['missing_uptime'] = dict_relay_count
         relay_data['_first_seen_correction_summary'] = summary
         _log(progress_logger, _format_summary_message(summary))
         return relay_data
 
     for relay in relays:
         if not isinstance(relay, dict):
-            # Defensive: a non-dict entry in the relays list. Skip silently
-            # (and don't bump any counter -- we don't know how to classify it).
+            # Defensive: a non-dict entry in the relays list. Tallied in
+            # non_dict_skipped (outside ``total``) above; skip silently here.
             continue
         fingerprint = relay.get('fingerprint')
 
@@ -179,25 +212,28 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
         if bounds is None:
             summary['no_signal'] += 1
             continue
-        lower, upper = bounds
+        midpoint, upper = bounds
 
-        if lower < FIRST_SEEN_FLOOR:
+        if midpoint < FIRST_SEEN_FLOOR:
             summary['rejected_floor'] += 1
             continue
 
         # Only correct if /details' first_seen is strictly *after* the latest
         # possible time the relay could have been observed in uptime's
-        # earliest interval. Comparing against `upper` (not `lower`) avoids
-        # spurious "corrections" of a few days for relays whose first_seen
-        # is already consistent with uptime to within bucket precision.
+        # earliest interval. Comparing against `upper` (not `midpoint`)
+        # avoids spurious "corrections" of a few days for relays whose
+        # first_seen is already consistent with uptime to within bucket
+        # precision.
         if upper >= current_dt:
             summary['unchanged'] += 1
             continue
 
-        # Apply the correction. Use `lower` so the corrected first_seen is
-        # guaranteed to be <= the true first_seen.
+        # Apply the correction. Use the interval midpoint (onionoo's
+        # documented point estimate) so the user-facing first_seen lands on
+        # the most likely actual-observation time, not a strict lower bound
+        # that would predate the relay's existence.
         relay['first_seen_onionoo_raw'] = raw_first_seen
-        relay['first_seen'] = lower.strftime(_ONIONOO_TIMESTAMP_FORMAT)
+        relay['first_seen'] = midpoint.strftime(_ONIONOO_TIMESTAMP_FORMAT)
         relay['_first_seen_corrected'] = True
         relay['_first_seen_correction_source'] = 'onionoo_uptime'
         summary['corrected'] += 1
@@ -212,22 +248,25 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
 
 def _earliest_uptime_interval(uptime_relay):
     # type: (Dict[str, Any]) -> Optional[tuple]
-    """Return ``(lower_bound, upper_bound)`` UTC datetimes for the earliest
+    """Return ``(midpoint, upper_bound)`` UTC datetimes for the earliest
     non-null observation in uptime history across all available periods, or
     ``None`` if no period yields a valid signal.
 
     The relay was observed *somewhere* in the interval
-    ``[lower_bound, upper_bound]``. ``lower_bound`` is used as the corrected
-    ``first_seen`` (conservative -- never later than truth). ``upper_bound``
-    is used in the "should we correct?" comparison: only if the current
-    onionoo /details first_seen falls *strictly later than* ``upper_bound``
-    do we have evidence the value is wrong.
+    ``[midpoint - interval/2, midpoint + interval/2 = upper_bound]``.
+    ``midpoint`` is onionoo's documented point estimate for when the
+    observation occurred and is what we expose as the corrected
+    ``first_seen``. ``upper_bound`` is used in the "should we correct?"
+    comparison: only if the current onionoo /details ``first_seen`` falls
+    *strictly later than* ``upper_bound`` do we have evidence the value
+    is wrong.
 
     For each period in ``uptime_relay['uptime']``, find the first index ``i``
     where ``values[i] is not None`` (note: ``0`` is a valid observation
     meaning "tracked but down"). Per onionoo's protocol spec, ``first`` is
-    the *midpoint* of interval 0, so interval N covers
-    ``[first + N*interval - interval/2, first + N*interval + interval/2]``.
+    the midpoint of interval 0, so interval N covers
+    ``[first + N*interval - interval/2, first + N*interval + interval/2]``
+    and its midpoint is ``first + N*interval``.
 
     Return the period whose ``upper_bound`` is earliest -- this is the
     longest reliable history that contains the earliest observation.
@@ -259,7 +298,7 @@ def _earliest_uptime_interval(uptime_relay):
 
 def _earliest_in_period(period_data):
     # type: (Any) -> Optional[tuple]
-    """Find the (lower_bound, upper_bound) of the earliest non-null
+    """Find the (midpoint, upper_bound) of the earliest non-null
     observation in a single uptime period dict.
 
     Returns None for malformed/empty periods. Tolerant of:
@@ -307,21 +346,21 @@ def _earliest_in_period(period_data):
         interval_int = int(interval)
         half_interval = interval_int // 2
         offset = interval_int * first_nonnull_idx
-        # Compute lower and upper directly without the intermediate midpoint
-        # datetime -- saves one timedelta() construction and one datetime
-        # addition per matched period (~10k savings on a full run).
-        lower = first_dt + timedelta(seconds=offset - half_interval)
+        # Midpoint and upper_bound; lower_bound = midpoint - half_interval
+        # isn't returned because we no longer use it (Allium displays the
+        # midpoint as the user-facing first_seen).
+        midpoint = first_dt + timedelta(seconds=offset)
         upper = first_dt + timedelta(seconds=offset + half_interval)
-        return (lower, upper)
+        return (midpoint, upper)
     except (OverflowError, ValueError):
         return None
 
 
 # Backwards-compatible wrapper for tests / external callers that only need
-# the lower-bound timestamp.
+# the midpoint timestamp.
 def _earliest_uptime_timestamp(uptime_relay):
     # type: (Dict[str, Any]) -> Optional[datetime]
-    """Return only the lower bound of the earliest uptime observation."""
+    """Return only the midpoint of the earliest uptime observation interval."""
     bounds = _earliest_uptime_interval(uptime_relay)
     if bounds is None:
         return None
@@ -359,6 +398,7 @@ def _empty_summary(total):
         'no_signal': 0,
         'rejected_floor': 0,
         'invalid_first_seen': 0,
+        'non_dict_skipped': 0,
     }
 
 
@@ -366,8 +406,9 @@ def _format_summary_message(summary):
     # type: (Dict[str, int]) -> str
     return (
         "First-seen correction: repaired {corrected}/{total} relays from "
-        "onionoo uptime history (missing_uptime={missing_uptime}, "
-        "no_signal={no_signal}, rejected_floor={rejected_floor}, "
+        "onionoo uptime history (unchanged={unchanged}, "
+        "missing_uptime={missing_uptime}, no_signal={no_signal}, "
+        "rejected_floor={rejected_floor}, "
         "invalid_first_seen={invalid_first_seen})"
     ).format(**summary)
 

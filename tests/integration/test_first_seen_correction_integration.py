@@ -71,10 +71,10 @@ def test_correction_propagates_to_relays_sorted_categories():
     # grid (864000s = 10d, onionoo's actual 5_years interval), with a single
     # non-null value at index 0.
     #
-    # The correction module returns the LOWER BOUND of the earliest non-null
-    # interval (= first - interval/2) per onionoo's spec ("first is the
-    # midpoint of interval 0"). So the expected corrected value is
-    # first_dt - 5 days.
+    # The correction module returns the MIDPOINT of the earliest non-null
+    # interval (= `first` itself, when first non-null is at idx 0). This
+    # matches onionoo's documented point estimate for when the observation
+    # occurred.
     interval = 864000
     uptime_relays = []
     expected_corrected = {}
@@ -83,8 +83,8 @@ def test_correction_propagates_to_relays_sorted_categories():
         assert true_dt is not None
         first_dt = _floor_to_grid(true_dt, interval)
         first_str = first_dt.strftime('%Y-%m-%d %H:%M:%S')
-        expected_lower_bound = first_dt - timedelta(seconds=interval // 2)
-        expected_corrected[fp] = expected_lower_bound.strftime('%Y-%m-%d %H:%M:%S')
+        # idx=0 -> midpoint = first.
+        expected_corrected[fp] = first_str
         # Synthesise only the 5_years period for this test -- in real onionoo
         # data, shorter periods (1_year, 6_months, 1_month) only span the
         # last N units relative to today, so their values would be all-None
@@ -140,14 +140,13 @@ def test_correction_propagates_to_relays_sorted_categories():
         # metadata.
         assert relay['_first_seen_corrected'] is True
         assert relay['_first_seen_correction_source'] == 'onionoo_uptime'
-        # Corrected value is the lower bound of interval 0 = first - 5d,
-        # and first is at most `interval` (10 days) earlier than the true
-        # value due to grid-flooring. So corrected is in
-        # [true - interval - interval/2, true] = [true - 15d, true].
+        # Corrected value is the midpoint of interval 0 = `first`, which
+        # is at most one interval (10 days) earlier than the true value
+        # due to grid-flooring. So corrected is in [true - interval, true].
         corrected = parse_onionoo_timestamp(relay['first_seen'])
         true_dt = parse_onionoo_timestamp(true_first_seen[fp])
         assert corrected <= true_dt
-        max_gap = timedelta(seconds=interval + interval // 2)
+        max_gap = timedelta(seconds=interval)
         assert (true_dt - corrected) <= max_gap, (
             'fingerprint {}: gap {} exceeds max {} (true={}, corrected={})'.format(
                 fp, true_dt - corrected, max_gap, true_dt, corrected
@@ -282,31 +281,133 @@ def test_coordinator_create_relay_set_invokes_correction():
     with tempfile.TemporaryDirectory() as tmpdir:
         coord = Coordinator(output_dir=tmpdir, progress=False)
         coord.worker_data = {'onionoo_uptime': uptime_data}
-        # Patch enrich_with_api_data to a no-op; we're testing only the
-        # correction wiring and first_seen_repair_stats exposure here.
-        with patch.object(
-            type(coord),
-            'create_relay_set',
-            Coordinator.create_relay_set,
+        # Patch enrich_with_api_data to a no-op; building synthetic data
+        # complete enough for it would not exercise additional behaviour
+        # that our other tests don't cover.
+        with patch(
+            'allium.lib.relays.Relays.enrich_with_api_data',
+            return_value=None,
         ):
-            with patch(
-                'allium.lib.relays.Relays.enrich_with_api_data',
-                return_value=None,
-            ):
-                relay_set = coord.create_relay_set(relay_data)
+            relay_set = coord.create_relay_set(relay_data)
 
     assert relay_set is not None
     assert relay_set.first_seen_repair_stats['corrected'] == 1
     assert relay_set.first_seen_repair_stats['total'] == 1
 
     relay = relay_set.json['relays'][0]
-    # Lower bound = 2025-03-08 - 5d = 2025-03-03.
-    assert relay['first_seen'] == '2025-03-03 00:00:00'
+    # Midpoint at idx=0 == `first` == 2025-03-08.
+    assert relay['first_seen'] == '2025-03-08 00:00:00'
     assert relay['first_seen_onionoo_raw'] == '2026-04-06 23:00:00'
     assert relay['_first_seen_corrected'] is True
 
-    assert '2025-03-03' in relay_set.json['sorted']['first_seen']
+    assert '2025-03-08' in relay_set.json['sorted']['first_seen']
     assert '2026-04-06' not in relay_set.json['sorted']['first_seen']
+
+
+def test_corrected_first_seen_flows_into_network_health_metrics():
+    """Direct proof that network-health counters consume corrected dates.
+
+    Builds two relays:
+    - relay A: buggy `first_seen` (5 days ago) + uptime showing 18mo old
+    - relay B: legitimate new relay (no correction)
+
+    Asserts that after correction + network-health computation:
+    - new_relays_30d counts only relay B (1), not both
+    - new_relays_1y counts only relay B (1), not both
+    - network_mean_age_formatted reflects the corrected (older) date
+    """
+    from datetime import datetime, timedelta, timezone
+    from allium.lib.first_seen_correction import correct_first_seen
+    from allium.lib.relays import Relays
+
+    now = datetime.now(tz=timezone.utc)
+    five_days_ago = now - timedelta(days=5)
+    eighteen_months_ago = now - timedelta(days=18 * 30)
+
+    fp_a = 'AAAA' + 'A' * 36
+    fp_b = 'BBBB' + 'B' * 36
+
+    # Relay A: buggy reset state -- /details says new, /uptime says old.
+    # Relay B: legitimately new.
+    relay_a = {
+        'fingerprint': fp_a, 'nickname': 'oldrelay',
+        'first_seen': five_days_ago.strftime('%Y-%m-%d %H:%M:%S'),
+        'last_seen': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'running': True, 'flags': ['Running', 'Valid', 'Stable'],
+        'or_addresses': ['10.0.0.1:9001'],
+        'observed_bandwidth': 100000, 'consensus_weight': 100,
+        'country': 'us', 'country_name': 'United States',
+        'platform': 'Tor 0.4.8.10 on Linux',
+    }
+    relay_b = {
+        'fingerprint': fp_b, 'nickname': 'newrelay',
+        'first_seen': five_days_ago.strftime('%Y-%m-%d %H:%M:%S'),
+        'last_seen': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'running': True, 'flags': ['Running', 'Valid'],
+        'or_addresses': ['10.0.0.2:9001'],
+        'observed_bandwidth': 50000, 'consensus_weight': 50,
+        'country': 'us', 'country_name': 'United States',
+        'platform': 'Tor 0.4.8.10 on Linux',
+    }
+    relay_data = {
+        'version': '8.0',
+        'relays_published': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'relays': [relay_a, relay_b],
+    }
+
+    # Uptime: A is 18mo old in uptime history, B is genuinely new (no uptime
+    # entry -- "missing_uptime" path; no correction applied).
+    uptime_data = {
+        'relays': [
+            {
+                'fingerprint': fp_a,
+                'uptime': {
+                    '5_years': {
+                        'first': eighteen_months_ago.strftime('%Y-%m-%d %H:%M:%S'),
+                        'last': now.strftime('%Y-%m-%d %H:%M:%S'),
+                        'interval': 864000,
+                        'count': 55,
+                        'values': [999] * 55,
+                    },
+                },
+            },
+        ],
+    }
+
+    correct_first_seen(relay_data, uptime_data)
+
+    # Sanity: A was corrected to ~18mo old, B was left as-is.
+    assert relay_a['_first_seen_corrected'] is True
+    assert '_first_seen_corrected' not in relay_b
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        relay_set = Relays(
+            output_dir=tmpdir, onionoo_url='http://localhost',
+            relay_data=relay_data, progress=False,
+        )
+        relay_set._calculate_network_health_metrics()
+
+    health = relay_set.json['network_health']
+
+    # With correction, only relay B (genuinely new) should be counted.
+    assert health['new_relays_30d'] == 1, (
+        'expected only 1 new relay in 30d (relay B); got {}; relay_a first_seen={}, '
+        'relay_b first_seen={}'.format(health['new_relays_30d'],
+                                       relay_a['first_seen'], relay_b['first_seen'])
+    )
+    assert health['new_relays_1y'] == 1, (
+        'expected only 1 new relay in 1y (relay B); got {}'.format(health['new_relays_1y'])
+    )
+
+    # Mean age should reflect the corrected (older) A: mean of ~5d and ~18mo.
+    mean_str = health.get('network_mean_age_formatted', '')
+    assert mean_str and 'Unknown' not in mean_str
+    # Loosely: at least 2 months old on average (one ~5d relay, one ~18mo
+    # relay -> mean ~9mo). Without correction it would be ~5d for both.
+    assert ('m' in mean_str or 'mo' in mean_str or 'y' in mean_str), (
+        'mean age {} does not include months/years -- correction may not have '
+        'propagated to network_health'.format(mean_str)
+    )
 
 
 def test_coordinator_create_relay_set_no_uptime_is_silent_noop():

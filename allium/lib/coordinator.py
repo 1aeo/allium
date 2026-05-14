@@ -398,7 +398,8 @@ class Coordinator:
         # from /uptime history BEFORE the Relays constructor runs, so
         # categorisation, leaderboards, intelligence engine, templates,
         # and search index all see the corrected value with no rework.
-        # Silent no-op if uptime data is unavailable (e.g. --apis details).
+        # Applies no corrections if uptime data is unavailable (e.g.
+        # --apis details); still emits a summary log line in progress mode.
         # See allium/lib/first_seen_correction.py for full background.
         correct_first_seen(
             relay_data,
