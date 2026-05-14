@@ -229,7 +229,7 @@ Allium integrates with multiple Tor Project APIs:
 ### Onionoo Uptime API
 
 - **URL**: `https://onionoo.torproject.org/uptime`
-- **Purpose**: Historical uptime statistics and flag history for reliability analysis
+- **Purpose**: Historical uptime statistics, flag history for reliability analysis, **and cross-check source for `first_seen` correction** (see Notable behaviour below)
 - **Memory**: ~2GB during processing (large historical dataset)
 
 <details>
@@ -260,6 +260,22 @@ Allium integrates with multiple Tor Project APIs:
 - **Cache**: Configurable (default: 12 hours)
 
 **Performance Features**: Parallel API fetching, HTTP conditional requests, graceful fallback to cached data
+
+### Notable behaviour: first_seen correction
+
+Allium repairs the `first_seen` field on each relay using Onionoo's
+`/uptime` endpoint before page generation. This works around a long-standing
+upstream Onionoo bug (issues
+[#40018](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40018),
+[#40028](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40028),
+[#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),
+[#40042](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042))
+which periodically resets `first_seen` for large fractions of the network
+after backend state-loss events. When the bug is active, a per-run summary
+log line reports how many relays were repaired and the resulting
+`network_mean_age_formatted` reflects the corrected (older) dates. Logic
+lives in `allium/lib/first_seen_correction.py` and will be removed once
+the upstream bug is fixed.
 
 ## Security & Performance
 
