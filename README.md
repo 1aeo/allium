@@ -271,10 +271,11 @@ upstream onionoo bug (issues
 [#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),
 [#40042](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042))
 which periodically resets `first_seen` for large fractions of the network
-after backend state-loss events. As of 2026-05-13 the correction repairs
-~92% of relays, restoring median network age from a buggy 1 month to a
-realistic 1.5 years. Logic lives in `allium/lib/first_seen_correction.py`
-and will be removed once the upstream bug is fixed.
+after backend state-loss events. When the bug is active, a per-run summary
+log line reports how many relays were repaired and the resulting
+`network_mean_age_formatted` reflects the corrected (older) dates. Logic
+lives in `allium/lib/first_seen_correction.py` and will be removed once
+the upstream bug is fixed.
 
 ## Security & Performance
 

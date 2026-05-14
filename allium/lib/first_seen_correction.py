@@ -16,10 +16,15 @@ instead of from older data. Issues filed upstream:
     https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033
     https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042
 
-A 2022 upstream hack (commit 4dec094) addressed this via `UptimeStatus`
-cross-check but was reverted in commit 85af138 without fixing the underlying
-state-loss. As of 2026-05-13, 87.9% of all running relays share the reset
-timestamp `2026-04-06 23:00:00`.
+A 2022 upstream hack (commit 4dec094 in the onionoo repo) addressed this
+via `UptimeStatus` cross-check but was reverted in commit 85af138 without
+fixing the underlying state-loss. The bug recurs whenever onionoo's
+backend state is rebuilt or arrives partially: the symptom is a large
+fraction of running relays sharing one identical `first_seen` timestamp
+that matches a specific recent consensus's `valid-after`. Cross-check
+the live network state (e.g. count occurrences of the most common
+`first_seen` value in ``/details``) to confirm whether the bug is
+currently active.
 
 Crucially, onionoo's `/uptime` endpoint stores history independently of
 `NodeStatus.firstSeenMillis` and survives the reset. Allium already fetches
@@ -44,8 +49,11 @@ Design rules
   (Tor's first public relays appeared in 2003-2004; anything earlier is
   garbage like the epoch-zero bug from issue #40028).
 - Catastrophic restore where both `NodeStatus` and `UptimeStatus` are lost
-  simultaneously cannot be recovered; in that case we degrade silently to
-  current (buggy) behaviour. Acceptable because that's the existing baseline.
+  simultaneously cannot be recovered (uptime won't show older data either);
+  in that case the function applies no corrections and the run continues
+  with the existing /details `first_seen` values. The per-run summary log
+  still records the classification (most relays under ``no_signal`` or
+  ``missing_uptime``).
 - Precision is bucket-aligned. Per onionoo's protocol spec, the `first`
   timestamp of an uptime period is the *midpoint* of interval 0, so
   interval N covers ``[first + N*i - i/2, first + N*i + i/2]`` (where

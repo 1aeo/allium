@@ -39,9 +39,12 @@ relays (see upstream issues
 [#40028](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40028),
 [#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),
 [#40042](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042)).
-As of 2026-05-13, ~88% of running relays share a single reset timestamp
-of `2026-04-06 23:00:00`. The `/uptime` endpoint stores history
-independently and survives the reset.
+The symptom is a large fraction of running relays sharing one identical
+recent `first_seen` timestamp (matching some specific recent consensus's
+`valid-after`). The `/uptime` endpoint stores history independently and
+survives the reset; you can confirm the bug is currently active by
+checking whether the most common `first_seen` value in `/details`
+accounts for an implausibly large share of the network.
 
 Before constructing the relay set, Allium cross-checks each relay's
 `first_seen` against the earliest non-null entry in its uptime history. If
@@ -50,12 +53,13 @@ the uptime endpoint observed the relay earlier than `/details` claims,
 value is preserved under `first_seen_onionoo_raw` for diagnostics.
 
 The correction is conservative (only moves `first_seen` earlier, never
-later), defensively bounded (rejects pre-2004 garbage values), and a
-silent no-op when `/uptime` data is unavailable (e.g. `--apis details`).
-Implementation: `allium/lib/first_seen_correction.py`. Repair stats are
-surfaced on the coordinator's relay set as `first_seen_repair_stats` and
-logged once per run. This module is intended to be removed once the
-upstream bug is fixed.
+later) and defensively bounded (rejects pre-2004 garbage values). When
+`/uptime` data is unavailable (e.g. `--apis details`) no corrections are
+applied, but a summary log line is still emitted in progress mode so
+operators can observe the no-op classification. Implementation:
+`allium/lib/first_seen_correction.py`. Repair stats are surfaced on the
+coordinator's relay set as `first_seen_repair_stats` and logged once per
+run. This module is intended to be removed once the upstream bug is fixed.
 
 ### Onionoo Bandwidth API
 
