@@ -122,6 +122,20 @@ def test_no_change_when_relay_data_has_no_relays():
     assert summary['corrected'] == 0
 
 
+def test_empty_relays_branch_emits_summary_log():
+    """Docstring promises the no-corrections branches also log in progress
+    mode. Lock that contract in for the empty-relays branch (other branches
+    are covered by test_progress_logger_called_once_with_summary)."""
+    captured = []
+    correct_first_seen(
+        {'relays': []},
+        _make_uptime(),
+        progress_logger=lambda msg: captured.append(msg),
+    )
+    assert len(captured) == 1
+    assert '0/0' in captured[0]
+
+
 # ---------------------------------------------------------------------------
 # 5. Fingerprint missing from uptime
 # ---------------------------------------------------------------------------

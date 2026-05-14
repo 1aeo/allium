@@ -263,9 +263,9 @@ Allium integrates with multiple Tor Project APIs:
 
 ### Notable behaviour: first_seen correction
 
-Allium repairs the `first_seen` field on each relay using onionoo's
+Allium repairs the `first_seen` field on each relay using Onionoo's
 `/uptime` endpoint before page generation. This works around a long-standing
-upstream onionoo bug (issues
+upstream Onionoo bug (issues
 [#40018](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40018),
 [#40028](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40028),
 [#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),

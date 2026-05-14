@@ -172,7 +172,12 @@ def correct_first_seen(relay_data,             # type: Dict[str, Any]
     if not relays or not isinstance(relays, list):
         # Nothing to correct; still stamp an empty summary so callers that
         # surface .first_seen_repair_stats don't have to special-case None.
-        relay_data['_first_seen_correction_summary'] = _empty_summary(0)
+        # Match the no-uptime fast path: also emit a summary log line so
+        # progress-mode operators see the no-op classification (per the
+        # docstring's promise).
+        summary = _empty_summary(0)
+        relay_data['_first_seen_correction_summary'] = summary
+        _log(progress_logger, _format_summary_message(summary))
         return relay_data
 
     uptime_index = _build_uptime_index(uptime_data)
