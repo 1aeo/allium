@@ -1647,4 +1647,10 @@ class TestIncompleteAROISiblingMap:
         # Full count surfaces (all 30 incomplete family members).
         assert cd.get('incomplete_family_count') == 30
         # Rendered list is capped at exactly 25.
-        assert len(cd.get('incomplete_family_fingerprints', [])) == 25
+        capped_fps = cd.get('incomplete_family_fingerprints', [])
+        assert len(capped_fps) == 25
+        # Every capped entry must be a real sibling fp — i.e. the cap
+        # selects a subset of the expected fingerprints rather than
+        # inventing or corrupting any.
+        expected_sibling_fingerprints = set(sibling_fps)
+        assert set(capped_fps).issubset(expected_sibling_fingerprints)

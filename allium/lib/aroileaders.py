@@ -41,7 +41,7 @@ _URL_FIELD_FALLBACK_RE = re.compile(
 )
 
 
-def _incomplete_aroi_display_name(contact_info, contact_hash):
+def _incomplete_aroi_display_name(contact_info, contact_hash) -> str:
     """Build a friendly display name for an operator whose AROI parsing
     failed but whose ContactInfo still contains a recognisable identifier.
 
@@ -65,6 +65,9 @@ def _incomplete_aroi_display_name(contact_info, contact_hash):
             if '://' in domain:
                 domain = domain.split('://', 1)[1]
             domain = domain.split('/', 1)[0].split('?', 1)[0]
+            # Canonicalise to lowercase before the www-prefix check so
+            # values like "WWW.Example.com" are normalised correctly.
+            domain = domain.lower()
             if domain.startswith('www.'):
                 domain = domain[4:]
             domain = domain.rstrip('.,;:')
@@ -515,6 +518,19 @@ def _collect_operator_metrics(relays_instance):
             #   2. raw contact-info string truncated to 30 chars
             #   3. contact_hash prefix as last resort
             operator_key = _incomplete_aroi_display_name(contact_info, contact_hash)
+            # Collision guard: two different contact_hash groups can
+            # resolve to the same fallback display name (e.g. two
+            # operators both publishing url:example.com but with
+            # different ContactInfo variants and no ciissversion). The
+            # later iteration would otherwise overwrite the earlier
+            # entry in aroi_operators, silently dropping the first
+            # operator's metrics. Append a short contact_hash suffix on
+            # collision so both rows are preserved. Proper cross-
+            # contact_hash *merging* is a larger refactor (would need to
+            # re-aggregate from raw relays) and is intentionally
+            # deferred — preventing data loss is the priority here.
+            if operator_key in aroi_operators:
+                operator_key = f"{operator_key}#{contact_hash[:8]}"
         
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data
