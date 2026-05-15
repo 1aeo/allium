@@ -8,6 +8,7 @@ Extracted from relays.py for better modularity.
 
 import html as _html
 import re
+from typing import Dict, List
 
 from .string_utils import extract_contact_display_name
 
@@ -659,7 +660,7 @@ _INCOMPLETE_URL_RE = re.compile(
 )
 
 
-def _build_incomplete_aroi_sibling_map(relay_set):
+def _build_incomplete_aroi_sibling_map(relay_set) -> Dict[str, Dict[str, List[str]]]:
     """Option B: surface BOTH authenticated and self-asserted incomplete-
     AROI relays on the validated operator's detail page, in TWO
     separately-labelled buckets so visitors and the operator can tell

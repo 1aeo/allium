@@ -1395,7 +1395,7 @@ class TestIncompleteAROIDisplayName:
     but failed AROI parsing now render as '<domain> (incomplete AROI)'
     instead of a truncated raw blob."""
 
-    def _name(self, contact, contact_hash='aaaaaaaa'):
+    def _name(self, contact, contact_hash='aaaaaaaa') -> str:
         from allium.lib.aroileaders import _incomplete_aroi_display_name
         return _incomplete_aroi_display_name(contact, contact_hash)
 
@@ -1427,8 +1427,8 @@ class TestIncompleteAROIDisplayName:
     def test_truncates_when_no_url_no_email_no_name(self):
         long_contact = 'random_unparseable_blob_of_text_far_too_long_for_a_display_name'
         result = self._name(long_contact)
-        # Truncated to 30 chars + '...' as legacy fallback (cascade 3).
-        assert len(result) <= 35
+        # Truncated to 30 chars + '...' = 33 total (cascade 3).
+        assert len(result) == 33
         assert result.endswith('...')
 
     def test_url_with_path_drops_path(self):
@@ -1587,3 +1587,64 @@ class TestIncompleteAROISiblingMap:
         assert 'B' * 40 in cd.get('incomplete_family_fingerprints', [])
         assert cd.get('incomplete_url_claim_count') == 1
         assert 'R' * 40 in cd.get('incomplete_url_claim_fingerprints', [])
+
+    def test_sibling_fingerprints_capped_at_25(self):
+        """The 25-fingerprint cap on the rendered list keeps operator
+        pages bounded even when many incomplete relays are attributable
+        to one operator. The total *count* still reflects all matches.
+
+        Note: an earlier review-round prompt referenced the obsolete
+        field names ``incomplete_sibling_count`` /
+        ``incomplete_sibling_fingerprints``. Those were renamed in the
+        Option B v2 commit which split the data into two distinct
+        buckets; this test uses the current names. The same ``[:25]``
+        cap is applied to ``incomplete_url_claim_fingerprints`` in the
+        production code, so testing the family bucket exercises the
+        cap logic for both."""
+        from allium.lib.categorization import (
+            sort_relay, calculate_contact_derived_data,
+        )
+        rs = MagicMock()
+        base = {
+            'flags': [], 'observed_bandwidth': 100, 'consensus_weight': 1,
+            'consensus_weight_fraction': 0.0,
+            'guard_consensus_weight_fraction': 0.0,
+            'middle_consensus_weight_fraction': 0.0,
+            'exit_consensus_weight_fraction': 0.0,
+            'first_seen': '2025-01-01 00:00:00',
+            'country': 'US', 'platform': 'Linux',
+            'as': '111', 'as_name': '',
+        }
+        # 30 incomplete sibling fingerprints (>25, exercises the cap).
+        sibling_fps = [f"{i:040X}" for i in range(30)]
+        validated = {
+            **base, 'fingerprint': 'A' * 40,
+            'effective_family': sibling_fps,
+            'aroi_domain': '1aeo.com', 'aroi_configured': True,
+            'contact': 'ciissversion:3 url:1aeo.com proof:uri-familyid-ed25519',
+            'contact_md5': '1aeohash',
+        }
+        # Each sibling mutually declares the validated relay (authenticated).
+        incomplete_relays = [
+            {
+                **base, 'fingerprint': fp,
+                'effective_family': ['A' * 40],
+                'aroi_domain': 'none', 'aroi_configured': False,
+                'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                'contact_md5': f'sib_{i}',
+            }
+            for i, fp in enumerate(sibling_fps)
+        ]
+        rs.json = {
+            'relays': [validated] + incomplete_relays,
+            'sorted': {'contact': {}},
+        }
+        sort_relay(rs, validated, 0, 'contact', '1aeohash', 1, 0.0)
+        rs.json['sorted']['contact']['1aeohash']['bandwidth'] = 100
+        calculate_contact_derived_data(rs)
+
+        cd = rs.json['sorted']['contact']['1aeohash']
+        # Full count surfaces (all 30 incomplete family members).
+        assert cd.get('incomplete_family_count') == 30
+        # Rendered list is capped at exactly 25.
+        assert len(cd.get('incomplete_family_fingerprints', [])) == 25
