@@ -40,6 +40,13 @@ _URL_FIELD_FALLBACK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Maximum length of a derived display name returned by
+# extract_contact_display_name() that we accept for the incomplete-AROI
+# leaderboard row. Values longer than this are rejected so the row falls
+# through to the truncation cascade (cascade 3) and the leaderboard cell
+# stays compact / readable.
+MAX_DERIVED_LENGTH = 60
+
 
 def _incomplete_aroi_display_name(contact_info, contact_hash) -> str:
     """Build a friendly display name for an operator whose AROI parsing
@@ -76,7 +83,7 @@ def _incomplete_aroi_display_name(contact_info, contact_hash) -> str:
 
         # Cascade 2: email/name/url-derivation helper.
         derived = extract_contact_display_name(clean_contact, None)
-        if derived and derived != 'none' and len(derived) <= 60:
+        if derived and derived != 'none' and len(derived) <= MAX_DERIVED_LENGTH:
             return derived
 
         # Cascade 3: truncated raw contact (preserved legacy behaviour).
