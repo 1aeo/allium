@@ -101,6 +101,65 @@
                         </ul>
                     </li>
                     {%- endif %}
+                    {# Option B: two distinctly-labelled buckets of
+                       incomplete-AROI relays attributable to this
+                       operator. Categorisation populates both:
+                         - authenticated_family: relays in this
+                           operator's validated relays' effective_family
+                           (mutual Tor family declaration — authenticated)
+                         - url_claim: relays that self-assert
+                           url:&lt;this-domain&gt; in their ContactInfo but
+                           are NOT in effective_family (UNAUTHENTICATED;
+                           could be operator's own misconfigured relays
+                           OR third-party spoofers — operator wants
+                           visibility either way).
+                       The wording for the second bucket explicitly
+                       names the unauthenticated nature so visitors
+                       and operators don't conflate it with the
+                       authenticated relays. #}
+                    {%- set _fam_count = (contact_display_data.get('incomplete_family_count', 0) if contact_display_data else 0) -%}
+                    {%- set _claim_count = (contact_display_data.get('incomplete_url_claim_count', 0) if contact_display_data else 0) -%}
+                    {%- set _aroi_disp = relay_subset[0]['aroi_domain']|escape if relay_subset and relay_subset[0].get('aroi_domain') else '' -%}
+                    {%- if _fam_count > 0 %}
+                    <li><strong>⚠ Family relays missing AROI fields:</strong>
+                        <span style="color: #856404;">{{ _fam_count }}</span>
+                        relay{{ 's' if _fam_count != 1 else '' }} that
+                        <em>this operator's validated relays mutually declare
+                        in their <code>effective_family</code></em>
+                        appear to be missing
+                        <code style="font-size: 11px; padding: 1px 4px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 2px;">ciissversion:</code>
+                        in their ContactInfo (or have a version/proof mismatch).
+                        They show up on the leaderboard as a fragmented
+                        "{{ _aroi_disp }} (incomplete AROI)" entry
+                        instead of being grouped under this operator.
+                        Add the missing
+                        <code style="font-size: 11px; padding: 1px 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 2px;">ciissversion:3</code>
+                        (or <code>:2</code> for legacy RSA proofs) to those
+                        relays' ContactInfo to merge them.
+                    </li>
+                    {%- endif %}
+                    {%- if _claim_count > 0 %}
+                    <li><strong>⚠ Self-asserted <code>url:</code> claims (unverified):</strong>
+                        <span style="color: #856404;">{{ _claim_count }}</span>
+                        relay{{ 's' if _claim_count != 1 else '' }} publish
+                        <code style="font-size: 11px; padding: 1px 4px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 2px;">url:{{ _aroi_disp }}</code>
+                        in their ContactInfo but are
+                        <strong>NOT</strong> in any of this operator's
+                        validated relays' <code>effective_family</code>.
+                        Allium does not authenticate these claims — they
+                        are surfaced here so the operator has visibility.
+                        They could be the operator's own additional relays
+                        that forgot BOTH <code>family</code> and
+                        <code>ciissversion</code> declarations
+                        (fix both in their ContactInfo + torrc to merge them
+                        under this operator), OR third-party operators
+                        spoofing this domain (in which case the operator
+                        should investigate / report). These relays do
+                        <strong>not</strong> contribute to this operator's
+                        validated metrics, bandwidth totals, or relay counts
+                        anywhere on the site.
+                    </li>
+                    {%- endif %}
                     <li><strong>Hash:</strong> {{ contact_hash }}</li>
                     {% if primary_country_data %}
                     <li><strong>Countries:</strong> 
