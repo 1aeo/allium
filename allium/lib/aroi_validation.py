@@ -703,6 +703,8 @@ def _deduplicate_fingerprint_not_found_error(error: str) -> str:
     Example output:
         "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, https://www.prsv.ch/.../rsa-fingerprint.txt"
     """
+    error = _normalize_error_message(error)
+
     # Pattern to match "Fingerprint not found in URL" segments separated by semicolons
     pattern = r'Fingerprint not found in ([^;]+)'
     matches = re.findall(pattern, error)
@@ -716,6 +718,13 @@ def _deduplicate_fingerprint_not_found_error(error: str) -> str:
     return error
 
 
+def _normalize_error_message(error) -> str:
+    """Return a safe display string for optional validator error fields."""
+    if isinstance(error, str) and error.strip():
+        return error
+    return 'Unknown error'
+
+
 def _simplify_error_message(error: str) -> tuple:
     """
     Simplify a verbose error message into a short description with protocol prefix.
@@ -723,6 +732,7 @@ def _simplify_error_message(error: str) -> tuple:
     Returns:
         Tuple of (simplified_message, proof_type) where proof_type is 'dns', 'uri', or 'other'
     """
+    error = _normalize_error_message(error)
     e = error.lower()
     
     # DNS-specific errors (check first as they're more specific)
@@ -1239,7 +1249,7 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     if result.get('valid', False):
                         domain_has_valid_relay[aroi_domain] = True
                     else:
-                        error = result.get('error', 'Unknown error')
+                        error = _normalize_error_message(result.get('error'))
                         # Only track actual validation failures, not missing AROI fields
                         # (relays with "Missing AROI fields" shouldn't have aroi_domain set, but defensive check)
                         if error not in ('Missing AROI fields', 'No contact information'):
@@ -1588,7 +1598,7 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             # Validation failed -> categorize by error_category (A.4) with
             # fallback to substring heuristic (older cached pre-schema-v2
             # responses don't have error_category).
-            error = val_result.get('error', 'Unknown error')
+            error = _normalize_error_message(val_result.get('error'))
             error = _deduplicate_fingerprint_not_found_error(error)
             error_category = val_result.get('error_category')
 
