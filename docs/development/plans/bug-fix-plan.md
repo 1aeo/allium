@@ -144,24 +144,44 @@ missing key) from "0% uptime" when reading `uptime_percentages`.
 **Bug.** `aroi_validation.py` (~line 1806) computes `v3_relay_percentage` as
 `v3 / (v2 + v3)` (AROI-declaring relays only) while `aroileaders.py` (~line 965) uses
 `v3 / total_relays`. The same operator shows different percentages on contact pages vs
-leaderboards; `v3_tier` already uses `total_relays`, so contact validation is internally
-inconsistent too.
+leaderboards. It is self-contradictory within a single sentence on the contact page
+(`contact-relay-list.html` line ~482): "**50%** of this operator's relays already
+declare ciissversion:3 (**1 of 50**)" — the percentage uses `v2+v3` while the
+parenthetical uses `total_relays`. `v3_tier` and `is_v3_adopter` already use
+`total_relays` everywhere.
 
-**Fix.** Standardize on `total_relays` (matches the documented tier classification), and
-update template copy if needed.
+**Options considered.**
 
-**Files.** `allium/lib/aroi_validation.py`, templates `contact-relay-list.html`,
-`macros.html`. Verify with the diff on contact pages and leaderboard v3 columns.
+- **A — standardize on `total_relays`** (chosen): matches `classify_v3_tier` (documented
+  single source of truth), `is_v3_adopter`, and the existing "(N of M)" template copy.
+- B — standardize on `v2 + v3` ("migration progress among AROI-declaring relays"):
+  would require rewording contact copy and changing leaderboard columns.
+- C — keep both semantics under two distinct field names: most precise but adds surface.
+
+**DECISION: Option A.** Compute `v3_relay_percentage = v3_relay_count / total_relays`
+in `aroi_validation.get_contact_validation_status` (delete the `v2+v3` variant); the
+leaderboard formula is already correct. Accept that the "🔁 X% v3" mixed-migration pill
+now measures share of all relays, consistent with the tier badge next to it.
+
+**Files.** `allium/lib/aroi_validation.py` (formula), templates
+`contact-relay-list.html`, `macros.html` (verify copy still reads correctly).
+Verify with the diff on contact pages and leaderboard v3 columns; cross-check one
+mixed-migration operator by hand.
 
 ---
 
 ## Phase 6 — Timezone and determinism bugs (small HTML diffs possible)
 
 1. **Veteran score uses naive local time.** `aroileaders.py` (~lines 795–812) uses
-   `datetime.now()` and `strptime` on onionoo timestamps; every other consumer uses
-   UTC-aware helpers (`time_utils.parse_onionoo_timestamp`). On a non-UTC host, veteran
-   days drift by up to a day. Fix: `datetime.now(timezone.utc)` +
-   `parse_onionoo_timestamp()`.
+   `datetime.now()` (naive, host-local) and `strptime` on onionoo's UTC timestamps;
+   every other consumer uses UTC-aware helpers (`time_utils.parse_onionoo_timestamp`).
+   On a non-UTC host, `veteran_days` drifts by up to ±1 day (more around DST), making
+   output non-reproducible across machines.
+   Options: (A, chosen) `datetime.now(timezone.utc)` + `parse_onionoo_timestamp()` —
+   consistent with the rest of the codebase; (B) `datetime.utcnow()` — minimal but
+   deprecated in Python 3.12; (C) leave as-is and rely on UTC hosts — silently
+   re-breaks on any non-UTC machine.
+   **DECISION: Option A.** On a UTC host the diff must be noise-floor only.
 2. **Leaderboard ties are nondeterministic.** `_top_n` sorts by a single metric; ties
    break by dict insertion order. Fix: secondary sort key `(-metric, operator_key)`.
    This also reduces spurious diffs in the comparison workflow itself.
@@ -200,16 +220,31 @@ update template copy if needed.
 
 ## Phase 8 — Data/display correctness in diagnostics (HTML diff expected, small)
 
-1. **`burst-limit` formatted as a rate.** Onionoo `burst-limit` is bytes (bucket size),
-   not bytes/sec, but `relay_diagnostics.py` (~line 606) and `relay-info.html`
-   (~line 980) render it with `/s` units. Fix: format burst as a data volume.
+1. **`burst-limit` formatted as a rate.** Per proposal 328 / dir-spec, onionoo's
+   `overload_ratelimits.rate-limit`/`burst-limit` are the raw torrc `BandwidthRate`
+   (bytes **per second**) and `BandwidthBurst` (token-bucket size in **bytes** — a
+   quantity, not a rate). `relay_diagnostics.py` (~line 606) and `relay-info.html`
+   (~line 980) render burst with `/s` units, so a 1 GB bucket shows as "1.07 GB/s".
+   Options: (A, chosen) format burst as a data volume, no `/s` — spec-correct, and the
+   diagnostics page should teach the correct semantics; (B) keep rate-style display to
+   match operators' torrc mental model — status quo; (C) raw bytes — unambiguous but
+   inconsistent with site formatting.
+   **DECISION: Option A.** Small diff confined to relay pages with overload data plus
+   the "Rate Limit Configuration" issue text.
 2. **Guard bandwidth message ignores `--bits`.** `relay_diagnostics.py` line ~276
    hardcodes `f"{observed_bandwidth / 1_000_000:.1f} MB/s"`. Fix: use the shared
    formatter with `use_bits`.
 3. **IPv6 directory authority parsing.** `page_writer.py` (~lines 649–655) splits
-   `or_addresses[0]` on `:`, which breaks `[2001:db8::1]:9001`. Fix: reuse
-   `ip_utils.safe_parse_ip_address` bracket-aware parsing. Affects
-   `misc/authorities.html` latency probes for IPv6 authorities.
+   `or_addresses[0]` on `:`, which breaks `[2001:db8::1]:9001` (yields `[2001`), and
+   `dir_address.split(':')[-1]` has the same flaw. **Latent today:** onionoo lists each
+   authority's IPv4 address first and `dir_address` is IPv4, so current output is
+   correct; it breaks only if an authority ever publishes IPv6-first, at which point
+   the latency probe silently targets a garbage endpoint and reports the authority down.
+   Options: (A, chosen) bracket-aware parsing via `ip_utils.safe_parse_ip_address`,
+   preferring the first IPv4 entry for the probe (the monitor's TCP check is only
+   exercised over IPv4); (B) IPv4-filter only; (C) leave as-is.
+   **DECISION: Option A** (which subsumes B's explicit IPv4 preference). Zero expected
+   output change today — the diff must be noise-floor only.
 4. **Stable-flag eligibility defaults to eligible.** `consensus/collector_fetcher.py`
    (~line 1102): when an authority publishes no `stable-mtbf` threshold, every relay is
    marked Stable-eligible. Fix: fall back to the documented dir-spec OR-condition
@@ -249,7 +284,7 @@ update template copy if needed.
 | 5 | Contact + leaderboard v3 columns | one operator cross-checked on both surfaces |
 | 6 | Ties may reorder once, then stable | re-run twice; second diff must be noise-floor only |
 | 7 | Nav/breadcrumb markup diffs; 4 files removed if variants dropped | — |
-| 8 | Relay pages with burst-limit / authorities page | — |
+| 8 | Relay pages with burst-limit/overload data; authorities page expected unchanged (IPv6 fix is latent) | — |
 | 9 | Noise floor only | unit tests per fix |
 
 After each phase: `pytest` must pass, then commit that phase separately so each diff
