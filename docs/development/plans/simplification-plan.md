@@ -91,9 +91,12 @@ Simplification:
 
 1. Make `APIConfig` the single source of truth: add `worker_fn`, `enabled_flag`, and
    `progress_name` fields; derive `API_WORKER_REGISTRY` from the config list.
-2. Delete the dead consensus-health plumbing (`fetch_consensus_health`,
+2. Keep the consensus-health path (`fetch_consensus_health`,
    `get_consensus_health_data`, the `consensus_health_data` attach in
-   `coordinator.create_relay_set_with_coordinator`, and the reader stub in `relays.py`).
+   `coordinator.create_relay_set_with_coordinator`, and the reader stub in `relays.py`)
+   — it is a planned feature path, not cruft. When migrating to the unified registry,
+   give it an `APIConfig` entry with a disabled/optional flag so it fits the single
+   registry instead of remaining an orphan.
 3. Delete `Coordinator.get_collector_data` (tests-only) and the unused
    `self.workers = {}`.
 

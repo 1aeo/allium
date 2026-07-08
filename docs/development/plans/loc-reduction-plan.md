@@ -5,8 +5,9 @@ change**. Structural refactors are in the simplification plan; behavior changes 
 bug fix plan. Current size: ~23.3k lines of production Python (`allium/` + 
 `compare_outputs.py`), ~8.2k lines of templates, ~22.2k lines of tests.
 
-Target: **~900–1,300 production Python lines** plus **~500–700 template lines**
-removed, in strictly mechanical, individually-verified steps.
+Target: **~900–1,200 production Python lines** plus **~500–700 template lines**
+removed, in strictly mechanical, individually-verified steps. (The consensus-health
+pipeline is explicitly out of scope — see Batch 3.)
 
 ## Workflow (applies to every batch)
 
@@ -81,14 +82,17 @@ diff **and** confirm contact pages and vanity URLs are still generated (spot-che
 
 | Item | File | ~Lines |
 |------|------|--------|
-| `fetch_consensus_health` (not in `API_WORKER_REGISTRY`; production never calls it) | `workers.py` | 72 |
 | `fetch_collector_data` legacy wrapper | `workers.py` | 6 |
-| `get_consensus_health_data` + `consensus_health_data` attach + reader stub | `coordinator.py`, `relays.py` | 40 |
 | `_state_manager` global (workers use `_save_state`/`_load_state` directly) | `workers.py` | 1 |
 | `BulkFileOperations`, `TestFileHelper`, `create_unified_file_manager`, `safe_file_operation`, `safe_json_operation` | `file_io_utils.py` | 150 |
 
-Subtotal ≈ **270 lines**. Integration tests that call `fetch_consensus_health` directly
-must be deleted or repointed in the same commit.
+Subtotal ≈ **160 lines**.
+
+**Keep (intentionally excluded):** the consensus-health path stays as-is —
+`fetch_consensus_health` (`workers.py`), `Coordinator.get_consensus_health_data`, the
+`consensus_health_data` attach in `create_relay_set_with_coordinator`, and the reader
+stub in `relays.py`. It is not wired into `API_WORKER_REGISTRY` today, but it is a
+planned feature path, not cruft — do not delete it in this plan.
 
 ---
 
@@ -163,7 +167,7 @@ shift whitespace; the comparison tool will catch it).
 5. Batch 5 (duplication merges) — one commit per row, strict byte-identical gate.
 6. Batch 6 (templates) — one commit per template family.
 
-Running total if all batches land: **~1,330–1,530 Python lines** (~6% of production
+Running total if all batches land: **~1,220–1,420 Python lines** (~5–6% of production
 Python) **+ ~500–650 template lines** (~7% of templates), all with noise-floor diffs.
 Each commit message should state the batch, the symbols removed, and the compare result
 (`Content diffs: N (noise floor)`).
