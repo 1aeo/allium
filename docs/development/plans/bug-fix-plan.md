@@ -1,0 +1,256 @@
+# Plan 3: Bug Fix Plan
+
+Scope: fix verified and suspected bugs found during a full-codebase review. Every phase
+follows the output comparison workflow so each fix's HTML impact is observed and reviewed,
+not guessed.
+
+## Workflow (applies to every phase)
+
+```bash
+# 1. Generate baseline BEFORE the change (full APIs)
+python3 allium/allium.py --out allium/www_baseline --apis all --progress
+
+# 2. Apply the fix(es) for one phase
+
+# 3. Regenerate AFTER the change (full APIs, same command)
+python3 allium/allium.py --out allium/www_after --apis all --progress
+
+# 4. Diff every generated file (~28k files, ~10s)
+python3 compare_outputs.py            # exit 0 = clean, 1 = diffs to review
+python3 compare_outputs.py --quiet    # summary only
+
+# 5. Run the test suite
+pytest
+flake8 . --select=E9,F63,F7,F82 --show-source
+```
+
+Environment notes (verified in this repo):
+
+- A full `--apis all` run completes in ~3.5 min and needs ~7 GB RSS.
+- Running baseline and after back-to-back reuses warm API caches; the observed noise
+  floor is **~25 content-diff files** (relay uptime ticking, root page timestamps).
+  Any diff beyond that must be attributable to the fix being verified.
+- If onionoo drifts between runs, regenerate the baseline immediately before the
+  after-run to keep the cache warm.
+
+Fixes are grouped into phases by risk and by expected HTML impact, so the diff for each
+phase isolates one class of change.
+
+---
+
+## Phase 1 — Double-escaped HTML entities (verified, visible to users)
+
+**Bug.** `page_writer.py` enables Jinja2 `autoescape=True`, but `relays.py` /
+`html_escape_utils.py` still pre-escape fields (`contact_escaped`,
+`nickname_escaped`, `as_name_escaped`, `platform_escaped`, `flags_escaped`,
+`first_seen_date_escaped`, `contact_info_escaped` in `aroileaders.py`, …) and templates
+render them without `|safe`. Autoescape escapes them a second time.
+
+**Verified evidence.** Generated output contains double-escaped entities rendered as
+literal text in the browser (e.g. `&amp;lt;admin AT my-mail dot rocks&amp;gt;` displays
+as `&lt;admin AT my-mail dot rocks&gt;`):
+
+- `misc/all.html`: 1,275 occurrences
+- `index.html` (AROI leaderboards): 71 occurrences
+- `top500.html`: 61 occurrences
+
+**Fix.** Pick one escaping strategy. Recommended: keep autoescape as the single source of
+truth — change the pre-computed fields to carry **raw** values (or drop the `_escaped`
+suffix fields and reference raw fields in templates), and remove the redundant
+`html.escape()` calls in `html_escape_utils.py` / `aroileaders.py`
+(`contact_info_escaped`). Do NOT sprinkle `|safe` on the pre-escaped fields — that
+re-introduces XSS risk if any call site forgets to pre-escape.
+
+**Expected diff.** Large but mechanical: affected pages change `&amp;amp;` → `&amp;`,
+`&amp;lt;` → `&lt;`, etc. Verify by grepping the after-output:
+`rg -c "&amp;amp;|&amp;lt;" allium/www_after/misc/all.html` should return 0 (or only
+legitimately double-escaped operator strings that literally contain `&amp;`).
+Spot-check that single escaping is still present (no raw `<script>` in output):
+`rg -l "<script" allium/www_after/misc/all.html` should only match the intentional
+page scripts.
+
+**Files.** `allium/lib/html_escape_utils.py`, `allium/lib/relays.py`,
+`allium/lib/aroileaders.py`, templates using `*_escaped` fields
+(`relay-list.html`, `contact-relay-list.html`, `aroi_macros.html`).
+
+---
+
+## Phase 2 — HTTP 304/error cache fallback never finds the cache (verified, no HTML diff expected)
+
+**Bug.** `error_handlers.handle_http_errors(api_name, cache_loader, ...)` is invoked with
+display names — `"onionoo details"`, `"onionoo historical bandwidth"`, `"AROI validation"`,
+`"Exit DNS Health"` (`workers.py` lines 792–927). On HTTP 304 and on the generic
+exception fallback it calls `cache_loader(api_name)`, and `CacheManager.save_cache/load_cache`
+build filenames as `f"{cache_key}.json"`. The cache is written under the config
+`api_name` (`onionoo_details.json`), so the decorator looks for `onionoo details.json`,
+which never exists. The same wrong key is passed to `_mark_ready`/`_mark_stale`, so worker
+state entries are also keyed inconsistently with the coordinator's registry.
+
+**Fix.** Pass the machine key and display name separately, e.g.
+`@handle_http_errors(cache_key="onionoo_details", display_name="onionoo details", ...)`,
+and use `cache_key` for `cache_loader`/`mark_ready`/`mark_stale`, `display_name` for log
+messages only.
+
+**Test.** Unit test: mock a 304 `HTTPError` from `_fetch_with_cache_fallback`, pre-seed
+`onionoo_details.json` cache, assert cached data is returned and worker status is keyed
+`onionoo_details`. The full-run diff should show **zero** content diffs beyond the noise
+floor (this path only triggers on 304/error).
+
+**Files.** `allium/lib/error_handlers.py`, `allium/lib/workers.py`,
+`tests/unit/workers/`.
+
+---
+
+## Phase 3 — Contact page downtime alerts double/triple-count dual-role relays (HTML diff expected)
+
+**Bug.** `operator_analysis.py` (~lines 1451–1463): an offline relay with both `Guard`
+and `Exit` flags increments `guard`, `exit`, **and** `middle` buckets. `contact.html`
+(line ~328) sums the three buckets into `total_offline`, so one offline Guard+Exit relay
+counts as 3. Per-role offline bandwidth percentages can also exceed 100%.
+
+**Fix.** Count each relay once for the total (unique fingerprints); keep per-role detail
+lists if desired but make the headline count exclusive (use the same primary-role rule
+used elsewhere: Exit > Guard > Middle), or compute `total_offline` in Python from the
+number of offline relays instead of summing buckets in the template.
+
+**Expected diff.** Contact pages of operators that currently have offline dual-role
+relays; verify a sampled contact page shows the corrected count.
+
+**Files.** `allium/lib/operator_analysis.py`, `allium/templates/contact.html`.
+
+---
+
+## Phase 4 — Reliability leaderboard drops 0% uptime relays from the average (HTML diff expected)
+
+**Bug.** `aroileaders.py` line ~250: `if uptime_pct > 0.0:` excludes relays with exactly
+0% uptime from the operator average. Nine relays at 99% plus one at 0% scores ~99%
+instead of ~89.1%, inflating "Reliability Masters"/"Legacy Titans" rankings.
+
+**Fix.** Include explicit 0.0 values when the relay has uptime data for the period;
+only skip relays with **missing** data. Distinguish "no data" (`None` /
+missing key) from "0% uptime" when reading `uptime_percentages`.
+
+**Expected diff.** Reliability leaderboard sections of `index.html` /
+`misc/aroi-leaderboards.html`, and contact pages showing reliability scores.
+
+**Files.** `allium/lib/aroileaders.py` (and the analogous logic in
+`operator_analysis.calculate_operator_reliability` if it shares the pattern),
+`tests/unit/aroi/`.
+
+---
+
+## Phase 5 — Inconsistent v3 migration percentage denominators (HTML diff expected)
+
+**Bug.** `aroi_validation.py` (~line 1806) computes `v3_relay_percentage` as
+`v3 / (v2 + v3)` (AROI-declaring relays only) while `aroileaders.py` (~line 965) uses
+`v3 / total_relays`. The same operator shows different percentages on contact pages vs
+leaderboards; `v3_tier` already uses `total_relays`, so contact validation is internally
+inconsistent too.
+
+**Fix.** Standardize on `total_relays` (matches the documented tier classification), and
+update template copy if needed.
+
+**Files.** `allium/lib/aroi_validation.py`, templates `contact-relay-list.html`,
+`macros.html`. Verify with the diff on contact pages and leaderboard v3 columns.
+
+---
+
+## Phase 6 — Timezone and determinism bugs (small HTML diffs possible)
+
+1. **Veteran score uses naive local time.** `aroileaders.py` (~lines 795–812) uses
+   `datetime.now()` and `strptime` on onionoo timestamps; every other consumer uses
+   UTC-aware helpers (`time_utils.parse_onionoo_timestamp`). On a non-UTC host, veteran
+   days drift by up to a day. Fix: `datetime.now(timezone.utc)` +
+   `parse_onionoo_timestamp()`.
+2. **Leaderboard ties are nondeterministic.** `_top_n` sorts by a single metric; ties
+   break by dict insertion order. Fix: secondary sort key `(-metric, operator_key)`.
+   This also reduces spurious diffs in the comparison workflow itself.
+3. **`total_steps` comment is stale.** `allium.py` line 296 says "59 total steps" but the
+   computed value is 61 (4+22+35) and the run logs `[61/61]` (verified). Fix the comment
+   (or derive counts from the registries). No HTML impact.
+
+**Files.** `allium/lib/aroileaders.py`, `allium/allium.py`.
+
+---
+
+## Phase 7 — Template correctness (HTML diff expected, cosmetic)
+
+1. **Broken nav highlighting.** `flag.html` and `first_seen.html` call
+   `navigation('misc', ...)` but the macro has no `'misc'` branch — nothing highlights.
+   `relay-info.html` uses `navigation('all', ...)`, wrongly highlighting "All Relays"
+   on relay pages. Fix: pass a valid section or none.
+2. **Country breadcrumb shows ISO code.** `page_context.get_detail_context()` puts the
+   raw sorted key (e.g. `US`) into `country_name`; `country.html` derives the full name
+   separately. Fix: resolve the display name in `get_detail_context`.
+3. **Sort variants with no visible column.** `site_generator.py` generates
+   `by-unique-contact-count` / `by-unique-family-count` pages for all five misc types,
+   but `misc-contacts.html` and `misc-families.html` have no such columns — the pages
+   exist with no visual indication of the sort. Fix: either add the columns or stop
+   generating those variants for those two types (note: removing variants deletes
+   4 output files — the comparison report will show them under "Only in baseline",
+   which is the expected signal).
+4. **`platform.html` description doesn't escape `value`** while the title does
+   (autoescape actually covers this — verify, then align the template for consistency).
+
+**Files.** `allium/templates/macros.html`, `flag.html`, `first_seen.html`,
+`relay-info.html`, `platform.html`, `allium/lib/page_context.py`,
+`allium/lib/site_generator.py`.
+
+---
+
+## Phase 8 — Data/display correctness in diagnostics (HTML diff expected, small)
+
+1. **`burst-limit` formatted as a rate.** Onionoo `burst-limit` is bytes (bucket size),
+   not bytes/sec, but `relay_diagnostics.py` (~line 606) and `relay-info.html`
+   (~line 980) render it with `/s` units. Fix: format burst as a data volume.
+2. **Guard bandwidth message ignores `--bits`.** `relay_diagnostics.py` line ~276
+   hardcodes `f"{observed_bandwidth / 1_000_000:.1f} MB/s"`. Fix: use the shared
+   formatter with `use_bits`.
+3. **IPv6 directory authority parsing.** `page_writer.py` (~lines 649–655) splits
+   `or_addresses[0]` on `:`, which breaks `[2001:db8::1]:9001`. Fix: reuse
+   `ip_utils.safe_parse_ip_address` bracket-aware parsing. Affects
+   `misc/authorities.html` latency probes for IPv6 authorities.
+4. **Stable-flag eligibility defaults to eligible.** `consensus/collector_fetcher.py`
+   (~line 1102): when an authority publishes no `stable-mtbf` threshold, every relay is
+   marked Stable-eligible. Fix: fall back to the documented dir-spec OR-condition
+   (`flag_thresholds.check_stable_eligibility`) instead of `True`.
+
+---
+
+## Phase 9 — Latent bugs (no HTML diff expected; fix + unit test only)
+
+1. **Rare-country loop iterates category names.** `country_utils.py` lines 574–592
+   iterate `GEOPOLITICAL_CLASSIFICATIONS.keys()` (`'conflict_zones'`, `'authoritarian'`, …)
+   instead of country codes, adding those strings to the rare-country set. Currently
+   masked because both consumers filter to 2-letter codes; still wrong. Fix: iterate the
+   union of the classification **sets**, or delete the block (zero-relay countries score
+   from geopolitical factors only). Confirm the diff is clean.
+2. **`first_seen_date` re-escapes instead of unescaping.** `html_escape_utils.py`
+   line 297: comment says "Unescape" but code does `.replace('&', '&amp;')`. Field is
+   unused in templates — remove it (also covered by Phase 1 rework).
+3. **Non-atomic state/cache writes.** `workers._save_state` and
+   `file_io_utils.write_json_file` write JSON in place; a crash mid-write corrupts
+   state/cache. Fix: write to temp file + `os.replace`.
+4. **`_is_retryable_error` retries all `OSError`s** (`workers.py` ~line 511), including
+   `ENOSPC`/`EACCES`. Fix: restrict to network-related errno values.
+5. **Fragile exception handler in `fetch_collector_consensus_data`** (`workers.py`
+   ~lines 999–1065): initialize `cached_data`/`timeout_seconds` before the `try`.
+
+---
+
+## Verification matrix
+
+| Phase | Expected compare_outputs result | Extra checks |
+|-------|--------------------------------|--------------|
+| 1 | Many diffs, all entity-decoding only | grep for `&amp;amp;`/`&amp;lt;` count → 0; XSS spot-check |
+| 2 | Noise floor only | new unit test for 304 fallback |
+| 3 | Contact pages with offline dual-role relays | sample page inspection |
+| 4 | Leaderboard + contact reliability sections | recompute one operator by hand |
+| 5 | Contact + leaderboard v3 columns | one operator cross-checked on both surfaces |
+| 6 | Ties may reorder once, then stable | re-run twice; second diff must be noise-floor only |
+| 7 | Nav/breadcrumb markup diffs; 4 files removed if variants dropped | — |
+| 8 | Relay pages with burst-limit / authorities page | — |
+| 9 | Noise floor only | unit tests per fix |
+
+After each phase: `pytest` must pass, then commit that phase separately so each diff
+review maps to one class of change.
