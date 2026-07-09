@@ -229,12 +229,17 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
             for relay in operator_relays:
                 percentages = relay.get('uptime_percentages') or {}
                 uptime_pct = percentages.get(time_period, 0.0) or 0.0
-                if uptime_pct > 0.0:
+                data_points = (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                # Include relays that HAVE uptime data for the period, even at
+                # 0% uptime (excluding them inflated operator averages); skip
+                # only relays with insufficient data (<30 daily points, the
+                # same validity threshold the percentage computation uses).
+                if data_points >= 30:
                     uptime_values.append(uptime_pct)
                     breakdown[relay.get('nickname', 'Unknown')] = {
                         'fingerprint': relay.get('fingerprint', ''),
                         'uptime': uptime_pct,
-                        'data_points': (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                        'data_points': data_points
                     }
             
             if not uptime_values:
