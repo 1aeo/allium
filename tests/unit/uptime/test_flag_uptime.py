@@ -18,7 +18,6 @@ from unittest.mock import patch, MagicMock
 
 from allium.lib.relays import Relays
 from allium.lib.uptime_utils import (
-    normalize_uptime_value, 
     calculate_relay_uptime_average,
     extract_relay_uptime_for_period,
     calculate_statistical_outliers
@@ -27,17 +26,6 @@ from allium.lib.uptime_utils import (
 
 class TestFlagUptimeCalculation(unittest.TestCase):
     """Test core flag uptime calculation logic"""
-    
-    def test_uptime_value_normalization(self):
-        """Test conversion from Onionoo 0-999 scale to 0-100 percentage"""
-        # Test boundary values
-        self.assertAlmostEqual(normalize_uptime_value(0), 0.0, places=2)
-        self.assertAlmostEqual(normalize_uptime_value(999), 100.0, places=2)
-        
-        # Test typical values - allow for more precision
-        self.assertAlmostEqual(normalize_uptime_value(950), 95.095, places=2)
-        self.assertAlmostEqual(normalize_uptime_value(800), 80.080, places=2)
-        self.assertAlmostEqual(normalize_uptime_value(500), 50.050, places=2)
     
     def test_relay_uptime_average_calculation(self):
         """Test averaging of multiple uptime data points"""

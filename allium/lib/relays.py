@@ -888,19 +888,6 @@ class Relays:
         from .flag_analysis import sort_by_observed_bandwidth
         sort_by_observed_bandwidth(self.json)
 
-    def _write_timestamp(self):
-        """
-        Store encoded timestamp in a file to retain time of last request, passed
-        to onionoo via If-Modified-Since header during fetch() if exists
-        """
-        timestamp = time.time()
-        f_timestamp = format_timestamp_gmt(timestamp)
-        if self.json is not None:
-            with open(self.ts_file, "w", encoding="utf8") as ts_file:
-                ts_file.write(f_timestamp)
-        
-        return f_timestamp
-
     def _calculate_network_totals(self):
         """Calculate network totals using three counting methodologies."""
         from .categorization import calculate_network_totals
@@ -1251,11 +1238,6 @@ class Relays:
         self.json['smart_context'] = engine.analyze_all_layers()
         self.progress_step += 1
         self._log_progress("Tier 1 intelligence analysis complete")
-
-    def create_output_dir(self):
-        """Ensure self.output_dir exists (required for write functions)."""
-        from .page_writer import create_output_dir
-        create_output_dir(self)
 
     def write_misc(self, template, path, page_ctx=None, sorted_by=None, reverse=True, is_index=False):
         """Render and write unsorted HTML listings to disk."""

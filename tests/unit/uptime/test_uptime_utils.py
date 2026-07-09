@@ -15,7 +15,6 @@ import time
 import unittest
 
 from allium.lib.uptime_utils import (
-    normalize_uptime_value,
     calculate_relay_uptime_average,
     find_relay_uptime_data,
     extract_relay_uptime_for_period,
@@ -26,22 +25,6 @@ from allium.lib.uptime_utils import (
 
 class TestUptimeNormalization(unittest.TestCase):
     """Test uptime value normalization functions"""
-    
-    def test_normalize_uptime_value(self):
-        """Test normalization from Onionoo 0-999 scale to 0-100 percentage"""
-        # Test boundary values
-        self.assertAlmostEqual(normalize_uptime_value(0), 0.0, places=3)
-        self.assertAlmostEqual(normalize_uptime_value(999), 100.0, places=3) 
-        
-        # Test typical values
-        self.assertAlmostEqual(normalize_uptime_value(950), 95.095, places=3)
-        self.assertAlmostEqual(normalize_uptime_value(800), 80.080, places=3)
-        self.assertAlmostEqual(normalize_uptime_value(500), 50.050, places=3)
-        self.assertAlmostEqual(normalize_uptime_value(250), 25.025, places=3)
-        
-        # Test mid-range values
-        self.assertAlmostEqual(normalize_uptime_value(750), 75.075, places=3)
-        self.assertAlmostEqual(normalize_uptime_value(900), 90.090, places=3)
     
     def test_calculate_relay_uptime_average(self):
         """Test averaging of multiple uptime data points"""

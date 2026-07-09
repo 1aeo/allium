@@ -7,7 +7,6 @@ across workers.py, coordinator.py, and relays.py files.
 
 import functools
 import json
-import traceback
 import urllib.error
 from typing import Any, Callable
 
@@ -134,42 +133,6 @@ def handle_json_errors(operation: str = "parse JSON", default_return: Any = None
             except Exception as e:
                 print(f"Warning: Unexpected error during {operation}: {e}")
                 return default_return
-        return wrapper
-    return decorator
-
-
-def handle_worker_errors(api_name: str, enable_ci_debug: bool = True):
-    """
-    Decorator for handling worker execution errors in coordinator.
-    
-    Args:
-        api_name: Name of the API worker
-        enable_ci_debug: Whether to enable CI debugging output
-    """
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                # Extract coordinator instance if available
-                coordinator = None
-                if args and hasattr(args[0], '_log_progress_with_step_increment'):
-                    coordinator = args[0]
-                
-                if coordinator:
-                    api_display_name = coordinator._get_api_display_name(api_name)
-                    coordinator._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
-                    coordinator.worker_data[api_name] = None
-                
-                # CI debugging
-                if enable_ci_debug:
-                    import os
-                    if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
-                        print(f"🔧 CI Debug: {api_name} worker failed with: {e}")
-                        traceback.print_exc()
-                
-                return None
         return wrapper
     return decorator
 

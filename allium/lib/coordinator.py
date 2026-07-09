@@ -76,7 +76,6 @@ class Coordinator:
             self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Worker management
-        self.workers = {}
         self.worker_data = {}
         self.worker_threads = []
         
@@ -359,12 +358,6 @@ class Coordinator:
         Get consensus health data if available.
         """
         return self.worker_data.get('consensus_health')
-
-    def get_collector_data(self):
-        """
-        Get collector data if available (legacy)
-        """
-        return self.worker_data.get('collector')
 
     def get_collector_consensus_data(self):
         """

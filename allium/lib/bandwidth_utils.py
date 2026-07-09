@@ -7,28 +7,6 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 
 import statistics
 
-def calculate_network_cv_statistics(all_operators_data):
-    """Calculate network-wide CV statistics for dynamic threshold setting."""
-    if not all_operators_data or len(all_operators_data) < 10:
-        return None
-        
-    try:
-        cv_values = sorted([cv for cv in all_operators_data if cv >= 0])
-        if len(cv_values) < 10:
-            return None
-            
-        return {
-            'p25': statistics.quantiles(cv_values, n=4)[0],
-            'p50': statistics.median(cv_values),
-            'p75': statistics.quantiles(cv_values, n=4)[2],
-            'p90': statistics.quantiles(cv_values, n=10)[8],
-            'total_operators': len(cv_values),
-            'mean': statistics.mean(cv_values),
-            'std_dev': statistics.stdev(cv_values)
-        }
-    except Exception:
-        return None
-
 def calculate_total_data_from_history(history_data):
     """Calculate total bytes transferred from an Onionoo bandwidth history object.
     

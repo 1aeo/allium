@@ -111,21 +111,6 @@ def _top_n(operators, metric, n=50, filter_fn=None):
     return sorted(source.items(), key=lambda x: x[1][metric], reverse=True)[:n]
 
 
-def normalize_contact_info(contact_info):
-    """
-    Normalize contact information by removing common artifacts and standardizing.
-    
-    This function cleans up contact information to improve grouping accuracy.
-    
-    Args:
-        contact_info (str): Raw contact information string
-        
-    Returns:
-        str: Normalized contact information
-    """
-    return contact_info.strip()
-
-
 def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decimal_places=1):
     """
     Helper function to format bandwidth with automatic unit determination.
