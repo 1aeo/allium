@@ -1419,11 +1419,12 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     NEW operator-level migration metadata:
       - is_mixed_migration: True iff operator has BOTH v2 AND v3 declaring
                             relays under the same contact
-      - v3_relay_count / v2_relay_count / v3_relay_percentage
+      - v3_relay_count / v2_relay_count / v3_pct_of_total /
+        v3_migration_progress_pct
       - v3_tier: 'none'|'explorer'|'migrating'|'mostly'|'complete'
         (consumed by leaderboards, listing icons, and the operator
          header pill in B1)
-      - is_v3_adopter: v3_relay_percentage >= V3_LISTING_ICON_THRESHOLD
+      - is_v3_adopter: v3 share of total relays >= V3_LISTING_ICON_THRESHOLD
 
     A.4 changes: when val_result['error_category'] is set, prefer it over
     today's substring heuristic for cascade decisions; passthrough the
@@ -1475,7 +1476,8 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             # NEW: operator-level v2/v3 migration tally
             'v2_relay_count': 0,
             'v3_relay_count': 0,
-            'v3_relay_percentage': 0.0,
+            'v3_pct_of_total': 0.0,
+            'v3_migration_progress_pct': 0.0,
             'is_mixed_migration': False,
             'is_v3_adopter': False,
             'v3_tier': 'none',      # none|explorer|migrating|mostly|complete
@@ -1802,9 +1804,19 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     # A.5 operator-level migration metadata. Computed once, consumed by
     # every B-phase surface (operator pill, leaderboard tier, search
     # index, listing icons).
+    # Two explicitly-named percentages (the old ambiguous
+    # v3_relay_percentage mixed denominators between surfaces):
+    # - v3_pct_of_total: share of ALL the operator's relays on v3; matches
+    #   v3_tier / is_v3_adopter and the contact-page "(N of TOTAL)" copy.
+    # - v3_migration_progress_pct: share of AROI-DECLARING relays on v3;
+    #   drives the mixed-migration pill only.
     total_aroi_relays = summary['v2_relay_count'] + summary['v3_relay_count']
+    if summary['total_relays'] > 0:
+        summary['v3_pct_of_total'] = (
+            summary['v3_relay_count'] / summary['total_relays'] * 100
+        )
     if total_aroi_relays > 0:
-        summary['v3_relay_percentage'] = (
+        summary['v3_migration_progress_pct'] = (
             summary['v3_relay_count'] / total_aroi_relays * 100
         )
     summary['is_mixed_migration'] = (

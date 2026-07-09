@@ -325,8 +325,7 @@
                 {% if contact_display_data and contact_display_data.downtime_alerts %}
                 {% set alerts = contact_display_data.downtime_alerts %}
                 {% if alerts.has_offline_relays %}
-                {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
-                <li><strong><span class="al-status-danger">🚨 Offline ({{ total_offline }})</span>:</strong>
+                <li><strong><span class="al-status-danger">🚨 Offline ({{ alerts.offline_counts.total }})</span>:</strong>
                     {% if alerts.offline_counts.guard > 0 %}
                         <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
                     {% endif %}
@@ -523,8 +522,7 @@
                 {% if contact_display_data and contact_display_data.downtime_alerts %}
                 {% set alerts = contact_display_data.downtime_alerts %}
                 {% if alerts.has_offline_relays %}
-                {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
-                <li><strong><span class="al-status-danger">🚨 Offline ({{ total_offline }})</span>:</strong>
+                <li><strong><span class="al-status-danger">🚨 Offline ({{ alerts.offline_counts.total }})</span>:</strong>
                     {% if alerts.offline_counts.guard > 0 %}
                         <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
                     {% endif %}

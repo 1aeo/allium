@@ -6,6 +6,7 @@ Extracted from the original monolithic Relays class for multi-API support.
 """
 
 import base64
+import errno
 import json
 import logging
 import os
@@ -376,8 +377,11 @@ def _save_state():
         "workers": _worker_status,
         "last_updated": time.time()
     }
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+    # Atomic write: a crash mid-dump must not corrupt the existing state
+    tmp_path = STATE_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(state_data, f, indent=2)
+    os.replace(tmp_path, STATE_FILE)
 
 
 @handle_file_io_errors("load state")
@@ -472,7 +476,16 @@ _RETRYABLE_EXCEPTIONS = (
     ConnectionAbortedError,
     ConnectionRefusedError,
     BrokenPipeError,
+    socket.gaierror,  # transient DNS resolution failures
 )
+
+# Network-related errnos worth retrying; anything else (ENOSPC, EACCES,
+# EMFILE, ...) indicates a local problem a retry cannot fix.
+_RETRYABLE_ERRNOS = frozenset({
+    errno.ECONNRESET, errno.ECONNREFUSED, errno.ECONNABORTED,
+    errno.EPIPE, errno.ETIMEDOUT, errno.EHOSTUNREACH,
+    errno.ENETUNREACH, errno.ENETDOWN, errno.ENETRESET,
+})
 
 
 def _is_retryable_error(exc: Exception) -> bool:
@@ -502,11 +515,11 @@ def _is_retryable_error(exc: Exception) -> bool:
             return True
         # URLError wrapping OSError with retryable errno
         if isinstance(exc.reason, OSError):
-            return True
+            return exc.reason.errno in _RETRYABLE_ERRNOS
         return False
     if isinstance(exc, OSError):
-        # Generic OS-level network errors (ECONNRESET, etc.)
-        return True
+        # Only network-related errnos; ENOSPC/EACCES etc. are not transient
+        return exc.errno in _RETRYABLE_ERRNOS
     return False
 
 
@@ -783,7 +796,7 @@ def _fetch_with_cache_fallback(
 # ============================================================================
 
 
-@handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_details", "onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=True, critical=True)
 def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
@@ -805,7 +818,7 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     )
 
 
-@handle_http_errors("onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_uptime", "onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
@@ -827,7 +840,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     )
 
 
-@handle_http_errors("onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_bandwidth", "onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidth", cache_hours=12, progress_logger=None):
     """
@@ -859,7 +872,7 @@ def _validate_aroi_response(data: dict) -> bool:
     return all(key in data for key in required_keys)
 
 
-@handle_http_errors("AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
+@handle_http_errors("aroi_validation", "AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
                    allow_exit_on_304=False, critical=False)
 def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json", progress_logger=None):
     """
@@ -902,7 +915,7 @@ def _validate_exit_dns_health_response(data) -> bool:
     return True
 
 
-@handle_http_errors("Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
+@handle_http_errors("exit_dns_health", "Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
                    allow_exit_on_304=False, critical=False)
 def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/latest.json", progress_logger=None):
     """
@@ -970,6 +983,11 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             log_progress(f"loaded {relay_count} relays from collector consensus cache")
             return cached_data
     
+    # Initialized before the try so the exception handler can always
+    # reference them, even if the failure happens before they are set
+    cached_data = None
+    timeout_seconds = COLLECTOR_TIMEOUT_STALE_CACHE
+
     try:
         fetch_start = time.time()
         
