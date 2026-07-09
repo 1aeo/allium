@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
 from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
-from allium.lib.operator_analysis import compute_contact_display_data
+from allium.lib.operator_analysis import compute_contact_display_data, format_intelligence_rating
 from allium.lib.relays import Relays
 
 
@@ -86,35 +86,35 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_format_intelligence_rating_poor(self):
         """Test color-coded formatting for Poor intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Poor, 1 network')
+        result = format_intelligence_rating('Poor, 1 network')
         expected = '<span class="al-rating-poor">Poor</span>, 1 network'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_okay(self):
         """Test color-coded formatting for Okay intelligence ratings.""" 
-        result = self.relays._format_intelligence_rating('Okay, 2 countries')
+        result = format_intelligence_rating('Okay, 2 countries')
         expected = '<span class="al-rating-okay">Okay</span>, 2 countries'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_great(self):
         """Test color-coded formatting for Great intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Great, 4 networks (2 rare)')
+        result = format_intelligence_rating('Great, 4 networks (2 rare)')
         expected = '<span class="al-rating-great">Great</span>, 4 networks (2 rare)'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_invalid_format(self):
         """Test handling of invalid rating format."""
-        result = self.relays._format_intelligence_rating('Invalid format')
+        result = format_intelligence_rating('Invalid format')
         self.assertEqual(result, 'Invalid format')
 
     def test_format_intelligence_rating_empty_string(self):
         """Test handling of empty string."""
-        result = self.relays._format_intelligence_rating('')
+        result = format_intelligence_rating('')
         self.assertEqual(result, '')
 
     def test_format_intelligence_rating_none(self):
         """Test handling of None input."""
-        result = self.relays._format_intelligence_rating(None)
+        result = format_intelligence_rating(None)
         self.assertEqual(result, None)
 
     @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')

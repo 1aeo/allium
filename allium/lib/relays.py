@@ -13,6 +13,8 @@ import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+from .network_health import calculate_network_health_metrics
+from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
@@ -132,13 +134,13 @@ class Relays:
         if uptime_data:
             self._reprocess_uptime_data()
             self._generate_aroi_leaderboards()
-            self._calculate_network_health_metrics()
+            calculate_network_health_metrics(self)
 
         # Steps 11-14: Bandwidth → health → aggregate groups (needs health %) → leaderboards
         if bandwidth_data and self.json.get('relays'):
             try:
                 self._reprocess_bandwidth_data()
-                self._calculate_network_health_metrics()
+                calculate_network_health_metrics(self)
                 self._aggregate_total_data_to_groups()
                 self._generate_aroi_leaderboards()
             except Exception as e:
@@ -160,7 +162,7 @@ class Relays:
             try:
                 self._attach_exit_dns_health_data()
                 self._aggregate_dns_health_to_groups()
-                self._calculate_network_health_metrics()
+                calculate_network_health_metrics(self)
             except Exception as e:
                 print(f"Warning: Exit DNS Health processing failed ({e}), continuing without DNS health data")
 
@@ -168,7 +170,7 @@ class Relays:
         # Normally called after uptime and/or bandwidth processing above,
         # but if neither data source was available, we need the fallback.
         if 'network_health' not in self.json:
-            self._calculate_network_health_metrics()
+            calculate_network_health_metrics(self)
 
         # Steps 15-16: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
@@ -390,7 +392,7 @@ class Relays:
         # Cache method refs outside loop to avoid repeated attribute lookups (10K iterations)
         _bw_determine = self.bandwidth_formatter.determine_unit
         _bw_format = self.bandwidth_formatter.format_bandwidth_with_unit
-        _time_ago = self._format_time_ago
+        _time_ago = format_time_ago
         _time_keys = (('last_restarted', 'last_restarted_ago'),
                       ('first_seen', 'first_seen_ago'),
                       ('last_seen', 'last_seen_ago'))
@@ -456,7 +458,7 @@ class Relays:
                 relay["ip_address"] = UNKNOWN_LOWERCASE
                 
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
-            relay["uptime_display"] = self._calculate_uptime_display(relay)
+            relay["uptime_display"] = calculate_uptime_display(relay)
             
             # Initialize uptime API display (will be populated by _reprocess_uptime_data)
             relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
@@ -1232,10 +1234,6 @@ class Relays:
         from .page_writer import get_directory_authorities_data
         return get_directory_authorities_data(self)
 
-    def _format_time_ago(self, timestamp_str):
-        """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')."""
-        return format_time_ago(timestamp_str)
-
     @functools.cached_property
     def _aroi_validation_timestamp(self):
         """
@@ -1254,27 +1252,3 @@ class Relays:
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
 
-    def _get_leaderboard_category_info(self, category):
-        """Get display information for a leaderboard category."""
-        from .operator_analysis import get_leaderboard_category_info
-        return get_leaderboard_category_info(category)
-
-    def _format_intelligence_rating(self, rating_text):
-        """Format intelligence rating text with color coding."""
-        from .operator_analysis import format_intelligence_rating
-        return format_intelligence_rating(rating_text)
-
-    def _calculate_uptime_display(self, relay):
-        """Calculate uptime/downtime display for a single relay."""
-        from .operator_analysis import calculate_uptime_display
-        return calculate_uptime_display(relay)
-
-    def _preformat_network_health_template_strings(self, health_metrics):
-        """Pre-format all template strings to eliminate Jinja2 formatting overhead."""
-        from .network_health import preformat_network_health_template_strings
-        preformat_network_health_template_strings(health_metrics)
-
-    def _calculate_network_health_metrics(self):
-        """Calculate network health metrics. Delegates to network_health module."""
-        from .network_health import calculate_network_health_metrics
-        calculate_network_health_metrics(self)
