@@ -1222,44 +1222,19 @@ class Relays:
         self.json['smart_context'] = engine.analyze_all_layers()
         self.progress_logger.log_without_increment("Tier 1 intelligence analysis complete")
 
-    def write_misc(self, template, path, page_ctx=None, sorted_by=None, reverse=True, is_index=False):
-        """Render and write unsorted HTML listings to disk."""
-        from .page_writer import write_misc
-        write_misc(self, template, path, page_ctx=page_ctx, sorted_by=sorted_by, reverse=reverse, is_index=is_index)
-
     def _get_directory_authorities_data(self):
-        """Prepare directory authorities data for template rendering."""
+        """Prepare directory authorities data for template rendering.
+
+        Kept as a facade method: page_context.StandardTemplateContexts
+        calls it via self.relays (importing page_writer there would be
+        circular — page_writer imports page_context).
+        """
         from .page_writer import get_directory_authorities_data
         return get_directory_authorities_data(self)
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')."""
         return format_time_ago(timestamp_str)
-
-    def get_detail_page_context(self, category, value):
-        """Generate page context with correct breadcrumb data for detail pages."""
-        from .page_context import get_detail_page_context
-        return get_detail_page_context(category, value)
-
-    def write_pages_by_key(self, k):
-        """Render and write sorted HTML relay listings to disk."""
-        from .page_writer import write_pages_by_key
-        write_pages_by_key(self, k)
-
-    def _build_template_args(self, k, v, i, the_prefixed, validated_aroi_domains):
-        """Build template arguments for all page types."""
-        from .page_writer import build_template_args
-        return build_template_args(self, k, v, i, the_prefixed, validated_aroi_domains)
-
-    def _write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time):
-        """Parallel page generation using fork()."""
-        from .page_writer import write_pages_parallel
-        write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time)
-
-    def write_relay_info(self):
-        """Render and write per-relay HTML info documents to disk."""
-        from .page_writer import write_relay_info
-        write_relay_info(self)
 
     def _get_contact_validation_status(self, members):
         """
