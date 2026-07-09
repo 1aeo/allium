@@ -12,11 +12,10 @@ from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
     fetch_aroi_validation, fetch_exit_dns_health, fetch_collector_consensus_data,
     fetch_collector_descriptors,
-    get_worker_status, get_all_worker_status
+    get_all_worker_status
 )
 from .relays import Relays
 from .progress_logger import ProgressLogger
-from .error_handlers import handle_worker_errors, handle_calculation_errors
 from .first_seen_correction import correct_first_seen
 
 
@@ -77,7 +76,6 @@ class Coordinator:
             self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Worker management
-        self.workers = {}
         self.worker_data = {}
         self.worker_threads = []
         
@@ -360,12 +358,6 @@ class Coordinator:
         Get consensus health data if available.
         """
         return self.worker_data.get('consensus_health')
-
-    def get_collector_data(self):
-        """
-        Get collector data if available (legacy)
-        """
-        return self.worker_data.get('collector')
 
     def get_collector_consensus_data(self):
         """

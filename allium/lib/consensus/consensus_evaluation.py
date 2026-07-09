@@ -594,20 +594,17 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     
     # Set relay values from stats
     relay_tk = tk_stats['primary_value']
-    relay_mtbf = mtbf_stats['primary_value']
     
     # Calculate HSDir TK statistics for display
     # dir-spec default: 25 hours (HSDIR_TK_DEFAULT)
     # Consensus needs majority (5/9), so if 8 authorities use 25h and 1 uses 10d,
     # relay only needs 25h to get HSDir from majority
-    hsdir_tk_min = HSDIR_TK_DEFAULT  # dir-spec default (25 hours)
     hsdir_tk_max = hsdir_tk_threshold  # strictest (currently moria1's ~10 days)
     hsdir_tk_consensus = HSDIR_TK_DEFAULT  # what majority requires (dir-spec default)
     hsdir_tk_strict_auths = [name for name, val in hsdir_tk_values if val > HSDIR_TK_DEFAULT * 2]  # significantly stricter
     
     # Count per-authority HSDir metric evaluations for Summary table
     # (avoids conflating overall HSDir flag assignment count with per-metric counts)
-    hsdir_wfu_meets_count = sum(1 for v in all_wfu_values if v is not None and v >= hsdir_wfu_threshold)
     hsdir_tk_meets_count = 0
     for vote in authority_votes:
         if vote.get('voted'):
@@ -620,7 +617,6 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     
     # Calculate Fast speed statistics
     # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
-    fast_speed_min = min(fast_speed_values) if fast_speed_values else FAST_BW_GUARANTEE
     fast_speed_max = max(fast_speed_values) if fast_speed_values else FAST_BW_GUARANTEE
     fast_speed_typical = sorted(fast_speed_values)[len(fast_speed_values)//2] if fast_speed_values else FAST_BW_GUARANTEE
     fast_speed_strict_auths = [name for name, val in fast_speed_by_auth.items() if val > fast_speed_typical * 2]
@@ -658,15 +654,12 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     guard_bw_meets_top25_count = sum(1 for bw in guard_bw_values if guard_bw_value >= bw) if guard_bw_values else 0
     # Relay meets Guard BW if it meets the guarantee OR is in top 25% for any authority
     guard_bw_meets = guard_bw_meets_guarantee or guard_bw_meets_top25_count > 0
-    guard_bw_meets_all = guard_bw_meets_guarantee or (guard_bw_meets_top25_count == len(guard_bw_values) if guard_bw_values else False)
     guard_bw_meets_some = guard_bw_meets
     guard_bw_meets_count = total_authorities if guard_bw_meets_guarantee else guard_bw_meets_top25_count
     
     # Calculate Stable analysis
     stable_meets_count = flag_eligibility.get('stable', {}).get('eligible_count', 0)
     stable_meets_all = stable_meets_count == total_authorities
-    stable_range = _format_range(stable_uptime_values, _format_days) if stable_uptime_values else 'N/A'
-    stable_mtbf_range = _format_range(stable_mtbf_values, _format_days) if stable_mtbf_values else 'N/A'
     
     # Extract Guard prerequisite flag counts from flag_eligibility
     # Per Tor dir-spec Section 3.4.2: Guard requires Fast, Stable, and V2Dir flags
@@ -684,12 +677,10 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     hsdir_prereq_v2dir_count = sum(1 for d in guard_details if d.get('has_v2dir', False))
     
     # Calculate Fast analysis using observed_bandwidth
-    fast_range = _format_range(fast_speed_values, bw_formatter) if fast_speed_values else 'N/A'
     
     # Check if observed_bandwidth meets Fast eligibility
     fast_meets_minimum = guard_bw_value >= FAST_BW_MINIMUM
     fast_meets_threshold_count = sum(1 for fs in fast_speed_values if guard_bw_value >= fs) if fast_speed_values else 0
-    fast_meets = fast_meets_minimum or fast_meets_threshold_count > 0
     fast_meets_all = fast_meets_minimum or (fast_meets_threshold_count == len(fast_speed_values) if fast_speed_values else False)
     fast_meets_count = total_authorities if fast_meets_minimum else fast_meets_threshold_count
     

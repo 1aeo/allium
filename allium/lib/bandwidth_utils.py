@@ -7,28 +7,6 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 
 import statistics
 
-def calculate_network_cv_statistics(all_operators_data):
-    """Calculate network-wide CV statistics for dynamic threshold setting."""
-    if not all_operators_data or len(all_operators_data) < 10:
-        return None
-        
-    try:
-        cv_values = sorted([cv for cv in all_operators_data if cv >= 0])
-        if len(cv_values) < 10:
-            return None
-            
-        return {
-            'p25': statistics.quantiles(cv_values, n=4)[0],
-            'p50': statistics.median(cv_values),
-            'p75': statistics.quantiles(cv_values, n=4)[2],
-            'p90': statistics.quantiles(cv_values, n=10)[8],
-            'total_operators': len(cv_values),
-            'mean': statistics.mean(cv_values),
-            'std_dev': statistics.stdev(cv_values)
-        }
-    except Exception:
-        return None
-
 def calculate_total_data_from_history(history_data):
     """Calculate total bytes transferred from an Onionoo bandwidth history object.
     
@@ -212,39 +190,11 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
     """Calculate simplified growth trend metrics."""
     if period != '6_months':
         return None
-        
-    # Build relay bandwidth arrays
-    relay_arrays = []
-    for relay in operator_relays:
-        fingerprint = relay.get('fingerprint', '')
-        relay_bandwidth = bandwidth_map.get(fingerprint)
-        if relay_bandwidth and relay_bandwidth.get('read_history'):
-            period_data = relay_bandwidth['read_history'].get(period, {})
-            if period_data.get('values') and period_data.get('factor'):
-                relay_arrays.append({
-                    'values': period_data['values'],
-                    'factor': period_data['factor']
-                })
-    
-    if not relay_arrays:
-        return None
-    
-    # Calculate daily totals
-    max_length = max(len(r['values']) for r in relay_arrays)
-    daily_totals = []
-    
-    for day_index in range(max_length):
-        day_total = valid_count = 0
-        for relay_data in relay_arrays:
-            if day_index < len(relay_data['values']):
-                value = relay_data['values'][day_index]
-                if value is not None and isinstance(value, (int, float)) and value >= 0:
-                    day_total += value * relay_data['factor']
-                    valid_count += 1
-        
-        if valid_count > 0:
-            daily_totals.append(day_total)
-    
+
+    # Shared daily-totals aggregation (bandwidth_map already built by caller)
+    daily_totals = extract_operator_daily_bandwidth_totals(
+        operator_relays, None, period, bandwidth_map)['daily_totals']
+
     if len(daily_totals) < 60:  # Need at least ~2 months
         return None
     

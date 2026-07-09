@@ -7,10 +7,8 @@ across workers.py, coordinator.py, and relays.py files.
 
 import functools
 import json
-import os
-import traceback
 import urllib.error
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 
 def handle_http_errors(api_name: str, cache_loader: Callable, cache_saver: Callable, 
@@ -139,42 +137,6 @@ def handle_json_errors(operation: str = "parse JSON", default_return: Any = None
     return decorator
 
 
-def handle_worker_errors(api_name: str, enable_ci_debug: bool = True):
-    """
-    Decorator for handling worker execution errors in coordinator.
-    
-    Args:
-        api_name: Name of the API worker
-        enable_ci_debug: Whether to enable CI debugging output
-    """
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                # Extract coordinator instance if available
-                coordinator = None
-                if args and hasattr(args[0], '_log_progress_with_step_increment'):
-                    coordinator = args[0]
-                
-                if coordinator:
-                    api_display_name = coordinator._get_api_display_name(api_name)
-                    coordinator._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
-                    coordinator.worker_data[api_name] = None
-                
-                # CI debugging
-                if enable_ci_debug:
-                    import os
-                    if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
-                        print(f"🔧 CI Debug: {api_name} worker failed with: {e}")
-                        traceback.print_exc()
-                
-                return None
-        return wrapper
-    return decorator
-
-
 def handle_calculation_errors(operation: str = "calculation", default_return: Any = None, 
                              log_errors: bool = True):
     """
@@ -197,39 +159,3 @@ def handle_calculation_errors(operation: str = "calculation", default_return: An
         return wrapper
     return decorator
 
-
-def safe_file_operation(operation_func: Callable, default_return: Any = None, 
-                       error_prefix: str = "File operation"):
-    """
-    Utility function for safe file operations without decorators.
-    
-    Args:
-        operation_func: Function to execute safely
-        default_return: Value to return on error
-        error_prefix: Prefix for error messages
-    """
-    try:
-        return operation_func()
-    except Exception as e:
-        print(f"Warning: {error_prefix} failed: {e}")
-        return default_return
-
-
-def safe_json_operation(operation_func: Callable, default_return: Any = None,
-                       error_prefix: str = "JSON operation"):
-    """
-    Utility function for safe JSON operations without decorators.
-    
-    Args:
-        operation_func: Function to execute safely
-        default_return: Value to return on error
-        error_prefix: Prefix for error messages
-    """
-    try:
-        return operation_func()
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Warning: {error_prefix} failed: {e}")
-        return default_return
-    except Exception as e:
-        print(f"Warning: Unexpected error during {error_prefix}: {e}")
-        return default_return
