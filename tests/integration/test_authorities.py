@@ -215,11 +215,15 @@ class TestDirectoryAuthorities(unittest.TestCase):
         self.assertIn('authorities_data', authorities_info)
         self.assertIn('authorities_summary', authorities_info)
         
-        # Verify only authorities are returned (not regular relays)
-        self.assertEqual(len(authorities_info['authorities_data']), 1)
-        self.assertEqual(authorities_info['authorities_data'][0]['nickname'], 'moria1')
+        # Verify only authorities are returned (not regular relays).
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) that are merged
+        # in for historical context; they are not part of the dynamic Onionoo set.
+        dynamic_authorities = [a for a in authorities_info['authorities_data']
+                               if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 1)
+        self.assertEqual(dynamic_authorities[0]['nickname'], 'moria1')
         
-        # Verify summary
+        # Verify summary (authority-flag count excludes offline placeholders)
         self.assertEqual(authorities_info['authorities_summary']['total_authorities'], 1)
 
     @patch('urllib.request.urlopen')
@@ -300,11 +304,13 @@ class TestDirectoryAuthorities(unittest.TestCase):
         authorities_info = relays._get_directory_authorities_data()
         authorities = authorities_info['authorities_data']
         
-        # Verify we got expected number of authorities (only relays with Authority flag)
-        self.assertEqual(len(authorities), 3)
+        # Verify we got expected number of authorities (only relays with Authority flag).
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) merged in for context.
+        dynamic_authorities = [a for a in authorities if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 3)
         
         # Verify authorities are found (order may vary)
-        nicknames = [auth['nickname'] for auth in authorities]
+        nicknames = [auth['nickname'] for auth in dynamic_authorities]
         self.assertIn('dannenberg', nicknames)
         self.assertIn('moria1', nicknames)
         self.assertIn('tor26', nicknames)
@@ -360,7 +366,10 @@ class TestDirectoryAuthorities(unittest.TestCase):
         # Verify authority data and summary were stored as attributes
         self.assertTrue(hasattr(relays, 'authorities_data'))
         self.assertTrue(hasattr(relays, 'authorities_summary'))
-        self.assertEqual(len(relays.authorities_data), 1)
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) merged in for context.
+        dynamic_authorities = [a for a in relays.authorities_data
+                               if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 1)
         self.assertEqual(relays.authorities_summary['total_authorities'], 1)
         
         # Verify output file was created
@@ -377,9 +386,12 @@ class TestDirectoryAuthorities(unittest.TestCase):
         empty_relay_data = {"relays": []}
         relays = Relays(self.test_dir, self.test_onionoo_url, empty_relay_data)
         
-        # Should still work but authorities will have empty uptime data
+        # Should still work but authorities will have empty uptime data.
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) merged in for context.
         authorities_info = relays._get_directory_authorities_data()
-        self.assertEqual(len(authorities_info['authorities_data']), 0)  # No authorities since no relays with Authority flag
+        dynamic_authorities = [a for a in authorities_info['authorities_data']
+                               if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 0)  # No authorities since no relays with Authority flag
 
     @patch('urllib.request.urlopen')
     def test_uptime_edge_cases(self, mock_urlopen):
@@ -409,8 +421,10 @@ class TestDirectoryAuthorities(unittest.TestCase):
         authorities_info = relays._get_directory_authorities_data()
         authorities = authorities_info['authorities_data']
         
-        # Should handle missing uptime gracefully
-        self.assertEqual(len(authorities), 1)
+        # Should handle missing uptime gracefully.
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) merged in for context.
+        dynamic_authorities = [a for a in authorities if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 1)
         # Note: The actual implementation may not set these fields if uptime data is missing
         # The test focuses on proper handling without errors
 
@@ -543,8 +557,11 @@ class TestDirectoryAuthorities(unittest.TestCase):
         
         relays = Relays(self.test_dir, self.test_onionoo_url, main_response_no_authorities)
         
+        # Exclude hardcoded known-offline placeholders (e.g. gabelmoo) merged in for context.
         authorities_info = relays._get_directory_authorities_data()
-        self.assertEqual(len(authorities_info['authorities_data']), 0)
+        dynamic_authorities = [a for a in authorities_info['authorities_data']
+                               if not a.get('is_known_offline')]
+        self.assertEqual(len(dynamic_authorities), 0)
 
 
     def test_template_validation(self):
@@ -647,6 +664,106 @@ class TestAuthorityIntegration(unittest.TestCase):
             self.fail(f"Authorities integration failed: {e}")
 
 
+class TestKnownOfflineAuthorityMerge(unittest.TestCase):
+    """Tests for retaining removed/offline authorities on the DA page (Task 5).
+
+    A directory authority removed from the consensus eventually ages out of all live
+    data sources, so it would vanish from the page. A small hardcoded list keeps such
+    authorities visible (as offline) - but only when NOT present dynamically, and
+    without ever affecting the voting/reachability counts.
+    """
+
+    GABELMOO_FP = 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281'
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.test_onionoo_url = "https://test.onionoo.url/details"
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+
+    def _authorities_by_nick(self, authorities_info):
+        return {a['nickname']: a for a in authorities_info['authorities_data']}
+
+    def test_offline_authority_merged_when_absent(self):
+        """gabelmoo absent from Onionoo -> appears as an offline, context-only row."""
+        mock_relay_data = {
+            "relays": [
+                {
+                    "nickname": "moria1",
+                    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+                    "running": True,
+                    "flags": ["Authority", "Running", "V2Dir", "Valid"],
+                    "country": "US", "country_name": "United States",
+                    "first_seen": "2015-03-11 20:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "observed_bandwidth": 1000000, "consensus_weight": 5000,
+                },
+            ]
+        }
+        relays = Relays(self.test_dir, self.test_onionoo_url, mock_relay_data)
+        info = relays._get_directory_authorities_data()
+        by_nick = self._authorities_by_nick(info)
+
+        # gabelmoo is merged in as offline / context-only
+        self.assertIn('gabelmoo', by_nick)
+        self.assertFalse(by_nick['gabelmoo']['running'])
+        self.assertTrue(by_nick['gabelmoo'].get('is_known_offline'))
+        # No broken relay link source: it carries an offline_note for the badge tooltip
+        self.assertTrue(by_nick['gabelmoo'].get('offline_note'))
+
+        # The live authority is untouched (not flagged offline)
+        self.assertTrue(by_nick['moria1']['running'])
+        self.assertFalse(by_nick['moria1'].get('is_known_offline', False))
+
+        # Counts: dynamic authority-flag count EXCLUDES the hardcoded offline row
+        self.assertEqual(info['authorities_summary']['total_with_authority_flag'], 1)
+        # Offline summary (dynamic) reflects gabelmoo
+        self.assertGreaterEqual(info['authorities_summary']['offline_count'], 1)
+        self.assertIn('gabelmoo', info['authorities_summary']['offline_names'])
+        # Alphabetical ordering preserved after merge
+        nicks = [a['nickname'] for a in info['authorities_data']]
+        self.assertEqual(nicks, sorted(nicks, key=str.lower))
+
+    def test_offline_authority_not_duplicated_when_present(self):
+        """gabelmoo present in Onionoo -> live row wins, no hardcoded duplicate."""
+        mock_relay_data = {
+            "relays": [
+                {
+                    "nickname": "moria1",
+                    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+                    "running": True,
+                    "flags": ["Authority", "Running", "V2Dir", "Valid"],
+                    "country": "US", "country_name": "United States",
+                    "first_seen": "2015-03-11 20:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "observed_bandwidth": 1000000, "consensus_weight": 5000,
+                },
+                {
+                    "nickname": "gabelmoo",
+                    "fingerprint": self.GABELMOO_FP,
+                    "running": True,
+                    "flags": ["Authority", "Running", "V2Dir", "Valid"],
+                    "country": "DE", "country_name": "Germany",
+                    "first_seen": "2010-03-22 11:00:00",
+                    "platform": "Tor 0.4.9.9 on Linux",
+                    "observed_bandwidth": 9810000, "consensus_weight": 20,
+                },
+            ]
+        }
+        relays = Relays(self.test_dir, self.test_onionoo_url, mock_relay_data)
+        info = relays._get_directory_authorities_data()
+
+        gabelmoo_rows = [a for a in info['authorities_data'] if a['nickname'] == 'gabelmoo']
+        self.assertEqual(len(gabelmoo_rows), 1)  # no duplicate
+        # The live row wins: running True, not flagged as the hardcoded offline entry
+        self.assertTrue(gabelmoo_rows[0]['running'])
+        self.assertFalse(gabelmoo_rows[0].get('is_known_offline', False))
+        # Both authorities online -> offline summary empty, and gabelmoo counted live
+        self.assertEqual(info['authorities_summary']['offline_count'], 0)
+        self.assertEqual(info['authorities_summary']['total_with_authority_flag'], 2)
+
+
 if __name__ == '__main__':
     # Create test suite
     loader = unittest.TestLoader()
@@ -655,6 +772,7 @@ if __name__ == '__main__':
     # Add test cases
     suite.addTests(loader.loadTestsFromTestCase(TestDirectoryAuthorities))
     suite.addTests(loader.loadTestsFromTestCase(TestAuthorityIntegration))
+    suite.addTests(loader.loadTestsFromTestCase(TestKnownOfflineAuthorityMerge))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

@@ -15,7 +15,13 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)</li>
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)
+            {% if relays.authorities_summary.offline_count %}
+            <ul style="margin-top: 4px;">
+                <li><span class="al-status-danger">🔴 {{ relays.authorities_summary.offline_count }} offline</span>: {{ relays.authorities_summary.offline_names | join(', ') }} <span style="font-size: 0.85em; color: #666;">(shown for historical context)</span></li>
+            </ul>
+            {% endif %}
+        </li>
         
         {# Consensus status from CollecTor #}
         {% if relays.consensus_status %}
@@ -146,11 +152,17 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
-                    <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
-                       {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
-                       {% else %}class="al-link-plain"{% endif %}>
-                        {{ authority.nickname }}
-                    </a>
+                    {% if authority.is_known_offline -%}
+                        {# Removed authority aged out of live data: no relay page exists, so plain text (no 404 link) #}
+                        <span style="color: #dc3545; font-weight: bold;">{{ authority.nickname }}</span>
+                        <span class="al-status-muted" style="font-size: 0.85em;" title="{{ authority.offline_note }}">(removed — shown for context)</span>
+                    {% else -%}
+                        <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
+                           {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
+                           {% else %}class="al-link-plain"{% endif %}>
+                            {{ authority.nickname }}
+                        </a>
+                    {%- endif %}
                 </td>
                 <td>
                     {% if authority.running -%}
@@ -316,6 +328,7 @@
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
             <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
+            <li><strong>🔴 "removed — shown for context":</strong> A directory authority that was removed from the consensus and has aged out of live data sources (Onionoo/CollecTor). Retained here as a hardcoded placeholder for historical context after such a critical change; all other data on this page is dynamic. If the authority returns, its live data automatically supersedes this placeholder.</li>
             <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span class="al-status-success-bold">Green (&gt;1)</span> = Vote received with relays, <span class="al-status-danger-bold">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
             <li><strong>BW Auth:</strong> <span class="al-status-success-bold">Yes</span> = Runs bandwidth scanner (sbws), <span class="al-status-muted">No</span> = Does not run scanner</li>
             <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span class="al-status-warning">Orange = &gt;200ms</span>, <span class="al-status-danger-bold">Red = &gt;500ms</span>, <span class="al-status-danger-bold">Timeout</span> = &gt;2s, <span class="al-status-danger-bold">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>

@@ -23,6 +23,11 @@ from allium.lib.consensus.collector_fetcher import (
     get_authority_names,
     get_authority_count,
     get_authority_registry,
+    get_voting_authority_names,
+    get_voting_authority_count,
+    update_voting_authorities,
+    get_known_offline_authorities,
+    KNOWN_OFFLINE_AUTHORITIES,
 )
 
 
@@ -1364,3 +1369,109 @@ class TestMiddleOnlyFlagTracking:
         details_by_auth = {d['authority']: d for d in eligibility['middleonly']['details']}
         assert details_by_auth['auth1']['assigned'] is True
         assert details_by_auth['auth2']['assigned'] is False
+
+
+# 8 currently-voting authorities (gabelmoo removed) - alphabetical
+_ACTIVE_VOTERS_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
+                    'longclaw', 'maatuska', 'moria1', 'tor26']
+
+
+class TestDynamicVotingAuthorities:
+    """Tests for the dynamic voting-authority list (update_voting_authorities).
+
+    Verifies the fix for stale reachability denominators when a directory authority
+    is removed (e.g. gabelmoo going offline -> should become 8 voters, not 9).
+    """
+
+    def test_fresh_registry_uses_fallback_voting_list(self):
+        registry = AuthorityRegistry()
+        assert registry.get_voting_authority_count() == 9
+        assert 'gabelmoo' in registry.get_voting_authority_names()
+
+    def test_update_voting_authorities_sets_dynamic_list(self):
+        registry = AuthorityRegistry()
+        count = registry.update_voting_authorities(_ACTIVE_VOTERS_8)
+        assert count == 8
+        assert registry.get_voting_authority_count() == 8
+        assert registry.get_voting_authority_names() == sorted(_ACTIVE_VOTERS_8)
+        assert 'gabelmoo' not in registry.get_voting_authority_names()
+
+    def test_update_voting_authorities_dedups_and_sorts(self):
+        registry = AuthorityRegistry()
+        count = registry.update_voting_authorities(['moria1', 'bastet', 'moria1', ''])
+        assert count == 2
+        assert registry.get_voting_authority_names() == ['bastet', 'moria1']
+
+    def test_update_voting_authorities_empty_keeps_previous(self):
+        registry = AuthorityRegistry()
+        registry.update_voting_authorities(['moria1', 'bastet'])
+        # Empty / None input must not wipe the list
+        assert registry.update_voting_authorities([]) == 2
+        assert registry.update_voting_authorities(None) == 2
+        assert registry.get_voting_authority_names() == ['bastet', 'moria1']
+
+    def test_update_voting_authorities_empty_on_fresh_keeps_fallback(self):
+        registry = AuthorityRegistry()
+        registry.update_voting_authorities([])
+        assert registry.get_voting_authority_count() == 9  # fallback intact
+
+    def test_clear_voting_authorities_restores_fallback(self):
+        registry = AuthorityRegistry()
+        registry.update_voting_authorities(['moria1', 'bastet'])
+        assert registry.get_voting_authority_count() == 2
+        registry.clear_voting_authorities()
+        assert registry.get_voting_authority_count() == 9
+        assert 'gabelmoo' in registry.get_voting_authority_names()
+
+    def test_global_update_voting_authorities_wrapper(self):
+        registry = get_authority_registry()
+        try:
+            update_voting_authorities(_ACTIVE_VOTERS_8)
+            assert get_voting_authority_count() == 8
+            assert 'gabelmoo' not in get_voting_authority_names()
+        finally:
+            registry.clear_voting_authorities()  # reset shared singleton
+
+    def test_reachability_denominator_reflects_dynamic_voters(self):
+        """_format_reachability must use the dynamic voting set as the denominator.
+
+        With gabelmoo removed (8 voters) and a relay reachable by all 8, reachability
+        should be 8/8 - not the stale 8/9 that produced the false 'partial' warning.
+        """
+        registry = get_authority_registry()
+        try:
+            update_voting_authorities(_ACTIVE_VOTERS_8)
+
+            fetcher = CollectorFetcher()
+            relay = {'votes': {name: {'flags': ['Running', 'Valid']}
+                               for name in _ACTIVE_VOTERS_8}}
+            reachability = fetcher._format_reachability(relay)
+
+            assert reachability['total_authorities'] == 8
+            assert reachability['ipv4_reachable_count'] == 8
+            assert 'gabelmoo' not in reachability['ipv4_reachable_authorities']
+        finally:
+            registry.clear_voting_authorities()
+
+
+class TestKnownOfflineAuthorities:
+    """Tests for the small hardcoded known-offline authority bridge list."""
+
+    def test_gabelmoo_present_with_relay_fingerprint(self):
+        offline = get_known_offline_authorities()
+        assert offline is KNOWN_OFFLINE_AUTHORITIES
+        by_nick = {e['nickname']: e for e in offline}
+        assert 'gabelmoo' in by_nick
+        # Must be the Onionoo RELAY fingerprint (for dedupe), not the ED03BB signing key
+        assert by_nick['gabelmoo']['fingerprint'] == 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281'
+        assert by_nick['gabelmoo']['offline_since'] == '2026-06-30'
+
+    def test_offline_list_is_small(self):
+        # Deliberately tiny bridge list; guard against unbounded growth.
+        assert len(get_known_offline_authorities()) <= 3
+
+    def test_offline_entries_have_relay_fingerprints(self):
+        # Entries carry 40-char Onionoo relay fingerprints (used for dedupe), and a note.
+        for e in get_known_offline_authorities():
+            assert len(e['fingerprint']) == 40
+            assert e.get('note')
