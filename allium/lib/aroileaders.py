@@ -643,7 +643,7 @@ def _collect_operator_metrics(relays_instance):
             # Validation tracking (merged into same loop)
             fp = relay.get('fingerprint')
             # B4.1: tally per-version DECLARATIONS (any v2 or v3 contact)
-            # so we can compute v3_relay_percentage even for operators
+            # so we can compute v3_pct_of_total even for operators
             # whose v3 relays haven't been validated yet.
             relay_aroi_version = relay.get('aroi_version')
             if relay_aroi_version == '2':
@@ -941,7 +941,7 @@ def _collect_operator_metrics(relays_instance):
             'validated_v3_relay_count': validated_v3_relay_count,
             'v2_relay_count': v2_relay_count,
             'v3_relay_count': v3_relay_count,
-            'v3_relay_percentage': (
+            'v3_pct_of_total': (
                 v3_relay_count / total_relays * 100 if total_relays > 0 else 0.0
             ),
             'v3_tier': _classify_v3_tier_local(v3_relay_count, total_relays),
@@ -1057,7 +1057,7 @@ _PASSTHROUGH_KEYS = (
     'validated_relay_count', 'invalid_relay_count', 'validated_guard_count', 'validated_exit_count',
     'validated_middle_count', 'validated_consensus_weight', 'validated_country_count',
     'validated_v2_relay_count', 'validated_v3_relay_count', 'v2_relay_count', 'v3_relay_count',
-    'v3_relay_percentage', 'v3_tier',
+    'v3_pct_of_total', 'v3_tier',
 )
 
 # Defaults for category-specific entry fields (non-applicable categories keep these).
@@ -1322,7 +1322,7 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
-                'v3_relay_pct_str': f"{metrics['v3_relay_percentage']:.0f}%",
+                'v3_relay_pct_str': f"{metrics['v3_pct_of_total']:.0f}%",
                 'total_data_transferred': formatted_total_data_transferred,
                 'total_data_pct': total_data_pct,
             })

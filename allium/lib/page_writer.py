@@ -470,7 +470,7 @@ def write_misc(
                 contact_data['aroi_pending_count'] = _summary.get('pending_onionoo_count', 0)
                 contact_data['aroi_v3_tier'] = _summary.get('v3_tier', 'none')
                 contact_data['aroi_is_v3_adopter'] = _summary.get('is_v3_adopter', False)
-                contact_data['aroi_v3_pct'] = _summary.get('v3_relay_percentage', 0.0)
+                contact_data['aroi_v3_pct'] = _summary.get('v3_pct_of_total', 0.0)
     
     # Pre-compute family statistics for misc-families templates
     template_vars = {
