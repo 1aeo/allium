@@ -378,10 +378,7 @@ class Relays:
         - Pre-computed time formatting
         - Pre-computed address parsing
         """
-        from .html_escape_utils import create_bulk_escaper, NA_FALLBACK, UNKNOWN_LOWERCASE
-        
-        # Use centralized HTML escaping utility
-        bulk_escaper = create_bulk_escaper()
+        from .html_escape_utils import escape_relay_fields, NA_FALLBACK, UNKNOWN_LOWERCASE
         
         # Single pass: total CW + percentile distributions
         cw_vals, gp_vals, mp_vals, ep_vals = [], [], [], []
@@ -415,7 +412,7 @@ class Relays:
         _bisect_left = bisect.bisect_left
         
         for relay in self.json["relays"]:
-            bulk_escaper.escape_all_relay_fields(relay)
+            escape_relay_fields(relay)
             
             country = relay.get("country")
             if country:
