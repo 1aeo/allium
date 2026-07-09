@@ -783,7 +783,7 @@ def _fetch_with_cache_fallback(
 # ============================================================================
 
 
-@handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_details", "onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=True, critical=True)
 def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
@@ -805,7 +805,7 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     )
 
 
-@handle_http_errors("onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_uptime", "onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
@@ -827,7 +827,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     )
 
 
-@handle_http_errors("onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+@handle_http_errors("onionoo_bandwidth", "onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidth", cache_hours=12, progress_logger=None):
     """
@@ -859,7 +859,7 @@ def _validate_aroi_response(data: dict) -> bool:
     return all(key in data for key in required_keys)
 
 
-@handle_http_errors("AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
+@handle_http_errors("aroi_validation", "AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
                    allow_exit_on_304=False, critical=False)
 def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json", progress_logger=None):
     """
@@ -902,7 +902,7 @@ def _validate_exit_dns_health_response(data) -> bool:
     return True
 
 
-@handle_http_errors("Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
+@handle_http_errors("exit_dns_health", "Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
                    allow_exit_on_304=False, critical=False)
 def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/latest.json", progress_logger=None):
     """
