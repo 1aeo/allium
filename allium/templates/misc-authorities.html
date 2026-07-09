@@ -152,11 +152,16 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
-                    {% if authority.is_known_offline %}{# Removed authority aged out of live data: no relay page exists, so plain text (no 404 link) #}<span style="color: #dc3545; font-weight: bold;">{{ authority.nickname }}</span> <span class="al-status-muted" style="font-size: 0.85em;" title="{{ authority.offline_note }}">(removed — shown for context)</span>{% else %}<a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
+                    {% if authority.is_known_offline %}
+                    {# Removed authority aged out of live data: no relay page exists, so plain text (no 404 link) #}
+                    <span style="color: #dc3545; font-weight: bold;">{{ authority.nickname }}</span> <span class="al-status-muted" style="font-size: 0.85em;" title="{{ authority.offline_note }}">(removed — shown for context)</span>
+                    {% else %}
+                    <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
                        {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
                        {% else %}class="al-link-plain"{% endif %}>
                         {{ authority.nickname }}
-                    </a>{% endif %}
+                    </a>
+                    {% endif %}
                 </td>
                 <td>
                     {% if authority.running -%}
