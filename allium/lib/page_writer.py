@@ -557,6 +557,69 @@ def write_misc(
     with open(output, "w", encoding="utf8") as html:
         html.write(template_render)
 
+def probe_authority_latency(relay_set):
+    """TCP-probe voting directory authorities; returns the latency status map.
+
+    Runs from the coordinator before page generation so rendering stays
+    pure; get_directory_authorities_data consumes the attached result and
+    only probes inline as a fallback (tests / direct calls).
+    """
+    from .consensus import AuthorityMonitor
+
+    authorities = [r for r in relay_set.json.get("relays", [])
+                   if 'Authority' in r.get('flags', [])]
+    collector_data = getattr(relay_set, 'collector_consensus_data', None) or {}
+    votes = collector_data.get('votes', {}) if isinstance(collector_data, dict) else {}
+    vote_nicknames = {k.lower() for k in votes}
+    vote_fingerprints = {k.upper() for k in votes if len(k) == 40}
+    vote_prefixes = ({k.upper()[:8] for k in votes if len(k) == 40}
+                     | {k.upper() for k in votes if len(k) == 8})
+
+    # Build authority endpoint data from VOTING authorities only (those that
+    # voted in collector) so latency counts match voting authority counts
+    authority_endpoints = []
+    for auth in authorities:
+        auth_nickname = auth.get('nickname', '')
+        auth_fp = auth.get('fingerprint', '').upper()
+        voted = (auth_fp in vote_fingerprints
+                 or (auth_fp and auth_fp[:8] in vote_prefixes)
+                 or auth_nickname.lower() in vote_nicknames)
+        if not voted:
+            continue
+
+        # Extract address from or_addresses (Onionoo format). Entries
+        # can be bracketed IPv6 ('[2001:db8::1]:9001'); naive ':' splits
+        # would yield garbage if an authority ever published IPv6 first.
+        # Prefer the first IPv4 entry - the monitor probes over IPv4 -
+        # falling back to a bracket-aware parse of the first entry.
+        or_addresses = auth.get('or_addresses', [])
+        address = ''
+        for or_addr in or_addresses:
+            parsed_ip, ip_version = safe_parse_ip_address(or_addr)
+            if parsed_ip and ip_version == 4:
+                address = parsed_ip
+                break
+        if not address and or_addresses:
+            parsed_ip, _ipv = safe_parse_ip_address(or_addresses[0])
+            address = parsed_ip or ''
+
+        # Extract dir_port from dir_address if available, otherwise
+        # default to 80 (rsplit stays correct for bracketed IPv6)
+        dir_address = auth.get('dir_address', '')
+        dir_port = dir_address.rsplit(':', 1)[-1] if ':' in dir_address else '80'
+
+        if auth_nickname and address:
+            authority_endpoints.append({
+                'nickname': auth_nickname,
+                'address': address,
+                'dir_port': dir_port,
+            })
+
+    # Pass discovered authorities to monitor (falls back to hardcoded if empty)
+    monitor = AuthorityMonitor(timeout=2, authorities=authority_endpoints)
+    return monitor.check_all_authorities()
+
+
 def get_directory_authorities_data(relay_set):
     """
     Prepare directory authorities data for template rendering.
@@ -650,47 +713,12 @@ def get_directory_authorities_data(relay_set):
     authority_alerts = []
     
     try:
-        from .consensus import AuthorityMonitor
-        
-        # Build authority endpoint data from VOTING authorities only (those that voted in collector)
-        # This ensures latency counts match voting authority counts
-        authority_endpoints = []
-        for auth in authorities:
-            # Only include voting authorities in latency check
-            if not auth.get('collector_data', {}).get('voted', False):
-                continue
-                
-            # Extract address from or_addresses (Onionoo format). Entries
-            # can be bracketed IPv6 ('[2001:db8::1]:9001'); naive ':' splits
-            # would yield garbage if an authority ever published IPv6 first.
-            # Prefer the first IPv4 entry - the monitor probes over IPv4 -
-            # falling back to a bracket-aware parse of the first entry.
-            or_addresses = auth.get('or_addresses', [])
-            address = ''
-            for or_addr in or_addresses:
-                parsed_ip, ip_version = safe_parse_ip_address(or_addr)
-                if parsed_ip and ip_version == 4:
-                    address = parsed_ip
-                    break
-            if not address and or_addresses:
-                parsed_ip, _ipv = safe_parse_ip_address(or_addresses[0])
-                address = parsed_ip or ''
-
-            # Extract dir_port from dir_address if available, otherwise
-            # default to 80 (rsplit stays correct for bracketed IPv6)
-            dir_address = auth.get('dir_address', '')
-            dir_port = dir_address.rsplit(':', 1)[-1] if ':' in dir_address else '80'
-            
-            if auth.get('nickname') and address:
-                authority_endpoints.append({
-                    'nickname': auth.get('nickname'),
-                    'address': address,
-                    'dir_port': dir_port,
-                })
-        
-        # Pass discovered authorities to monitor (falls back to hardcoded if empty)
-        monitor = AuthorityMonitor(timeout=2, authorities=authority_endpoints)
-        latency_status = monitor.check_all_authorities()
+        # Probing runs in the coordinator so page generation stays pure
+        # rendering; probe inline only when nothing was attached
+        # (tests / direct calls without the coordinator).
+        latency_status = getattr(relay_set, 'authority_latency_status', None)
+        if latency_status is None:
+            latency_status = probe_authority_latency(relay_set)
         
         # Attach latency data to each authority
         for authority in authorities:
@@ -1061,135 +1089,18 @@ def write_pages_by_key(relay_set, k):
     
     for v in sorted_values:
         i = relay_set.json["sorted"][k][v]
-        members = []
-
-        for m_relay in i["relays"]:
-            members.append(relay_set.json["relays"][m_relay])
         # Sanitize for filesystem paths only (raw v used for data lookup above)
         v_safe = _sanitize_path_component(v)
-        if k == "flag":
-            dir_path = os.path.join(output_path, v_safe.lower())
-        else:
-            dir_path = os.path.join(output_path, v_safe)
-
+        dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
-        # relay_subset passed directly to template for thread safety (no shared state)
-        
-        bandwidth_unit = relay_set.bandwidth_formatter.determine_unit(i["bandwidth"])
-        # Format all bandwidth values using the same unit
-        bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["bandwidth"], bandwidth_unit)
-        guard_bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
-        middle_bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
-        exit_bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
-        
-        display = i.get("display", {})
-        total_data_formatted = display.get("total_data_formatted", "N/A")
-        total_data_pct = display.get("total_data_pct", "")
-        
-        # Calculate network position using DRY helper
-        network_position = _compute_network_position_safe(
-            i["guard_count"], i["middle_count"], i["exit_count"], len(members))
-        
-        # Generate page context with correct breadcrumb data
-        page_ctx = get_detail_page_context(relay_set, k, v)
-        
-        # Contact pages never reach this loop (routed to dedicated renderers
-        # above); contact-specific template args stay at their defaults.
-        contact_rankings = []
-        operator_reliability = None
-        contact_display_data = None
-        primary_country_data = None
-        contact_validation_status = None
-        aroi_validation_timestamp = None
 
-        # Add family-specific data for family templates (used by detail_summary macro)
-        family_aroi_domain = None
-        family_contact = None
-        family_contact_md5 = None
-        if k == "family":
-            family_aroi_domain = i.get("aroi_domain", "")
-            family_contact = i.get("contact", "")
-            family_contact_md5 = i.get("contact_md5", "")
-        
-        # AROI validation status for family pages
-        if k == "family":
-            contact_validation_status = (i.get("aroi_validation_full") or
-                                         i.get("contact_validation_status") or
-                                         _contact_validation_status(relay_set, members))
-            aroi_validation_timestamp = relay_set._aroi_validation_timestamp
-
-        is_validated_aroi = False
-
-        # Family support counts for summary bullet (DRY helper)
-        family_support_counts = _get_family_support_counts(k, contact_display_data, i)
-        exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
-
-        # Time the template rendering
+        # Shared arg construction with the parallel path (they cannot drift)
         render_start = time.time()
-        rendered = template.render(
-            relays=relay_set,
-            relay_subset=members,  # Pass directly for thread safety
-            bandwidth=bandwidth,
-            bandwidth_unit=bandwidth_unit,
-            total_data_formatted=total_data_formatted,
-            total_data_pct=total_data_pct,
-            guard_bandwidth=guard_bandwidth,
-            middle_bandwidth=middle_bandwidth,
-            exit_bandwidth=exit_bandwidth,
-            consensus_weight_fraction=i["consensus_weight_fraction"],
-            guard_consensus_weight_fraction=i["guard_consensus_weight_fraction"],
-            middle_consensus_weight_fraction=i["middle_consensus_weight_fraction"],
-            exit_consensus_weight_fraction=i["exit_consensus_weight_fraction"],
-            exit_count=i["exit_count"],
-            guard_count=i["guard_count"],
-            middle_count=i["middle_count"],
-            network_position=network_position,
-            is_index=False,
-            page_ctx=page_ctx,
-            key=k,
-            value=v,
-            flag=v if k == "flag" else None,  # For flag.html template
-            sp_countries=the_prefixed,
-            contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
-            operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
-            contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
-            primary_country_data=primary_country_data,  # Primary country data for contact pages
-            contact_validation_status=contact_validation_status,  # AROI validation status for Phase 2
-            aroi_validation_timestamp=aroi_validation_timestamp,  # AROI validation data timestamp
-            # Family-specific data for detail_summary macro in family templates
-            family_aroi_domain=family_aroi_domain,  # AROI domain for family pages
-            family_contact=family_contact,  # Contact string for family pages
-            family_contact_md5=family_contact_md5,  # Contact MD5 hash for family pages
-            # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
-            consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
-            guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
-            middle_consensus_weight_percentage=f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
-            exit_consensus_weight_percentage=f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
-            guard_relay_text="guard relay" if i["guard_count"] == 1 else "guard relays",
-            middle_relay_text="middle relay" if i["middle_count"] == 1 else "middle relays",
-            exit_relay_text="exit relay" if i["exit_count"] == 1 else "exit relays",
-            has_guard=i["guard_count"] > 0,
-            has_middle=i["middle_count"] > 0,
-            has_exit=i["exit_count"] > 0,
-            has_typed_relays=i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0,
-            # Unique AROI and contact data for AS detail pages
-            unique_aroi_list=i.get("unique_aroi_list", []),
-            unique_contact_list=i.get("unique_contact_list", []),
-            unique_aroi_count=i.get("unique_aroi_count", 0),
-            unique_contact_count=i.get("unique_contact_count", 0),
-            unique_aroi_contact_html=i.get("unique_aroi_contact_html", ""),
-            aroi_to_contact_map=i.get("aroi_to_contact_map", {}),
-            # Validation status for vanity URL display
-            is_validated_aroi=is_validated_aroi,
-            # Pass validated domains set to all templates for vanity URL links
-            validated_aroi_domains=relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
-            # Base URL for vanity URLs
-            base_url=relay_set.base_url,
-            # Family support counts for summary bullets
-            family_support_counts=family_support_counts,
-            # Exit DNS Health summary for operator/group pages
-            exit_dns_health_summary=exit_dns_health_summary
+        template_args = build_template_args(
+            relay_set, k, v, i, the_prefixed,
+            relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set()
         )
+        rendered = template.render(relays=relay_set, **template_args)
         render_time += time.time() - render_start
 
         # Time the file I/O
@@ -1198,7 +1109,7 @@ def write_pages_by_key(relay_set, k):
         with open(html_path, "w", encoding="utf8") as html:
             html.write(rendered)
         io_time += time.time() - io_start
-        
+
         page_count += 1
         
         # Print progress for large page sets

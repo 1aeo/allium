@@ -362,7 +362,20 @@ class Coordinator:
             return None
         
         # Create Relays instance with the data
-        return self.create_relay_set(relay_data)
+        relay_set = self.create_relay_set(relay_data)
+
+        # Probe authority latency here (not during page rendering) so page
+        # generation is pure rendering; misc-authorities consumes the result
+        if relay_set is not None:
+            from .page_writer import probe_authority_latency
+            try:
+                relay_set.authority_latency_status = probe_authority_latency(relay_set)
+            except Exception as e:
+                # Non-fatal: rendering falls back to its inline probe path
+                self.progress_logger.log_without_increment(
+                    f"authority latency probe failed: {e}")
+
+        return relay_set
     
     def get_worker_status_summary(self):
         """Get summary of all worker statuses for debugging/monitoring"""
