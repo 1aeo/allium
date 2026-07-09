@@ -153,14 +153,14 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period, u
         if relay_uptime and relay_uptime.get('uptime'):
             period_data = relay_uptime['uptime'].get(time_period, {})
             if period_data.get('values'):
-                # Calculate average uptime using optimized shared utility
-                avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                if avg_uptime > 0:  # Only include relays with valid uptime data
+                # Single-pass average + valid-datapoint count
+                avg_uptime, data_points = _compute_uptime_percentage_and_datapoints(period_data['values'])
+                # Include relays that HAVE data for the period, even at 0%
+                # uptime (excluding them inflated operator averages); skip
+                # only relays with insufficient data (<30 daily points, the
+                # same validity threshold the percentage computation uses).
+                if data_points >= 30:
                     uptime_values.append(avg_uptime)
-                    
-                    # OPTIMIZATION: Avoid redundant list comprehension - count non-None values efficiently
-                    data_points = sum(1 for v in period_data['values'] if v is not None)
-                    
                     relay_breakdown[fingerprint] = {
                         'nickname': nickname,
                         'fingerprint': fingerprint,
