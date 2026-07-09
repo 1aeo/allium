@@ -28,8 +28,10 @@ from .bandwidth_formatter import (
     format_bandwidth_with_unit,
     determine_unit_filter,
     format_bandwidth_filter,
+    format_data_volume_with_unit,
 )
 from .intelligence_engine import IntelligenceEngine
+from .ip_utils import safe_parse_ip_address
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -95,6 +97,7 @@ ENV = Environment(
 ENV.filters['determine_unit'] = determine_unit_filter
 ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
+ENV.filters['format_data_volume'] = format_data_volume_with_unit
 ENV.filters['format_time_ago'] = format_time_ago
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
@@ -638,13 +641,26 @@ def get_directory_authorities_data(relay_set):
             if not auth.get('collector_data', {}).get('voted', False):
                 continue
                 
-            # Extract address from or_addresses (Onionoo format)
+            # Extract address from or_addresses (Onionoo format). Entries
+            # can be bracketed IPv6 ('[2001:db8::1]:9001'); naive ':' splits
+            # would yield garbage if an authority ever published IPv6 first.
+            # Prefer the first IPv4 entry - the monitor probes over IPv4 -
+            # falling back to a bracket-aware parse of the first entry.
             or_addresses = auth.get('or_addresses', [])
-            address = or_addresses[0].split(':')[0] if or_addresses else ''
-            
-            # Extract dir_port from dir_address if available, otherwise default to 80
+            address = ''
+            for or_addr in or_addresses:
+                parsed_ip, ip_version = safe_parse_ip_address(or_addr)
+                if parsed_ip and ip_version == 4:
+                    address = parsed_ip
+                    break
+            if not address and or_addresses:
+                parsed_ip, _ipv = safe_parse_ip_address(or_addresses[0])
+                address = parsed_ip or ''
+
+            # Extract dir_port from dir_address if available, otherwise
+            # default to 80 (rsplit stays correct for bracketed IPv6)
             dir_address = auth.get('dir_address', '')
-            dir_port = dir_address.split(':')[-1] if ':' in dir_address else '80'
+            dir_port = dir_address.rsplit(':', 1)[-1] if ':' in dir_address else '80'
             
             if auth.get('nickname') and address:
                 authority_endpoints.append({
