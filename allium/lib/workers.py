@@ -248,6 +248,14 @@ class APIConfig:
     # Error-path settings
     allow_exit_on_304: bool = False  # 304 with no cache: log "dying peacefully" message
     critical: bool = True            # Affects no-cache log message on generic errors
+    # Worker-registry settings (single source of truth for the coordinator;
+    # worker_fn/args_fn are attached after the fetchers are defined below)
+    worker_fn: Optional[Callable] = None   # Fetch function run by the coordinator
+    args_fn: Optional[Callable] = None     # coordinator -> argument list for worker_fn
+    group: str = 'all'               # '--apis' mode gate: 'details' runs always
+    progress_name: str = ''          # Coordinator progress prefix (e.g. 'Details API')
+    enabled: bool = True             # Registry entries can exist but stay dormant
+    feature_flag: str = ''           # Named feature gate checked by the coordinator
 
 
 # Pre-configured API settings
@@ -1754,3 +1762,87 @@ def fetch_consensus_health(progress_logger=None):
 
 # Initialize state on module import
 _load_state() 
+
+
+# ============================================================================
+# API WORKER REGISTRY (single source of truth - coordinator derives from this)
+# ============================================================================
+# The last args_fn element is a progress-logger placeholder; the coordinator
+# replaces it with an API-specific logger before calling the worker.
+# To add a new API source:
+#   1. Create a fetch function above
+#   2. Create/extend an APIConfig entry and add it to API_CONFIGS
+#   3. Handle the data in Relays.enrich_with_api_data()
+
+COLLECTOR_CONSENSUS_CONFIG = APIConfig(
+    api_name='collector_consensus',
+    display_name='collector consensus',
+    cache_max_age_hours=COLLECTOR_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=COLLECTOR_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=COLLECTOR_TIMEOUT_STALE_CACHE,
+    progress_name='CollecTor Consensus API',
+    feature_flag='consensus_evaluation',
+)
+
+COLLECTOR_DESCRIPTORS_CONFIG = APIConfig(
+    api_name='collector_descriptors',
+    display_name='collector descriptors',
+    cache_max_age_hours=DESCRIPTORS_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=COLLECTOR_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=COLLECTOR_TIMEOUT_STALE_CACHE,
+    progress_name='CollecTor Descriptors API',
+    feature_flag='consensus_evaluation',
+)
+
+# Planned feature path (see plan Phase 3): registered but dormant so it is
+# part of the one registry instead of an orphan fetcher.
+CONSENSUS_HEALTH_CONFIG = APIConfig(
+    api_name='consensus_health',
+    display_name='consensus health',
+    cache_max_age_hours=1,
+    timeout_fresh_cache=10,
+    timeout_stale_cache=30,
+    progress_name='Authority Health API',
+    enabled=False,
+)
+
+DETAILS_CONFIG.worker_fn = fetch_onionoo_details
+DETAILS_CONFIG.group = 'details'  # runs in both --apis modes
+DETAILS_CONFIG.progress_name = 'Details API'
+DETAILS_CONFIG.args_fn = lambda c: [c.onionoo_details_url, c._noop_logger]
+
+UPTIME_CONFIG.worker_fn = fetch_onionoo_uptime
+UPTIME_CONFIG.progress_name = 'Uptime API'
+UPTIME_CONFIG.args_fn = lambda c: [c.onionoo_uptime_url, c._noop_logger]
+
+BANDWIDTH_CONFIG.worker_fn = fetch_onionoo_bandwidth
+BANDWIDTH_CONFIG.progress_name = 'Historical Bandwidth API'
+BANDWIDTH_CONFIG.args_fn = lambda c: [c.onionoo_bandwidth_url, c.bandwidth_cache_hours, c._noop_logger]
+
+AROI_CONFIG.worker_fn = fetch_aroi_validation
+AROI_CONFIG.progress_name = 'AROI Validation API'
+AROI_CONFIG.args_fn = lambda c: [c.aroi_url, c._noop_logger]
+
+EXIT_DNS_HEALTH_CONFIG.worker_fn = fetch_exit_dns_health
+EXIT_DNS_HEALTH_CONFIG.progress_name = 'Exit DNS Health API'
+EXIT_DNS_HEALTH_CONFIG.args_fn = lambda c: [c.exit_dns_health_url, c._noop_logger]
+
+COLLECTOR_CONSENSUS_CONFIG.worker_fn = fetch_collector_consensus_data
+COLLECTOR_CONSENSUS_CONFIG.args_fn = lambda c: [None, c._noop_logger]
+
+COLLECTOR_DESCRIPTORS_CONFIG.worker_fn = fetch_collector_descriptors
+COLLECTOR_DESCRIPTORS_CONFIG.args_fn = lambda c: [c._noop_logger]
+
+CONSENSUS_HEALTH_CONFIG.worker_fn = fetch_consensus_health
+CONSENSUS_HEALTH_CONFIG.args_fn = lambda c: [c._noop_logger]
+
+API_CONFIGS = [
+    DETAILS_CONFIG,
+    UPTIME_CONFIG,
+    BANDWIDTH_CONFIG,
+    AROI_CONFIG,
+    EXIT_DNS_HEALTH_CONFIG,
+    COLLECTOR_CONSENSUS_CONFIG,
+    COLLECTOR_DESCRIPTORS_CONFIG,
+    CONSENSUS_HEALTH_CONFIG,
+]

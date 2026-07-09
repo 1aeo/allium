@@ -7,12 +7,7 @@ Phase 2 implementation: multiple API support, threading, and incremental renderi
 """
 
 import threading
-from .workers import (
-    fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
-    fetch_aroi_validation, fetch_exit_dns_health, fetch_collector_consensus_data,
-    fetch_collector_descriptors,
-    get_all_worker_status
-)
+from .workers import get_all_worker_status
 from .relays import Relays
 from .progress_logger import ProgressLogger
 from .first_seen_correction import correct_first_seen
@@ -80,17 +75,10 @@ class Coordinator:
     # =========================================================================
     # API WORKER REGISTRY
     # =========================================================================
-    # Declarative list of API workers. Each entry defines:
-    #   name:       Internal identifier for the API
-    #   fetch_fn:   Function to call (from workers.py)
-    #   group:      Which --apis mode includes this worker ('details' or 'all')
-    #   args_fn:    Lambda returning the argument list for fetch_fn
-    #   enabled_fn: Optional callable returning bool (for feature flags)
-    #
-    # To add a new API source:
-    #   1. Create a fetch function in workers.py
-    #   2. Add one entry here
-    #   3. Handle the data in Relays.enrich_with_api_data()
+    # Derived from workers.API_CONFIGS - the single source of truth. To add a
+    # new API source: create a fetch function + APIConfig entry in workers.py
+    # and handle the data in Relays.enrich_with_api_data(). The progress step
+    # count (allium.py) follows automatically.
     # =========================================================================
     # The last element in each args_fn list is a progress logger placeholder.
     # _run_worker() replaces it with an API-specific logger before calling the
@@ -98,83 +86,38 @@ class Coordinator:
     # call if _run_worker replacement is ever skipped (e.g., in tests).
     _noop_logger = staticmethod(lambda *args, **kwargs: None)
 
-    API_WORKER_REGISTRY = [
-        {
-            "name": "onionoo_details",
-            "fetch_fn": fetch_onionoo_details,
-            "group": "details",  # Included in both 'details' and 'all' modes
-            "args_fn": lambda self: [self.onionoo_details_url, self._noop_logger],
-        },
-        {
-            "name": "onionoo_uptime",
-            "fetch_fn": fetch_onionoo_uptime,
-            "group": "all",
-            "args_fn": lambda self: [self.onionoo_uptime_url, self._noop_logger],
-        },
-        {
-            "name": "onionoo_bandwidth",
-            "fetch_fn": fetch_onionoo_bandwidth,
-            "group": "all",
-            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._noop_logger],
-        },
-        {
-            "name": "aroi_validation",
-            "fetch_fn": fetch_aroi_validation,
-            "group": "all",
-            "args_fn": lambda self: [self.aroi_url, self._noop_logger],
-        },
-        {
-            "name": "exit_dns_health",
-            "fetch_fn": fetch_exit_dns_health,
-            "group": "all",
-            "args_fn": lambda self: [self.exit_dns_health_url, self._noop_logger],
-        },
-        {
-            "name": "collector_consensus",
-            "fetch_fn": fetch_collector_consensus_data,
-            "group": "all",
-            "args_fn": lambda self: [None, self._noop_logger],
-            "enabled_fn": None,  # Checked dynamically in _build_api_workers
-        },
-        {
-            "name": "collector_descriptors",
-            "fetch_fn": fetch_collector_descriptors,
-            "group": "all",
-            "args_fn": lambda self: [self._noop_logger],
-            "enabled_fn": None,  # Checked dynamically in _build_api_workers
-        },
-    ]
-    
     @classmethod
     def iter_enabled_worker_entries(cls, enabled_apis):
-        """Yield registry entries enabled for this run.
+        """Yield APIConfig entries enabled for this run.
 
         Single source of truth for worker gating - used by
         _build_api_workers AND by allium.py's total_steps derivation, so
         the progress step count follows the registry automatically.
         """
         from .consensus import is_consensus_evaluation_enabled
+        from .workers import API_CONFIGS
 
-        # Feature flag checks by worker name (avoids import issues in class-level lambdas)
         feature_flags = {
-            "collector_consensus": is_consensus_evaluation_enabled,
-            "collector_descriptors": is_consensus_evaluation_enabled,
+            "consensus_evaluation": is_consensus_evaluation_enabled,
         }
 
-        for entry in cls.API_WORKER_REGISTRY:
-            # Include if group matches: 'details' workers run in all modes,
-            # 'all' workers only run when --apis=all
-            if entry["group"] == "details" or enabled_apis == "all":
-                flag_fn = feature_flags.get(entry["name"])
-                if flag_fn and not flag_fn():
-                    continue
-                yield entry
+        for config in API_CONFIGS:
+            if not config.enabled:
+                continue
+            # 'details' workers run in all modes, 'all' workers only when
+            # --apis=all
+            if config.group != "details" and enabled_apis != "all":
+                continue
+            flag_fn = feature_flags.get(config.feature_flag)
+            if flag_fn and not flag_fn():
+                continue
+            yield config
 
     def _build_api_workers(self):
         """Build the list of API workers based on enabled_apis mode and feature flags."""
         return [
-            (entry["name"], entry["fetch_fn"], entry["args_fn"](self))
-            for entry in self.iter_enabled_worker_entries(self.enabled_apis)
+            (config.api_name, config.worker_fn, config.args_fn(self))
+            for config in self.iter_enabled_worker_entries(self.enabled_apis)
         ]
         
     def _run_worker(self, api_name, worker_func, args):
@@ -212,25 +155,12 @@ class Coordinator:
                 traceback.print_exc()
 
     def _get_api_display_name(self, api_name):
-        """Get display name for API"""
-        if api_name == "onionoo_details":
-            return "Details API"
-        elif api_name == "onionoo_uptime":
-            return "Uptime API"
-        elif api_name == "onionoo_bandwidth":
-            return "Historical Bandwidth API"
-        elif api_name == "aroi_validation":
-            return "AROI Validation API"
-        elif api_name == "exit_dns_health":
-            return "Exit DNS Health API"
-        elif api_name == "collector_consensus":
-            return "CollecTor Consensus API"
-        elif api_name == "collector_descriptors":
-            return "CollecTor Descriptors API"
-        elif api_name == "consensus_health":
-            return "Authority Health API"
-        else:
-            return api_name.replace("_", " ").title()
+        """Get progress display name for API (from the registry configs)"""
+        from .workers import API_CONFIGS
+        for config in API_CONFIGS:
+            if config.api_name == api_name and config.progress_name:
+                return config.progress_name
+        return api_name.replace("_", " ").title()
 
     def _create_api_specific_logger(self, api_name):
         """Create a progress logger that includes API name in messages.
