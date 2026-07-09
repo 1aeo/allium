@@ -17,6 +17,7 @@ import os
 from shutil import copy2
 
 from .page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
+from .page_writer import write_misc, write_pages_by_key, write_relay_info
 
 
 # =============================================================================
@@ -127,7 +128,8 @@ def generate_site(relay_set, args, progress_logger):
     for page_def in STANDALONE_PAGES:
         progress_logger.log(f"Generating {page_def['label']}...")
         page_ctx = _build_page_context(page_def, relay_set)
-        relay_set.write_misc(
+        write_misc(
+            relay_set,
             template=page_def["template"],
             path=page_def["output"],
             page_ctx=page_ctx,
@@ -150,7 +152,8 @@ def generate_site(relay_set, args, progress_logger):
             page_ctx = standard_contexts.get_misc_page_context(
                 f"misc-{page_type}.html", page_title, sorted_by=sorted_by
             )
-            relay_set.write_misc(
+            write_misc(
+                relay_set,
                 template=f"misc-{page_type}.html",
                 path=f"misc/{page_type}-{suffix}.html",
                 sorted_by=sorted_by,
@@ -160,11 +163,11 @@ def generate_site(relay_set, args, progress_logger):
 
     # --- Detail pages by key (family, contact, as, country, flag, platform, first_seen) ---
     for key in SORTED_PAGE_KEYS:
-        relay_set.write_pages_by_key(key)
+        write_pages_by_key(relay_set, key)
 
     # --- Individual relay pages ---
     progress_logger.log("Generating individual relay info pages...")
-    relay_set.write_relay_info()
+    write_relay_info(relay_set)
     progress_logger.log(f"Generated individual pages for {len(relay_set.json.get('relays', []))} relays")
 
     # --- Static files ---

@@ -217,8 +217,8 @@ def _render_page_mp(args):
     page_data = _mp_relay_set.json["sorted"][_mp_page_type][value]
     
     # Build template args in worker (uses forked memory)
-    template_args = _mp_relay_set._build_template_args(
-        _mp_page_type, value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+    template_args = build_template_args(
+        _mp_relay_set, _mp_page_type, value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
     )
     
     # Render and write
@@ -901,8 +901,8 @@ def _render_contact_batch_mp(args):
     """Render all contact sort variants for one contact in a worker."""
     dir_path, value = args
     page_data = _mp_relay_set.json["sorted"]["contact"][value]
-    base_template_args = _mp_relay_set._build_template_args(
-        "contact", value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+    base_template_args = build_template_args(
+        _mp_relay_set, "contact", value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
     )
     return _render_contact_variants(
         _mp_template, _mp_relay_set, base_template_args, dir_path, page_data, _mp_output_root
@@ -923,8 +923,8 @@ def _write_contact_pages_sequential(relay_set, sorted_values, template, output_p
         dir_path = os.path.join(output_path, v_safe)
         os.makedirs(dir_path, exist_ok=True)
 
-        base_template_args = relay_set._build_template_args(
-            "contact", v, contact_data, the_prefixed, validated_aroi_domains
+        base_template_args = build_template_args(
+            relay_set, "contact", v, contact_data, the_prefixed, validated_aroi_domains
         )
 
         render_start = time.time()
