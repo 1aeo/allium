@@ -140,6 +140,13 @@ def generate_site(relay_set, args, progress_logger):
     standard_contexts = StandardTemplateContexts(relay_set)
     for suffix, sorted_by in SORTED_BY_VARIANTS.items():
         for page_type, page_title in MISC_SORTED_PAGE_TYPES:
+            # misc-contacts and misc-families have no unique-contact/
+            # unique-family columns; the variants sorted by them gave no
+            # visual indication of the sort, so they are not generated.
+            if (page_type in ("contacts", "families")
+                    and suffix in ("by-unique-contact-count",
+                                   "by-unique-family-count")):
+                continue
             page_ctx = standard_contexts.get_misc_page_context(
                 f"misc-{page_type}.html", page_title, sorted_by=sorted_by
             )

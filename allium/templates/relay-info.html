@@ -36,7 +36,7 @@
 {% block body -%}
 <div id="content">
 <h2 id="nickname">View Relay "{{ relay['nickname'] }}"</h2>
-{{ navigation('all', page_ctx) }}
+{{ navigation('', page_ctx) }}
 {# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
 {% set has_aroi = relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 {% if has_aroi and base_url and relay['aroi_domain'] in validated_aroi_domains -%}
