@@ -7,6 +7,8 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 
 import statistics
 
+from .statistical_utils import StatisticalUtils
+
 def calculate_total_data_from_history(history_data):
     """Calculate total bytes transferred from an Onionoo bandwidth history object.
     
@@ -472,15 +474,18 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
             network_flag_statistics[flag] = {}
             for period, values in periods.items():
                 if values and len(values) >= 3:
-                    mean_bw = statistics.mean(values)
-                    std_dev = statistics.stdev(values) if len(values) > 1 else 0
-                    
+                    # Use unified statistical utilities (same statistics.mean/
+                    # stdev as before, so values are byte-identical)
+                    stats = StatisticalUtils.calculate_basic_statistics(values)
+                    mean_bw = stats['mean']
+                    std_dev = stats['std_dev']
+
                     network_flag_statistics[flag][period] = {
                         'mean': mean_bw,
                         'std_dev': std_dev,
                         'two_sigma_low': max(0.0, mean_bw - 2 * std_dev),
                         'two_sigma_high': mean_bw + 2 * std_dev,
-                        'count': len(values)
+                        'count': stats['count']
                     }
     
     return {

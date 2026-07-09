@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from allium.lib.page_writer import build_template_args, write_pages_by_key
 from allium.lib.relays import Relays
 
 
@@ -727,8 +728,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         the_prefixed = ["United States"]
         validated_aroi_domains = set()
         
-        template_args = relay_set._build_template_args(
-            "contact", contact_hash, contact_data, the_prefixed, validated_aroi_domains
+        template_args = build_template_args(
+            relay_set, "contact", contact_hash, contact_data, the_prefixed, validated_aroi_domains
         )
         
         # Verify critical contact metadata is in template args
@@ -770,8 +771,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         contact_data["is_validated_aroi"] = True
         
         # Build template args
-        template_args = relay_set._build_template_args(
-            "contact", contact_hash, contact_data, [], set()
+        template_args = build_template_args(
+            relay_set, "contact", contact_hash, contact_data, [], set()
         )
         
         # Verify flat storage is used (not nested precomputed dict)
@@ -843,7 +844,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             mp_workers=0,
         )
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertGreater(len(contact_hashes), 0)
@@ -886,7 +887,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             mp_workers=0,
         )
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertGreater(len(contact_hashes), 0)
@@ -934,7 +935,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             progress=False,
             mp_workers=0,
         )
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertEqual(len(contact_hashes), 1)
         contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
@@ -984,7 +985,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         contact_data["is_validated_aroi"] = True
         contact_data["aroi_domain"] = "example.org"
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         vanity_dir = os.path.join(self.temp_dir, "example.org")
         self.assertTrue(os.path.isdir(vanity_dir))

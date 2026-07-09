@@ -126,6 +126,23 @@ class TestIsRetryableError:
         except json.JSONDecodeError as e:
             assert _is_retryable_error(e) is False
 
+    def test_ssl_eof_error_is_retryable(self):
+        # SSLError.errno holds OpenSSL codes (8 = EOF), not system errnos;
+        # transient TLS handshake failures must retry (audit finding)
+        import ssl
+        err = ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+        assert _is_retryable_error(err) is True
+        assert _is_retryable_error(urllib.error.URLError(reason=err)) is True
+
+    def test_ssl_cert_verification_error_not_retryable(self):
+        import ssl
+        err = ssl.SSLCertVerificationError(1, "certificate verify failed")
+        assert _is_retryable_error(err) is False
+        assert _is_retryable_error(urllib.error.URLError(reason=err)) is False
+
+    def test_darwin_eprototype_is_retryable(self):
+        assert _is_retryable_error(OSError(errno.EPROTOTYPE, "quirk")) is True
+
     def test_os_error_with_network_errno_is_retryable(self):
         assert _is_retryable_error(OSError(errno.ENETUNREACH, "Network unreachable")) is True
 

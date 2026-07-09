@@ -14,7 +14,7 @@ Design principles:
 import json
 import os
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Import existing utilities (DRY - avoid reimplementing)
@@ -389,7 +389,12 @@ def generate_search_index(
                 executor.submit(_process_relay_batch, batch, family_membership, valid_family_ids)
                 for batch in batches
             ]
-            for future in as_completed(futures):
+            # Iterate in SUBMISSION order, not as_completed: completion
+            # order varies with thread scheduling, which made the merged
+            # lookup dicts' key order - and therefore the serialized JSON -
+            # nondeterministic run-to-run (breaks byte-level regression
+            # diffs of generated site trees)
+            for future in futures:
                 batch_entries, batch_as, batch_countries, batch_platforms, batch_flags = future.result()
                 indexed_entries.extend(batch_entries)
                 as_names.update(batch_as)
@@ -445,8 +450,10 @@ def generate_search_index(
         'relays': relay_entries,
         'families': family_entries,
         'lookups': {
-            'as_names': as_names,
-            'country_names': country_names,
+            # sorted for byte-deterministic output (JSON maps are
+            # order-insensitive to consumers)
+            'as_names': dict(sorted(as_names.items())),
+            'country_names': dict(sorted(country_names.items())),
             'platforms': sorted(platforms),
             'flags': sorted(flags),
             'validated_aroi_domains': validated_aroi_list,

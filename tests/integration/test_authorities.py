@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch, mock_open
 
+from allium.lib.page_writer import write_misc
 from allium.lib.relays import Relays
 
 
@@ -353,7 +354,8 @@ class TestDirectoryAuthorities(unittest.TestCase):
         relays = Relays(self.test_dir, self.test_onionoo_url, main_response_with_authorities)
         
         # Call write_misc directly since write_directory_authorities no longer exists
-        relays.write_misc(
+        write_misc(
+            relays,
             template="misc-authorities.html",
             path="misc/authorities.html"
         )
@@ -568,11 +570,12 @@ class TestDirectoryAuthorities(unittest.TestCase):
         
         # Test template compilation and rendering
         try:
-            relays.write_misc(
+            write_misc(
+                relays,
                 template="misc-authorities.html",
                 path="misc/authorities.html"
             )
-            
+
             # Verify output file was created and has content
             output_file = os.path.join(self.test_dir, "misc", "authorities.html")
             self.assertTrue(os.path.exists(output_file))
@@ -633,14 +636,11 @@ class TestAuthorityIntegration(unittest.TestCase):
         self.assertIsNotNone(relays.json)
         self.assertEqual(len(relays.json['relays']), 1)
         
-        # Test that write_misc method can handle misc-authorities.html template
-        self.assertTrue(hasattr(relays, 'write_misc'))
-        self.assertTrue(callable(getattr(relays, 'write_misc')))
-        
-        # Test authorities processing integration
+        # Test authorities processing integration via the page_writer module function
         try:
-            relays.write_misc(
-                template="misc-authorities.html", 
+            write_misc(
+                relays,
+                template="misc-authorities.html",
                 path="misc/authorities.html"
             )
             # If no exception, integration is working
