@@ -20,6 +20,8 @@ from collections import defaultdict
 from typing import Dict, Optional, List, Tuple
 from datetime import datetime
 
+from .string_utils import URL_FIELD_TOKEN_RE
+
 logger = logging.getLogger(__name__)
 
 
@@ -434,7 +436,9 @@ _PROOF_TYPE_RE = re.compile(
     re.IGNORECASE,
 )
 _PROOF_ANY_TYPE_RE = re.compile(r'\bproof:([A-Za-z0-9-]+)\b', re.IGNORECASE)
-_URL_FIELD_RE = re.compile(r'\burl:(?:https?://)?([^,\s]+)', re.IGNORECASE)
+# Shared url: token pattern (string_utils is the single source of truth).
+# Keep the _URL_FIELD_RE name: relays.py imports it from this module.
+_URL_FIELD_RE = URL_FIELD_TOKEN_RE
 
 # Module-state for one-time warning logs (deduplicates per build).
 _warned_unsupported_ciissversion = set()
