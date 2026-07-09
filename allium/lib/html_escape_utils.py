@@ -12,6 +12,8 @@ This module provides:
 import html
 from typing import Any, Dict, List
 
+from markupsafe import Markup
+
 
 class HTMLEscapeConstants:
     """Centralized HTML escaping constants for consistency."""
@@ -43,7 +45,10 @@ class HTMLEscaper:
         """
         if value is None or value == "":
             return fallback
-        return html.escape(str(value))
+        # Markup marks the string as already-escaped so Jinja2 autoescape
+        # does not escape it a second time (fallbacks contain no HTML
+        # specials, so they need no wrapping).
+        return Markup(html.escape(str(value)))
     
     def escape_list(self, values: List[Any], fallback: str = "") -> List[str]:
         """
@@ -78,8 +83,8 @@ class HTMLEscaper:
         str_value = str(value)
         if len(str_value) > max_length:
             str_value = str_value[:max_length]
-        
-        return html.escape(str_value)
+
+        return Markup(html.escape(str_value))
 
 
 class RelayFieldEscaper:
