@@ -1,0 +1,141 @@
+{# =============================================================================
+   SHARED MACROS FOR THE misc-*.html LISTING PAGES
+   (misc-contacts / misc-families / misc-networks / misc-countries / misc-platforms)
+
+   Markup and indentation are copied byte-for-byte from the original templates
+   so the rendered HTML output is byte-identical. Conventions:
+   - Header-matrix macros (bw_headers/cw_headers/rc_headers/sortable_th) end WITH
+     a trailing newline; call them as {{ misc.x(...) -}} on a column-0 line so the
+     surrounding whitespace matches the original {% if %}/{% endif -%} blocks.
+   - Row-cell macros end WITHOUT a trailing newline; call them as
+     {{ misc.x(...) }} on a column-0 line (the call line supplies the newline).
+   ============================================================================= #}
+
+{# The "Network Relays" stats bullet - identical on all five listing pages. #}
+{% macro network_relays_bullet(relays) %}
+        <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
+            <ul style="margin: 2px 0; padding-left: 20px;">
+                <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
+                    Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['primary']['exit'] }}
+                </li>
+                <li><strong><span title="Exclusive categories for all role combinations, adding Guard+Exit">Role Categories</span></strong>: 
+                    Guard: {{ relays.json['network_totals']['categories']['guard_only'] }} | 
+                    Middle: {{ relays.json['network_totals']['categories']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['categories']['exit_only'] }} | 
+                    Guard+Exit: {{ relays.json['network_totals']['categories']['guard_exit'] }}
+                </li>
+                <li><strong><span title="Multi-role relays counted by every role they perform">All Roles</span></strong>: 
+                    Guard: {{ relays.json['network_totals']['all']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['all']['exit'] }}
+                </li>
+                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
+                    {{ relays.json['network_totals']['measured_relays'] }} relays, {{ relays.json['network_totals']['measured_percentage'] }}% of all relays
+                </li>
+            </ul>
+        </li>
+{%- endmacro %}
+
+{# The "Last updated" footer paragraph - identical on all five listing pages. #}
+{% macro last_updated(relays) %}
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+{%- endmacro %}
+
+{# Observed-bandwidth sort-header matrix. prefix = "contacts"/"families"/... #}
+{% macro bw_headers(prefix, sorted_by_label) %}
+            {% if sorted_by_label == 'bandwidth' -%}
+                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers.">Overall / <a href="{{ prefix }}-by-guard-bandwidth.html">Guard</a> / <a href="{{ prefix }}-by-middle-bandwidth.html">Middle</a> / <a href="{{ prefix }}-by-exit-bandwidth.html">Exit</a> BW Cap</th>
+            {% elif sorted_by_label == 'guard_bandwidth' -%}
+                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="{{ prefix }}-by-overall-bandwidth.html">Overall</a> / Guard / <a href="{{ prefix }}-by-middle-bandwidth.html">Middle</a> / <a href="{{ prefix }}-by-exit-bandwidth.html">Exit</a> BW Cap</th>
+            {% elif sorted_by_label == 'middle_bandwidth' -%}
+                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="{{ prefix }}-by-overall-bandwidth.html">Overall</a> / <a href="{{ prefix }}-by-guard-bandwidth.html">Guard</a> / Middle / <a href="{{ prefix }}-by-exit-bandwidth.html">Exit</a> BW Cap</th>
+            {% elif sorted_by_label == 'exit_bandwidth' -%}
+                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="{{ prefix }}-by-overall-bandwidth.html">Overall</a> / <a href="{{ prefix }}-by-guard-bandwidth.html">Guard</a> / <a href="{{ prefix }}-by-middle-bandwidth.html">Middle</a> / Exit BW Cap</th>
+            {% else -%}
+                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="{{ prefix }}-by-overall-bandwidth.html">Overall</a> / <a href="{{ prefix }}-by-guard-bandwidth.html">Guard</a> / <a href="{{ prefix }}-by-middle-bandwidth.html">Middle</a> / <a href="{{ prefix }}-by-exit-bandwidth.html">Exit</a> BW Cap</th>
+            {% endif -%}
+{% endmacro %}
+
+{# Consensus-weight sort-header matrix. #}
+{% macro cw_headers(prefix, sorted_by_label) %}
+            {% if sorted_by_label == 'consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="{{ prefix }}-by-consensus-weight.html">Overall</a> / <a href="{{ prefix }}-by-guard-consensus-weight.html">Guard</a> / <a href="{{ prefix }}-by-middle-consensus-weight.html">Middle</a> / <a href="{{ prefix }}-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="{{ prefix }}-by-consensus-weight.html">Overall</a> / Guard / <a href="{{ prefix }}-by-middle-consensus-weight.html">Middle</a> / <a href="{{ prefix }}-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="{{ prefix }}-by-consensus-weight.html">Overall</a> / <a href="{{ prefix }}-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="{{ prefix }}-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="{{ prefix }}-by-consensus-weight.html">Overall</a> / <a href="{{ prefix }}-by-guard-consensus-weight.html">Guard</a> / <a href="{{ prefix }}-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
+            {% else -%}
+                <th class="text-center cw-header" title="Consensus Weight">
+                    <a href="{{ prefix }}-by-consensus-weight.html">Overall</a> / <a href="{{ prefix }}-by-guard-consensus-weight.html">Guard</a> / <a href="{{ prefix }}-by-middle-consensus-weight.html">Middle</a> / <a href="{{ prefix }}-by-exit-consensus-weight.html">Exit</a> CW
+                </th>
+            {% endif -%}
+{% endmacro %}
+
+{# Guard/Middle/Exit relay-count sort-header matrix. #}
+{% macro rc_headers(prefix, sorted_by_label) %}
+            {% if sorted_by_label == 'exit_count' -%}
+                <th class="text-center rc-header">
+                    <a href="{{ prefix }}-by-guard-count.html">Guard</a> / <a href="{{ prefix }}-by-middle-count.html">Middle</a> / Exit
+                </th>
+            {% elif sorted_by_label == 'guard_count' -%}
+                <th class="text-center rc-header">
+                    Guard / <a href="{{ prefix }}-by-middle-count.html">Middle</a> / <a href="{{ prefix }}-by-exit-count.html">Exit</a>
+                </th>
+            {% elif sorted_by_label == 'middle_count' -%}
+                <th class="text-center rc-header">
+                    <a href="{{ prefix }}-by-guard-count.html">Guard</a> / Middle / <a href="{{ prefix }}-by-exit-count.html">Exit</a>
+                </th>
+            {% else -%}
+                <th class="text-center rc-header">
+                    <a href="{{ prefix }}-by-guard-count.html">Guard</a> / <a href="{{ prefix }}-by-middle-count.html">Middle</a> / <a href="{{ prefix }}-by-exit-count.html">Exit</a>
+                </th>
+            {% endif -%}
+{% endmacro %}
+
+{# Generic sortable column header: plain label when the page is already sorted
+   by sort_key, otherwise a link to the sorted variant. title is emitted raw
+   (template-literal strings only) to keep output byte-identical. #}
+{% macro sortable_th(sorted_by_label, sort_key, href, label, title=none) %}
+            {% if sorted_by_label == sort_key -%}
+                <th{% if title %} title="{{ title|safe }}"{% endif %}>{{ label }}</th>
+            {% else -%}
+                <th{% if title %} title="{{ title|safe }}"{% endif %}>
+                    <a href="{{ href }}">{{ label }}</a>
+                </th>
+            {% endif -%}
+{% endmacro %}
+
+{# Pre-computed BW / CW / relay-count data cells (contacts, networks, countries,
+   platforms; misc-families uses a deeper indent and keeps its cells local). #}
+{% macro combined_cells(d) %}
+                    {# PERF: Use pre-computed combined bandwidth string #}
+                    <td class="text-center bw-data">{{ d.bw_combined }}</td>
+                    {# PERF: Use pre-computed combined CW percentage string #}
+                    <td class="text-center cw-data">{{ d.cw_combined }}</td>
+                    {# PERF: Use pre-computed count combined string #}
+                    <td class="text-center rc-data">{{ d.count_combined }}</td>
+{%- endmacro %}
+
+{# Total-data + exit-DNS-health data cells. #}
+{% macro total_data_dns_cells(d) %}
+                    <td>{{ d.total_data_formatted }}</td>
+                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span class="al-status-success">{{ d.exit_dns_health_summary.healthy }}</span> / <span class="al-status-danger">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+{%- endmacro %}
+
+{# Full shared row tail for networks/countries/platforms: BW/CW/count cells,
+   unique-operator/family(/AS) counts, total data and DNS health. #}
+{% macro listing_row_cells(v, d, include_unique_as=false) %}
+{{ combined_cells(d) }}
+                    <td>{{ v['unique_contact_count'] }}</td>
+                    <td>{{ v['unique_family_count'] }}</td>
+{% if include_unique_as %}
+                    <td>{{ v['unique_as_count'] }}</td>
+{% endif %}
+{{ total_data_dns_cells(d) }}
+{%- endmacro %}

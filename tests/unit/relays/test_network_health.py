@@ -6,6 +6,7 @@ Test network health dashboard calculations and metrics
 import unittest
 from unittest.mock import Mock, patch
 
+from allium.lib.network_health import calculate_network_health_metrics
 from allium.lib.relays import Relays
 from allium.lib.ip_utils import determine_ipv6_support
 
@@ -64,7 +65,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         # Should have network health data
         self.assertIn('network_health', relays_obj.json)
@@ -84,7 +85,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         # Should have IPv6 AROI operator metrics
         health_data = relays_obj.json['network_health']
@@ -100,7 +101,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         health_data = relays_obj.json['network_health']
         
@@ -126,7 +127,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         # Should have exit policy metrics
         health_data = relays_obj.json['network_health']
@@ -143,7 +144,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         health_data = relays_obj.json['network_health']
         
@@ -243,7 +244,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         
         # Process data to create family sorted data structure
         relays_obj._categorize()
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         # Verify the fix: should count 2 unique families, not 5 family member entries
         health_data = relays_obj.json['network_health']
@@ -360,7 +361,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
                          "Intelligence engine total_families should count unique families (2), not family member entries (5)")
         
         # Verify this matches the network health dashboard calculation
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         health_data = relays_obj.json['network_health']
         self.assertEqual(intelligence_families_count, health_data['families_count'],
                         "Intelligence engine total_families should match network health families_count")
@@ -463,7 +464,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         health = relays_obj.json['network_health']
         
@@ -599,7 +600,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         
         health = relays_obj.json['network_health']
         
@@ -652,7 +653,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=True,
             progress=False
         )
-        relays_bits._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_bits)
         health_bits = relays_bits.json['network_health']
         
         # 125,000,000 bytes/s = 1.00 Gbit/s — verify it shows ~1 Gbit/s, NOT 8 Gbit/s
@@ -673,7 +674,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_bytes._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_bytes)
         health_bytes = relays_bytes.json['network_health']
         
         # 125,000,000 bytes/s = 125 MB/s
@@ -719,7 +720,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
             use_bits=False,
             progress=False
         )
-        relays_obj._calculate_network_health_metrics()
+        calculate_network_health_metrics(relays_obj)
         health = relays_obj.json['network_health']
         
         # Port 8080 should NOT count as web traffic (ports 80/443)

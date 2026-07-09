@@ -70,14 +70,11 @@ except ImportError:
 # Serge has Authority flag but doesn't vote.
 
 # Reuse existing bandwidth formatter instead of duplicating logic
+# (shared cached instances, keyed by use_bits)
 try:
-    from ..bandwidth_formatter import BandwidthFormatter
-    _BandwidthFormatterClass = BandwidthFormatter
+    from ..bandwidth_formatter import _get_formatter as _get_bw_formatter
 except ImportError:
-    _BandwidthFormatterClass = None
-
-# Cache formatters to avoid recreating them repeatedly
-_bw_formatter_cache = {}
+    _get_bw_formatter = None
 
 # Reuse existing percentage formatter from string_utils
 try:
@@ -2025,11 +2022,9 @@ def _format_bandwidth_value(value: Any, use_bits: bool = False) -> str:
             return f"{value * 8} bit/s"
         return f"{value} B/s"
     
-    # Get or create cached formatter for this use_bits setting
-    if _BandwidthFormatterClass is not None:
-        if use_bits not in _bw_formatter_cache:
-            _bw_formatter_cache[use_bits] = _BandwidthFormatterClass(use_bits=use_bits)
-        formatter = _bw_formatter_cache[use_bits]
+    # Use shared cached formatter for this use_bits setting
+    if _get_bw_formatter is not None:
+        formatter = _get_bw_formatter(use_bits=use_bits)
         try:
             return formatter.format_bandwidth_with_suffix(value, decimal_places=1)
         except (ValueError, TypeError):
