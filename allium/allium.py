@@ -15,7 +15,7 @@ import sys
 import time
 import urllib.parse
 from lib.coordinator import create_relay_set_with_coordinator
-from lib.progress_logger import create_progress_logger
+from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -274,8 +274,8 @@ if __name__ == "__main__":
 
     total_steps = setup_steps + coordinator_steps + page_generation_steps
 
-    # Create unified progress logger
-    progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
+    # Create the single ProgressLogger threaded through the whole pipeline
+    progress_logger = ProgressLogger(start_time, total_steps, args.progress)
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")

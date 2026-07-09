@@ -64,28 +64,24 @@ class TestCoordinator:
         use_bits = True
         progress = True
         start_time = time.time()
-        progress_step = 5
-        total_steps = 53
-        
+
         coordinator = make_coordinator(
             output_dir=output_dir,
             details_url=onionoo_details_url,
             uptime_url=onionoo_uptime_url,
             use_bits=use_bits,
             progress=progress,
-            start_time=start_time,
-            progress_step=progress_step,
-            total_steps=total_steps
+            start_time=start_time
         )
-        
+
         assert coordinator.output_dir == output_dir
         assert coordinator.onionoo_details_url == onionoo_details_url
         assert coordinator.onionoo_uptime_url == onionoo_uptime_url
         assert coordinator.use_bits == use_bits
         assert coordinator.progress == progress
         assert coordinator.start_time == start_time
-        assert coordinator.progress_step == progress_step
-        assert coordinator.total_steps == total_steps
+        assert coordinator.progress_logger.start_time == start_time
+        assert coordinator.progress_logger.progress_enabled == progress
         assert coordinator.worker_data == {}
     
     def test_coordinator_initialization_uses_default_values_when_minimal_parameters_provided(self):
@@ -97,8 +93,8 @@ class TestCoordinator:
         assert coordinator.onionoo_uptime_url == "https://test.uptime.url"
         assert coordinator.use_bits is False
         assert coordinator.progress is False
-        assert coordinator.progress_step == 0
-        assert coordinator.total_steps == 53
+        assert coordinator.progress_logger.progress_step == 0
+        assert coordinator.progress_logger.total_steps == 53
         assert isinstance(coordinator.start_time, float)
     
     def test_log_progress_outputs_formatted_message_when_progress_enabled(self):
@@ -106,7 +102,7 @@ class TestCoordinator:
         coordinator = make_coordinator(progress=True)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_called_once()
             call_args = mock_print.call_args[0][0]
@@ -118,7 +114,7 @@ class TestCoordinator:
         coordinator = make_coordinator(progress=False)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_not_called()
     
@@ -197,7 +193,8 @@ class TestCoordinator:
                 assert call_kwargs['use_bits'] == True
                 assert call_kwargs['progress'] == True
                 assert call_kwargs['relay_data'] == mock_data
-                assert call_kwargs['total_steps'] == 53
+                # The ONE shared progress logger is threaded through to Relays
+                assert call_kwargs['progress_logger'] is coordinator.progress_logger
                 
                 # Check progress messages
                 assert any("Creating relay set with Details API data" in str(call) for call in mock_print.call_args_list)
@@ -423,7 +420,7 @@ class TestCoordinatorProgressLogging:
         coordinator = make_coordinator(progress=True, start_time=time.time())
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test progress message")
+            coordinator.progress_logger.log("Test progress message")
             
             mock_print.assert_called_once()
             log_message = mock_print.call_args[0][0]
@@ -439,7 +436,7 @@ class TestCoordinatorProgressLogging:
         # Mock resource module to raise an exception
         with patch('resource.getrusage', side_effect=Exception("Memory unavailable")):
             with patch('builtins.print') as mock_print:
-                coordinator._log_progress("Test message")
+                coordinator.progress_logger.log("Test message")
                 
                 mock_print.assert_called_once()
                 log_message = mock_print.call_args[0][0]
@@ -462,15 +459,12 @@ class TestCoordinatorEdgeCases:
         # Test with empty strings using keyword arguments
         coordinator = Coordinator(
             output_dir="", onionoo_details_url="", onionoo_uptime_url="",
-            onionoo_bandwidth_url="", aroi_url="", bandwidth_cache_hours=0,
-            progress_step=-1, total_steps=0
+            onionoo_bandwidth_url="", aroi_url="", bandwidth_cache_hours=0
         )
-        
+
         assert coordinator.output_dir == ""
         assert coordinator.onionoo_details_url == ""
         assert coordinator.onionoo_uptime_url == ""
-        assert coordinator.progress_step == -1
-        assert coordinator.total_steps == 0
     
     def test_create_relay_set_with_empty_data(self):
         """Test creating relay set with empty data"""

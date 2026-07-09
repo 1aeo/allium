@@ -49,28 +49,22 @@ from .page_writer import (
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.progress = progress
-        self.start_time = start_time or time.time()
-        self.progress_step = progress_step
-        self.total_steps = total_steps
         self.filter_downtime_days = filter_downtime_days
         self.base_url = base_url
         self.mp_workers = mp_workers  # 0 = disable, >0 = worker count
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
-        
+
         # Initialize bandwidth formatter with correct units setting
         self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
-        
-        # Use shared progress logger if provided, otherwise create new one
-        # Shared logger ensures consistent step counting across allium.py and coordinator.py
-        if progress_logger is not None:
-            self.progress_logger = progress_logger
-        else:
-            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+
+        # Use the shared progress logger threaded through from allium.py via
+        # the coordinator, or create one (tests / direct construction).
+        self.progress_logger = progress_logger or ProgressLogger(progress_enabled=progress)
         
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
@@ -180,12 +174,6 @@ class Relays:
         self._precompute_all_contact_page_data()
         self._precompute_all_family_page_data()
 
-    def _log_progress(self, message, increment_step=False):
-        """Log progress message using shared progress utility"""
-        # Use unified progress logger without incrementing (maintains backwards compatibility)
-        self.progress_logger.log_without_increment(message)
-
-
     def _trim_platform(self):
         """
         Trim platform to retain base operating system without version number or
@@ -254,7 +242,7 @@ class Relays:
         # Log if relays were filtered
         excluded_count = original_count - len(self.json["relays"])
         if excluded_count > 0 and self.progress:
-            self._log_progress(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
+            self.progress_logger.log_without_increment(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
 
     def _simple_aroi_parsing(self, contact):
         """
@@ -549,14 +537,14 @@ class Relays:
         uptime_data = getattr(self, 'uptime_data', None)
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
-            self._log_progress("Calculating network uptime percentiles (6-month period)...")
+            self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")
             self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months')
             if self.network_uptime_percentiles:
                 total_relays = self.network_uptime_percentiles.get('total_relays', 0)
-                self._log_progress(f"Network percentiles calculated: {total_relays:,} relays analyzed")
+                self.progress_logger.log_without_increment(f"Network percentiles calculated: {total_relays:,} relays analyzed")
             else:
                 self.network_uptime_percentiles = None
-                self._log_progress("Network percentiles calculation failed: insufficient data")
+                self.progress_logger.log_without_increment("Network percentiles calculation failed: insufficient data")
         else:
             self.network_uptime_percentiles = None
 
@@ -574,7 +562,7 @@ class Relays:
         
         # Check if relay set is properly initialized before processing
         if not hasattr(self, 'json') or not self.json.get('relays'):
-            self._log_progress("Skipping bandwidth processing: no relay data available")
+            self.progress_logger.log_without_increment("Skipping bandwidth processing: no relay data available")
             return
             
         try:
@@ -640,14 +628,14 @@ class Relays:
             self._process_flag_bandwidth_display(network_flag_statistics)
             
             # Calculate network-wide bandwidth percentiles ONCE for all contacts
-            self._log_progress("Calculating network bandwidth percentiles...")
+            self.progress_logger.log_without_increment("Calculating network bandwidth percentiles...")
             self.network_bandwidth_percentiles = self._calculate_network_bandwidth_percentiles(bandwidth_data)
             if self.network_bandwidth_percentiles:
                 total_operators = self.network_bandwidth_percentiles.get('total_operators', 0)
-                self._log_progress(f"Network bandwidth percentiles calculated: {total_operators:,} operators analyzed")
+                self.progress_logger.log_without_increment(f"Network bandwidth percentiles calculated: {total_operators:,} operators analyzed")
             else:
                 self.network_bandwidth_percentiles = None
-                self._log_progress("Network bandwidth percentiles calculation failed: insufficient data")
+                self.progress_logger.log_without_increment("Network bandwidth percentiles calculation failed: insufficient data")
             
             # Note: _aggregate_total_data_to_groups is called from enrich_with_api_data
             # after _calculate_network_health_metrics (needs network_total_data_by_period)
@@ -735,7 +723,7 @@ class Relays:
         
         # Check if relay set is properly initialized before processing
         if not hasattr(self, 'json') or not self.json.get('relays'):
-            self._log_progress("Skipping collector processing: no relay data available")
+            self.progress_logger.log_without_increment("Skipping collector processing: no relay data available")
             return
         
         try:
@@ -744,7 +732,7 @@ class Relays:
             from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
             from .relay_diagnostics import generate_relay_issues
             
-            self._log_progress("Processing CollecTor consensus data for relay consensus evaluation...")
+            self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
             
             # Get relay index and flag thresholds from collector data
             relay_index = collector_data.get('relay_index', {})
@@ -752,7 +740,7 @@ class Relays:
             bw_authorities = collector_data.get('bw_authorities', [])
             
             if not relay_index:
-                self._log_progress("No relay index in collector data, skipping consensus evaluation")
+                self.progress_logger.log_without_increment("No relay index in collector data, skipping consensus evaluation")
                 return
             
             # Use the number of voting authorities from flag_thresholds (actual voters)
@@ -847,7 +835,7 @@ class Relays:
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
             
-            self._log_progress(f"Processed consensus evaluation for {evaluation_count} relays")
+            self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             
         except Exception as e:
             # Fallback gracefully if collector processing fails
@@ -1072,7 +1060,7 @@ class Relays:
             except Exception as e:
                 # Fall back to sequential if parallel fails
                 if self.progress:
-                    self._log_progress(f"Parallel precomputation failed ({e}), using sequential...")
+                    self.progress_logger.log_without_increment(f"Parallel precomputation failed ({e}), using sequential...")
         
         # Sequential fallback
         for contact_hash in contact_hashes:
@@ -1124,7 +1112,7 @@ class Relays:
                 # Progress reporting
                 processed += 1
                 if processed % 500 == 0:
-                    self._log_progress(f"Pre-computed {processed}/{total_contacts} contacts...")
+                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
 
     def _precompute_all_family_page_data(self):
         """
@@ -1156,7 +1144,7 @@ class Relays:
             except Exception as e:
                 # Fall back to sequential if parallel fails
                 if self.progress:
-                    self._log_progress(f"Parallel family precomputation failed ({e}), using sequential...")
+                    self.progress_logger.log_without_increment(f"Parallel family precomputation failed ({e}), using sequential...")
         
         # Sequential fallback
         for family_hash in family_hashes:
@@ -1203,7 +1191,7 @@ class Relays:
                 # Progress reporting
                 processed += 1
                 if processed % 1000 == 0:
-                    self._log_progress(f"Pre-computed {processed}/{total_families} families...")
+                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
 
     def _generate_aroi_leaderboards(self):
         """
@@ -1213,7 +1201,7 @@ class Relays:
         instead of rebuilding them for each of ~3,000 contacts × 4 metric calculations.
         This reduced map-building iterations from ~132M to ~21K (99.98% reduction).
         """
-        self._log_progress("Generating AROI operator leaderboards...")
+        self.progress_logger.log_without_increment("Generating AROI operator leaderboards...")
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
         # Bump the deterministic version counter consumed by
         # operator_analysis._get_contact_rankings_index so any cached
@@ -1222,19 +1210,17 @@ class Relays:
         # invalidation (no risk of address reuse on GC'd dicts).
         self.leaderboards_version = getattr(self, 'leaderboards_version', 0) + 1
         contact_count = len(self.json.get('sorted', {}).get('contact', {}))
-        self._log_progress(f"AROI leaderboards generated for {contact_count} operators")
+        self.progress_logger.log_without_increment(f"AROI leaderboards generated for {contact_count} operators")
 
     def _generate_smart_context(self):
         """
         Generate smart context information using intelligence engine
         """
         # IntelligenceEngine imported at module level for performance
-        self.progress_step += 1
-        self._log_progress("Starting Tier 1 intelligence analysis...")
+        self.progress_logger.log_without_increment("Starting Tier 1 intelligence analysis...")
         engine = IntelligenceEngine(self.json)
         self.json['smart_context'] = engine.analyze_all_layers()
-        self.progress_step += 1
-        self._log_progress("Tier 1 intelligence analysis complete")
+        self.progress_logger.log_without_increment("Tier 1 intelligence analysis complete")
 
     def write_misc(self, template, path, page_ctx=None, sorted_by=None, reverse=True, is_index=False):
         """Render and write unsorted HTML listings to disk."""
