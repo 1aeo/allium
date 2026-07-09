@@ -30,8 +30,14 @@ from .bandwidth_formatter import (
     format_bandwidth_filter,
     format_data_volume_with_unit,
 )
+from .aroi_validation import get_contact_validation_status
 from .intelligence_engine import IntelligenceEngine
 from .ip_utils import safe_parse_ip_address
+from .operator_analysis import (
+    calculate_operator_reliability,
+    compute_contact_display_data,
+    generate_contact_rankings,
+)
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -260,6 +266,19 @@ def _compute_network_position_safe(guard_count, middle_count, exit_count, total_
         return {'label': 'Mixed', 'formatted_string': f'{total_relays} relays'}
 
 
+def _contact_validation_status(relay_set, members):
+    """AROI validation status for a group's relays (Phase 2).
+
+    DRY helper: passes the relay_set's raw validation data plus its
+    pre-built validation_map so the map is not rebuilt for each of the
+    3,000+ contact/family groups.
+    """
+    return get_contact_validation_status(
+        members,
+        getattr(relay_set, 'aroi_validation_data', None),
+        getattr(relay_set, 'validation_map', None))
+
+
 # Precomputation worker globals (for contact page data parallelization)
 _precompute_relay_set = None
 
@@ -293,15 +312,15 @@ def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp,
     
     bandwidth_unit = relay_set.bandwidth_formatter.determine_unit(contact_data.get("bandwidth", 0))
     
-    contact_rankings = relay_set._generate_contact_rankings(contact_hash)
-    operator_reliability = relay_set._calculate_operator_reliability(contact_hash, members)
-    contact_display_data = relay_set._compute_contact_display_data(
-        contact_data, bandwidth_unit, operator_reliability, contact_hash, members)
-    
+    contact_rankings = generate_contact_rankings(contact_hash, relay_set)
+    operator_reliability = calculate_operator_reliability(contact_hash, members, relay_set)
+    contact_display_data = compute_contact_display_data(
+        contact_data, bandwidth_unit, operator_reliability, contact_hash, members, relay_set)
+
     if "aroi_validation_full" in contact_data:
         contact_validation_status = contact_data["aroi_validation_full"]
     else:
-        contact_validation_status = relay_set._get_contact_validation_status(members)
+        contact_validation_status = _contact_validation_status(relay_set, members)
     
     aroi_domain = members[0].get("aroi_domain") if members else None
     is_validated_aroi = (aroi_domain and aroi_domain != "none" and
@@ -360,7 +379,7 @@ def _compute_family_predata(relay_set, family_hash):
         return None
     
     contact_validation_status = (family_data.get("aroi_validation_full") or
-                                 relay_set._get_contact_validation_status(members))
+                                 _contact_validation_status(relay_set, members))
     
     network_position = _compute_network_position_safe(
         family_data["guard_count"], family_data["middle_count"],
@@ -461,7 +480,7 @@ def write_misc(
             if "aroi_validation_status" not in contact_data:
                 relay_indices = contact_data.get("relays", [])
                 members = [relay_set.json["relays"][idx] for idx in relay_indices]
-                validation_status = relay_set._get_contact_validation_status(members)
+                validation_status = _contact_validation_status(relay_set, members)
                 contact_data["aroi_validation_status"] = validation_status["validation_status"]
                 # Store full validation status for operator pages to reuse
                 contact_data["aroi_validation_full"] = validation_status
@@ -1096,7 +1115,7 @@ def write_pages_by_key(relay_set, k):
         if k == "family":
             contact_validation_status = (i.get("aroi_validation_full") or
                                          i.get("contact_validation_status") or
-                                         relay_set._get_contact_validation_status(members))
+                                         _contact_validation_status(relay_set, members))
             aroi_validation_timestamp = relay_set._aroi_validation_timestamp
 
         is_validated_aroi = False
@@ -1233,7 +1252,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
                                      i.get("contact_validation_status"))
         # Only compute on-the-fly if no precomputed data exists (fallback)
         if contact_validation_status is None:
-            contact_validation_status = relay_set._get_contact_validation_status(members)
+            contact_validation_status = _contact_validation_status(relay_set, members)
         aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     
     # Family support counts for summary bullet (DRY helper)

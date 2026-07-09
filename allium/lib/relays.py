@@ -1236,25 +1236,6 @@ class Relays:
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')."""
         return format_time_ago(timestamp_str)
 
-    def _get_contact_validation_status(self, members):
-        """
-        Get AROI validation status for a contact's relays (Phase 2).
-        
-        Args:
-            members (list): List of relay objects for this contact
-            
-        Returns:
-            dict: Validation status information from get_contact_validation_status
-        """
-        from .aroi_validation import get_contact_validation_status
-        
-        # Get the validation data and pre-built validation_map
-        validation_data = getattr(self, 'aroi_validation_data', None)
-        validation_map = getattr(self, 'validation_map', None)
-        
-        # Pass shared validation_map to avoid rebuilding it 3,000+ times
-        return get_contact_validation_status(members, validation_data, validation_map)
-    
     @functools.cached_property
     def _aroi_validation_timestamp(self):
         """
@@ -1273,55 +1254,15 @@ class Relays:
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
 
-    def _generate_contact_rankings(self, contact_hash):
-        """Generate AROI leaderboard rankings for a specific contact."""
-        from .operator_analysis import generate_contact_rankings
-        return generate_contact_rankings(contact_hash, self)
-
     def _get_leaderboard_category_info(self, category):
         """Get display information for a leaderboard category."""
         from .operator_analysis import get_leaderboard_category_info
         return get_leaderboard_category_info(category)
 
-    def _calculate_operator_reliability(self, contact_hash, operator_relays):
-        """Calculate comprehensive reliability statistics for an operator."""
-        from .operator_analysis import calculate_operator_reliability
-        return calculate_operator_reliability(contact_hash, operator_relays, self)
-
     def _format_intelligence_rating(self, rating_text):
         """Format intelligence rating text with color coding."""
         from .operator_analysis import format_intelligence_rating
         return format_intelligence_rating(rating_text)
-
-    def _compute_contact_display_data(self, i, bandwidth_unit, operator_reliability, v, members):
-        """Compute contact-specific display data for contact pages."""
-        from .operator_analysis import compute_contact_display_data
-        return compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, members, self)
-
-    def _compute_contact_flag_analysis(self, contact_hash, members):
-        """Compute flag analysis for contact operator."""
-        from .operator_analysis import compute_contact_flag_analysis
-        return compute_contact_flag_analysis(contact_hash, members, self)
-
-    def _compute_contact_flag_bandwidth_analysis(self, contact_hash, members):
-        """Compute flag bandwidth analysis for contact operator."""
-        from .operator_analysis import compute_contact_flag_bandwidth_analysis
-        return compute_contact_flag_bandwidth_analysis(contact_hash, members, self)
-
-    def _process_operator_flag_bandwidth_reliability(self, operator_flag_data, network_flag_statistics):
-        """Process operator flag bandwidth data into display format."""
-        from .operator_analysis import process_operator_flag_bandwidth_reliability
-        return process_operator_flag_bandwidth_reliability(operator_flag_data, network_flag_statistics, self)
-
-    def _process_operator_flag_reliability(self, operator_flag_data, network_flag_statistics):
-        """Process flag reliability metrics for an operator."""
-        from .operator_analysis import process_operator_flag_reliability
-        return process_operator_flag_reliability(operator_flag_data, network_flag_statistics)
-
-    def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
-        """Calculate real-time downtime alerts for operator contact pages."""
-        from .operator_analysis import calculate_operator_downtime_alerts
-        return calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_data, bandwidth_unit, self)
 
     def _calculate_uptime_display(self, relay):
         """Calculate uptime/downtime display for a single relay."""
