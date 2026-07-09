@@ -41,35 +41,6 @@ def is_valid_aroi(aroi: Optional[str]) -> bool:
     """
     return bool(aroi) and aroi != 'none'
 
-def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
-    """
-    Format a decimal value as a percentage with consistent decimal places.
-    
-    Delegates to format_percentage_from_fraction (identical logic, single implementation).
-    
-    Args:
-        value: Decimal value (e.g., 0.1234 for 12.34%)
-        decimals: Number of decimal places (default: 1)
-        fallback: Fallback string for None/invalid values (default: "N/A")
-    
-    Returns:
-        str: Formatted percentage string (e.g., "12.3%")
-    """
-    return format_percentage_from_fraction(value, decimals, fallback)
-
-def format_percentage_or_na(value, decimals=2):
-    """
-    Format a fraction as percentage or return "N/A" - specialized for relay data.
-    
-    Args:
-        value: Decimal fraction value 
-        decimals: Number of decimal places (default: 2 for relay probabilities)
-    
-    Returns:
-        str: Formatted percentage or "N/A"
-    """
-    return format_percentage(value, decimals, NA_FALLBACK)
-
 def format_percentage_from_fraction(value, decimals=1, fallback=NA_FALLBACK):
     """
     Format a fraction as percentage (multiply by 100) with consistent decimal places.

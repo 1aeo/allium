@@ -117,42 +117,6 @@ class ProgressLogger:
         with _step_lock:
             self.progress_step += 1
     
-    def update_from_other_logger(self, other_logger):
-        """
-        Update this logger's step count from another ProgressLogger instance.
-        Thread-safe.
-        
-        Args:
-            other_logger: Another ProgressLogger instance to sync from
-        """
-        with _step_lock:
-            if isinstance(other_logger, ProgressLogger):
-                self.progress_step = other_logger.progress_step
-            else:
-                # Handle cases where we're passed a simple step counter
-                if hasattr(other_logger, 'progress_step'):
-                    self.progress_step = other_logger.progress_step
-    
-    def create_child_logger(self, api_name=""):
-        """
-        Create a child logger that includes an API name prefix in messages.
-        
-        Args:
-            api_name: Name to prefix in log messages
-            
-        Returns:
-            Function that can be used as a progress logger with API prefix
-        """
-        def child_log(message):
-            if api_name:
-                formatted_message = f"{api_name} - {message}"
-            else:
-                formatted_message = message
-            self.log_with_increment(formatted_message)
-        
-        return child_log
-
-
 def create_progress_logger(start_time=None, progress_step=0, total_steps=53, progress_enabled=True):
     """
     Factory function to create a ProgressLogger instance.
@@ -170,23 +134,3 @@ def create_progress_logger(start_time=None, progress_step=0, total_steps=53, pro
 
 
 # Legacy compatibility functions that delegate to ProgressLogger
-def log_step_progress(message, start_time, progress_step, total_steps, progress_enabled, increment=True):
-    """
-    Legacy compatibility function for allium.py log_step_progress.
-    
-    Note: This returns the updated progress_step for backwards compatibility.
-    """
-    logger = ProgressLogger(start_time, progress_step, total_steps, progress_enabled)
-    logger.log(message, increment_step=increment)
-    return logger.progress_step
-
-
-def log_progress_with_step_increment(message, logger):
-    """
-    Legacy compatibility function for coordinator.py _log_progress_with_step_increment.
-    
-    Args:
-        message: Progress message
-        logger: ProgressLogger instance to use
-    """
-    logger.log_with_increment(message)

@@ -321,12 +321,3 @@ def get_detail_page_context(category: str, value: str) -> Dict[str, Any]:
     generator = PageContextGenerator()
     return generator.get_detail_context(category, value)
 
-
-def create_template_context_builder(relays_instance=None) -> TemplateContextBuilder:
-    """Create a new template context builder."""
-    return TemplateContextBuilder(relays_instance)
-
-
-def create_standard_contexts(relays_instance=None) -> StandardTemplateContexts:
-    """Create a new standard template contexts instance."""
-    return StandardTemplateContexts(relays_instance)

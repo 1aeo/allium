@@ -8,7 +8,6 @@ This module consolidates statistical calculations that were duplicated across:
 - relays.py (z-score calculations)
 """
 
-import math
 import statistics
 import sys
 from typing import List, Dict, Optional
@@ -230,108 +229,7 @@ class StatisticalUtils:
             # Handle case where all values are identical (std dev = 0)
             return {'low_outliers': [], 'high_outliers': []}
     
-    @staticmethod
-    def calculate_z_score(value: float, mean: float, std_dev: float) -> Optional[float]:
-        """
-        Calculate z-score (standard score) for a value.
-        
-        Consolidates z-score calculation logic from relays.py.
-        
-        Args:
-            value: Value to calculate z-score for
-            mean: Mean of the distribution
-            std_dev: Standard deviation of the distribution
-            
-        Returns:
-            Z-score or None if std_dev is 0
-        """
-        if std_dev == 0:
-            return None
-        
-        return (value - mean) / std_dev
-    
-    @staticmethod
-    def classify_by_z_score(z_score: Optional[float], 
-                           thresholds: Dict[str, float] = None) -> str:
-        """
-        Classify a value based on its z-score.
-        
-        Consolidates z-score classification logic from relays.py.
-        
-        Args:
-            z_score: Calculated z-score
-            thresholds: Custom thresholds for classification
-            
-        Returns:
-            Classification string
-        """
-        if z_score is None:
-            return 'insufficient_data'
-        
-        if thresholds is None:
-            thresholds = {
-                'high_outlier': 2.0,
-                'above_average': 0.3,
-                'low_outlier': -2.0
-            }
-        
-        if z_score >= thresholds.get('high_outlier', 2.0):
-            return 'high_outlier'
-        elif z_score >= thresholds.get('above_average', 0.3):
-            return 'above_average'
-        elif z_score <= thresholds.get('low_outlier', -2.0):
-            return 'low_outlier'
-        else:
-            return 'normal'
-    
-    @staticmethod
-    def calculate_confidence_intervals(values: List[float], confidence_level: float = 0.95) -> Optional[Dict[str, float]]:
-        """
-        Calculate confidence intervals for a dataset.
-        
-        Provides additional statistical utility for future enhancements.
-        
-        Args:
-            values: List of numeric values
-            confidence_level: Confidence level (0.0-1.0)
-            
-        Returns:
-            Dictionary with lower_bound, upper_bound, margin_of_error
-        """
-        if len(values) < 2:
-            return None
-        
-        try:
-            mean = statistics.mean(values)
-            std_dev = statistics.stdev(values)
-            n = len(values)
-            
-            # Use t-distribution for small samples (n < 30) or normal for large samples
-            if n < 30:
-                # Simplified t-distribution approximation
-                t_value = 2.0 if confidence_level >= 0.95 else 1.7
-            else:
-                # Normal distribution z-scores
-                t_value = 1.96 if confidence_level >= 0.95 else 1.64
-            
-            margin_of_error = t_value * (std_dev / math.sqrt(n))
-            
-            return {
-                'lower_bound': mean - margin_of_error,
-                'upper_bound': mean + margin_of_error,
-                'margin_of_error': margin_of_error,
-                'mean': mean
-            }
-        except statistics.StatisticsError:
-            return None
-
-
 # Convenience functions for backwards compatibility
-def calculate_percentile(data: List[float], percentile: float) -> float:
-    """Backwards compatibility wrapper for StatisticalUtils.calculate_percentile"""
-    return StatisticalUtils.calculate_percentile(data, percentile)
-
-
 def calculate_statistical_outliers(values: List[float], data_mapping: Dict[str, Dict] = None, 
                                   std_dev_threshold: float = 2.0) -> Dict[str, List[Dict]]:
     """Backwards compatibility wrapper for StatisticalUtils.calculate_outliers"""

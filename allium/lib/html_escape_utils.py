@@ -45,18 +45,6 @@ class HTMLEscaper:
             return fallback
         return html.escape(str(value))
     
-    def escape_with_unknown_fallback(self, value: Any) -> str:
-        """Escape with 'Unknown' fallback for user-visible fields."""
-        return self.safe_escape(value, self.constants.UNKNOWN_ESCAPED)
-    
-    def escape_with_none_fallback(self, value: Any) -> str:
-        """Escape with 'none' fallback for technical fields."""
-        return self.safe_escape(value, self.constants.NONE_ESCAPED)
-    
-    def escape_with_lowercase_unknown_fallback(self, value: Any) -> str:
-        """Escape with 'unknown' fallback for lowercase contexts."""
-        return self.safe_escape(value, self.constants.UNKNOWN_LOWERCASE)
-    
     def escape_list(self, values: List[Any], fallback: str = "") -> List[str]:
         """
         Escape a list of values with consistent fallback handling.
@@ -294,7 +282,6 @@ class BulkRelayEscaper:
         
         # Date field escaping
         first_seen_data = self.field_escaper.escape_date_field(relay.get("first_seen"))
-        relay["first_seen_date"] = first_seen_data['date_escaped'].replace('&', '&amp;')  # Unescape for raw date
         relay["first_seen_date_escaped"] = first_seen_data['date_escaped']
         
         return relay
@@ -314,65 +301,6 @@ class BulkRelayEscaper:
         return [self.escape_all_relay_fields(relay) for relay in relays_list]
 
 
-class TemplateEscapingHelpers:
-    """Helper functions for template-specific escaping patterns."""
-    
-    def __init__(self):
-        """Initialize with base escaper."""
-        self.escaper = HTMLEscaper()
-    
-    def escape_breadcrumb_data(self, breadcrumb_data: Dict[str, Any]) -> Dict[str, str]:
-        """
-        Escape breadcrumb navigation data consistently.
-        
-        Consolidates breadcrumb escaping patterns from templates.
-        
-        Args:
-            breadcrumb_data: Dictionary of breadcrumb data
-            
-        Returns:
-            Dict[str, str]: Escaped breadcrumb data
-        """
-        escaped_data = {}
-        
-        # Standard breadcrumb fields
-        standard_fields = [
-            'as_number', 'country_name', 'platform_name', 'nickname',
-            'contact_hash', 'family_hash', 'date', 'flag_name', 'aroi_domain'
-        ]
-        
-        for field in standard_fields:
-            if field in breadcrumb_data:
-                escaped_data[field] = self.escaper.safe_escape(breadcrumb_data[field])
-        
-        # Special handling for hash truncation
-        if 'contact_hash' in breadcrumb_data:
-            escaped_data['contact_hash_short'] = self.escaper.safe_escape(
-                str(breadcrumb_data['contact_hash'])[:8]
-            )
-        
-        if 'family_hash' in breadcrumb_data:
-            escaped_data['family_hash_short'] = self.escaper.safe_escape(
-                str(breadcrumb_data['family_hash'])[:8]
-            )
-        
-        return escaped_data
-    
-    def escape_or_addresses(self, or_addresses: List[str]) -> List[str]:
-        """
-        Escape OR addresses list for template usage.
-        
-        Addresses the OR address escaping patterns in relay-info.html.
-        
-        Args:
-            or_addresses: List of OR addresses
-            
-        Returns:
-            List[str]: List of escaped OR addresses
-        """
-        return self.escaper.escape_list(or_addresses)
-
-
 # Convenience functions for backward compatibility and ease of use
 def safe_html_escape(value: Any, fallback: str = "") -> str:
     """
@@ -384,24 +312,9 @@ def safe_html_escape(value: Any, fallback: str = "") -> str:
     return escaper.safe_escape(value, fallback)
 
 
-def escape_relay_field(relay: Dict[str, Any], field_name: str, fallback: str = "") -> str:
-    """
-    Escape a specific field from a relay object.
-    
-    Convenience function for template usage.
-    """
-    escaper = HTMLEscaper()
-    return escaper.safe_escape(relay.get(field_name), fallback)
-
-
 def create_bulk_escaper() -> BulkRelayEscaper:
     """Create a new bulk relay escaper instance."""
     return BulkRelayEscaper()
-
-
-def create_template_helpers() -> TemplateEscapingHelpers:
-    """Create a new template escaping helpers instance."""
-    return TemplateEscapingHelpers()
 
 
 # Constants for external use
