@@ -159,39 +159,3 @@ def handle_calculation_errors(operation: str = "calculation", default_return: An
         return wrapper
     return decorator
 
-
-def safe_file_operation(operation_func: Callable, default_return: Any = None, 
-                       error_prefix: str = "File operation"):
-    """
-    Utility function for safe file operations without decorators.
-    
-    Args:
-        operation_func: Function to execute safely
-        default_return: Value to return on error
-        error_prefix: Prefix for error messages
-    """
-    try:
-        return operation_func()
-    except Exception as e:
-        print(f"Warning: {error_prefix} failed: {e}")
-        return default_return
-
-
-def safe_json_operation(operation_func: Callable, default_return: Any = None,
-                       error_prefix: str = "JSON operation"):
-    """
-    Utility function for safe JSON operations without decorators.
-    
-    Args:
-        operation_func: Function to execute safely
-        default_return: Value to return on error
-        error_prefix: Prefix for error messages
-    """
-    try:
-        return operation_func()
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Warning: {error_prefix} failed: {e}")
-        return default_return
-    except Exception as e:
-        print(f"Warning: Unexpected error during {error_prefix}: {e}")
-        return default_return

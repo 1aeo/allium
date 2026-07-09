@@ -11,11 +11,9 @@ This module provides:
 """
 
 import json
-import os
-import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 from .error_handlers import handle_file_io_errors, handle_json_errors
 
 
@@ -279,152 +277,6 @@ class StateManager(FileIOManager):
         return self.save_state(current_state)
 
 
-class TestFileHelper:
-    """Helper utilities for creating test files and directories."""
-    
-    @staticmethod
-    def create_temp_directory() -> tempfile.TemporaryDirectory:
-        """Create temporary directory for testing."""
-        return tempfile.TemporaryDirectory()
-    
-    @staticmethod
-    def create_test_json_file(directory: str, filename: str, data: Dict[str, Any]) -> str:
-        """
-        Create a test JSON file with specified data.
-        
-        Args:
-            directory: Directory to create file in
-            filename: Name of file to create
-            data: JSON data to write
-            
-        Returns:
-            str: Full path to created file
-        """
-        file_path = os.path.join(directory, filename)
-        with open(file_path, 'w') as f:
-            json.dump(data, f, indent=2)
-        return file_path
-    
-    @staticmethod
-    def create_corrupted_json_file(directory: str, filename: str, 
-                                  content: str = '{"invalid": json}') -> str:
-        """
-        Create a corrupted JSON file for error testing.
-        
-        Args:
-            directory: Directory to create file in
-            filename: Name of file to create
-            content: Invalid JSON content
-            
-        Returns:
-            str: Full path to created file
-        """
-        file_path = os.path.join(directory, filename)
-        with open(file_path, 'w') as f:
-            f.write(content)
-        return file_path
-    
-    @staticmethod
-    def create_test_cache_structure(base_dir: str) -> Dict[str, str]:
-        """
-        Create standard test cache directory structure.
-        
-        Args:
-            base_dir: Base directory for cache structure
-            
-        Returns:
-            dict: Dictionary of created directory paths
-        """
-        cache_dir = os.path.join(base_dir, "cache")
-        data_dir = base_dir
-        
-        os.makedirs(cache_dir, exist_ok=True)
-        os.makedirs(data_dir, exist_ok=True)
-        
-        return {
-            'cache_dir': cache_dir,
-            'data_dir': data_dir,
-            'state_file': os.path.join(data_dir, 'state.json')
-        }
-
-
-class BulkFileOperations:
-    """Bulk file operations for common patterns."""
-    
-    def __init__(self, base_directory: str):
-        """Initialize with base directory."""
-        self.base_directory = Path(base_directory)
-        self.file_manager = FileIOManager(base_directory)
-    
-    def copy_files_with_pattern(self, pattern: str, destination: str) -> List[str]:
-        """
-        Copy files matching pattern to destination.
-        
-        Args:
-            pattern: File pattern to match (glob-style)
-            destination: Destination directory
-            
-        Returns:
-            List[str]: List of copied file paths
-        """
-        import shutil
-        
-        copied_files = []
-        dest_path = Path(destination)
-        dest_path.mkdir(parents=True, exist_ok=True)
-        
-        for file_path in self.base_directory.glob(pattern):
-            if file_path.is_file():
-                dest_file = dest_path / file_path.name
-                shutil.copy2(file_path, dest_file)
-                copied_files.append(str(dest_file))
-        
-        return copied_files
-    
-    def delete_files_with_pattern(self, pattern: str) -> List[str]:
-        """
-        Delete files matching pattern.
-        
-        Args:
-            pattern: File pattern to match (glob-style)
-            
-        Returns:
-            List[str]: List of deleted file paths
-        """
-        deleted_files = []
-        
-        for file_path in self.base_directory.glob(pattern):
-            if file_path.is_file():
-                try:
-                    file_path.unlink()
-                    deleted_files.append(str(file_path))
-                except OSError:
-                    continue
-        
-        return deleted_files
-    
-    def get_files_by_age(self, max_age_seconds: float) -> List[str]:
-        """
-        Get files older than specified age.
-        
-        Args:
-            max_age_seconds: Maximum age in seconds
-            
-        Returns:
-            List[str]: List of old file paths
-        """
-        current_time = time.time()
-        old_files = []
-        
-        for file_path in self.base_directory.rglob("*"):
-            if file_path.is_file():
-                file_age = current_time - file_path.stat().st_mtime
-                if file_age > max_age_seconds:
-                    old_files.append(str(file_path))
-        
-        return old_files
-
-
 # Convenience functions for backward compatibility
 def create_cache_manager(cache_directory: str) -> CacheManager:
     """Create a new cache manager instance."""
@@ -441,35 +293,4 @@ def create_state_manager(state_file_path: str) -> StateManager:
     return StateManager(state_file_path)
 
 
-def create_test_helper() -> TestFileHelper:
-    """Create a new test file helper instance."""
-    return TestFileHelper()
-
-
 # Factory function for unified file I/O operations
-def create_unified_file_manager(base_directory: str, 
-                               cache_subdir: str = "cache",
-                               state_filename: str = "state.json") -> Dict[str, Any]:
-    """
-    Create unified file managers for common use cases.
-    
-    Args:
-        base_directory: Base directory for all operations
-        cache_subdir: Subdirectory for cache files
-        state_filename: Name of state file
-        
-    Returns:
-        dict: Dictionary containing all manager instances
-    """
-    base_path = Path(base_directory)
-    cache_path = base_path / cache_subdir
-    state_path = base_path / state_filename
-    
-    return {
-        'file_manager': FileIOManager(str(base_path)),
-        'cache_manager': CacheManager(str(cache_path)),
-        'timestamp_manager': TimestampManager(str(cache_path)),
-        'state_manager': StateManager(str(state_path)),
-        'bulk_operations': BulkFileOperations(str(base_path)),
-        'test_helper': TestFileHelper()
-    }

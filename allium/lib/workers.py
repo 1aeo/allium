@@ -306,12 +306,11 @@ EXIT_DNS_HEALTH_CONFIG = APIConfig(
 
 
 # Use centralized file I/O utilities
-from .file_io_utils import create_cache_manager, create_timestamp_manager, create_state_manager
+from .file_io_utils import create_cache_manager, create_timestamp_manager
 
 # Initialize file managers
 _cache_manager = create_cache_manager(CACHE_DIR)
 _timestamp_manager = create_timestamp_manager(CACHE_DIR)
-_state_manager = create_state_manager(STATE_FILE)
 
 def _save_cache(api_name, data):
     """
