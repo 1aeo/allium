@@ -501,8 +501,12 @@ def get_rare_countries_weighted_with_existing_data(country_data, total_relays, m
             rare_countries.add(country_upper)
     
     # Also check countries with 0 relays (geopolitically significant ones)
-    # These are not in country_data but might still be rare due to geopolitical factors
-    for country in GEOPOLITICAL_CLASSIFICATIONS.keys():
+    # These are not in country_data but might still be rare due to geopolitical
+    # factors. Iterate the union of the classification SETS (country codes);
+    # iterating .keys() scored the category names instead, so zero-relay
+    # significant countries were silently never added. sorted() keeps the
+    # scoring loop byte-deterministic.
+    for country in sorted(set().union(*GEOPOLITICAL_CLASSIFICATIONS.values())):
         if country not in country_data:
             # Country has 0 relays
             relay_count_factor = calculate_relay_count_factor(0)

@@ -104,8 +104,11 @@ class FileIOManager:
             bool: True if successful, False if error
         """
         file_path = self.get_file_path(filename)
-        with open(file_path, "w", encoding=encoding) as f:
+        # Atomic write: a crash mid-dump must not corrupt the existing file
+        tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+        with open(tmp_path, "w", encoding=encoding) as f:
             json.dump(data, f, indent=indent)
+        tmp_path.replace(file_path)
         return True
     
     def file_exists(self, filename: str) -> bool:
