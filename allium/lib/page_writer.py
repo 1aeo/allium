@@ -935,7 +935,7 @@ def _write_contact_pages_sequential(relay_set, sorted_values, template, output_p
         page_count += 1
 
         if page_count % 500 == 0:
-            relay_set._log_progress(f"Processed {page_count}/{len(sorted_values)} contact pages...")
+            relay_set.progress_logger.log_without_increment(f"Processed {page_count}/{len(sorted_values)} contact pages...")
 
     total_time = time.time() - start_time
     relay_set.progress_logger.log(
@@ -985,7 +985,7 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
             except Exception:
                 pass
 
-        relay_set._log_progress(f"Contact multiprocessing failed ({e}), falling back to sequential...")
+        relay_set.progress_logger.log_without_increment(f"Contact multiprocessing failed ({e}), falling back to sequential...")
         relay_set.mp_workers = 0
         for retry in range(3):
             try:
@@ -1003,7 +1003,7 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
 def write_pages_by_key(relay_set, k):
     """Render and write sorted HTML relay listings to disk"""
     start_time = time.time()
-    relay_set._log_progress(f"Starting {k} page generation...")
+    relay_set.progress_logger.log_without_increment(f"Starting {k} page generation...")
     
     template = ENV.get_template(k + ".html")
     output_path = os.path.join(relay_set.output_dir, k)
@@ -1184,7 +1184,7 @@ def write_pages_by_key(relay_set, k):
         
         # Print progress for large page sets
         if page_count % 1000 == 0:
-            relay_set._log_progress(f"Processed {page_count} {k} pages...")
+            relay_set.progress_logger.log_without_increment(f"Processed {page_count} {k} pages...")
 
     end_time = time.time()
     total_time = end_time - start_time
@@ -1346,7 +1346,7 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
             except Exception:
                 pass  # Ignore cleanup errors
         
-        relay_set._log_progress(f"Multiprocessing failed ({e}), falling back to sequential...")
+        relay_set.progress_logger.log_without_increment(f"Multiprocessing failed ({e}), falling back to sequential...")
         relay_set.mp_workers = 0
         
         # Clean up partial output before sequential fallback (with retry for lingering file handles)

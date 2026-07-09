@@ -7,7 +7,6 @@ Phase 2 implementation: multiple API support, threading, and incremental renderi
 """
 
 import threading
-import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
     fetch_aroi_validation, fetch_exit_dns_health, fetch_collector_consensus_data,
@@ -61,19 +60,14 @@ class Coordinator:
             self.base_url = kwargs.get('base_url', '')
             self.mp_workers = kwargs.get('mp_workers', 4)
         
-        self.start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None) or time.time()
-        self.progress_step = kwargs.get('progress_step', 0)
-        self.total_steps = kwargs.get('total_steps', 53)
-        
-        # Use injected progress logger or create new one
-        if progress_logger is not None:
-            self.progress_logger = progress_logger
-            # Sync state from injected logger
-            self.start_time = progress_logger.start_time
-            self.progress_step = progress_logger.get_current_step()
-            self.total_steps = progress_logger.total_steps
-        else:
-            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        # ONE ProgressLogger instance is threaded through the whole pipeline
+        # (allium.py → coordinator → relays → page_writer). Use the injected
+        # instance when provided; otherwise create one (tests / direct use).
+        if progress_logger is None:
+            start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None)
+            progress_logger = ProgressLogger(start_time, progress_enabled=self.progress)
+        self.progress_logger = progress_logger
+        self.start_time = progress_logger.start_time
         
         # Worker management
         self.worker_data = {}
@@ -196,18 +190,18 @@ class Coordinator:
             
             # Log API-specific start message
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - fetching data...")
+            self.progress_logger.log(f"{api_display_name} - fetching data...")
             
             result = worker_func(*args_with_api_logger)
             self.worker_data[api_name] = result
             if result is not None:
-                self._log_progress_with_step_increment(f"{api_display_name} - completed successfully")
+                self.progress_logger.log(f"{api_display_name} - completed successfully")
             else:
-                self._log_progress_with_step_increment(f"{api_display_name} - warning: returned no data")
+                self.progress_logger.log(f"{api_display_name} - warning: returned no data")
         except Exception as e:
             # Use centralized error handling approach
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
+            self.progress_logger.log(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
             
             # CI debugging with centralized approach
@@ -251,28 +245,9 @@ class Coordinator:
         def api_logger(message):
             # Format message with API name prefix but DON'T increment step
             # This keeps step count predictable (only start/complete increment)
-            formatted_message = f"{api_display_name} - {message}"
-            self._log_progress_without_increment(formatted_message)
-        
+            self.progress_logger.log_without_increment(f"{api_display_name} - {message}")
+
         return api_logger
-
-    def _log_progress(self, message):
-        """Log progress message with step increment.
-        
-        Compatibility wrapper preserving the original _log_progress interface.
-        Forwards to _log_progress_with_step_increment for consistent behavior.
-        """
-        self._log_progress_with_step_increment(message)
-
-    def _log_progress_without_increment(self, message):
-        """Log progress message without incrementing progress step (for intermediate messages)"""
-        self.progress_logger.log_without_increment(message)
-
-    def _log_progress_with_step_increment(self, message):
-        """Log progress message and increment progress step"""
-        self.progress_logger.log_with_increment(message)
-        # Keep progress_step in sync for backwards compatibility
-        self.progress_step = self.progress_logger.get_current_step()
 
     def fetch_all_apis_threaded(self):
         """
@@ -280,7 +255,7 @@ class Coordinator:
         """
         if self.progress:
             self.progress_logger.start_section("API Fetching")
-            self._log_progress_with_step_increment("Starting threaded API fetching...")
+            self.progress_logger.log("Starting threaded API fetching...")
         
         # Start all API workers in threads
         for api_name, worker_func, args in self.api_workers:
@@ -298,7 +273,7 @@ class Coordinator:
             # Don't log thread join messages to avoid clutter
         
         if self.progress:
-            self._log_progress_with_step_increment("All API workers completed")
+            self.progress_logger.log("All API workers completed")
             self.progress_logger.end_section("API Fetching")
         
         return self.worker_data
@@ -315,7 +290,7 @@ class Coordinator:
             all_data = self.fetch_all_apis_threaded()
         except Exception as e:
             if self.progress:
-                self._log_progress_with_step_increment(f"Error during threaded API fetching: {e}")
+                self.progress_logger.log(f"Error during threaded API fetching: {e}")
             print(f"❌ Error: Failed to fetch API data: {e}")
             print("🔧 This might be due to network connectivity issues")
             return None
@@ -326,7 +301,7 @@ class Coordinator:
             return details_data
         else:
             if self.progress:
-                self._log_progress_with_step_increment("Failed to fetch onionoo details data")
+                self.progress_logger.log("Failed to fetch onionoo details data")
             print("❌ Error: No details data available from onionoo API")
             print("🔧 This might be due to:")
             print("   - Network connectivity issues")
@@ -388,7 +363,7 @@ class Coordinator:
         """
         if self.progress:
             self.progress_logger.start_section("Data Processing")
-            self._log_progress_with_step_increment("Creating relay set with Details API data...")
+            self.progress_logger.log("Creating relay set with Details API data...")
 
         # Workaround for onionoo's mass `first_seen` reset bug (upstream
         # issues #40018/#40028/#40033/#40042). Repair relay['first_seen']
@@ -410,9 +385,6 @@ class Coordinator:
             relay_data=relay_data,
             use_bits=self.use_bits,
             progress=self.progress,
-            start_time=self.start_time,
-            progress_step=self.progress_step,
-            total_steps=self.total_steps,
             filter_downtime_days=self.filter_downtime_days,
             base_url=self.base_url,
             progress_logger=self.progress_logger,
@@ -421,7 +393,7 @@ class Coordinator:
         
         if relay_set.json is None:
             if self.progress:
-                self._log_progress_with_step_increment("Failed to create relay set")
+                self.progress_logger.log("Failed to create relay set")
             return None
 
         # Surface first_seen correction stats for diagnostics (api_diagnostics,
@@ -442,12 +414,9 @@ class Coordinator:
             consensus_health_data=self.get_consensus_health_data(),
             collector_descriptors_data=self.get_collector_descriptors_data(),
         )
-        
-        # Sync progress state
-        relay_set.progress_step = self.progress_step
-        
+
         if self.progress:
-            self._log_progress_with_step_increment("Relay set created successfully with Details API and Uptime API data")
+            self.progress_logger.log("Relay set created successfully with Details API and Uptime API data")
             self.progress_logger.end_section("Data Processing")
         
         return relay_set
