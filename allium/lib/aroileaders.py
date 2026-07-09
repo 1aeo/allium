@@ -108,7 +108,11 @@ def _top_n(operators, metric, n=50, filter_fn=None):
         list: Top-n (operator_key, metrics) tuples sorted by metric descending
     """
     source = operators if filter_fn is None else {k: v for k, v in operators.items() if filter_fn(v)}
-    return sorted(source.items(), key=lambda x: x[1][metric], reverse=True)[:n]
+    # Ties break by relay count (bigger operator wins), then operator key
+    # purely to pin byte-stable output across runs (dict insertion order
+    # previously decided ties nondeterministically).
+    return sorted(source.items(),
+                  key=lambda x: (-x[1][metric], -x[1].get('total_relays', 0), x[0]))[:n]
 
 
 def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decimal_places=1):
@@ -229,12 +233,17 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
             for relay in operator_relays:
                 percentages = relay.get('uptime_percentages') or {}
                 uptime_pct = percentages.get(time_period, 0.0) or 0.0
-                if uptime_pct > 0.0:
+                data_points = (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                # Include relays that HAVE uptime data for the period, even at
+                # 0% uptime (excluding them inflated operator averages); skip
+                # only relays with insufficient data (<30 daily points, the
+                # same validity threshold the percentage computation uses).
+                if data_points >= 30:
                     uptime_values.append(uptime_pct)
                     breakdown[relay.get('nickname', 'Unknown')] = {
                         'fingerprint': relay.get('fingerprint', ''),
                         'uptime': uptime_pct,
-                        'data_points': (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                        'data_points': data_points
                     }
             
             if not uptime_values:
@@ -638,7 +647,7 @@ def _collect_operator_metrics(relays_instance):
             # Validation tracking (merged into same loop)
             fp = relay.get('fingerprint')
             # B4.1: tally per-version DECLARATIONS (any v2 or v3 contact)
-            # so we can compute v3_relay_percentage even for operators
+            # so we can compute v3_pct_of_total even for operators
             # whose v3 relays haven't been validated yet.
             relay_aroi_version = relay.get('aroi_version')
             if relay_aroi_version == '2':
@@ -766,20 +775,20 @@ def _collect_operator_metrics(relays_instance):
         veteran_details = ""
         
         if operator_relays:
-            from datetime import datetime
-            current_date = datetime.now()
+            from datetime import datetime, timezone
+            from .time_utils import parse_onionoo_timestamp
+            # UTC-aware, matching every other timestamp consumer; naive
+            # local time made veteran_days drift by up to a day on
+            # non-UTC hosts, breaking cross-machine reproducibility.
+            current_date = datetime.now(timezone.utc)
             
             # Find earliest first_seen date among all relays
             earliest_first_seen = None
             for relay in operator_relays:
-                relay_first_seen_str = relay.get('first_seen', '')
-                if relay_first_seen_str:
-                    try:
-                        relay_first_seen = datetime.strptime(relay_first_seen_str, '%Y-%m-%d %H:%M:%S')
-                        if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
-                            earliest_first_seen = relay_first_seen
-                    except (ValueError, TypeError):
-                        continue
+                relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
+                if relay_first_seen is not None and (
+                        earliest_first_seen is None or relay_first_seen < earliest_first_seen):
+                    earliest_first_seen = relay_first_seen
             
             if earliest_first_seen:
                 # Calculate days since earliest relay
@@ -854,9 +863,12 @@ def _collect_operator_metrics(relays_instance):
             'first_seen': first_seen,
             
             # === NEW CALCULATIONS (ONLY WHAT'S NEEDED) ===
-            'countries': list(countries),
+            # sorted() pins byte-stable output: set iteration order varies
+            # with PYTHONHASHSEED, which made country/platform lists (and
+            # every surface that joins them) differ run-to-run
+            'countries': sorted(countries),
             'country_count': len(countries),
-            'platforms': list(platforms),
+            'platforms': sorted(platforms),
             'platform_count': len(platforms),
             'non_linux_count': non_linux_count,
             'non_linux_bandwidth': non_linux_bandwidth,
@@ -936,7 +948,7 @@ def _collect_operator_metrics(relays_instance):
             'validated_v3_relay_count': validated_v3_relay_count,
             'v2_relay_count': v2_relay_count,
             'v3_relay_count': v3_relay_count,
-            'v3_relay_percentage': (
+            'v3_pct_of_total': (
                 v3_relay_count / total_relays * 100 if total_relays > 0 else 0.0
             ),
             'v3_tier': _classify_v3_tier_local(v3_relay_count, total_relays),
@@ -1052,7 +1064,7 @@ _PASSTHROUGH_KEYS = (
     'validated_relay_count', 'invalid_relay_count', 'validated_guard_count', 'validated_exit_count',
     'validated_middle_count', 'validated_consensus_weight', 'validated_country_count',
     'validated_v2_relay_count', 'validated_v3_relay_count', 'v2_relay_count', 'v3_relay_count',
-    'v3_relay_percentage', 'v3_tier',
+    'v3_pct_of_total', 'v3_tier',
 )
 
 # Defaults for category-specific entry fields (non-applicable categories keep these).
@@ -1317,7 +1329,7 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
-                'v3_relay_pct_str': f"{metrics['v3_relay_percentage']:.0f}%",
+                'v3_relay_pct_str': f"{metrics['v3_pct_of_total']:.0f}%",
                 'total_data_transferred': formatted_total_data_transferred,
                 'total_data_pct': total_data_pct,
             })

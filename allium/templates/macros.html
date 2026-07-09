@@ -330,7 +330,7 @@
     <span title="ciissversion:3 (ed25519 happy-family proofs, recommended)" style="padding: 1px 5px; background-color: #007bff; color: white; border-radius: 3px;">v3: {{ v3_count }}</span>
     {%- endif -%}
     {%- if summary.is_mixed_migration %}
-    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_relay_percentage) }}% of relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_relay_percentage) }}% v3</span>
+    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% of AROI-declaring relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% v3</span>
     {%- elif summary.v3_tier == 'complete' %}
     <span title="100% v3 — all relays on ciissversion:3" style="padding: 1px 5px; background-color: #ffc107; color: #212529; border-radius: 3px;">🏆 v3 complete</span>
     {%- endif -%}

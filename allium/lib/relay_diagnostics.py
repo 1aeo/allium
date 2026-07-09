@@ -98,7 +98,8 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
             relay.get('flags', []),
             relay.get('observed_bandwidth', 0),
             relay.get('version'),
-            relay.get('recommended_version')
+            relay.get('recommended_version'),
+            use_bits
         ))
     
     # Overload issues (6 types) - pass timestamp for efficiency
@@ -112,7 +113,8 @@ def generate_issues_from_consensus(
     current_flags: list = None,
     observed_bandwidth: int = 0,
     version: str = None,
-    recommended_version: bool = None
+    recommended_version: bool = None,
+    use_bits: bool = False
 ) -> List[dict]:
     """
     Consensus-related issue detection.
@@ -274,7 +276,7 @@ def generate_issues_from_consensus(
         
         # Metric thresholds
         if not guard_bw_eligible and observed_bandwidth:
-            bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s"
+            bw_display = _format_rate(observed_bandwidth, use_bits)
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
@@ -603,7 +605,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
         
         # Scenario 6: Rate Limit Configuration (info context)
         if rate_limit > 0 and (write_count > 0 or read_count > 0):
-            burst_str = _format_rate(burst_limit, use_bits)
+            burst_str = _format_volume(burst_limit)
             issues.append({
                 'severity': 'info',
                 'category': 'overload',
@@ -648,6 +650,18 @@ def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
                       'Persistent: edit /etc/security/limits.conf.'),
         'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
     }
+
+
+def _format_volume(volume_bytes: int) -> str:
+    """Format a data volume (e.g. BandwidthBurst token-bucket size).
+
+    Per proposal 328 / dir-spec, overload_ratelimits burst-limit is a
+    quantity of bytes, not a rate - no '/s' suffix.
+    """
+    if not volume_bytes:
+        return "unknown"
+    from .bandwidth_formatter import format_data_volume_with_unit
+    return format_data_volume_with_unit(volume_bytes)
 
 
 def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
