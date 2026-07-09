@@ -15,6 +15,7 @@ import time
 import urllib.request
 import urllib.error
 import socket
+import ssl
 import threading
 from datetime import datetime, timedelta, timezone
 from .error_handlers import handle_file_io_errors, handle_json_errors
@@ -501,12 +502,24 @@ _RETRYABLE_EXCEPTIONS = (
 )
 
 # Network-related errnos worth retrying; anything else (ENOSPC, EACCES,
-# EMFILE, ...) indicates a local problem a retry cannot fix.
+# EMFILE, ...) indicates a local problem a retry cannot fix. EPROTOTYPE
+# covers Darwin's send()-after-peer-reset quirk (surfaces instead of EPIPE).
 _RETRYABLE_ERRNOS = frozenset({
     errno.ECONNRESET, errno.ECONNREFUSED, errno.ECONNABORTED,
     errno.EPIPE, errno.ETIMEDOUT, errno.EHOSTUNREACH,
     errno.ENETUNREACH, errno.ENETDOWN, errno.ENETRESET,
+    errno.EPROTOTYPE,
 })
+
+
+def _is_retryable_ssl_error(exc):
+    """TLS-layer failures (handshake EOF, connection resets during the
+    handshake) are transient; certificate verification failures are not -
+    retrying cannot fix a bad certificate. SSLError.errno holds OpenSSL
+    error codes (1-10), NOT system errnos, so these must be classified
+    before any errno-based check."""
+    return isinstance(exc, ssl.SSLError) and not isinstance(
+        exc, ssl.SSLCertVerificationError)
 
 
 def _is_retryable_error(exc: Exception) -> bool:
@@ -526,6 +539,8 @@ def _is_retryable_error(exc: Exception) -> bool:
     """
     if isinstance(exc, _RETRYABLE_EXCEPTIONS):
         return True
+    if _is_retryable_ssl_error(exc):
+        return True
     # IMPORTANT: Check HTTPError BEFORE URLError because HTTPError is a subclass of URLError
     if isinstance(exc, urllib.error.HTTPError):
         # Retry on 5xx server errors and 429 rate limiting
@@ -533,6 +548,8 @@ def _is_retryable_error(exc: Exception) -> bool:
     if isinstance(exc, urllib.error.URLError):
         # URLError wrapping a retryable socket error
         if isinstance(exc.reason, _RETRYABLE_EXCEPTIONS):
+            return True
+        if _is_retryable_ssl_error(exc.reason):
             return True
         # URLError wrapping OSError with retryable errno
         if isinstance(exc.reason, OSError):
