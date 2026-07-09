@@ -148,16 +148,14 @@ class Relays:
         # (e.g. gabelmoo going offline) so reachability, per-authority tables, and
         # diagnostics use the correct denominator instead of a stale hardcoded 9.
         # Done EARLY (before uptime/bandwidth/network-health/collector steps below) so
-        # every downstream consumer sees the corrected voting count. Empty vote data
-        # is ignored by update_voting_authorities(), keeping the fallback.
+        # every downstream consumer sees the corrected voting count. update_voting_authorities()
+        # extracts names from the dict's keys and ignores empty input (keeps the fallback).
         if collector_consensus_data:
-            _flag_thresholds = collector_consensus_data.get('flag_thresholds') or {}
-            _vote_names = list(_flag_thresholds.keys()) or list(
-                (collector_consensus_data.get('votes') or {}).keys()
+            from .consensus.collector_fetcher import update_voting_authorities
+            update_voting_authorities(
+                collector_consensus_data.get('flag_thresholds')
+                or collector_consensus_data.get('votes')
             )
-            if _vote_names:
-                from .consensus.collector_fetcher import update_voting_authorities
-                update_voting_authorities(_vote_names)
 
         # Steps 8-10: Uptime processing → regenerate leaderboards + health
         if uptime_data:

@@ -802,9 +802,8 @@ def get_directory_authorities_data(relay_set):
     # Offline summary is DYNAMIC: any authority currently not running - includes live
     # (stage 1/2) offline authorities AND hardcoded (stage 3) entries. Drives the
     # header sub-bullet, so it auto-updates for ANY future DA going offline.
-    offline_authorities = [a for a in authorities if not a.get('running', False)]
-    offline_count = len(offline_authorities)
-    offline_names = sorted(a.get('nickname', '') for a in offline_authorities)
+    offline_names = sorted(a.get('nickname', '') for a in authorities if not a.get('running', False))
+    offline_count = len(offline_names)
     
     # Build consensus status
     voted_count = sum(1 for a in authorities if a.get('collector_data', {}).get('voted', False))
