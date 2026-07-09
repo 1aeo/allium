@@ -108,7 +108,11 @@ def _top_n(operators, metric, n=50, filter_fn=None):
         list: Top-n (operator_key, metrics) tuples sorted by metric descending
     """
     source = operators if filter_fn is None else {k: v for k, v in operators.items() if filter_fn(v)}
-    return sorted(source.items(), key=lambda x: x[1][metric], reverse=True)[:n]
+    # Ties break by relay count (bigger operator wins), then operator key
+    # purely to pin byte-stable output across runs (dict insertion order
+    # previously decided ties nondeterministically).
+    return sorted(source.items(),
+                  key=lambda x: (-x[1][metric], -x[1].get('total_relays', 0), x[0]))[:n]
 
 
 def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decimal_places=1):
@@ -771,20 +775,20 @@ def _collect_operator_metrics(relays_instance):
         veteran_details = ""
         
         if operator_relays:
-            from datetime import datetime
-            current_date = datetime.now()
+            from datetime import datetime, timezone
+            from .time_utils import parse_onionoo_timestamp
+            # UTC-aware, matching every other timestamp consumer; naive
+            # local time made veteran_days drift by up to a day on
+            # non-UTC hosts, breaking cross-machine reproducibility.
+            current_date = datetime.now(timezone.utc)
             
             # Find earliest first_seen date among all relays
             earliest_first_seen = None
             for relay in operator_relays:
-                relay_first_seen_str = relay.get('first_seen', '')
-                if relay_first_seen_str:
-                    try:
-                        relay_first_seen = datetime.strptime(relay_first_seen_str, '%Y-%m-%d %H:%M:%S')
-                        if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
-                            earliest_first_seen = relay_first_seen
-                    except (ValueError, TypeError):
-                        continue
+                relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
+                if relay_first_seen is not None and (
+                        earliest_first_seen is None or relay_first_seen < earliest_first_seen):
+                    earliest_first_seen = relay_first_seen
             
             if earliest_first_seen:
                 # Calculate days since earliest relay
@@ -859,9 +863,12 @@ def _collect_operator_metrics(relays_instance):
             'first_seen': first_seen,
             
             # === NEW CALCULATIONS (ONLY WHAT'S NEEDED) ===
-            'countries': list(countries),
+            # sorted() pins byte-stable output: set iteration order varies
+            # with PYTHONHASHSEED, which made country/platform lists (and
+            # every surface that joins them) differ run-to-run
+            'countries': sorted(countries),
             'country_count': len(countries),
-            'platforms': list(platforms),
+            'platforms': sorted(platforms),
             'platform_count': len(platforms),
             'non_linux_count': non_linux_count,
             'non_linux_bandwidth': non_linux_bandwidth,

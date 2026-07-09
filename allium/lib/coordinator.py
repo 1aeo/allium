@@ -151,32 +151,37 @@ class Coordinator:
         },
     ]
     
-    def _build_api_workers(self):
-        """Build the list of API workers based on enabled_apis mode and feature flags."""
+    @classmethod
+    def iter_enabled_worker_entries(cls, enabled_apis):
+        """Yield registry entries enabled for this run.
+
+        Single source of truth for worker gating - used by
+        _build_api_workers AND by allium.py's total_steps derivation, so
+        the progress step count follows the registry automatically.
+        """
         from .consensus import is_consensus_evaluation_enabled
-        
+
         # Feature flag checks by worker name (avoids import issues in class-level lambdas)
         feature_flags = {
             "collector_consensus": is_consensus_evaluation_enabled,
             "collector_descriptors": is_consensus_evaluation_enabled,
         }
-        
-        workers = []
-        for entry in self.API_WORKER_REGISTRY:
+
+        for entry in cls.API_WORKER_REGISTRY:
             # Include if group matches: 'details' workers run in all modes,
             # 'all' workers only run when --apis=all
-            group = entry["group"]
-            if group == "details" or self.enabled_apis == "all":
-                # Check feature flag if present
+            if entry["group"] == "details" or enabled_apis == "all":
                 flag_fn = feature_flags.get(entry["name"])
                 if flag_fn and not flag_fn():
                     continue
-                workers.append((
-                    entry["name"],
-                    entry["fetch_fn"],
-                    entry["args_fn"](self),
-                ))
-        return workers
+                yield entry
+
+    def _build_api_workers(self):
+        """Build the list of API workers based on enabled_apis mode and feature flags."""
+        return [
+            (entry["name"], entry["fetch_fn"], entry["args_fn"](self))
+            for entry in self.iter_enabled_worker_entries(self.enabled_apis)
+        ]
         
     def _run_worker(self, api_name, worker_func, args):
         """Run a single API worker in a thread"""
