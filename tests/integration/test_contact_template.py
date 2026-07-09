@@ -1057,7 +1057,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """No pill strip when operator has 0 v2 + 0 v3 relays."""
         rendered = self._render_pills({
             'v2_relay_count': 0, 'v3_relay_count': 0,
-            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 0.0, 'v3_migration_progress_pct': 0.0, 'is_mixed_migration': False,
             'v3_tier': 'none', 'is_v3_adopter': False,
         })
         self.assertNotIn('v2:', rendered)
@@ -1067,7 +1067,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """Operator with only v2 relays: gray v2 pill, no v3 pill."""
         rendered = self._render_pills({
             'v2_relay_count': 5, 'v3_relay_count': 0,
-            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 0.0, 'v3_migration_progress_pct': 0.0, 'is_mixed_migration': False,
             'v3_tier': 'none', 'is_v3_adopter': False,
         })
         self.assertIn('v2: 5', rendered)
@@ -1077,7 +1077,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """100% v3 operator: pill + 🏆 v3 complete badge."""
         rendered = self._render_pills({
             'v2_relay_count': 0, 'v3_relay_count': 10,
-            'v3_relay_percentage': 100.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 100.0, 'v3_migration_progress_pct': 100.0, 'is_mixed_migration': False,
             'v3_tier': 'complete', 'is_v3_adopter': True,
         })
         self.assertIn('v3: 10', rendered)
@@ -1088,7 +1088,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """Mixed v2/v3 operator: shows 🔁 migration percentage."""
         rendered = self._render_pills({
             'v2_relay_count': 7, 'v3_relay_count': 3,
-            'v3_relay_percentage': 30.0, 'is_mixed_migration': True,
+            'v3_pct_of_total': 30.0, 'v3_migration_progress_pct': 30.0, 'is_mixed_migration': True,
             'v3_tier': 'migrating', 'is_v3_adopter': True,
         })
         self.assertIn('v2: 7', rendered)
