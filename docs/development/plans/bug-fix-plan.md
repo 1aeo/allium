@@ -54,12 +54,21 @@ as `&lt;admin AT my-mail dot rocks&gt;`):
 - `index.html` (AROI leaderboards): 71 occurrences
 - `top500.html`: 61 occurrences
 
-**Fix.** Pick one escaping strategy. Recommended: keep autoescape as the single source of
-truth — change the pre-computed fields to carry **raw** values (or drop the `_escaped`
-suffix fields and reference raw fields in templates), and remove the redundant
-`html.escape()` calls in `html_escape_utils.py` / `aroileaders.py`
-(`contact_info_escaped`). Do NOT sprinkle `|safe` on the pre-escaped fields — that
-re-introduces XSS risk if any call site forgets to pre-escape.
+**Fix. DECISION: keep escaping logic in Python (Jinja2 is slower); wrap pre-escaped
+strings in `markupsafe.Markup`.** Python-side pre-escaping stays — it was introduced
+for render performance and template logic should stay minimal. To stop the
+double-escaping, have the Python escaping helpers (`html_escape_utils.py`,
+`contact_info_escaped` in `aroileaders.py`, and any other `*_escaped` producers) return
+`markupsafe.Markup(html.escape(value))` instead of a plain `str`. Autoescape treats
+`Markup` as already-safe and will not re-escape it, while remaining on as the safety
+net for every raw field. Rules:
+
+- Only wrap strings in `Markup` at the point they pass through `html.escape()` (or are
+  built exclusively from already-escaped parts, like `_flags_html`). Never wrap raw
+  onionoo data.
+- Do NOT sprinkle `|safe` in templates — `Markup` at the Python source centralizes the
+  safety decision at the same place the escaping happens.
+- `markupsafe` is a hard dependency of Jinja2, so this adds no new dependency.
 
 **Expected diff.** Large but mechanical: affected pages change `&amp;amp;` → `&amp;`,
 `&amp;lt;` → `&lt;`, etc. Verify by grepping the after-output:
@@ -108,10 +117,21 @@ and `Exit` flags increments `guard`, `exit`, **and** `middle` buckets. `contact.
 (line ~328) sums the three buckets into `total_offline`, so one offline Guard+Exit relay
 counts as 3. Per-role offline bandwidth percentages can also exceed 100%.
 
-**Fix.** Count each relay once for the total (unique fingerprints); keep per-role detail
-lists if desired but make the headline count exclusive (use the same primary-role rule
-used elsewhere: Exit > Guard > Middle), or compute `total_offline` in Python from the
-number of offline relays instead of summing buckets in the template.
+**Fix. DECISION: exclusive buckets with the codebase's priority order, all math in
+Python.** Two parts:
+
+1. Classify each offline relay into exactly one bucket using the same priority rule
+   used elsewhere (`contact_sorting.py` role_rank and `categorization.py` role
+   counting both use **Exit > Guard > Middle**): `if 'Exit' in flags → exit;
+   elif 'Guard' in flags → guard; else → middle`. This also aligns the per-role
+   offline bandwidth sums with the `guard_bandwidth`/`exit_bandwidth`/
+   `middle_bandwidth` denominators, which `categorization.py` already computes with
+   the same exclusive rule — so per-role percentages can no longer exceed 100%.
+2. Compute `total_offline` in Python (`len(offline_relays)`) and put it in
+   `downtime_alerts`; remove the `{% set total_offline = ... %}` arithmetic from
+   `contact.html`. Jinja2 is slower than Python — templates should render
+   precomputed values, not do math (this is the established pattern:
+   `_preprocess_template_data`, `preformat_network_health_template_strings`).
 
 **Expected diff.** Contact pages of operators that currently have offline dual-role
 relays; verify a sampled contact page shows the corrected count.
@@ -152,21 +172,34 @@ parenthetical uses `total_relays`. `v3_tier` and `is_v3_adopter` already use
 
 **Options considered.**
 
-- **A — standardize on `total_relays`** (chosen): matches `classify_v3_tier` (documented
-  single source of truth), `is_v3_adopter`, and the existing "(N of M)" template copy.
+- A — standardize on `total_relays`: matches `classify_v3_tier`, `is_v3_adopter`, and
+  the existing "(N of M)" template copy, but the mixed-migration pill would undersell
+  migration progress for operators where only a few relays declare AROI.
 - B — standardize on `v2 + v3` ("migration progress among AROI-declaring relays"):
-  would require rewording contact copy and changing leaderboard columns.
-- C — keep both semantics under two distinct field names: most precise but adds surface.
+  would misstate the leaderboard "share of relays on v3" columns.
+- **C — keep both semantics under two distinct field names** (chosen): most precise;
+  each surface gets the number that matches its copy.
 
-**DECISION: Option A.** Compute `v3_relay_percentage = v3_relay_count / total_relays`
-in `aroi_validation.get_contact_validation_status` (delete the `v2+v3` variant); the
-leaderboard formula is already correct. Accept that the "🔁 X% v3" mixed-migration pill
-now measures share of all relays, consistent with the tier badge next to it.
+**DECISION: Option C.** Replace the ambiguous `v3_relay_percentage` with two
+explicitly-named fields, both computed in Python (`aroi_validation.py`), never in
+templates:
 
-**Files.** `allium/lib/aroi_validation.py` (formula), templates
-`contact-relay-list.html`, `macros.html` (verify copy still reads correctly).
-Verify with the diff on contact pages and leaderboard v3 columns; cross-check one
-mixed-migration operator by hand.
+- `v3_pct_of_total = v3_relay_count / total_relays * 100` — used by leaderboard
+  columns, `v3_tier`, `is_v3_adopter`, and the contact-page sentence
+  "X% of this operator's relays already declare ciissversion:3 (N of TOTAL)"
+  (fixing the self-contradiction, since the parenthetical already uses totals).
+- `v3_migration_progress_pct = v3_relay_count / (v2_relay_count + v3_relay_count) * 100`
+  — used by the "🔁 X% v3" mixed-migration pill (only shown when both v2 and v3
+  exist), with tooltip copy updated to say "of AROI-declaring relays".
+
+Deleting the old name (rather than keeping it as an alias) forces every consumer —
+templates, search index, Prometheus — to pick the right semantics explicitly.
+
+**Files.** `allium/lib/aroi_validation.py`, `allium/lib/aroileaders.py`,
+`allium/lib/page_writer.py` (`aroi_v3_pct`), templates `contact-relay-list.html`,
+`macros.html`; grep for `v3_relay_percentage` / `v3_relay_pct_str` to catch all
+consumers. Verify with the diff on contact pages and leaderboard v3 columns;
+cross-check one mixed-migration operator by hand on both surfaces.
 
 ---
 
@@ -182,12 +215,25 @@ mixed-migration operator by hand.
    deprecated in Python 3.12; (C) leave as-is and rely on UTC hosts — silently
    re-breaks on any non-UTC machine.
    **DECISION: Option A.** On a UTC host the diff must be noise-floor only.
-2. **Leaderboard ties are nondeterministic.** `_top_n` sorts by a single metric; ties
-   break by dict insertion order. Fix: secondary sort key `(-metric, operator_key)`.
-   This also reduces spurious diffs in the comparison workflow itself.
+2. **Leaderboard ties are nondeterministic.** `_top_n` (`aroileaders.py` line 98) sorts
+   by a single metric; ties currently break by dict insertion order. (The *operator
+   key* is the dict key of `aroi_operators` — the operator's AROI domain when one is
+   declared, otherwise the derived incomplete-AROI display name /
+   `contact_<hash-prefix>` from `_incomplete_aroi_display_name`.)
+   **DECISION:** break ties by relay count so the tied operator with more relays wins,
+   then by operator key only as a final determinism guarantee:
+   `key=lambda x: (-x[1][metric], -x[1]['total_relays'], x[0])`. The operator-key
+   tertiary never affects who "wins" a meaningful tie — it only pins the order when
+   metric AND relay count are both identical, so output is byte-stable across runs.
 3. **`total_steps` comment is stale.** `allium.py` line 296 says "59 total steps" but the
-   computed value is 61 (4+22+35) and the run logs `[61/61]` (verified). Fix the comment
-   (or derive counts from the registries). No HTML impact.
+   computed value is 61 (4+22+35) and the run logs `[61/61]` (verified).
+   **DECISION: derive the count dynamically** so it stays correct going forward:
+   compute coordinator steps from the enabled API worker registry (per-API step count ×
+   number of enabled APIs + fixed data-processing steps) and page-generation steps from
+   `site_generator` page definitions (`STANDALONE_PAGES`, `MISC_SORTED_PAGE_TYPES`,
+   detail-page categories, search index, Prometheus) instead of hard-coded literals.
+   Expose the derivation next to the registries it counts, so adding an API or page
+   type updates the total automatically. No HTML impact (stdout progress only).
 
 **Files.** `allium/lib/aroileaders.py`, `allium/allium.py`.
 
@@ -252,14 +298,18 @@ mixed-migration operator by hand.
 
 ---
 
-## Phase 9 — Latent bugs (no HTML diff expected; fix + unit test only)
+## Phase 9 — Latent bugs (mostly no HTML diff expected; fix + unit test)
 
 1. **Rare-country loop iterates category names.** `country_utils.py` lines 574–592
    iterate `GEOPOLITICAL_CLASSIFICATIONS.keys()` (`'conflict_zones'`, `'authoritarian'`, …)
    instead of country codes, adding those strings to the rare-country set. Currently
-   masked because both consumers filter to 2-letter codes; still wrong. Fix: iterate the
-   union of the classification **sets**, or delete the block (zero-relay countries score
-   from geopolitical factors only). Confirm the diff is clean.
+   masked because both consumers filter to 2-letter codes; still wrong.
+   **DECISION: iterate the union of the classification sets** — i.e.
+   `set().union(*GEOPOLITICAL_CLASSIFICATIONS.values())` — so zero-relay but
+   geopolitically significant countries are scored as intended (the block's original
+   purpose). Note this may legitimately add real country codes to the rare set that
+   were previously missing; review the resulting diff on AROI rare-country leaderboards
+   and network-health rare-country metrics rather than expecting a noise-floor result.
 2. **`first_seen_date` re-escapes instead of unescaping.** `html_escape_utils.py`
    line 297: comment says "Unescape" but code does `.replace('&', '&amp;')`. Field is
    unused in templates — remove it (also covered by Phase 1 rework).
@@ -281,11 +331,11 @@ mixed-migration operator by hand.
 | 2 | Noise floor only | new unit test for 304 fallback |
 | 3 | Contact pages with offline dual-role relays | sample page inspection |
 | 4 | Leaderboard + contact reliability sections | recompute one operator by hand |
-| 5 | Contact + leaderboard v3 columns | one operator cross-checked on both surfaces |
-| 6 | Ties may reorder once, then stable | re-run twice; second diff must be noise-floor only |
+| 5 | Contact pill/copy + leaderboard v3 columns (two named fields) | one mixed-migration operator cross-checked on both surfaces |
+| 6 | Ties may reorder once (relay-count tiebreak), then stable | re-run twice; second diff must be noise-floor only |
 | 7 | Nav/breadcrumb markup diffs; 4 files removed if variants dropped | — |
 | 8 | Relay pages with burst-limit/overload data; authorities page expected unchanged (IPv6 fix is latent) | — |
-| 9 | Noise floor only | unit tests per fix |
+| 9 | Noise floor except item 1 (rare-country fix may add zero-relay countries — review AROI/network-health rare-country surfaces) | unit tests per fix |
 
 After each phase: `pytest` must pass, then commit that phase separately so each diff
 review maps to one class of change.

@@ -38,15 +38,18 @@ Phases are ordered so that each one reduces the surface area the next one touche
 
 Templates render with `autoescape=True` while Python pre-escapes a dozen `*_escaped`
 fields, which currently double-escapes output (see bug fix plan, Phase 1). Resolve that
-first; the simplification below assumes autoescape is the single mechanism.
+first. Decision recorded there: escaping logic **stays in Python** (Jinja2 is slower;
+templates should render precomputed values) — the pre-escaped fields are wrapped in
+`markupsafe.Markup` so autoescape does not re-escape them, and autoescape remains on as
+the safety net for raw fields.
 
 Then collapse `html_escape_utils.py` (411 lines, 5 classes) into a small module:
 
 - Production only uses `create_bulk_escaper()` (from `relays.py`) and two constants.
   `HTMLEscapeConstants`, `HTMLEscaper`, `RelayFieldEscaper`, `TemplateEscapingHelpers`,
   `escape_relay_field`, `create_template_helpers` are unused indirection.
-- Replace with module-level functions: one `escape_relay_fields(relay)` plus
-  `safe_html_escape(value, fallback)`.
+- Replace with module-level functions: one `escape_relay_fields(relay)` (returning
+  `Markup`-wrapped escaped fields) plus `safe_html_escape(value, fallback)`.
 
 **Risk:** low. **Diff:** noise floor only (after the escaping bug fix has landed).
 
