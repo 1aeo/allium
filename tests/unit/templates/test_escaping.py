@@ -10,7 +10,7 @@ import unittest
 from jinja2 import Environment
 from markupsafe import Markup
 
-from allium.lib.html_escape_utils import create_bulk_escaper, safe_html_escape
+from allium.lib.html_escape_utils import escape_relay_fields, safe_html_escape
 
 
 def _render(template_src, **ctx):
@@ -28,7 +28,7 @@ class TestSingleEscaping(unittest.TestCase):
 
     def test_contact_escaped_not_double_escaped_under_autoescape(self):
         relay = {"contact": "<admin AT my-mail dot rocks> & friends"}
-        create_bulk_escaper().escape_all_relay_fields(relay)
+        escape_relay_fields(relay)
         html_out = _render("{{ relay['contact_escaped'] }}", relay=relay)
         self.assertIn("&lt;admin AT my-mail dot rocks&gt; &amp; friends", html_out)
         self.assertNotIn("&amp;lt;", html_out)
@@ -36,7 +36,7 @@ class TestSingleEscaping(unittest.TestCase):
 
     def test_raw_field_still_autoescaped(self):
         relay = {"contact": "<script>alert(1)</script>"}
-        create_bulk_escaper().escape_all_relay_fields(relay)
+        escape_relay_fields(relay)
         # Raw field goes through autoescape; escaped field is single-escaped.
         html_out = _render(
             "{{ relay['contact'] }}|{{ relay['contact_escaped'] }}", relay=relay)
@@ -47,13 +47,13 @@ class TestSingleEscaping(unittest.TestCase):
 
     def test_truncated_fields_single_escaped(self):
         relay = {"nickname": "a<b>" + "x" * 20, "platform": "Tor 0.4.8 on <BSD>"}
-        create_bulk_escaper().escape_all_relay_fields(relay)
+        escape_relay_fields(relay)
         out = _render("{{ relay['nickname_truncated'] }}", relay=relay)
         self.assertNotIn("&amp;lt;", out)
 
     def test_fallbacks_unchanged(self):
         relay = {}
-        create_bulk_escaper().escape_all_relay_fields(relay)
+        escape_relay_fields(relay)
         self.assertEqual(relay["nickname_escaped"], "Unknown")
         self.assertEqual(relay["contact_escaped"], "")
         self.assertEqual(relay["aroi_domain_escaped"], "none")
