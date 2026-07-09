@@ -216,6 +216,7 @@ from .flag_thresholds import (
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
     HSDIR_TK_DEFAULT,
+    check_stable_eligibility,
 )
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
@@ -1085,11 +1086,16 @@ class CollectorFetcher:
                 'bw_met': guard_bw_eligible,
             })
             
-            # Stable flag eligibility
+            # Stable flag eligibility - dir-spec OR-condition via the
+            # shared helper. An authority publishing no thresholds no longer
+            # marks every relay eligible (votes carry no relay uptime, so
+            # only the MTBF arm can be satisfied here).
+            stable_uptime = thresholds.get('stable-uptime', 0)
             stable_mtbf = thresholds.get('stable-mtbf', 0)
             relay_mtbf = vote_info.get('mtbf', 0)
-            
-            stable_eligible = relay_mtbf >= stable_mtbf if stable_mtbf > 0 else True
+
+            stable_eligible = check_stable_eligibility(
+                None, relay_mtbf, stable_uptime, stable_mtbf)['eligible']
             if stable_eligible:
                 eligibility['stable']['eligible_count'] += 1
             

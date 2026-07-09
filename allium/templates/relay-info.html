@@ -977,8 +977,8 @@ Country: unknown
                 </dd>
                 <dt>Burst Limit</dt>
                 <dd>
-                    {% set burst_unit = ratelimits.get('burst-limit', 0)|determine_unit(relays.use_bits) %}
-                    {{ ratelimits.get('burst-limit', 0)|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                    {# BandwidthBurst is a token-bucket size (bytes), not a rate #}
+                    {{ ratelimits.get('burst-limit', 0)|format_data_volume }}
                 </dd>
                 <dt>Write Limit Hit</dt>
                 <dd>
