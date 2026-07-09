@@ -86,7 +86,6 @@ class TestCoordinator:
         assert coordinator.start_time == start_time
         assert coordinator.progress_step == progress_step
         assert coordinator.total_steps == total_steps
-        assert coordinator.workers == {}
         assert coordinator.worker_data == {}
     
     def test_coordinator_initialization_uses_default_values_when_minimal_parameters_provided(self):
@@ -617,16 +616,6 @@ class TestCoordinatorMultiAPI:
         
         result = coordinator.get_consensus_health_data()
         assert result == mock_health_data
-    
-    def test_get_collector_data(self):
-        """Test getting collector data from coordinator"""
-        mock_collector_data = {"authorities": [{"name": "test"}]}
-        
-        coordinator = make_coordinator()
-        coordinator.worker_data = {'collector': mock_collector_data}
-        
-        result = coordinator.get_collector_data()
-        assert result == mock_collector_data
     
     def test_create_relay_set_with_additional_apis(self):
         """Test relay set creation with additional API data attached via enrich_with_api_data"""

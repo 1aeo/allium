@@ -167,10 +167,6 @@ def is_eu_political(country_code):
     """Check if country is in EU political union."""
     return country_code.upper() in EU_POLITICAL_REGION
 
-def is_eu_geographic(country_code):
-    """Check if country is in geographic Europe region."""
-    return country_code.upper() in EU_GEOGRAPHIC_REGION
-
 def is_frontier_country(country_code):
     """Check if country is classified as frontier/rare."""
     return country_code.upper() in FRONTIER_COUNTRIES
@@ -463,73 +459,6 @@ def calculate_regional_factor(country_code):
 
 
 
-def assign_rarity_tier(rarity_score):
-    """
-    Assign tier classification based on weighted rarity score.
-    
-    Args:
-        rarity_score (int): Calculated rarity score
-        
-    Returns:
-        str: Tier classification
-    """
-    if rarity_score >= 15:   return 'legendary'    # 🏆
-    elif rarity_score >= 10: return 'epic'         # ⭐
-    elif rarity_score >= 6:  return 'rare'         # 🎖️
-    elif rarity_score >= 3:  return 'emerging'     # 📍
-    else:                    return 'common'       # Standard
-
-
-
-
-def count_frontier_countries_weighted_with_existing_data(countries, country_data, total_relays, min_score=6):
-    """
-    Ultra-optimized version that uses pre-calculated country data from relays.py.
-    
-    This is the most efficient implementation as it leverages existing work from relays.py
-    categorization instead of re-scanning the entire relay dataset.
-    
-    Args:
-        countries (list): List of country codes to evaluate
-        country_data (dict): Pre-calculated country data from relays.json["sorted"]["country"]
-        total_relays (int): Total number of relays in the network
-        min_score (int): Minimum score to be considered rare
-        
-    Returns:
-        int: Number of rare countries in the list
-    """
-    if not country_data or total_relays == 0:
-        return 0  # No country data available, return 0 rare countries
-    
-    rare_count = 0
-    for country in countries:
-        if country:
-            country_upper = country.upper()
-            
-            # Get relay count from existing country data (zero-cost lookup)
-            country_relays = 0
-            if country_upper in country_data:
-                country_relays = len(country_data[country_upper].get('relays', []))
-            
-            # Calculate factors efficiently without any relay scanning
-            relay_count_factor = calculate_relay_count_factor(country_relays)
-            network_percentage_factor = calculate_network_percentage_factor(country_relays, total_relays)
-            geopolitical_factor = calculate_geopolitical_factor(country)
-            regional_factor = calculate_regional_factor(country)
-            
-            # Apply weighted formula
-            rarity_score = (
-                (relay_count_factor * 4) +
-                (network_percentage_factor * 3) +
-                (geopolitical_factor * 2) +
-                (regional_factor * 1)
-            )
-            
-            if rarity_score >= min_score:
-                rare_count += 1
-    
-    return rare_count
-
 def get_rare_countries_weighted_with_existing_data(country_data, total_relays, min_score=6):
     """
     Ultra-optimized version that uses pre-calculated country data from relays.py.
@@ -594,7 +523,3 @@ def get_rare_countries_weighted_with_existing_data(country_data, total_relays, m
     return rare_countries
 
 # === REQUIRED FOR INTELLIGENCE ENGINE ===
-
-def get_geographic_regions_for_analysis():
-    """Return geographic regional mapping for intelligence analysis HHI calculations"""
-    return CORE_REGIONS.copy()

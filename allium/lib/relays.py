@@ -10,23 +10,15 @@ import functools
 import hashlib
 import multiprocessing as mp
 import os
-import re
 import time
 from .aroileaders import _calculate_aroi_leaderboards
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .progress_logger import ProgressLogger
-from .bandwidth_formatter import (
-    BandwidthFormatter,
-    format_bandwidth_with_unit,
-    determine_unit_filter,
-    format_bandwidth_filter
-)
+from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
 from .intelligence_engine import IntelligenceEngine
-from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import (
     parse_onionoo_timestamp,
-    create_time_thresholds,
     format_timestamp_gmt,
     format_time_ago,
 )
@@ -47,7 +39,6 @@ from .aroi_validation import (
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
-    _compute_network_position_safe,
     _compute_contact_predata,
     _compute_family_predata,
     _init_precompute_worker,
@@ -897,19 +888,6 @@ class Relays:
         from .flag_analysis import sort_by_observed_bandwidth
         sort_by_observed_bandwidth(self.json)
 
-    def _write_timestamp(self):
-        """
-        Store encoded timestamp in a file to retain time of last request, passed
-        to onionoo via If-Modified-Since header during fetch() if exists
-        """
-        timestamp = time.time()
-        f_timestamp = format_timestamp_gmt(timestamp)
-        if self.json is not None:
-            with open(self.ts_file, "w", encoding="utf8") as ts_file:
-                ts_file.write(f_timestamp)
-        
-        return f_timestamp
-
     def _calculate_network_totals(self):
         """Calculate network totals using three counting methodologies."""
         from .categorization import calculate_network_totals
@@ -1260,11 +1238,6 @@ class Relays:
         self.json['smart_context'] = engine.analyze_all_layers()
         self.progress_step += 1
         self._log_progress("Tier 1 intelligence analysis complete")
-
-    def create_output_dir(self):
-        """Ensure self.output_dir exists (required for write functions)."""
-        from .page_writer import create_output_dir
-        create_output_dir(self)
 
     def write_misc(self, template, path, page_ctx=None, sorted_by=None, reverse=True, is_index=False):
         """Render and write unsorted HTML listings to disk."""

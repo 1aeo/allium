@@ -6,22 +6,8 @@ to avoid duplication between aroileaders.py and relays.py.
 """
 
 import statistics
-import math
 from .error_handlers import handle_calculation_errors
 from .statistical_utils import StatisticalUtils
-
-
-def normalize_uptime_value(raw_value):
-    """
-    Normalize uptime value from Onionoo's 0-999 scale to 0-100 percentage.
-    
-    Args:
-        raw_value (int): Raw uptime value from Onionoo API (0-999)
-        
-    Returns:
-        float: Normalized percentage (0.0-100.0)
-    """
-    return raw_value / 999 * 100
 
 
 def _compute_uptime_percentage_and_datapoints(uptime_values):

@@ -6,7 +6,8 @@ Test network health dashboard calculations and metrics
 import unittest
 from unittest.mock import Mock, patch
 
-from allium.lib.relays import Relays, determine_ipv6_support
+from allium.lib.relays import Relays
+from allium.lib.ip_utils import determine_ipv6_support
 
 class TestNetworkHealthDashboard(unittest.TestCase):
     

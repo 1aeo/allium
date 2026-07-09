@@ -10,15 +10,12 @@ import json
 import logging
 import os
 import random
-import sys
 import time
 import urllib.request
 import urllib.error
 import socket
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
 logger = logging.getLogger(__name__)
@@ -309,12 +306,11 @@ EXIT_DNS_HEALTH_CONFIG = APIConfig(
 
 
 # Use centralized file I/O utilities
-from .file_io_utils import create_cache_manager, create_timestamp_manager, create_state_manager
+from .file_io_utils import create_cache_manager, create_timestamp_manager
 
 # Initialize file managers
 _cache_manager = create_cache_manager(CACHE_DIR)
 _timestamp_manager = create_timestamp_manager(CACHE_DIR)
-_state_manager = create_state_manager(STATE_FILE)
 
 def _save_cache(api_name, data):
     """
@@ -643,8 +639,6 @@ def _fetch_with_cache_fallback(
     
     # If cache is fresh and valid, optionally return immediately
     if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
-        cache_age_display = cache_age / 3600 if cache_age >= 3600 else cache_age / 60
-        cache_unit = "hours" if cache_age >= 3600 else "minutes"
         log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
         _mark_ready(api_name)
         item_count = len(cached_data.get(config.count_field, []))
@@ -697,7 +691,7 @@ def _fetch_with_cache_fallback(
             log_fn=log_progress,
             operation_name=display_name,
         )
-    except TotalTimeoutError as e:
+    except TotalTimeoutError:
         elapsed = time.time() - fetch_start
         log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
         if cached_data:
@@ -804,17 +798,10 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     Returns:
         dict: JSON response from onionoo API
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=onionoo_url,
         config=DETAILS_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
     )
 
 
@@ -889,17 +876,10 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     Returns:
         dict: JSON response with AROI validation data
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=aroi_url,
         config=AROI_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,  # Return fresh cache immediately without fetching
         validator=_validate_aroi_response,
     )
@@ -938,16 +918,10 @@ def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/la
     Returns:
         dict: JSON response with exit DNS health data
     """
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-
     return _fetch_with_cache_fallback(
         url=exit_dns_health_url,
         config=EXIT_DNS_HEALTH_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,
         validator=_validate_exit_dns_health_response,
     )

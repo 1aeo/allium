@@ -12,8 +12,7 @@ from allium.lib.uptime_utils import (
     calculate_network_uptime_percentiles,
     find_operator_percentile_position,
     format_network_percentiles_display,
-    calculate_relay_uptime_average,
-    normalize_uptime_value
+    calculate_relay_uptime_average
 )
 
 
@@ -175,12 +174,6 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         values_low = [10, 5, 8] * 15  # 45 values but very low uptime
         average_low = calculate_relay_uptime_average(values_low)
         self.assertEqual(average_low, 0.0)
-        
-    def test_normalize_uptime_value(self):
-        """Test uptime value normalization from 0-999 to 0-100."""
-        self.assertEqual(normalize_uptime_value(0), 0.0)
-        self.assertEqual(normalize_uptime_value(999), 100.0)
-        self.assertAlmostEqual(normalize_uptime_value(500), 50.05, places=1)
         
     def test_data_filtering_logic(self):
         """Test that data filtering works correctly."""
