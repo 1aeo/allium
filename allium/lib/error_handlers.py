@@ -11,16 +11,18 @@ import urllib.error
 from typing import Any, Callable
 
 
-def handle_http_errors(api_name: str, cache_loader: Callable, cache_saver: Callable, 
-                      mark_ready: Callable, mark_stale: Callable, 
+def handle_http_errors(cache_key: str, display_name: str, cache_loader: Callable,
+                      cache_saver: Callable, mark_ready: Callable, mark_stale: Callable,
                       allow_exit_on_304: bool = False, critical: bool = True):
     """
     Decorator for handling HTTP errors in API worker functions.
-    
+
     Args:
-        api_name: Name of the API for logging
+        cache_key: Machine key used for cache files and worker status
+            (must match APIConfig.api_name, e.g. 'onionoo_details')
+        display_name: Human-readable API name for log messages only
         cache_loader: Function to load cached data
-        cache_saver: Function to save cached data  
+        cache_saver: Function to save cached data
         mark_ready: Function to mark worker as ready
         mark_stale: Function to mark worker as stale
         allow_exit_on_304: Whether to exit on HTTP 304 when no cache
@@ -46,47 +48,47 @@ def handle_http_errors(api_name: str, cache_loader: Callable, cache_saver: Calla
             except urllib.error.HTTPError as err:
                 if err.code == 304:
                     # No update since last run - use cached data
-                    log_progress(f"no {api_name} update since last run, using cached data...")
-                    cached_data = cache_loader(api_name)
+                    log_progress(f"no {display_name} update since last run, using cached data...")
+                    cached_data = cache_loader(cache_key)
                     if cached_data:
-                        mark_ready(api_name)
+                        mark_ready(cache_key)
                         return cached_data
                     else:
                         if allow_exit_on_304:
-                            log_progress(f"no {api_name} update since last run, dying peacefully...")
+                            log_progress(f"no {display_name} update since last run, dying peacefully...")
                             # Don't call sys.exit(1) from worker threads - it only kills the thread
                             # Instead, mark as stale and return None to let coordinator handle gracefully
-                            mark_stale(api_name, f"No cached {api_name} data available (304 with no cache)")
+                            mark_stale(cache_key, f"No cached {display_name} data available (304 with no cache)")
                             return None
                         else:
-                            log_progress(f"no {api_name} update since last run and no cache, skipping {api_name} data...")
-                            mark_stale(api_name, f"No cached {api_name} data available")
+                            log_progress(f"no {display_name} update since last run and no cache, skipping {display_name} data...")
+                            mark_stale(cache_key, f"No cached {display_name} data available")
                             return None
                 else:
-                    log_progress(f"HTTP error fetching {api_name} data: {err.code}")
+                    log_progress(f"HTTP error fetching {display_name} data: {err.code}")
                     raise err
                     
             except urllib.error.URLError as err:
-                log_progress(f"network error fetching {api_name} data: {err}")
+                log_progress(f"network error fetching {display_name} data: {err}")
                 log_progress("check your internet connection and try again")
                 log_progress("in CI environments, this might be a temporary network issue")
                 raise err
                 
             except Exception as e:
-                error_msg = f"Failed to fetch {api_name}: {str(e)}"
+                error_msg = f"Failed to fetch {display_name}: {str(e)}"
                 log_progress(f"error: {error_msg}")
-                mark_stale(api_name, error_msg)
+                mark_stale(cache_key, error_msg)
                 
                 # Try to return cached data as fallback
-                cached_data = cache_loader(api_name)
+                cached_data = cache_loader(cache_key)
                 if cached_data:
-                    log_progress(f"using cached {api_name} data as fallback")
+                    log_progress(f"using cached {display_name} data as fallback")
                     return cached_data
                 else:
                     if critical:
                         log_progress("no cached data available, cannot continue")
                     else:
-                        log_progress(f"no cached data available, continuing without {api_name} data")
+                        log_progress(f"no cached data available, continuing without {display_name} data")
                     return None
                     
         return wrapper
