@@ -790,7 +790,16 @@ def get_detail_page_context(relay_set, category, value):
     """Generate page context with correct breadcrumb data for detail pages"""
     # Use centralized page context generation
     from .page_context import get_detail_page_context
-    return get_detail_page_context(category, value)
+    display_value = None
+    if category == "country":
+        # Breadcrumb should show the country's display name, not the raw
+        # ISO-code sorted key (country.html already derives the full name)
+        group = relay_set.json.get("sorted", {}).get("country", {}).get(value, {})
+        relay_idxs = group.get("relays", [])
+        if relay_idxs:
+            first_relay = relay_set.json["relays"][relay_idxs[0]]
+            display_value = first_relay.get("country_name") or None
+    return get_detail_page_context(category, value, display_value)
 
 
 def _cleanup_vanity_sort_files(vanity_dir):

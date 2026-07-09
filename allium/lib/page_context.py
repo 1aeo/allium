@@ -56,12 +56,17 @@ class PageContextGenerator:
         """Get context for miscellaneous pages."""
         return self.get_base_context('misc', 'misc_listing', {'page_name': page_name})
     
-    def get_detail_context(self, category: str, value: str) -> Dict[str, Any]:
-        """Get context for detail pages with proper breadcrumb mapping."""
+    def get_detail_context(self, category: str, value: str,
+                           display_value: str = None) -> Dict[str, Any]:
+        """Get context for detail pages with proper breadcrumb mapping.
+
+        display_value, when given, is shown in the breadcrumb instead of
+        the raw sorted key (e.g. 'United States' instead of 'US').
+        """
         breadcrumb_type, data_key = self.detail_breadcrumb_mapping.get(
             category, (f"{category}_detail", category)
         )
-        breadcrumb_data = {data_key: value}
+        breadcrumb_data = {data_key: display_value or value}
         return self.get_base_context('detail', breadcrumb_type, breadcrumb_data)
     
     def get_relay_context(self, relay_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -316,8 +321,9 @@ def get_misc_page_context(page_name: str) -> Dict[str, Any]:
     return generator.get_misc_context(page_name)
 
 
-def get_detail_page_context(category: str, value: str) -> Dict[str, Any]:
+def get_detail_page_context(category: str, value: str,
+                            display_value: str = None) -> Dict[str, Any]:
     """Helper function for creating detail page contexts with consistent structure."""
     generator = PageContextGenerator()
-    return generator.get_detail_context(category, value)
+    return generator.get_detail_context(category, value, display_value)
 
