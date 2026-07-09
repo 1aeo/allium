@@ -360,13 +360,24 @@ class TestCoordinatorIntegration:
         coordinator = make_coordinator(output_dir="./test_output", progress=True)
         
         # Mock urllib request to return test data
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+        def _fresh_response(*args, **kwargs):
+            # fresh mock per urlopen call: each API worker calls urlopen
+            # and reads until EOF; a shared side_effect list would exhaust
+            resp = MagicMock()
+            resp.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            return resp
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+            from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir), \
+                 patch('allium.lib.workers._cache_manager', create_cache_manager(temp_dir)), \
+                 patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(temp_dir)):
+                # CACHE_DIR alone is not enough: the module-level
+                # _cache_manager/_timestamp_manager were bound at import, so
+                # without rebinding them these tests read/write the REAL
+                # cache dir (test pollution)
                 with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+                    with patch('urllib.request.urlopen', side_effect=_fresh_response):
                         with patch('builtins.print') as mock_print:
                             # Test fetching data
                             data = coordinator.fetch_onionoo_data()
@@ -377,14 +388,24 @@ class TestCoordinatorIntegration:
                             # Check that progress was logged
                             progress_calls = [str(call) for call in mock_print.call_args_list]
                             assert any("Starting threaded API fetching" in call for call in progress_calls)
-                            assert any("successfully fetched 2 relays from onionoo details API" in call for call in progress_calls)
+                            # Current message format (generic _fetch_with_cache_fallback):
+                            # "successfully fetched {count} items from {display_name} API in {elapsed}s"
+                            # - the old per-worker "2 relays" wording is gone
+                            assert any("successfully fetched 2 items from onionoo details API" in call for call in progress_calls)
     
     def test_coordinator_error_recovery(self):
         """Test coordinator behavior during worker errors"""
         coordinator = make_coordinator(output_dir="./test_output", progress=True)
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+            from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir), \
+                 patch('allium.lib.workers._cache_manager', create_cache_manager(temp_dir)), \
+                 patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(temp_dir)):
+                # CACHE_DIR alone is not enough: the module-level
+                # _cache_manager/_timestamp_manager were bound at import, so
+                # without rebinding them these tests read/write the REAL
+                # cache dir (test pollution)
                 with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
                     # Simulate network error
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
