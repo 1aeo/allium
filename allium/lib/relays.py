@@ -10,23 +10,15 @@ import functools
 import hashlib
 import multiprocessing as mp
 import os
-import re
 import time
 from .aroileaders import _calculate_aroi_leaderboards
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .progress_logger import ProgressLogger
-from .bandwidth_formatter import (
-    BandwidthFormatter,
-    format_bandwidth_with_unit,
-    determine_unit_filter,
-    format_bandwidth_filter
-)
+from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
 from .intelligence_engine import IntelligenceEngine
-from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import (
     parse_onionoo_timestamp,
-    create_time_thresholds,
     format_timestamp_gmt,
     format_time_ago,
 )
@@ -47,7 +39,6 @@ from .aroi_validation import (
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
-    _compute_network_position_safe,
     _compute_contact_predata,
     _compute_family_predata,
     _init_precompute_worker,

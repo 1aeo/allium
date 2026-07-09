@@ -6,10 +6,7 @@ Processes operator rankings based on Onionoo API data grouped by contact informa
 Reuses existing contact calculations and only computes new metrics not already available
 """
 
-import hashlib
-from collections import defaultdict
 import re
-import html
 
 # Import centralized IP parsing from ip_utils (canonical home)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
@@ -19,7 +16,6 @@ from .aroi_validation import classify_v3_tier as _classify_v3_tier_local
 # Import centralized country utilities
 from .country_utils import (
     count_non_eu_countries, 
-    count_frontier_countries_weighted_with_existing_data,
     calculate_diversity_score, 
     calculate_geographic_achievement,
     calculate_operator_as_diversity_score,
@@ -27,7 +23,8 @@ from .country_utils import (
 )
 
 # Import HTML escaping utility
-from .string_utils import safe_html_escape, extract_contact_display_name
+from .html_escape_utils import safe_html_escape
+from .string_utils import extract_contact_display_name
 
 
 # Pre-compiled url-token regex for the Option A incomplete-AROI fallback.

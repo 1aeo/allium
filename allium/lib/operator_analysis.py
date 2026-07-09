@@ -10,17 +10,6 @@ import html as _html
 import statistics
 
 from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES
-from .uptime_utils import (
-    extract_relay_uptime_for_period,
-    calculate_statistical_outliers,
-    find_operator_percentile_position,
-    format_network_percentiles_display,
-)
-from .bandwidth_utils import (
-    extract_relay_bandwidth_for_period,
-    extract_operator_daily_bandwidth_totals,
-    calculate_bandwidth_reliability_metrics,
-)
 
 
 def _build_contact_rankings_index(relay_set):
@@ -828,7 +817,6 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     # Format version status display (only show counts > 0) with version tooltips and percentages
     # Add status indicators based on recommended status ratio (similar to version compliance)
-    version_status_parts = []
     version_status_tooltips = {}
     
     recommended_count = version_status_counts.get('recommended', 0)
@@ -987,7 +975,6 @@ def compute_contact_flag_analysis(contact_hash, members, relay_set):
             
             for relay in members:
                 fingerprint = relay.get('fingerprint', '')
-                nickname = relay.get('nickname', 'Unknown')
                 
                 # Get actual flags this relay currently has (same approach as line 561)
                 relay_flags = set(relay.get('flags', []))

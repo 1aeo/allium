@@ -13,7 +13,6 @@ from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
-from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
 from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count
 
 

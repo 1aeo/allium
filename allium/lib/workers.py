@@ -10,15 +10,12 @@ import json
 import logging
 import os
 import random
-import sys
 import time
 import urllib.request
 import urllib.error
 import socket
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
 logger = logging.getLogger(__name__)
@@ -643,8 +640,6 @@ def _fetch_with_cache_fallback(
     
     # If cache is fresh and valid, optionally return immediately
     if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
-        cache_age_display = cache_age / 3600 if cache_age >= 3600 else cache_age / 60
-        cache_unit = "hours" if cache_age >= 3600 else "minutes"
         log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
         _mark_ready(api_name)
         item_count = len(cached_data.get(config.count_field, []))
@@ -697,7 +692,7 @@ def _fetch_with_cache_fallback(
             log_fn=log_progress,
             operation_name=display_name,
         )
-    except TotalTimeoutError as e:
+    except TotalTimeoutError:
         elapsed = time.time() - fetch_start
         log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
         if cached_data:

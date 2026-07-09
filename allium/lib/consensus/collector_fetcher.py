@@ -15,7 +15,7 @@ import urllib.request
 import urllib.error
 import socket
 import concurrent.futures
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import logging
 import time
@@ -24,7 +24,6 @@ import time
 from ..workers import (
     _fetch_url_with_total_timeout,
     _retry_with_backoff,
-    _is_retryable_error,
     TotalTimeoutError,
 )
 
@@ -216,16 +215,7 @@ from .flag_thresholds import (
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
-    GUARD_WFU_DEFAULT,
     HSDIR_TK_DEFAULT,
-    HSDIR_WFU_DEFAULT,
-    FAST_BW_GUARANTEE,
-    parse_wfu_threshold,
-    format_time_as_days,
-    check_guard_eligibility,
-    check_hsdir_eligibility,
-    check_fast_eligibility,
-    check_stable_eligibility,
 )
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
@@ -1096,7 +1086,6 @@ class CollectorFetcher:
             })
             
             # Stable flag eligibility
-            stable_uptime = thresholds.get('stable-uptime', 0)
             stable_mtbf = thresholds.get('stable-mtbf', 0)
             relay_mtbf = vote_info.get('mtbf', 0)
             

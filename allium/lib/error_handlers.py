@@ -7,10 +7,9 @@ across workers.py, coordinator.py, and relays.py files.
 
 import functools
 import json
-import os
 import traceback
 import urllib.error
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 
 def handle_http_errors(api_name: str, cache_loader: Callable, cache_saver: Callable, 

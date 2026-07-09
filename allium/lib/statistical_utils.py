@@ -11,7 +11,7 @@ This module consolidates statistical calculations that were duplicated across:
 import math
 import statistics
 import sys
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Optional
 
 
 class StatisticalUtils:

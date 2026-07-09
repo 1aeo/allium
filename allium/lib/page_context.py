@@ -9,8 +9,7 @@ This module provides:
 - Centralized breadcrumb management
 """
 
-from typing import Any, Dict, Optional, Union
-import os
+from typing import Any, Dict, Optional
 
 
 class PageContextGenerator:

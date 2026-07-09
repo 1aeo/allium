@@ -10,7 +10,7 @@ This module provides:
 """
 
 import html
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 
 class HTMLEscapeConstants:

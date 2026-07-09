@@ -35,7 +35,7 @@ def ensure_output_directory(output_dir):
     """
     try:
         os.makedirs(output_dir, exist_ok=True)
-    except PermissionError as e:
+    except PermissionError:
         print(f"❌ Error: Permission denied creating output directory '{output_dir}'")
         print(f"💡 Try running with a different output directory:")
         print(f"   python3 allium.py --out ~/allium-output --progress")
