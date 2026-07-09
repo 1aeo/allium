@@ -82,17 +82,19 @@ diff **and** confirm contact pages and vanity URLs are still generated (spot-che
 
 | Item | File | ~Lines |
 |------|------|--------|
-| `fetch_collector_data` legacy wrapper | `workers.py` | 6 |
 | `_state_manager` global (workers use `_save_state`/`_load_state` directly) | `workers.py` | 1 |
 | `BulkFileOperations`, `TestFileHelper`, `create_unified_file_manager`, `safe_file_operation`, `safe_json_operation` | `file_io_utils.py` | 150 |
 
-Subtotal ≈ **160 lines**.
+Subtotal ≈ **150 lines**.
 
-**Keep (intentionally excluded):** the consensus-health path stays as-is —
-`fetch_consensus_health` (`workers.py`), `Coordinator.get_consensus_health_data`, the
-`consensus_health_data` attach in `create_relay_set_with_coordinator`, and the reader
-stub in `relays.py`. It is not wired into `API_WORKER_REGISTRY` today, but it is a
-planned feature path, not cruft — do not delete it in this plan.
+**Keep (intentionally excluded):**
+
+- The consensus-health path stays as-is — `fetch_consensus_health` (`workers.py`),
+  `Coordinator.get_consensus_health_data`, the `consensus_health_data` attach in
+  `create_relay_set_with_coordinator`, and the reader stub in `relays.py`. It is not
+  wired into `API_WORKER_REGISTRY` today, but it is a planned feature path, not cruft —
+  do not delete it in this plan.
+- `fetch_collector_data` (`workers.py`) stays as well — keep the legacy wrapper.
 
 ---
 
@@ -167,7 +169,7 @@ shift whitespace; the comparison tool will catch it).
 5. Batch 5 (duplication merges) — one commit per row, strict byte-identical gate.
 6. Batch 6 (templates) — one commit per template family.
 
-Running total if all batches land: **~1,220–1,420 Python lines** (~5–6% of production
+Running total if all batches land: **~1,210–1,410 Python lines** (~5–6% of production
 Python) **+ ~500–650 template lines** (~7% of templates), all with noise-floor diffs.
 Each commit message should state the batch, the symbols removed, and the compare result
 (`Content diffs: N (noise floor)`).
