@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
 from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
-from allium.lib.operator_analysis import compute_contact_display_data
+from allium.lib.operator_analysis import compute_contact_display_data, format_intelligence_rating
 from allium.lib.relays import Relays
 
 
@@ -301,7 +301,7 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
         
         for rating_text, expected_class in test_cases:
             with self.subTest(rating=rating_text):
-                result = self.relays._format_intelligence_rating(rating_text)
+                result = format_intelligence_rating(rating_text)
                 self.assertIn(expected_class, result)
                 
                 # Verify the rating word is correctly highlighted
