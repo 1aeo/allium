@@ -1049,26 +1049,15 @@ def write_pages_by_key(relay_set, k):
         # Generate page context with correct breadcrumb data
         page_ctx = get_detail_page_context(relay_set, k, v)
         
-        # Generate contact rankings for AROI leaderboards (only for contact pages)
+        # Contact pages never reach this loop (routed to dedicated renderers
+        # above); contact-specific template args stay at their defaults.
         contact_rankings = []
         operator_reliability = None
         contact_display_data = None
         primary_country_data = None
         contact_validation_status = None
         aroi_validation_timestamp = None
-        if k == "contact":
-            contact_rankings = relay_set._generate_contact_rankings(v)
-            # Calculate operator reliability statistics
-            operator_reliability = relay_set._calculate_operator_reliability(v, members)
-            # Pre-compute all contact-specific display data
-            contact_display_data = relay_set._compute_contact_display_data(
-                i, bandwidth_unit, operator_reliability, v, members
-            )
-            # Store contact_display_data in the contact structure for relay pages to access
-            i['contact_display_data'] = contact_display_data
-            # Get primary country data for this contact
-            primary_country_data = i.get("primary_country_data")
-        
+
         # Add family-specific data for family templates (used by detail_summary macro)
         family_aroi_domain = None
         family_contact = None
@@ -1078,19 +1067,15 @@ def write_pages_by_key(relay_set, k):
             family_contact = i.get("contact", "")
             family_contact_md5 = i.get("contact_md5", "")
         
-        # AROI validation status for contact and family pages (DRY - shared logic)
-        if k in ("contact", "family"):
-            contact_validation_status = (i.get("aroi_validation_full") or 
-                                         i.get("contact_validation_status") or 
+        # AROI validation status for family pages
+        if k == "family":
+            contact_validation_status = (i.get("aroi_validation_full") or
+                                         i.get("contact_validation_status") or
                                          relay_set._get_contact_validation_status(members))
             aroi_validation_timestamp = relay_set._aroi_validation_timestamp
-        
-        # Check if this contact has a validated AROI domain for vanity URL display
+
         is_validated_aroi = False
-        if k == "contact" and members and hasattr(relay_set, 'validated_aroi_domains'):
-            aroi_domain = members[0].get("aroi_domain")
-            is_validated_aroi = aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains
-        
+
         # Family support counts for summary bullet (DRY helper)
         family_support_counts = _get_family_support_counts(k, contact_display_data, i)
         exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
@@ -1169,25 +1154,6 @@ def write_pages_by_key(relay_set, k):
         with open(html_path, "w", encoding="utf8") as html:
             html.write(rendered)
         io_time += time.time() - io_start
-        
-        # Create vanity URL for validated AROI domains (copy and adjust paths)
-        # Only create if base_url is configured - Place at root level (e.g., /domain/ instead of /contact/domain/)
-        if relay_set.base_url and k == "contact" and members and hasattr(relay_set, 'validated_aroi_domains'):
-            aroi_domain = members[0].get("aroi_domain")
-            if aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains:
-                # Lowercase domain for case-insensitive URLs
-                safe_domain = _sanitize_path_component(aroi_domain.lower())
-                # Use parent directory (root level) instead of output_path (contact subdirectory)
-                vanity_dir = os.path.join(os.path.dirname(output_path), safe_domain)
-                try:
-                    os.makedirs(vanity_dir, exist_ok=True)
-                    # Adjust path prefix from depth 2 (../../) to depth 1 (../)
-                    # Uses the in-memory rendered string to avoid reading the file back from disk
-                    adjusted_html = rendered.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
-                    with open(os.path.join(vanity_dir, "index.html"), 'w', encoding='utf8') as f:
-                        f.write(adjusted_html)
-                except OSError:
-                    pass  # Silent fail - don't break generation for vanity URL issues
         
         page_count += 1
         
@@ -1319,11 +1285,11 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
     """
     validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
     page_args = []
-    vanity_url_tasks = []  # Collect vanity URL tasks for post-processing
-    
+
+    # Contact pages never reach this function (routed to dedicated renderers
+    # in write_pages_by_key), so no vanity-URL handling is needed here.
     for v in sorted_values:
-        i = relay_set.json["sorted"][k][v]
-        # Sanitize for filesystem paths only (raw v used for data lookup above and by workers)
+        # Sanitize for filesystem paths only (raw v used for data lookup by workers)
         v_safe = _sanitize_path_component(v)
         dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
@@ -1331,13 +1297,6 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         # OPTIMIZED: Pass only (html_path, value) - workers build template args from forked memory
         # Raw v is passed so workers can look up data in relay_set.json["sorted"][k][v]
         page_args.append((html_path, v))
-        
-        # Collect vanity URL tasks for contact pages (to be processed after parallel generation)
-        # Uses precomputed aroi_domain to avoid re-fetching members
-        if k == "contact" and relay_set.base_url and i.get("is_validated_aroi"):
-            aroi_domain = i.get("aroi_domain")
-            if aroi_domain and aroi_domain != "none":
-                vanity_url_tasks.append((html_path, aroi_domain, output_path))
     
     pool = None
     try:
@@ -1348,22 +1307,7 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         pool.map(_render_page_mp, page_args)
         pool.close()
         pool.join()
-        
-        # Post-process vanity URLs for contact pages (after parallel generation)
-        if vanity_url_tasks:
-            for html_path, aroi_domain, contact_output_path in vanity_url_tasks:
-                try:
-                    safe_domain = _sanitize_path_component(aroi_domain.lower())
-                    vanity_dir = os.path.join(os.path.dirname(contact_output_path), safe_domain)
-                    os.makedirs(vanity_dir, exist_ok=True)
-                    with open(html_path, 'r', encoding='utf8') as f:
-                        html_content = f.read()
-                    adjusted_html = html_content.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
-                    with open(os.path.join(vanity_dir, "index.html"), 'w', encoding='utf8') as f:
-                        f.write(adjusted_html)
-                except OSError:
-                    pass  # Silent fail for vanity URL issues
-        
+
         total_time = time.time() - start_time
         relay_set.progress_logger.log(f"{k} page generation complete - Generated {len(page_args)} pages in {total_time:.2f}s")
         if relay_set.progress:
