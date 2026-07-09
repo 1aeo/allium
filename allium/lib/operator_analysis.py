@@ -1320,8 +1320,9 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
     downtime_alerts = {
         'offline_counts': {
             'guard': 0,
-            'middle': 0, 
-            'exit': 0
+            'middle': 0,
+            'exit': 0,
+            'total': 0
         },
         'offline_bandwidth_impact': {
             'total_offline_bandwidth': 0,  # bytes
@@ -1398,18 +1399,18 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
                 'display_text': f"{nickname} ({last_seen_formatted})"
             }
             
-            # Categorize by relay type based on flags
-            if 'Guard' in flags:
+            # Categorize each offline relay into exactly one bucket using the
+            # same Exit > Guard > Middle priority as contact_sorting.role_rank
+            # and categorization.py role counting, so bucket sums match the
+            # exclusive guard/exit/middle bandwidth denominators.
+            downtime_alerts['offline_counts']['total'] += 1
+            if 'Exit' in flags:
+                downtime_alerts['offline_counts']['exit'] += 1
+                downtime_alerts['offline_relay_details']['exit_relays'].append(relay_info)
+            elif 'Guard' in flags:
                 downtime_alerts['offline_counts']['guard'] += 1
                 downtime_alerts['offline_relay_details']['guard_relays'].append(relay_info)
-                
-            if 'Exit' in flags:
-                downtime_alerts['offline_counts']['exit'] += 1  
-                downtime_alerts['offline_relay_details']['exit_relays'].append(relay_info)
-                
-            # Middle relays are all relays that aren't Guard or Exit only, or relays that are both
-            # This matches the logic used elsewhere in the codebase for middle relay classification
-            if not flags or ('Guard' not in flags and 'Exit' not in flags) or ('Guard' in flags and 'Exit' in flags):
+            else:
                 downtime_alerts['offline_counts']['middle'] += 1
                 downtime_alerts['offline_relay_details']['middle_relays'].append(relay_info)
     
