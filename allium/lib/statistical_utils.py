@@ -228,9 +228,3 @@ class StatisticalUtils:
         except statistics.StatisticsError:
             # Handle case where all values are identical (std dev = 0)
             return {'low_outliers': [], 'high_outliers': []}
-    
-# Convenience functions for backwards compatibility
-def calculate_statistical_outliers(values: List[float], data_mapping: Dict[str, Dict] = None, 
-                                  std_dev_threshold: float = 2.0) -> Dict[str, List[Dict]]:
-    """Backwards compatibility wrapper for StatisticalUtils.calculate_outliers"""
-    return StatisticalUtils.calculate_outliers(values, data_mapping, std_dev_threshold)

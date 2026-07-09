@@ -190,39 +190,11 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
     """Calculate simplified growth trend metrics."""
     if period != '6_months':
         return None
-        
-    # Build relay bandwidth arrays
-    relay_arrays = []
-    for relay in operator_relays:
-        fingerprint = relay.get('fingerprint', '')
-        relay_bandwidth = bandwidth_map.get(fingerprint)
-        if relay_bandwidth and relay_bandwidth.get('read_history'):
-            period_data = relay_bandwidth['read_history'].get(period, {})
-            if period_data.get('values') and period_data.get('factor'):
-                relay_arrays.append({
-                    'values': period_data['values'],
-                    'factor': period_data['factor']
-                })
-    
-    if not relay_arrays:
-        return None
-    
-    # Calculate daily totals
-    max_length = max(len(r['values']) for r in relay_arrays)
-    daily_totals = []
-    
-    for day_index in range(max_length):
-        day_total = valid_count = 0
-        for relay_data in relay_arrays:
-            if day_index < len(relay_data['values']):
-                value = relay_data['values'][day_index]
-                if value is not None and isinstance(value, (int, float)) and value >= 0:
-                    day_total += value * relay_data['factor']
-                    valid_count += 1
-        
-        if valid_count > 0:
-            daily_totals.append(day_total)
-    
+
+    # Shared daily-totals aggregation (bandwidth_map already built by caller)
+    daily_totals = extract_operator_daily_bandwidth_totals(
+        operator_relays, None, period, bandwidth_map)['daily_totals']
+
     if len(daily_totals) < 60:  # Need at least ~2 months
         return None
     

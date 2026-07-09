@@ -798,17 +798,10 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     Returns:
         dict: JSON response from onionoo API
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=onionoo_url,
         config=DETAILS_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
     )
 
 
@@ -883,17 +876,10 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     Returns:
         dict: JSON response with AROI validation data
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=aroi_url,
         config=AROI_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,  # Return fresh cache immediately without fetching
         validator=_validate_aroi_response,
     )
@@ -932,16 +918,10 @@ def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/la
     Returns:
         dict: JSON response with exit DNS health data
     """
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-
     return _fetch_with_cache_fallback(
         url=exit_dns_health_url,
         config=EXIT_DNS_HEALTH_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,
         validator=_validate_exit_dns_health_response,
     )
