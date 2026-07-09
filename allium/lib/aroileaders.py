@@ -6,8 +6,6 @@ Processes operator rankings based on Onionoo API data grouped by contact informa
 Reuses existing contact calculations and only computes new metrics not already available
 """
 
-import re
-
 # Import centralized IP parsing from ip_utils (canonical home)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 # B4.1: shared classifier so leaderboard tier matches contact-page pill tier.
@@ -24,18 +22,15 @@ from .country_utils import (
 
 # Import HTML escaping utility
 from .html_escape_utils import safe_html_escape
-from .string_utils import extract_contact_display_name
+from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
 
 
-# Pre-compiled url-token regex for the Option A incomplete-AROI fallback.
-# Matches the CIISS `url:` field token in a raw contact string. We intentionally
-# accept any plausible domain (we are not validating CIISS conformance here —
-# the caller already confirmed AROI parsing FAILED, we just want a recognisable
-# display name).
-_URL_FIELD_FALLBACK_RE = re.compile(
-    r'\burl:(?:https?://)?([^,\s]+)',
-    re.IGNORECASE,
-)
+# Shared url-token regex (string_utils is the single source of truth) for the
+# Option A incomplete-AROI fallback. Matches the CIISS `url:` field token in a
+# raw contact string. We intentionally accept any plausible domain (we are not
+# validating CIISS conformance here — the caller already confirmed AROI parsing
+# FAILED, we just want a recognisable display name).
+_URL_FIELD_FALLBACK_RE = URL_FIELD_TOKEN_RE
 
 # Maximum length of a derived display name returned by
 # extract_contact_display_name() that we accept for the incomplete-AROI

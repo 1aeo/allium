@@ -101,6 +101,14 @@ _RE_ANGLE_BRACKET_URL = re.compile(r'<\s*https?://(?:www\.)?([^\s,/>]+)')
 # Onion URL pattern - extract .onion domain from url: field or standalone
 _RE_ONION_URL = re.compile(r'(?:url:)?https?://([a-z2-7]{56}\.onion)', re.I)
 
+# CIISS `url:` field token pattern - matches the url: token in a raw
+# ContactInfo string (optional scheme, captures value up to next
+# comma/whitespace). Shared single source of truth for:
+# - aroi_validation._URL_FIELD_RE (AROI field detection, relays.py hot path)
+# - aroileaders._URL_FIELD_FALLBACK_RE (incomplete-AROI display-name fallback)
+# - categorization._INCOMPLETE_URL_RE (incomplete-AROI sibling map)
+URL_FIELD_TOKEN_RE = re.compile(r'\burl:(?:https?://)?([^,\s]+)', re.IGNORECASE)
+
 # Generic placeholder names to exclude
 _PLACEHOLDER_NAMES = frozenset(['random person', 'dave null', 'abuse team'])
 
