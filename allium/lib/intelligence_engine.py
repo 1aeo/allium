@@ -4,7 +4,6 @@ All calculations moved from Jinja2 templates to Python for maximum performance.
 """
 
 import statistics
-import math
 from .statistical_utils import StatisticalUtils
 
 class IntelligenceEngine:

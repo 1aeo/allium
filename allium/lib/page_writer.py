@@ -7,7 +7,6 @@ page writing functions.
 Extracted from relays.py for better modularity.
 """
 
-import functools
 import multiprocessing as mp
 import os
 import time
@@ -19,7 +18,6 @@ from .contact_sorting import (
     CONTACT_SORT_FILE_MAP,
     CONTACT_SORT_MODES,
     CONTACT_DEFAULT_SORT_MODE,
-    CONTACT_SECTION_KEYS,
     adjust_vanity_paths as _adjust_vanity_paths,
     contact_sort_links as _contact_sort_links,
     build_contact_variant_args as _build_contact_variant_args,
@@ -27,9 +25,6 @@ from .contact_sorting import (
     contact_relay_count as _contact_relay_count,
 )
 from .bandwidth_formatter import (
-    BandwidthFormatter,
-    determine_unit,
-    get_divisor_for_unit,
     format_bandwidth_with_unit,
     determine_unit_filter,
     format_bandwidth_filter,
@@ -338,7 +333,7 @@ def _precompute_contact_worker(args):
         result = _compute_contact_predata(
             _precompute_relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains)
         return (contact_hash, result)
-    except Exception as e:
+    except Exception:
         return (contact_hash, None)
 
 
@@ -412,7 +407,7 @@ def _precompute_family_worker(args):
     try:
         result = _compute_family_predata(_precompute_relay_set, family_hash)
         return (family_hash, result)
-    except Exception as e:
+    except Exception:
         return (family_hash, None)
 
 
@@ -545,7 +540,6 @@ def get_directory_authorities_data(relay_set):
     Prepare directory authorities data for template rendering.
     Reuses existing authority uptime calculations and z-score infrastructure.
     """
-    from datetime import datetime, timezone
     
     # Filter authorities from existing relay data (no new processing)
     authorities = [relay for relay in relay_set.json["relays"] if 'Authority' in relay.get('flags', [])]
@@ -612,14 +606,12 @@ def get_directory_authorities_data(relay_set):
             )
             
             # Get per-authority consensus methods from consensus_method_info
-            auth_consensus_methods = None
             auth_max_method = None
             if collector_data:
                 cm_per_auth = collector_data.get('consensus_method_info', {}).get('per_authority', {})
                 # Try matching by nickname (vote auth names are lowercase)
                 auth_methods = cm_per_auth.get(auth_nickname)
                 if auth_methods:
-                    auth_consensus_methods = auth_methods
                     auth_max_method = max(auth_methods) if auth_methods else None
             
             authority['collector_data'] = {
@@ -686,7 +678,7 @@ def get_directory_authorities_data(relay_set):
                         latency_down_count += 1
                         authority_alerts.append(f"{authority.get('nickname', 'Unknown')} is not responding (latency check failed)")
                     break
-    except Exception as e:
+    except Exception:
         # Latency check failed - continue without it
         pass
     
@@ -1053,7 +1045,6 @@ def write_pages_by_key(relay_set, k):
         # Calculate network position using DRY helper
         network_position = _compute_network_position_safe(
             i["guard_count"], i["middle_count"], i["exit_count"], len(members))
-        network_position_display = network_position.get('formatted_string', 'unknown')
         
         # Generate page context with correct breadcrumb data
         page_ctx = get_detail_page_context(relay_set, k, v)

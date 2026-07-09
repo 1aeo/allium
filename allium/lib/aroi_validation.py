@@ -14,7 +14,6 @@ dns-familyid-ed25519, uri-familyid-ed25519). Spec:
 https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
 """
 
-import json
 import logging
 import re
 from collections import defaultdict

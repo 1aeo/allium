@@ -262,7 +262,6 @@ def process_flag_uptime_display(relays, network_flag_statistics):
             
             if period in flag_data[selected_flag]:
                 uptime_val = flag_data[selected_flag][period]['uptime']
-                data_points = flag_data[selected_flag][period].get('data_points', 0)
                 
                 # Compare flag uptime with regular uptime before adding prefix
                 regular_uptime_val = regular_uptime.get(period, 0.0)
@@ -276,9 +275,6 @@ def process_flag_uptime_display(relays, network_flag_statistics):
                 
                 # Format without prefix
                 percentage_str = f"{uptime_val:.1f}%"
-                
-                # Apply FLAG RELIABILITY color coding (not uptime color coding)
-                color_class = ''
                 
                 # Add network comparison for color determination
                 if (selected_flag in network_flag_statistics and 

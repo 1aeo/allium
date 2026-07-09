@@ -11,13 +11,7 @@ This module is maintained for backward compatibility.
 from typing import Optional
 
 # Import from centralized HTML escaping utilities
-from .html_escape_utils import (
-    safe_html_escape,
-    UNKNOWN_ESCAPED,
-    UNKNOWN_LOWERCASE, 
-    NONE_ESCAPED,
-    NA_FALLBACK
-)
+from .html_escape_utils import NA_FALLBACK
 
 
 def is_valid_aroi(aroi: Optional[str]) -> bool:

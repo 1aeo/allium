@@ -6,7 +6,6 @@ to avoid duplication between aroileaders.py and relays.py.
 """
 
 import statistics
-import math
 from .error_handlers import handle_calculation_errors
 from .statistical_utils import StatisticalUtils
 
