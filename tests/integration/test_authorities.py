@@ -7,6 +7,7 @@ Test suite for directory authorities functionality
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch, mock_open
