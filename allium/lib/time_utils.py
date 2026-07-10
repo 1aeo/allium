@@ -60,11 +60,16 @@ def create_time_thresholds():
     }
 
 
-def format_timestamp_gmt(timestamp=None):
-    """Format timestamp as GMT string for HTTP headers and display"""
+def format_timestamp_gmt(timestamp=None, fmt="%a, %d %b %Y %H:%M:%S GMT"):
+    """Format timestamp as GMT string for HTTP headers and display.
+
+    Args:
+        timestamp: Unix timestamp in seconds (defaults to now)
+        fmt: strftime format string (default: HTTP-header style)
+    """
     if timestamp is None:
         timestamp = _time_module.time()
-    return _time_module.strftime("%a, %d %b %Y %H:%M:%S GMT", _time_module.gmtime(timestamp))
+    return _time_module.strftime(fmt, _time_module.gmtime(timestamp))
 
 
 def format_time_ago(timestamp_str):

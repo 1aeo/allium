@@ -1,4 +1,5 @@
 {% from "macros.html" import navigation, network_dns_health_bullet %}
+{% import "misc_listing_macros.html" as misc %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
@@ -18,111 +19,25 @@
 
     <ul style="margin-bottom: 15px;">
         <li><strong>Platforms</strong>: {{ relays.json['sorted'].get('platform', {})|length }} operating systems hosting relays currently detected</li>
-        <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
-            <ul style="margin: 2px 0; padding-left: 20px;">
-                <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
-                    Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
-                    Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
-                    Exit: {{ relays.json['network_totals']['primary']['exit'] }}
-                </li>
-                <li><strong><span title="Exclusive categories for all role combinations, adding Guard+Exit">Role Categories</span></strong>: 
-                    Guard: {{ relays.json['network_totals']['categories']['guard_only'] }} | 
-                    Middle: {{ relays.json['network_totals']['categories']['middle'] }} | 
-                    Exit: {{ relays.json['network_totals']['categories']['exit_only'] }} | 
-                    Guard+Exit: {{ relays.json['network_totals']['categories']['guard_exit'] }}
-                </li>
-                <li><strong><span title="Multi-role relays counted by every role they perform">All Roles</span></strong>: 
-                    Guard: {{ relays.json['network_totals']['all']['guard'] }} | 
-                    Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
-                    Exit: {{ relays.json['network_totals']['all']['exit'] }}
-                </li>
-                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
-                    {{ relays.json['network_totals']['measured_relays'] }} relays, {{ relays.json['network_totals']['measured_percentage'] }}% of all relays
-                </li>
-            </ul>
-        </li>
+{{ misc.network_relays_bullet(relays) }}
         <li><strong>Software Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_linux_percentage }}% Linux | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_windows_percentage }}% Windows | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_bsd_percentage }}% BSD variants</li>
         {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
     
-    <p class="text-muted" style="margin-bottom: 15px;">
-    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
-    </p>
+{{ misc.last_updated(relays) }}
     
     <table class="table table-condensed">
         <tr>
             <th>Platform</th>
-            {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers.">Overall / <a href="platforms-by-guard-bandwidth.html">Guard</a> / <a href="platforms-by-middle-bandwidth.html">Middle</a> / <a href="platforms-by-exit-bandwidth.html">Exit</a> BW Cap</th>
-            {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="platforms-by-overall-bandwidth.html">Overall</a> / Guard / <a href="platforms-by-middle-bandwidth.html">Middle</a> / <a href="platforms-by-exit-bandwidth.html">Exit</a> BW Cap</th>
-            {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="platforms-by-overall-bandwidth.html">Overall</a> / <a href="platforms-by-guard-bandwidth.html">Guard</a> / Middle / <a href="platforms-by-exit-bandwidth.html">Exit</a> BW Cap</th>
-            {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="platforms-by-overall-bandwidth.html">Overall</a> / <a href="platforms-by-guard-bandwidth.html">Guard</a> / <a href="platforms-by-middle-bandwidth.html">Middle</a> / Exit BW Cap</th>
-            {% else -%}
-                <th class="text-center bw-header" title="Observed Bandwidth Capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="platforms-by-overall-bandwidth.html">Overall</a> / <a href="platforms-by-guard-bandwidth.html">Guard</a> / <a href="platforms-by-middle-bandwidth.html">Middle</a> / <a href="platforms-by-exit-bandwidth.html">Exit</a> BW Cap</th>
-            {% endif -%}
-            {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="platforms-by-consensus-weight.html">Overall</a> / <a href="platforms-by-guard-consensus-weight.html">Guard</a> / <a href="platforms-by-middle-consensus-weight.html">Middle</a> / <a href="platforms-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="platforms-by-consensus-weight.html">Overall</a> / Guard / <a href="platforms-by-middle-consensus-weight.html">Middle</a> / <a href="platforms-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="platforms-by-consensus-weight.html">Overall</a> / <a href="platforms-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="platforms-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="platforms-by-consensus-weight.html">Overall</a> / <a href="platforms-by-guard-consensus-weight.html">Guard</a> / <a href="platforms-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
-            {% else -%}
-                <th class="text-center cw-header" title="Consensus Weight">
-                    <a href="platforms-by-consensus-weight.html">Overall</a> / <a href="platforms-by-guard-consensus-weight.html">Guard</a> / <a href="platforms-by-middle-consensus-weight.html">Middle</a> / <a href="platforms-by-exit-consensus-weight.html">Exit</a> CW
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'exit_count' -%}
-                <th class="text-center rc-header">
-                    <a href="platforms-by-guard-count.html">Guard</a> / <a href="platforms-by-middle-count.html">Middle</a> / Exit
-                </th>
-            {% elif sorted_by_label == 'guard_count' -%}
-                <th class="text-center rc-header">
-                    Guard / <a href="platforms-by-middle-count.html">Middle</a> / <a href="platforms-by-exit-count.html">Exit</a>
-                </th>
-            {% elif sorted_by_label == 'middle_count' -%}
-                <th class="text-center rc-header">
-                    <a href="platforms-by-guard-count.html">Guard</a> / Middle / <a href="platforms-by-exit-count.html">Exit</a>
-                </th>
-            {% else -%}
-                <th class="text-center rc-header">
-                    <a href="platforms-by-guard-count.html">Guard</a> / <a href="platforms-by-middle-count.html">Middle</a> / <a href="platforms-by-exit-count.html">Exit</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'unique_contact_count' -%}
-                <th title="Number of unique AROI / contact operators using this platform">Unique AROI / Contact</th>
-            {% else -%}
-                <th title="Number of unique AROI / contact operators using this platform">
-                    <a href="platforms-by-unique-contact-count.html">Unique AROI / Contact</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'unique_family_count' -%}
-                <th title="Number of unique effective families using this platform">Unique Families</th>
-            {% else -%}
-                <th title="Number of unique effective families using this platform">
-                    <a href="platforms-by-unique-family-count.html">Unique Families</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'unique_as_count' -%}
-                <th title="Number of different autonomous systems (networks) using this platform">Unique AS</th>
-            {% else -%}
-                <th title="Number of different autonomous systems (networks) using this platform">
-                    <a href="platforms-by-unique-as-count.html">Unique AS</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'total_data' -%}
-                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
-            {% else -%}
-                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">
-                    <a href="platforms-by-total-data.html">Total Data</a>
-                </th>
-            {% endif -%}
+{{ misc.bw_headers('platforms', sorted_by_label) -}}
+{{ misc.cw_headers('platforms', sorted_by_label) -}}
+{{ misc.rc_headers('platforms', sorted_by_label) -}}
+{{ misc.sortable_th(sorted_by_label, 'unique_contact_count', 'platforms-by-unique-contact-count.html', 'Unique AROI / Contact', title='Number of unique AROI / contact operators using this platform') -}}
+{{ misc.sortable_th(sorted_by_label, 'unique_family_count', 'platforms-by-unique-family-count.html', 'Unique Families', title='Number of unique effective families using this platform') -}}
+{{ misc.sortable_th(sorted_by_label, 'unique_as_count', 'platforms-by-unique-as-count.html', 'Unique AS', title='Number of different autonomous systems (networks) using this platform') -}}
+{{ misc.sortable_th(sorted_by_label, 'total_data', 'platforms-by-total-data.html', 'Total Data', title='Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.') -}}
             <th title="Exit DNS Health: healthy / unhealthy exit relay counts. Source: exitdnshealth.1aeo.com">DNS Health</th>
         </tr>
         <tbody>
@@ -134,17 +49,7 @@
                     <td>
                         <a href="{{ page_ctx.path_prefix }}platform/{{ k|escape }}/">{{ k|escape }}</a>
                     </td>
-                    {# PERF: Use pre-computed combined bandwidth string #}
-                    <td class="text-center bw-data">{{ d.bw_combined }}</td>
-                    {# PERF: Use pre-computed combined CW percentage string #}
-                    <td class="text-center cw-data">{{ d.cw_combined }}</td>
-                    {# PERF: Use pre-computed count combined string #}
-                    <td class="text-center rc-data">{{ d.count_combined }}</td>
-                    <td>{{ v['unique_contact_count'] }}</td>
-                    <td>{{ v['unique_family_count'] }}</td>
-                    <td>{{ v['unique_as_count'] }}</td>
-                    <td>{{ d.total_data_formatted }}</td>
-                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span class="al-status-success">{{ d.exit_dns_health_summary.healthy }}</span> / <span class="al-status-danger">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+{{ misc.listing_row_cells(v, d, include_unique_as=true) }}
                 </tr>
             {% endfor -%}
         </tbody>

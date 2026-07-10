@@ -10,23 +10,17 @@ import functools
 import hashlib
 import multiprocessing as mp
 import os
-import re
 import time
 from .aroileaders import _calculate_aroi_leaderboards
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+from .network_health import calculate_network_health_metrics
+from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
-from .bandwidth_formatter import (
-    BandwidthFormatter,
-    format_bandwidth_with_unit,
-    determine_unit_filter,
-    format_bandwidth_filter
-)
+from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
 from .intelligence_engine import IntelligenceEngine
-from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import (
     parse_onionoo_timestamp,
-    create_time_thresholds,
     format_timestamp_gmt,
     format_time_ago,
 )
@@ -47,7 +41,6 @@ from .aroi_validation import (
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
-    _compute_network_position_safe,
     _compute_contact_predata,
     _compute_family_predata,
     _init_precompute_worker,
@@ -58,28 +51,22 @@ from .page_writer import (
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.progress = progress
-        self.start_time = start_time or time.time()
-        self.progress_step = progress_step
-        self.total_steps = total_steps
         self.filter_downtime_days = filter_downtime_days
         self.base_url = base_url
         self.mp_workers = mp_workers  # 0 = disable, >0 = worker count
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
-        
+
         # Initialize bandwidth formatter with correct units setting
         self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
-        
-        # Use shared progress logger if provided, otherwise create new one
-        # Shared logger ensures consistent step counting across allium.py and coordinator.py
-        if progress_logger is not None:
-            self.progress_logger = progress_logger
-        else:
-            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+
+        # Use the shared progress logger threaded through from allium.py via
+        # the coordinator, or create one (tests / direct construction).
+        self.progress_logger = progress_logger or ProgressLogger(progress_enabled=progress)
         
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
@@ -147,13 +134,13 @@ class Relays:
         if uptime_data:
             self._reprocess_uptime_data()
             self._generate_aroi_leaderboards()
-            self._calculate_network_health_metrics()
+            calculate_network_health_metrics(self)
 
         # Steps 11-14: Bandwidth → health → aggregate groups (needs health %) → leaderboards
         if bandwidth_data and self.json.get('relays'):
             try:
                 self._reprocess_bandwidth_data()
-                self._calculate_network_health_metrics()
+                calculate_network_health_metrics(self)
                 self._aggregate_total_data_to_groups()
                 self._generate_aroi_leaderboards()
             except Exception as e:
@@ -175,7 +162,7 @@ class Relays:
             try:
                 self._attach_exit_dns_health_data()
                 self._aggregate_dns_health_to_groups()
-                self._calculate_network_health_metrics()
+                calculate_network_health_metrics(self)
             except Exception as e:
                 print(f"Warning: Exit DNS Health processing failed ({e}), continuing without DNS health data")
 
@@ -183,17 +170,11 @@ class Relays:
         # Normally called after uptime and/or bandwidth processing above,
         # but if neither data source was available, we need the fallback.
         if 'network_health' not in self.json:
-            self._calculate_network_health_metrics()
+            calculate_network_health_metrics(self)
 
         # Steps 15-16: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
         self._precompute_all_family_page_data()
-
-    def _log_progress(self, message, increment_step=False):
-        """Log progress message using shared progress utility"""
-        # Use unified progress logger without incrementing (maintains backwards compatibility)
-        self.progress_logger.log_without_increment(message)
-
 
     def _trim_platform(self):
         """
@@ -263,7 +244,7 @@ class Relays:
         # Log if relays were filtered
         excluded_count = original_count - len(self.json["relays"])
         if excluded_count > 0 and self.progress:
-            self._log_progress(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
+            self.progress_logger.log_without_increment(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
 
     def _simple_aroi_parsing(self, contact):
         """
@@ -387,10 +368,7 @@ class Relays:
         - Pre-computed time formatting
         - Pre-computed address parsing
         """
-        from .html_escape_utils import create_bulk_escaper, NA_FALLBACK, UNKNOWN_LOWERCASE
-        
-        # Use centralized HTML escaping utility
-        bulk_escaper = create_bulk_escaper()
+        from .html_escape_utils import escape_relay_fields, NA_FALLBACK, UNKNOWN_LOWERCASE
         
         # Single pass: total CW + percentile distributions
         cw_vals, gp_vals, mp_vals, ep_vals = [], [], [], []
@@ -414,7 +392,7 @@ class Relays:
         # Cache method refs outside loop to avoid repeated attribute lookups (10K iterations)
         _bw_determine = self.bandwidth_formatter.determine_unit
         _bw_format = self.bandwidth_formatter.format_bandwidth_with_unit
-        _time_ago = self._format_time_ago
+        _time_ago = format_time_ago
         _time_keys = (('last_restarted', 'last_restarted_ago'),
                       ('first_seen', 'first_seen_ago'),
                       ('last_seen', 'last_seen_ago'))
@@ -424,7 +402,7 @@ class Relays:
         _bisect_left = bisect.bisect_left
         
         for relay in self.json["relays"]:
-            bulk_escaper.escape_all_relay_fields(relay)
+            escape_relay_fields(relay)
             
             country = relay.get("country")
             if country:
@@ -501,7 +479,7 @@ class Relays:
 
 
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
-            relay["uptime_display"] = self._calculate_uptime_display(relay)
+            relay["uptime_display"] = calculate_uptime_display(relay)
             
             # Initialize uptime API display (will be populated by _reprocess_uptime_data)
             relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
@@ -582,14 +560,14 @@ class Relays:
         uptime_data = getattr(self, 'uptime_data', None)
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
-            self._log_progress("Calculating network uptime percentiles (6-month period)...")
+            self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")
             self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months')
             if self.network_uptime_percentiles:
                 total_relays = self.network_uptime_percentiles.get('total_relays', 0)
-                self._log_progress(f"Network percentiles calculated: {total_relays:,} relays analyzed")
+                self.progress_logger.log_without_increment(f"Network percentiles calculated: {total_relays:,} relays analyzed")
             else:
                 self.network_uptime_percentiles = None
-                self._log_progress("Network percentiles calculation failed: insufficient data")
+                self.progress_logger.log_without_increment("Network percentiles calculation failed: insufficient data")
         else:
             self.network_uptime_percentiles = None
 
@@ -607,7 +585,7 @@ class Relays:
         
         # Check if relay set is properly initialized before processing
         if not hasattr(self, 'json') or not self.json.get('relays'):
-            self._log_progress("Skipping bandwidth processing: no relay data available")
+            self.progress_logger.log_without_increment("Skipping bandwidth processing: no relay data available")
             return
             
         try:
@@ -673,14 +651,14 @@ class Relays:
             self._process_flag_bandwidth_display(network_flag_statistics)
             
             # Calculate network-wide bandwidth percentiles ONCE for all contacts
-            self._log_progress("Calculating network bandwidth percentiles...")
+            self.progress_logger.log_without_increment("Calculating network bandwidth percentiles...")
             self.network_bandwidth_percentiles = self._calculate_network_bandwidth_percentiles(bandwidth_data)
             if self.network_bandwidth_percentiles:
                 total_operators = self.network_bandwidth_percentiles.get('total_operators', 0)
-                self._log_progress(f"Network bandwidth percentiles calculated: {total_operators:,} operators analyzed")
+                self.progress_logger.log_without_increment(f"Network bandwidth percentiles calculated: {total_operators:,} operators analyzed")
             else:
                 self.network_bandwidth_percentiles = None
-                self._log_progress("Network bandwidth percentiles calculation failed: insufficient data")
+                self.progress_logger.log_without_increment("Network bandwidth percentiles calculation failed: insufficient data")
             
             # Note: _aggregate_total_data_to_groups is called from enrich_with_api_data
             # after _calculate_network_health_metrics (needs network_total_data_by_period)
@@ -768,7 +746,7 @@ class Relays:
         
         # Check if relay set is properly initialized before processing
         if not hasattr(self, 'json') or not self.json.get('relays'):
-            self._log_progress("Skipping collector processing: no relay data available")
+            self.progress_logger.log_without_increment("Skipping collector processing: no relay data available")
             return
         
         try:
@@ -777,7 +755,7 @@ class Relays:
             from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
             from .relay_diagnostics import generate_relay_issues
             
-            self._log_progress("Processing CollecTor consensus data for relay consensus evaluation...")
+            self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
             
             # Get relay index and flag thresholds from collector data
             relay_index = collector_data.get('relay_index', {})
@@ -785,7 +763,7 @@ class Relays:
             bw_authorities = collector_data.get('bw_authorities', [])
             
             if not relay_index:
-                self._log_progress("No relay index in collector data, skipping consensus evaluation")
+                self.progress_logger.log_without_increment("No relay index in collector data, skipping consensus evaluation")
                 return
             
             # Use the number of voting authorities from flag_thresholds (actual voters)
@@ -880,7 +858,7 @@ class Relays:
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
             
-            self._log_progress(f"Processed consensus evaluation for {evaluation_count} relays")
+            self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             
         except Exception as e:
             # Fallback gracefully if collector processing fails
@@ -917,19 +895,6 @@ class Relays:
         """Sort relays by observed bandwidth."""
         from .flag_analysis import sort_by_observed_bandwidth
         sort_by_observed_bandwidth(self.json)
-
-    def _write_timestamp(self):
-        """
-        Store encoded timestamp in a file to retain time of last request, passed
-        to onionoo via If-Modified-Since header during fetch() if exists
-        """
-        timestamp = time.time()
-        f_timestamp = format_timestamp_gmt(timestamp)
-        if self.json is not None:
-            with open(self.ts_file, "w", encoding="utf8") as ts_file:
-                ts_file.write(f_timestamp)
-        
-        return f_timestamp
 
     def _calculate_network_totals(self):
         """Calculate network totals using three counting methodologies."""
@@ -1118,7 +1083,7 @@ class Relays:
             except Exception as e:
                 # Fall back to sequential if parallel fails
                 if self.progress:
-                    self._log_progress(f"Parallel precomputation failed ({e}), using sequential...")
+                    self.progress_logger.log_without_increment(f"Parallel precomputation failed ({e}), using sequential...")
         
         # Sequential fallback
         for contact_hash in contact_hashes:
@@ -1170,7 +1135,7 @@ class Relays:
                 # Progress reporting
                 processed += 1
                 if processed % 500 == 0:
-                    self._log_progress(f"Pre-computed {processed}/{total_contacts} contacts...")
+                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
 
     def _precompute_all_family_page_data(self):
         """
@@ -1202,7 +1167,7 @@ class Relays:
             except Exception as e:
                 # Fall back to sequential if parallel fails
                 if self.progress:
-                    self._log_progress(f"Parallel family precomputation failed ({e}), using sequential...")
+                    self.progress_logger.log_without_increment(f"Parallel family precomputation failed ({e}), using sequential...")
         
         # Sequential fallback
         for family_hash in family_hashes:
@@ -1249,7 +1214,7 @@ class Relays:
                 # Progress reporting
                 processed += 1
                 if processed % 1000 == 0:
-                    self._log_progress(f"Pre-computed {processed}/{total_families} families...")
+                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
 
     def _generate_aroi_leaderboards(self):
         """
@@ -1259,7 +1224,7 @@ class Relays:
         instead of rebuilding them for each of ~3,000 contacts × 4 metric calculations.
         This reduced map-building iterations from ~132M to ~21K (99.98% reduction).
         """
-        self._log_progress("Generating AROI operator leaderboards...")
+        self.progress_logger.log_without_increment("Generating AROI operator leaderboards...")
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
         # Bump the deterministic version counter consumed by
         # operator_analysis._get_contact_rankings_index so any cached
@@ -1268,83 +1233,28 @@ class Relays:
         # invalidation (no risk of address reuse on GC'd dicts).
         self.leaderboards_version = getattr(self, 'leaderboards_version', 0) + 1
         contact_count = len(self.json.get('sorted', {}).get('contact', {}))
-        self._log_progress(f"AROI leaderboards generated for {contact_count} operators")
+        self.progress_logger.log_without_increment(f"AROI leaderboards generated for {contact_count} operators")
 
     def _generate_smart_context(self):
         """
         Generate smart context information using intelligence engine
         """
         # IntelligenceEngine imported at module level for performance
-        self.progress_step += 1
-        self._log_progress("Starting Tier 1 intelligence analysis...")
+        self.progress_logger.log_without_increment("Starting Tier 1 intelligence analysis...")
         engine = IntelligenceEngine(self.json)
         self.json['smart_context'] = engine.analyze_all_layers()
-        self.progress_step += 1
-        self._log_progress("Tier 1 intelligence analysis complete")
-
-    def create_output_dir(self):
-        """Ensure self.output_dir exists (required for write functions)."""
-        from .page_writer import create_output_dir
-        create_output_dir(self)
-
-    def write_misc(self, template, path, page_ctx=None, sorted_by=None, reverse=True, is_index=False):
-        """Render and write unsorted HTML listings to disk."""
-        from .page_writer import write_misc
-        write_misc(self, template, path, page_ctx=page_ctx, sorted_by=sorted_by, reverse=reverse, is_index=is_index)
+        self.progress_logger.log_without_increment("Tier 1 intelligence analysis complete")
 
     def _get_directory_authorities_data(self):
-        """Prepare directory authorities data for template rendering."""
+        """Prepare directory authorities data for template rendering.
+
+        Kept as a facade method: page_context.StandardTemplateContexts
+        calls it via self.relays (importing page_writer there would be
+        circular — page_writer imports page_context).
+        """
         from .page_writer import get_directory_authorities_data
         return get_directory_authorities_data(self)
 
-    def _format_time_ago(self, timestamp_str):
-        """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')."""
-        return format_time_ago(timestamp_str)
-
-    def get_detail_page_context(self, category, value):
-        """Generate page context with correct breadcrumb data for detail pages."""
-        from .page_context import get_detail_page_context
-        return get_detail_page_context(category, value)
-
-    def write_pages_by_key(self, k):
-        """Render and write sorted HTML relay listings to disk."""
-        from .page_writer import write_pages_by_key
-        write_pages_by_key(self, k)
-
-    def _build_template_args(self, k, v, i, the_prefixed, validated_aroi_domains):
-        """Build template arguments for all page types."""
-        from .page_writer import build_template_args
-        return build_template_args(self, k, v, i, the_prefixed, validated_aroi_domains)
-
-    def _write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time):
-        """Parallel page generation using fork()."""
-        from .page_writer import write_pages_parallel
-        write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time)
-
-    def write_relay_info(self):
-        """Render and write per-relay HTML info documents to disk."""
-        from .page_writer import write_relay_info
-        write_relay_info(self)
-
-    def _get_contact_validation_status(self, members):
-        """
-        Get AROI validation status for a contact's relays (Phase 2).
-        
-        Args:
-            members (list): List of relay objects for this contact
-            
-        Returns:
-            dict: Validation status information from get_contact_validation_status
-        """
-        from .aroi_validation import get_contact_validation_status
-        
-        # Get the validation data and pre-built validation_map
-        validation_data = getattr(self, 'aroi_validation_data', None)
-        validation_map = getattr(self, 'validation_map', None)
-        
-        # Pass shared validation_map to avoid rebuilding it 3,000+ times
-        return get_contact_validation_status(members, validation_data, validation_map)
-    
     @functools.cached_property
     def _aroi_validation_timestamp(self):
         """
@@ -1363,67 +1273,3 @@ class Relays:
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
 
-    def _generate_contact_rankings(self, contact_hash):
-        """Generate AROI leaderboard rankings for a specific contact."""
-        from .operator_analysis import generate_contact_rankings
-        return generate_contact_rankings(contact_hash, self)
-
-    def _get_leaderboard_category_info(self, category):
-        """Get display information for a leaderboard category."""
-        from .operator_analysis import get_leaderboard_category_info
-        return get_leaderboard_category_info(category)
-
-    def _calculate_operator_reliability(self, contact_hash, operator_relays):
-        """Calculate comprehensive reliability statistics for an operator."""
-        from .operator_analysis import calculate_operator_reliability
-        return calculate_operator_reliability(contact_hash, operator_relays, self)
-
-    def _format_intelligence_rating(self, rating_text):
-        """Format intelligence rating text with color coding."""
-        from .operator_analysis import format_intelligence_rating
-        return format_intelligence_rating(rating_text)
-
-    def _compute_contact_display_data(self, i, bandwidth_unit, operator_reliability, v, members):
-        """Compute contact-specific display data for contact pages."""
-        from .operator_analysis import compute_contact_display_data
-        return compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, members, self)
-
-    def _compute_contact_flag_analysis(self, contact_hash, members):
-        """Compute flag analysis for contact operator."""
-        from .operator_analysis import compute_contact_flag_analysis
-        return compute_contact_flag_analysis(contact_hash, members, self)
-
-    def _compute_contact_flag_bandwidth_analysis(self, contact_hash, members):
-        """Compute flag bandwidth analysis for contact operator."""
-        from .operator_analysis import compute_contact_flag_bandwidth_analysis
-        return compute_contact_flag_bandwidth_analysis(contact_hash, members, self)
-
-    def _process_operator_flag_bandwidth_reliability(self, operator_flag_data, network_flag_statistics):
-        """Process operator flag bandwidth data into display format."""
-        from .operator_analysis import process_operator_flag_bandwidth_reliability
-        return process_operator_flag_bandwidth_reliability(operator_flag_data, network_flag_statistics, self)
-
-    def _process_operator_flag_reliability(self, operator_flag_data, network_flag_statistics):
-        """Process flag reliability metrics for an operator."""
-        from .operator_analysis import process_operator_flag_reliability
-        return process_operator_flag_reliability(operator_flag_data, network_flag_statistics)
-
-    def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
-        """Calculate real-time downtime alerts for operator contact pages."""
-        from .operator_analysis import calculate_operator_downtime_alerts
-        return calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_data, bandwidth_unit, self)
-
-    def _calculate_uptime_display(self, relay):
-        """Calculate uptime/downtime display for a single relay."""
-        from .operator_analysis import calculate_uptime_display
-        return calculate_uptime_display(relay)
-
-    def _preformat_network_health_template_strings(self, health_metrics):
-        """Pre-format all template strings to eliminate Jinja2 formatting overhead."""
-        from .network_health import preformat_network_health_template_strings
-        preformat_network_health_template_strings(health_metrics)
-
-    def _calculate_network_health_metrics(self):
-        """Calculate network health metrics. Delegates to network_health module."""
-        from .network_health import calculate_network_health_metrics
-        calculate_network_health_metrics(self)
