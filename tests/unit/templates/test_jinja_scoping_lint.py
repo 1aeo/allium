@@ -24,14 +24,7 @@ Benign same-iteration set-and-use (e.g. css_class per row) and list
 mutation via {% set _ = list.append(...) %} are not flagged.
 """
 
-import glob
-import os
 import re
-import unittest
-
-TEMPLATE_DIR = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', 'allium', 'templates'
-)
 
 _TAG_RE = re.compile(r'({%-?.*?-?%}|{{-?.*?-?}})', re.DOTALL)
 _COMMENT_RE = re.compile(r'{#.*?#}', re.DOTALL)
@@ -65,7 +58,7 @@ def find_set_in_for_scoping_bugs(source):
             # For each candidate, scan tags after this endfor: a read of the
             # var before a re-{% set %} is a violation.
             for var, set_pos in frame['candidates'].items():
-                word_re = re.compile(r'\b%s\b' % re.escape(var))
+                word_re = re.compile(r'\b{}\b'.format(re.escape(var)))
                 for _, later_tag in tags[idx + 1:]:
                     set_match = _SET_RE.match(later_tag)
                     if set_match and set_match.group(1) == var:
@@ -91,63 +84,59 @@ def find_set_in_for_scoping_bugs(source):
     return violations
 
 
-class TestJinjaScopingLint(unittest.TestCase):
-
-    def test_detector_catches_known_bug_pattern(self):
-        """Self-test: the detector must flag the exact pattern that broke the
-        IPv6 column (guards against detector rot)."""
-        buggy = (
-            "{% set ipv6_found = false %}\n"
-            "{% for addr in relay['or_addresses'] %}\n"
-            "    {% if ':' in addr %}{% set ipv6_found = true %}{% endif %}\n"
-            "{% endfor %}\n"
-            "{% if ipv6_found %}yes{% else %}N/A{% endif %}\n"
-        )
-        violations = find_set_in_for_scoping_bugs(buggy)
-        self.assertEqual([v[1] for v in violations], ['ipv6_found'])
-
-    def test_detector_allows_benign_patterns(self):
-        """Same-iteration set-and-use, list mutation, post-loop re-init, and
-        namespace() must not be flagged."""
-        benign = (
-            # set before loop, re-set + read within the same iteration only
-            "{% set css = '' %}\n"
-            "{% for row in rows %}\n"
-            "    {% set css = 'x' %}<td class=\"{{ css }}\">{{ row }}</td>\n"
-            "{% endfor %}\n"
-            # list mutation via throwaway var
-            "{% set vals = [] %}\n"
-            "{% for row in rows %}{% set _ = vals.append(row) %}{% endfor %}\n"
-            "{{ vals|join(',') }}\n"
-            # namespace pattern (the correct fix)
-            "{% set ns = namespace(found=false) %}\n"
-            "{% for row in rows %}{% set ns.found = true %}{% endfor %}\n"
-            "{% if ns.found %}yes{% endif %}\n"
-            # re-initialized after the loop before any read
-            "{% set flag = false %}\n"
-            "{% for row in rows %}{% set flag = true %}{% endfor %}\n"
-            "{% set flag = rows|length > 0 %}\n"
-            "{% if flag %}yes{% endif %}\n"
-        )
-        self.assertEqual(find_set_in_for_scoping_bugs(benign), [])
-
-    def test_no_scoping_bugs_in_templates(self):
-        """No template may read a set-inside-for variable after endfor."""
-        template_files = sorted(glob.glob(os.path.join(TEMPLATE_DIR, '*.html')))
-        self.assertGreater(len(template_files), 0, "no templates found")
-
-        all_violations = []
-        for path in template_files:
-            with open(path, encoding='utf8') as f:
-                violations = find_set_in_for_scoping_bugs(f.read())
-            for line, var in violations:
-                all_violations.append(f"{os.path.basename(path)}:{line}: "
-                                      f"'{var}' set inside for-loop is read after endfor "
-                                      f"(Jinja2 loop-local scoping — value never escapes the loop)")
-
-        self.assertEqual(all_violations, [],
-                         "Jinja2 set-inside-for scoping bugs found:\n" + "\n".join(all_violations))
+def test_detector_catches_known_bug_pattern():
+    """Self-test: the detector must flag the exact pattern that broke the
+    IPv6 column (guards against detector rot)."""
+    buggy = (
+        "{% set ipv6_found = false %}\n"
+        "{% for addr in relay['or_addresses'] %}\n"
+        "    {% if ':' in addr %}{% set ipv6_found = true %}{% endif %}\n"
+        "{% endfor %}\n"
+        "{% if ipv6_found %}yes{% else %}N/A{% endif %}\n"
+    )
+    violations = find_set_in_for_scoping_bugs(buggy)
+    assert [v[1] for v in violations] == ['ipv6_found']
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_detector_allows_benign_patterns():
+    """Same-iteration set-and-use, list mutation, post-loop re-init, and
+    namespace() must not be flagged."""
+    benign = (
+        # set before loop, re-set + read within the same iteration only
+        "{% set css = '' %}\n"
+        "{% for row in rows %}\n"
+        "    {% set css = 'x' %}<td class=\"{{ css }}\">{{ row }}</td>\n"
+        "{% endfor %}\n"
+        # list mutation via throwaway var
+        "{% set vals = [] %}\n"
+        "{% for row in rows %}{% set _ = vals.append(row) %}{% endfor %}\n"
+        "{{ vals|join(',') }}\n"
+        # namespace pattern (the correct fix)
+        "{% set ns = namespace(found=false) %}\n"
+        "{% for row in rows %}{% set ns.found = true %}{% endfor %}\n"
+        "{% if ns.found %}yes{% endif %}\n"
+        # re-initialized after the loop before any read
+        "{% set flag = false %}\n"
+        "{% for row in rows %}{% set flag = true %}{% endfor %}\n"
+        "{% set flag = rows|length > 0 %}\n"
+        "{% if flag %}yes{% endif %}\n"
+    )
+    assert find_set_in_for_scoping_bugs(benign) == []
+
+
+def test_no_scoping_bugs_in_templates(templates_dir):
+    """No template may read a set-inside-for variable after endfor."""
+    template_files = sorted(templates_dir.glob('*.html'))
+    assert len(template_files) > 0, "no templates found"
+
+    all_violations = []
+    for path in template_files:
+        violations = find_set_in_for_scoping_bugs(path.read_text(encoding='utf8'))
+        for line, var in violations:
+            all_violations.append(
+                f"{path.name}:{line}: "
+                f"'{var}' set inside for-loop is read after endfor "
+                f"(Jinja2 loop-local scoping — value never escapes the loop)")
+
+    assert all_violations == [], (
+        "Jinja2 set-inside-for scoping bugs found:\n" + "\n".join(all_violations))
