@@ -1118,7 +1118,11 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             geographic_breakdown_details = ""
             geographic_breakdown_tooltip = ""
             if category in ('non_eu_volume', 'non_eu_breadth'):
-                geographic_achievement = calculate_geographic_achievement(metrics['countries'])
+                # Bugbot fix (PR #217): derive the achievement from the operator's
+                # NON-EU countries only — these boards rank non-EU presence, so an
+                # EU-heavy operator must not earn EU-derived titles here.
+                non_eu_countries = [country for country, _count in metrics['non_eu_country_breakdown']]
+                geographic_achievement = calculate_geographic_achievement(non_eu_countries)
                 # Use non-EU country breakdown for specialization column instead of all countries
                 geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
                     metrics['non_eu_country_breakdown'], 52

@@ -275,6 +275,47 @@ class TestDistinctDiversityMetrics:
         # ...but only 2 distinct non-EU countries (breadth metric)
         assert metrics['non_eu_country_count'] == 2
 
+    def test_geographic_achievement_uses_non_eu_countries_only(self):
+        """Regression test (PR #217 Bugbot): the non-EU boards' achievement
+        title must be derived from the operator's NON-EU countries only.
+        An EU-heavy operator with a single US relay must get a North
+        America title, not a 'Europe Champion' title, on the non-EU
+        podium."""
+        from allium.lib.aroileaders import (
+            _collect_operator_metrics,
+            _rank_operators,
+            _format_leaderboard_entries,
+        )
+
+        instance = self._build_relays_instance([
+            ('Linux', 'DE'),   # EU
+            ('Linux', 'FR'),   # EU
+            ('Linux', 'NL'),   # EU
+            ('Linux', 'ES'),   # EU
+            ('Linux', 'US'),   # the ONLY non-EU relay
+        ])
+
+        # Stub bandwidth formatter for _format_leaderboard_entries
+        class _StubFormatter:
+            def determine_unit(self, value):
+                return 'MB/s'
+
+            def format_bandwidth_with_unit(self, value, unit, decimal_places=1):
+                return f'{value / 1e6:.{decimal_places}f}'
+
+        instance.bandwidth_formatter = _StubFormatter()
+        instance.timestamp = '2026-01-01 00:00:00'
+
+        ops = _collect_operator_metrics(instance)
+        boards = _rank_operators(ops)
+        formatted = _format_leaderboard_entries(boards, ops, instance)
+
+        entry = formatted['leaderboards']['non_eu_breadth'][0]
+        # Derived from ['US'] only -> North America title, never a
+        # European one (old bug: all 5 countries -> 'Europe Champion').
+        assert entry['geographic_achievement'] == 'North America Champion'
+        assert 'Europe' not in entry['geographic_achievement']
+
 
 class TestV3TierLeaderboardPropagation:
     """B4.test (re-opened): verify aroileaders.py uses the same tier
