@@ -8,6 +8,7 @@ Extracted from relays.py for better modularity.
 """
 
 import functools
+import logging
 import multiprocessing as mp
 import os
 import time
@@ -38,6 +39,8 @@ from .intelligence_engine import IntelligenceEngine
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize_path_component(value: str) -> str:
@@ -764,7 +767,7 @@ def get_directory_authorities_data(relay_set):
         from .consensus.collector_fetcher import get_known_offline_authorities
         known_offline = get_known_offline_authorities()
     except Exception as e:
-        print(f"Warning: Failed to load known offline authorities ({e}), skipping offline-retention rows")
+        logger.warning(f"Failed to load known offline authorities ({e}), skipping offline-retention rows")
         known_offline = []
     for entry in known_offline:
         entry_fp = (entry.get('fingerprint') or '').upper()

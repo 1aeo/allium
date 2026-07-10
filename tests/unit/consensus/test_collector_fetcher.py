@@ -1449,7 +1449,11 @@ class TestKnownOfflineAuthorities:
 
     def test_gabelmoo_present_with_relay_fingerprint(self):
         offline = get_known_offline_authorities()
-        assert offline is KNOWN_OFFLINE_AUTHORITIES
+        # Same content as the module list, but copies - callers can't mutate it
+        assert offline == KNOWN_OFFLINE_AUTHORITIES
+        assert offline is not KNOWN_OFFLINE_AUTHORITIES
+        assert all(entry is not original
+                   for entry, original in zip(offline, KNOWN_OFFLINE_AUTHORITIES))
         by_nick = {e['nickname']: e for e in offline}
         assert 'gabelmoo' in by_nick
         # Must be the Onionoo RELAY fingerprint (for dedupe), not the ED03BB signing key

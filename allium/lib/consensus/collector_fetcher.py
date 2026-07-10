@@ -116,8 +116,9 @@ def get_known_offline_authorities() -> List[dict]:
 
     Display-only, used to keep recently-removed authorities visible (as offline) on
     the dedicated Directory Authorities page after they age out of live data sources.
+    Returns copies so callers can't mutate the module-level entries.
     """
-    return KNOWN_OFFLINE_AUTHORITIES
+    return [dict(entry) for entry in KNOWN_OFFLINE_AUTHORITIES]
 
 
 # ============================================================================

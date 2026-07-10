@@ -540,6 +540,10 @@ def test_offline_authority_merged_when_absent(make_relays):
 
     # Counts: dynamic authority-flag count EXCLUDES the hardcoded offline row
     assert info['authorities_summary']['total_with_authority_flag'] == 1
+    # The voting denominator (the 8/9 -> 8/8 regression this fixes) also
+    # excludes the offline row: no collector data here, so it falls back to
+    # the dynamic Onionoo authority count
+    assert info['authorities_summary']['total_authorities'] == 1
     # Offline summary (dynamic) reflects gabelmoo
     assert info['authorities_summary']['offline_count'] >= 1
     assert 'gabelmoo' in info['authorities_summary']['offline_names']
