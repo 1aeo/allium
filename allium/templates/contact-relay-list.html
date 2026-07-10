@@ -291,21 +291,13 @@
             unknown
         {% endif -%}
     </td>
-    {# PERF: IPv6 column uses pre-computed table_has_ipv6 flag (O(1) instead of O(n²)) #}
+    {# PERF: IPv6 address pre-computed in Python (relays.py _preprocess_template_data).
+       Jinja2 set-inside-for does not survive endfor, so the old in-template loop
+       always rendered N/A (scoping bug). #}
     {% if table_has_ipv6 -%}
     <td>
-        {% set ipv6_found = false -%}
-        {% set ipv6_addr = '' -%}
-        {% if relay.get('or_addresses') -%}
-            {% for addr in relay['or_addresses'] -%}
-                {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
-                    {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
-                    {% set ipv6_found = true -%}
-                {% endif -%}
-            {% endfor -%}
-        {% endif -%}
-        {% if ipv6_found -%}
-            {{ ipv6_addr|escape }}
+        {% if relay.get('ipv6_display_address') -%}
+            {{ relay['ipv6_display_address']|escape }}
         {% else -%}
             N/A
         {% endif -%}
