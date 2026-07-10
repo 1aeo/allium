@@ -439,32 +439,57 @@ def patch_relays_methods():
 
 
 @pytest.fixture
-def jinja_env():
+def templates_dir():
+    """Fixture that provides the allium templates directory as a Path."""
+    return project_root / 'allium' / 'templates'
+
+
+@pytest.fixture
+def jinja_env(templates_dir):
     """Fixture that provides a configured Jinja2 environment for template testing."""
     from jinja2 import Environment, FileSystemLoader, select_autoescape
     
-    template_dir = project_root / 'allium' / 'templates'
     env = Environment(
-        loader=FileSystemLoader(str(template_dir)),
+        loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(['html', 'xml'])
     )
     
-    # Add custom filters for template compatibility
-    try:
-        from allium.lib.relays import (
-            determine_unit_filter, 
-            format_bandwidth_with_unit, 
-            format_bandwidth_filter, 
-            format_time_ago
-        )
-        env.filters['determine_unit'] = determine_unit_filter
-        env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
-        env.filters['format_bandwidth'] = format_bandwidth_filter
-        env.filters['format_time_ago'] = format_time_ago
-    except ImportError:
-        pass  # Filters may not be available in all test contexts
+    # Add custom filters for template compatibility.
+    # NOTE: these moved out of allium.lib.relays in the simplification refactor;
+    # import from their canonical homes so the filters are actually registered.
+    from allium.lib.bandwidth_formatter import (
+        determine_unit_filter,
+        format_bandwidth_with_unit,
+        format_bandwidth_filter,
+    )
+    from allium.lib.time_utils import format_time_ago
+    env.filters['determine_unit'] = determine_unit_filter
+    env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+    env.filters['format_bandwidth'] = format_bandwidth_filter
+    env.filters['format_time_ago'] = format_time_ago
     
     return env
+
+
+@pytest.fixture
+def process_relays(tmp_path):
+    """Factory fixture: run the full (unpatched) Relays init pipeline on raw
+    onionoo-shaped relay dicts and return the Relays instance.
+
+    Use this when a test must exercise real preprocessing
+    (_preprocess_template_data et al.). Unlike
+    TestSetupHelpers.create_test_relays_instance, nothing is mocked out.
+    """
+    def _process(relays):
+        from allium.lib.relays import Relays
+        return Relays(
+            output_dir=str(tmp_path),
+            onionoo_url='https://test.example.com',
+            relay_data={'relays': relays},
+            use_bits=False,
+            progress=False,
+        )
+    return _process
 
 
 # ============================================================================

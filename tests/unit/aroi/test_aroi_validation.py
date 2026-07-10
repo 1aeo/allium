@@ -736,7 +736,9 @@ class TestAROIValidationV3(unittest.TestCase):
         s = get_contact_validation_status(relays, {'results': []})
         self.assertEqual(s['validation_summary']['v2_relay_count'], 1)
         self.assertEqual(s['validation_summary']['v3_relay_count'], 2)
-        self.assertAlmostEqual(s['validation_summary']['v3_relay_percentage'],
+        self.assertAlmostEqual(s['validation_summary']['v3_pct_of_total'],
+                                66.66666, places=2)
+        self.assertAlmostEqual(s['validation_summary']['v3_migration_progress_pct'],
                                 66.66666, places=2)
         self.assertTrue(s['validation_summary']['is_mixed_migration'])
         self.assertTrue(s['validation_summary']['is_v3_adopter'])

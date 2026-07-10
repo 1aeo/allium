@@ -181,6 +181,19 @@
 {% endif %}
 {%- endmacro -%}
 
+{# =============================================================================
+   OPERATOR LINK URL (DRY - single source for the validated-AROI vs contact-page
+   link target; used by detail_summary here and the operator link macros in
+   aroi_macros.html). Emits just the URL with no surrounding whitespace.
+   ============================================================================= #}
+{% macro operator_href(aroi_domain, contact_hash, path_prefix) -%}
+    {%- if base_url and aroi_domain and aroi_domain in validated_aroi_domains -%}
+        {{- base_url }}/{{ aroi_domain|lower|escape }}/
+    {%- else -%}
+        {{- path_prefix }}contact/{{ contact_hash }}/
+    {%- endif -%}
+{%- endmacro %}
+
 {% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
@@ -227,12 +240,8 @@
     {%- set has_validation = contact_validation_status and contact_validation_status.has_aroi -%}
     {%- if has_aroi_domain and (contact_validation_status is none or has_validation) %}
     <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong> 
-    {% if base_url and aroi_domain in validated_aroi_domains -%}
-    <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ aroi_domain|escape }}</a>
-    {% else -%}
-    <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{{ aroi_domain|escape }}</a>
-    {% endif -%}
-    {{- aroi_validation_badge(contact_validation_status) -}}
+<a href="{{ operator_href(aroi_domain, contact_md5|escape, page_ctx.path_prefix if page_ctx else '../../') }}">{{ aroi_domain|escape }}</a>
+{{ aroi_validation_badge(contact_validation_status) -}}
     </li>
     {%- elif has_validation %}
     {#- Show validation status even when AROI domain wasn't parsed -#}
@@ -330,7 +339,7 @@
     <span title="ciissversion:3 (ed25519 happy-family proofs, recommended)" style="padding: 1px 5px; background-color: #007bff; color: white; border-radius: 3px;">v3: {{ v3_count }}</span>
     {%- endif -%}
     {%- if summary.is_mixed_migration %}
-    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_relay_percentage) }}% of relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_relay_percentage) }}% v3</span>
+    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% of AROI-declaring relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% v3</span>
     {%- elif summary.v3_tier == 'complete' %}
     <span title="100% v3 — all relays on ciissversion:3" style="padding: 1px 5px; background-color: #ffc107; color: #212529; border-radius: 3px;">🏆 v3 complete</span>
     {%- endif -%}

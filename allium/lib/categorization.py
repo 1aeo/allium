@@ -10,7 +10,7 @@ import html as _html
 import re
 from typing import Dict, List
 
-from .string_utils import extract_contact_display_name
+from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
 
 # Pre-compiled regex for sort key validation (called ~49K times per run)
 _VALID_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -654,10 +654,8 @@ def propagate_as_rarity(relay_set):
         cw = e.get('consensus_weight_fraction', 0)
         relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
-_INCOMPLETE_URL_RE = re.compile(
-    r'\burl:(?:https?://)?([^,\s]+)',
-    re.IGNORECASE,
-)
+# Shared url: token pattern (string_utils is the single source of truth)
+_INCOMPLETE_URL_RE = URL_FIELD_TOKEN_RE
 
 
 def _build_incomplete_aroi_sibling_map(relay_set) -> Dict[str, Dict[str, List[str]]]:
