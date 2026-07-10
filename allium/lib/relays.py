@@ -12,7 +12,7 @@ import multiprocessing as mp
 import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
-from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+from .ip_utils import determine_ipv6_support, safe_parse_ip_address as _safe_parse_ip_address
 from .network_health import calculate_network_health_metrics
 from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
