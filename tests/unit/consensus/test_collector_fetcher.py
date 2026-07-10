@@ -1475,3 +1475,12 @@ class TestKnownOfflineAuthorities:
         for e in get_known_offline_authorities():
             assert len(e['fingerprint']) == 40
             assert e.get('note')
+
+    def test_offline_entries_use_uppercase_country(self):
+        # Country must be uppercase to match _preprocess_template_data
+        # (relay["country"] = country.upper()) and the country/<CC>/ page URL convention,
+        # otherwise the offline row's country link 404s (e.g. /country/de/ vs /country/DE/).
+        for e in get_known_offline_authorities():
+            country = e.get('country')
+            if country:
+                assert country == country.upper(), f"{e['nickname']} country must be uppercase"

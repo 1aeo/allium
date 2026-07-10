@@ -222,7 +222,7 @@ class TestDirectoryAuthorities(unittest.TestCase):
                                if not a.get('is_known_offline')]
         self.assertEqual(len(dynamic_authorities), 1)
         self.assertEqual(dynamic_authorities[0]['nickname'], 'moria1')
-        
+
         # Verify summary (authority-flag count excludes offline placeholders)
         self.assertEqual(authorities_info['authorities_summary']['total_authorities'], 1)
 

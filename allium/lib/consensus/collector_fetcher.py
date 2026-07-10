@@ -100,7 +100,9 @@ KNOWN_OFFLINE_AUTHORITIES = [
     {
         'nickname': 'gabelmoo',
         'fingerprint': 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281',
-        'country': 'de',
+        # Uppercase to match _preprocess_template_data (relay["country"] = country.upper())
+        # and the country-page URL convention (country/DE/), so the offline row links correctly.
+        'country': 'DE',
         'country_name': 'Germany',
         'offline_since': '2026-06-30',  # last vote 2026-06-29 23:00 UTC (CollecTor archive)
         'note': ('Went offline on 2026-06-30 (last vote 2026-06-29) and was '
