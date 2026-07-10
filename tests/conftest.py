@@ -12,7 +12,6 @@ import json
 import os
 import sys
 import tempfile
-import types
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -246,45 +245,12 @@ def uptime_data():
 
 @pytest.fixture
 def mock_aroi_leaderboard_entry():
-    """Fixture that creates a mock AROI leaderboard entry."""
-    def _create_entry(rank=1, contact_hash='test_hash'):
-        entry = types.SimpleNamespace()
-        entry.contact_hash = contact_hash
-        entry.contact_info_escaped = f'operator{rank}@example.com'
-        entry.display_name = f'Operator{rank}'
-        entry.rank = rank
-        entry.total_relays = 10 + rank
-        entry.measured_count = 5 + (rank // 2)
-        entry.total_bandwidth = f'{1.0 + (rank * 0.1):.1f}'
-        entry.bandwidth_unit = 'MB/s'
-        entry.total_consensus_weight_pct = f'{1.0 + (rank * 0.1):.1f}%'
-        entry.exit_consensus_weight_pct = f'{0.5 + (rank * 0.05):.1f}%'
-        entry.guard_consensus_weight_pct = f'{0.5 + (rank * 0.05):.1f}%'
-        entry.exit_count = 5 + rank
-        entry.guard_count = 3 + rank
-        entry.middle_count = 2 + rank
-        entry.diversity_score = 50 + rank
-        entry.country_count = 2 + (rank // 5)
-        entry.platform_count = 1 + (rank // 3)
-        entry.unique_as_count = 1 + (rank // 2)
-        entry.non_linux_count = 1 + (rank // 3)
-        entry.non_eu_count = 1 + (rank // 2)
-        entry.non_eu_count_with_percentage = f'{1 + (rank // 2)} ({50 + rank}%)'
-        entry.non_eu_country_count = 1 + (rank // 4)
-        entry.platform_volume_summary = f'{1 + (rank // 3)} non-Linux relays ({1 + (rank // 3)} OSes)'
-        entry.platform_breadth_summary = f'{1 + (rank // 3)} OSes ({1 + (rank // 3)} non-Linux relays)'
-        entry.non_eu_volume_summary = f'{1 + (rank // 2)} relays ({1 + (rank // 4)} countries)'
-        entry.non_eu_breadth_summary = f'{1 + (rank // 4)} countries ({1 + (rank // 2)} relays)'
-        entry.rare_country_count = 1 + (rank // 10)
-        entry.relays_in_rare_countries = 1 + (rank // 8)
-        entry.veteran_days = 100 + (rank * 10)
-        entry.veteran_score = (100 + (rank * 10)) * (10 + rank)
-        entry.reliability_score = f'{90.0 + rank:.1f}%'
-        entry.reliability_average = f'{90.0 + rank:.1f}%'
-        entry.unique_ipv4_count = 10 + rank
-        entry.unique_ipv6_count = 5 + rank
-        return entry
-    return _create_entry
+    """Fixture that creates a mock AROI leaderboard entry.
+
+    Delegates to the shared TestDataFactory so the mock entry schema lives
+    in exactly one place and cannot drift between test suites."""
+    from helpers.fixtures import TestDataFactory
+    return TestDataFactory.create_aroi_leaderboard_entry
 
 
 @pytest.fixture

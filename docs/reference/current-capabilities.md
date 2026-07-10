@@ -31,43 +31,49 @@ Generates ~21,700 HTML pages including:
 - `search-index.json` - Search data for Cloudflare Pages function
 - Individual pages for relays, contacts, countries, ASes, families, platforms, flags
 
-## AROI Leaderboards (18 Categories)
+## AROI Leaderboards (21 Categories)
 
 Authenticated Relay Operator Identification system ranking verified operators.
 
 ### Capacity & Performance
-1. **Bandwidth Capacity Contributed** - Total observed bandwidth
-2. **Consensus Weight Leaders** - Network routing influence
+
+- **1. Bandwidth Capacity Contributed** - Total observed bandwidth
+- **2. Consensus Weight Leaders** - Network routing influence
+- **3. Total Data Transferred Champions (5-Year)** - Cumulative data served (read + write)
 
 ### Network Role Specialization
-3. **Exit Authority Champions** - Exit consensus weight
-4. **Guard Authority Champions** - Guard consensus weight
-5. **Exit Operators** - Exit relay count
-6. **Guard Operators** - Guard relay count
+
+- **4. Exit Authority Champions** - Exit consensus weight
+- **5. Guard Authority Champions** - Guard consensus weight
+- **6. Exit Operators** - Exit relay count
+- **7. Guard Operators** - Guard relay count
 
 ### Reliability Excellence (25+ relays required)
-7. **Reliability Masters** - 6-month average uptime
-8. **Legacy Titans** - 5-year average uptime
-9. **Bandwidth Served Masters** - 6-month bandwidth performance
-10. **Bandwidth Served Legends** - 5-year bandwidth performance
+
+- **8. Reliability Masters** - 6-month average uptime
+- **9. Legacy Titans** - 5-year average uptime
+- **10. Bandwidth Served Masters** - 6-month bandwidth performance
+- **11. Bandwidth Served Legends** - 5-year bandwidth performance
 
 ### Diversity & Geographic Leadership
+
 Each diversity dimension has two co-equal boards — Volume (relay count on the
 non-dominant side of the network) and Breadth (distinct spread within one
 operator) — so neither kind of diversity is buried under the other's metric.
 
-11. **Diversity All-Rounders (Overall)** - Multi-factor diversity scoring
-12. **Non-Linux Powerhouses (Platform Volume)** - Non-Linux relay count (distinct OS tiebreaker)
-13. **OS Polyglots (Platform Breadth)** - Distinct OSes incl. Linux, 2+ to qualify (non-Linux relay tiebreaker)
-14. **Global Powerhouses (Non-EU Volume)** - Non-EU relay count (distinct country tiebreaker)
-15. **Jurisdiction Globetrotters (Non-EU Breadth)** - Distinct non-EU countries (non-EU relay tiebreaker)
-16. **Frontier Builders (Rare-Country Breadth)** - Distinct rare countries (rare-relay tiebreaker)
+- **12. Diversity All-Rounders (Overall)** - Multi-factor diversity scoring
+- **13. Non-Linux Powerhouses (Platform Volume)** - Non-Linux relay count (distinct OS tiebreaker)
+- **14. OS Polyglots (Platform Breadth)** - Distinct OSes incl. Linux, 2+ to qualify (non-Linux relay tiebreaker)
+- **15. Global Powerhouses (Non-EU Volume)** - Non-EU relay count (distinct country tiebreaker)
+- **16. Jurisdiction Globetrotters (Non-EU Breadth)** - Distinct non-EU countries (non-EU relay tiebreaker)
+- **17. Frontier Builders (Rare-Country Breadth)** - Distinct rare countries (rare-relay tiebreaker)
 
 ### Innovation & Infrastructure
-17. **Network Veterans** - Scale-weighted tenure
-18. **IPv4 Address Leaders** - Unique IPv4 diversity
-19. **IPv6 Address Leaders** - Unique IPv6 diversity
-20. **AROI Validation Champions** - Verified identity count
+
+- **18. Network Veterans** - Scale-weighted tenure
+- **19. IPv4 Address Leaders** - Unique IPv4 diversity
+- **20. IPv6 Address Leaders** - Unique IPv6 diversity
+- **21. AROI Validation Champions** - Verified identity count
 
 ### Features
 - Champion badge system

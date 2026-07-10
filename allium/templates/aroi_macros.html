@@ -143,7 +143,7 @@
                             {% elif performance_type == "most_diverse" %}
                                 <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ entry.diversity_score }} diversity</span></span>
                             {% elif performance_type == "platform_volume" %}
-                                <span title="Volume diversity: non-Linux relays contributed (primary ranking metric) with distinct OS count and bandwidth capacity">{{ entry.platform_volume_summary }}, {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}</span>
+                                <span title="Volume diversity: non-Linux relays contributed (primary ranking metric) with distinct OS count">{{ entry.platform_volume_summary }}</span>
                             {% elif performance_type == "platform_breadth" %}
                                 <span title="Breadth diversity: distinct operating systems including Linux (primary ranking metric) with non-Linux relay count">{{ entry.platform_breadth_summary }}</span>
                             {% elif performance_type == "non_eu_volume" %}

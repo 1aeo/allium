@@ -97,7 +97,7 @@
         
         {{ champion_badge("platform_breadth", relays.json.aroi_leaderboards.leaderboards.platform_breadth, "OS Polyglot", "🧩", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("non_eu_volume", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, "Global Powerhouse", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("non_eu_volume", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, "Global Powerhouse", "🌍", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("non_eu_breadth", relays.json.aroi_leaderboards.leaderboards.non_eu_breadth, "Jurisdiction Globetrotter", "🧭", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
         
@@ -158,7 +158,7 @@
     {{ top3_table("OS Polyglots", "🧩", relays.json.aroi_leaderboards.leaderboards.platform_breadth, ["🏆 Polyglot Legend", "🧩 Polyglot Master", "🔧 Polyglot Champion"], "platform_breadth", page_ctx, relays.use_bits) }}
 
     <!-- Global Powerhouses (Non-EU Volume) -->
-    {{ top3_table("Global Powerhouses", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, ["🏆 Global Powerhouse", "🌍 Global Master", "🌐 Global Champion"], "non_eu_volume", page_ctx, relays.use_bits) }}
+    {{ top3_table("Global Powerhouses", "🌍", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, ["🏆 Global Powerhouse", "🌍 Global Master", "🌐 Global Champion"], "non_eu_volume", page_ctx, relays.use_bits) }}
 
     <!-- Jurisdiction Globetrotters (Non-EU Breadth) -->
     {{ top3_table("Jurisdiction Globetrotters", "🧭", relays.json.aroi_leaderboards.leaderboards.non_eu_breadth, ["🏆 Globetrotter Legend", "🧭 Globetrotter Master", "🗺️ Globetrotter Champion"], "non_eu_breadth", page_ctx, relays.use_bits) }}
