@@ -72,6 +72,11 @@ TEST_AROI_URL = "https://test.aroi.url/validate"
 TEST_EXIT_DNS_HEALTH_URL = "https://test.exitdnshealth.url/latest.json"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
+# The 8 currently-voting directory authorities (gabelmoo removed) - alphabetical.
+# Shared by the dynamic voting-authority tests (collector fetcher, diagnostics).
+ACTIVE_VOTING_AUTHORITIES_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
+                               'longclaw', 'maatuska', 'moria1', 'tor26']
+
 
 # ============================================================================
 # PYTEST FIXTURES - Common test data and utilities
@@ -82,6 +87,39 @@ def temp_dir():
     """Fixture that provides a temporary directory that's cleaned up after the test."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+
+
+@pytest.fixture
+def voting_registry_8_voters():
+    """Set the shared authority registry to the 8 active voters (gabelmoo removed).
+
+    Updates the module singleton via the global update_voting_authorities()
+    wrapper before the test and restores the hardcoded fallback afterwards, so
+    dynamic-voting tests never leak state into other tests.
+    """
+    from allium.lib.consensus.collector_fetcher import (
+        get_authority_registry,
+        update_voting_authorities,
+    )
+    registry = get_authority_registry()
+    update_voting_authorities(ACTIVE_VOTING_AUTHORITIES_8)
+    yield registry
+    registry.clear_voting_authorities()
+
+
+@pytest.fixture
+def make_relays(temp_dir):
+    """Factory that builds a Relays instance writing into a per-test temp directory.
+
+    Shared setup for the directory-authority integration tests (and any other
+    test that needs a real Relays object without hitting the network).
+    """
+    from allium.lib.relays import Relays
+
+    def _make(relay_data, onionoo_url=TEST_DETAILS_URL):
+        return Relays(temp_dir, onionoo_url, relay_data)
+
+    return _make
 
 
 @pytest.fixture

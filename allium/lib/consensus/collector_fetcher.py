@@ -210,7 +210,9 @@ class AuthorityRegistry:
         diagnostics - consistent with the authorities that actually voted.
 
         Returns:
-            The number of voting authorities currently recorded.
+            The effective number of voting authorities in use after the update
+            (the dynamic list if set, otherwise the hardcoded fallback) - so an
+            ignored empty update never reads as "zero voters".
         """
         names = sorted({n for n in (vote_authority_names or []) if n})
         if names:
@@ -219,7 +221,7 @@ class AuthorityRegistry:
                 f"AuthorityRegistry: {len(names)} voting authorities discovered "
                 f"from CollecTor: {names}"
             )
-        return len(self._voting_authority_names or [])
+        return self.get_voting_authority_count()
 
     def clear_voting_authorities(self) -> None:
         """Reset the dynamic voting list back to the hardcoded fallback.
@@ -228,6 +230,11 @@ class AuthorityRegistry:
         registry is a shared singleton.
         """
         self._voting_authority_names = None
+
+    def has_dynamic_voting_authorities(self) -> bool:
+        """True when the voting list was discovered from CollecTor vote data
+        (via update_voting_authorities) rather than the hardcoded fallback."""
+        return self._voting_authority_names is not None
 
     def get_voting_authority_names(self) -> List[str]:
         """

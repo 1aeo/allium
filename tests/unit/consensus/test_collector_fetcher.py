@@ -29,6 +29,9 @@ from allium.lib.consensus.collector_fetcher import (
     get_known_offline_authorities,
     KNOWN_OFFLINE_AUTHORITIES,
 )
+# 8 currently-voting authorities (gabelmoo removed) - shared with the
+# voting_registry_8_voters fixture in tests/conftest.py
+from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8 as _ACTIVE_VOTERS_8
 
 
 # ============================================================================
@@ -1371,11 +1374,6 @@ class TestMiddleOnlyFlagTracking:
         assert details_by_auth['auth2']['assigned'] is False
 
 
-# 8 currently-voting authorities (gabelmoo removed) - alphabetical
-_ACTIVE_VOTERS_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
-                    'longclaw', 'maatuska', 'moria1', 'tor26']
-
-
 class TestDynamicVotingAuthorities:
     """Tests for the dynamic voting-authority list (update_voting_authorities).
 
@@ -1412,7 +1410,8 @@ class TestDynamicVotingAuthorities:
 
     def test_update_voting_authorities_empty_on_fresh_keeps_fallback(self):
         registry = AuthorityRegistry()
-        registry.update_voting_authorities([])
+        # An ignored empty update reports the effective (fallback) count, not 0
+        assert registry.update_voting_authorities([]) == 9
         assert registry.get_voting_authority_count() == 9  # fallback intact
 
     def test_clear_voting_authorities_restores_fallback(self):
@@ -1423,35 +1422,26 @@ class TestDynamicVotingAuthorities:
         assert registry.get_voting_authority_count() == 9
         assert 'gabelmoo' in registry.get_voting_authority_names()
 
-    def test_global_update_voting_authorities_wrapper(self):
-        registry = get_authority_registry()
-        try:
-            update_voting_authorities(_ACTIVE_VOTERS_8)
-            assert get_voting_authority_count() == 8
-            assert 'gabelmoo' not in get_voting_authority_names()
-        finally:
-            registry.clear_voting_authorities()  # reset shared singleton
+    def test_global_update_voting_authorities_wrapper(self, voting_registry_8_voters):
+        # The fixture updates the shared singleton via the global
+        # update_voting_authorities() wrapper; the global getters must reflect it.
+        assert get_voting_authority_count() == 8
+        assert 'gabelmoo' not in get_voting_authority_names()
 
-    def test_reachability_denominator_reflects_dynamic_voters(self):
+    def test_reachability_denominator_reflects_dynamic_voters(self, voting_registry_8_voters):
         """_format_reachability must use the dynamic voting set as the denominator.
 
         With gabelmoo removed (8 voters) and a relay reachable by all 8, reachability
         should be 8/8 - not the stale 8/9 that produced the false 'partial' warning.
         """
-        registry = get_authority_registry()
-        try:
-            update_voting_authorities(_ACTIVE_VOTERS_8)
+        fetcher = CollectorFetcher()
+        relay = {'votes': {name: {'flags': ['Running', 'Valid']}
+                           for name in _ACTIVE_VOTERS_8}}
+        reachability = fetcher._format_reachability(relay)
 
-            fetcher = CollectorFetcher()
-            relay = {'votes': {name: {'flags': ['Running', 'Valid']}
-                               for name in _ACTIVE_VOTERS_8}}
-            reachability = fetcher._format_reachability(relay)
-
-            assert reachability['total_authorities'] == 8
-            assert reachability['ipv4_reachable_count'] == 8
-            assert 'gabelmoo' not in reachability['ipv4_reachable_authorities']
-        finally:
-            registry.clear_voting_authorities()
+        assert reachability['total_authorities'] == 8
+        assert reachability['ipv4_reachable_count'] == 8
+        assert 'gabelmoo' not in reachability['ipv4_reachable_authorities']
 
 
 class TestKnownOfflineAuthorities:

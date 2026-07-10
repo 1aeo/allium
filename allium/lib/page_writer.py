@@ -827,8 +827,18 @@ def get_directory_authorities_data(relay_set):
     
     # Use voting authority count from collector (actual voters) rather than Onionoo authority flag count
     # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote.
-    # Fallback uses the DYNAMIC (pre-merge) count so hardcoded offline rows don't inflate it.
-    voting_authority_count = len(collector_flag_thresholds) if collector_flag_thresholds else dynamic_authority_count
+    # When flag_thresholds is absent but votes were seen, the voting registry (updated from the vote
+    # keys in enrich_with_api_data) still holds the real voter count, so prefer it over the Onionoo
+    # Authority-flag count. Only with no vote data at all fall back to the DYNAMIC (pre-merge) Onionoo
+    # count, so hardcoded offline rows never inflate the denominator.
+    if collector_flag_thresholds:
+        voting_authority_count = len(collector_flag_thresholds)
+    else:
+        from .consensus.collector_fetcher import get_authority_registry
+        registry = get_authority_registry()
+        voting_authority_count = (registry.get_voting_authority_count()
+                                  if registry.has_dynamic_voting_authorities()
+                                  else dynamic_authority_count)
     
     # Extract consensus method info from collector data (for Happy Family migration tracking)
     consensus_method_info = None

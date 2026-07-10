@@ -150,9 +150,14 @@ class Relays:
         # Done EARLY (before uptime/bandwidth/network-health/collector steps below) so
         # every downstream consumer sees the corrected voting count. update_voting_authorities()
         # extracts names from the dict's keys and ignores empty input (keeps the fallback).
+        # The registry is a module singleton, so reset it at this generation boundary
+        # first: a collector-less (or failed-fetch) run in the same process must use
+        # the fallback, never a stale dynamic list from a previous generation.
+        from .consensus.collector_fetcher import get_authority_registry
+        registry = get_authority_registry()
+        registry.clear_voting_authorities()
         if collector_consensus_data:
-            from .consensus.collector_fetcher import update_voting_authorities
-            update_voting_authorities(
+            registry.update_voting_authorities(
                 collector_consensus_data.get('flag_thresholds')
                 or collector_consensus_data.get('votes')
             )
