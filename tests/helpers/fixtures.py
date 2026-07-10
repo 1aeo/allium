@@ -224,7 +224,9 @@ class TestPatchingHelpers:
     def create_mock_http_response(data):
         """Create mock HTTP response object."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(data).encode('utf-8')
+        # payload once, then EOF - the production chunk loop reads until
+        # an empty read; a constant return_value spins until total timeout
+        mock_response.read.side_effect = [json.dumps(data).encode('utf-8'), b'']
         return mock_response
     
     @staticmethod

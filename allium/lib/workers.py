@@ -6,20 +6,19 @@ Extracted from the original monolithic Relays class for multi-API support.
 """
 
 import base64
+import errno
 import json
 import logging
 import os
 import random
-import sys
 import time
 import urllib.request
 import urllib.error
 import socket
+import ssl
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
+from .error_handlers import handle_file_io_errors, handle_json_errors
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +246,17 @@ class APIConfig:
     retry_count: int = 3             # Max retries on transient failures (0 = no retry)
     retry_delay_base: float = 1.0    # Base delay in seconds for exponential backoff
     retry_on_fresh_cache: bool = False  # If True, retry even when fresh cache exists
+    # Error-path settings
+    allow_exit_on_304: bool = False  # 304 with no cache: log "dying peacefully" message
+    critical: bool = True            # Affects no-cache log message on generic errors
+    # Worker-registry settings (single source of truth for the coordinator;
+    # worker_fn/args_fn are attached after the fetchers are defined below)
+    worker_fn: Optional[Callable] = None   # Fetch function run by the coordinator
+    args_fn: Optional[Callable] = None     # coordinator -> argument list for worker_fn
+    group: str = 'all'               # '--apis' mode gate: 'details' runs always
+    progress_name: str = ''          # Coordinator progress prefix (e.g. 'Details API')
+    enabled: bool = True             # Registry entries can exist but stay dormant
+    feature_flag: str = ''           # Named feature gate checked by the coordinator
 
 
 # Pre-configured API settings
@@ -258,6 +268,8 @@ DETAILS_CONFIG = APIConfig(
     timeout_stale_cache=DETAILS_TIMEOUT_STALE_CACHE,
     retry_count=3,               # Critical API: retry up to 3 times
     retry_delay_base=2.0,        # 2s → 4s → 8s backoff
+    allow_exit_on_304=True,
+    critical=True,
 )
 
 UPTIME_CONFIG = APIConfig(
@@ -268,6 +280,8 @@ UPTIME_CONFIG = APIConfig(
     timeout_stale_cache=UPTIME_TIMEOUT_STALE_CACHE,
     retry_count=2,               # Non-critical: retry up to 2 times
     retry_delay_base=2.0,
+    allow_exit_on_304=False,
+    critical=False,
 )
 
 BANDWIDTH_CONFIG = APIConfig(
@@ -278,6 +292,8 @@ BANDWIDTH_CONFIG = APIConfig(
     timeout_stale_cache=BANDWIDTH_TIMEOUT_STALE_CACHE,
     retry_count=2,               # Non-critical: retry up to 2 times
     retry_delay_base=2.0,
+    allow_exit_on_304=False,
+    critical=False,
 )
 
 AROI_CONFIG = APIConfig(
@@ -291,6 +307,8 @@ AROI_CONFIG = APIConfig(
     count_field='results',
     retry_count=2,               # External API: retry up to 2 times
     retry_delay_base=1.0,
+    allow_exit_on_304=False,
+    critical=False,
 )
 
 EXIT_DNS_HEALTH_CONFIG = APIConfig(
@@ -304,17 +322,18 @@ EXIT_DNS_HEALTH_CONFIG = APIConfig(
     count_field='results',
     retry_count=2,               # External API: retry up to 2 times
     retry_delay_base=1.0,
+    allow_exit_on_304=False,
+    critical=False,
 )
 # ============================================================================
 
 
 # Use centralized file I/O utilities
-from .file_io_utils import create_cache_manager, create_timestamp_manager, create_state_manager
+from .file_io_utils import create_cache_manager, create_timestamp_manager
 
 # Initialize file managers
 _cache_manager = create_cache_manager(CACHE_DIR)
 _timestamp_manager = create_timestamp_manager(CACHE_DIR)
-_state_manager = create_state_manager(STATE_FILE)
 
 def _save_cache(api_name, data):
     """
@@ -380,8 +399,11 @@ def _save_state():
         "workers": _worker_status,
         "last_updated": time.time()
     }
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+    # Atomic write: a crash mid-dump must not corrupt the existing state
+    tmp_path = STATE_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(state_data, f, indent=2)
+    os.replace(tmp_path, STATE_FILE)
 
 
 @handle_file_io_errors("load state")
@@ -476,7 +498,28 @@ _RETRYABLE_EXCEPTIONS = (
     ConnectionAbortedError,
     ConnectionRefusedError,
     BrokenPipeError,
+    socket.gaierror,  # transient DNS resolution failures
 )
+
+# Network-related errnos worth retrying; anything else (ENOSPC, EACCES,
+# EMFILE, ...) indicates a local problem a retry cannot fix. EPROTOTYPE
+# covers Darwin's send()-after-peer-reset quirk (surfaces instead of EPIPE).
+_RETRYABLE_ERRNOS = frozenset({
+    errno.ECONNRESET, errno.ECONNREFUSED, errno.ECONNABORTED,
+    errno.EPIPE, errno.ETIMEDOUT, errno.EHOSTUNREACH,
+    errno.ENETUNREACH, errno.ENETDOWN, errno.ENETRESET,
+    errno.EPROTOTYPE,
+})
+
+
+def _is_retryable_ssl_error(exc):
+    """TLS-layer failures (handshake EOF, connection resets during the
+    handshake) are transient; certificate verification failures are not -
+    retrying cannot fix a bad certificate. SSLError.errno holds OpenSSL
+    error codes (1-10), NOT system errnos, so these must be classified
+    before any errno-based check."""
+    return isinstance(exc, ssl.SSLError) and not isinstance(
+        exc, ssl.SSLCertVerificationError)
 
 
 def _is_retryable_error(exc: Exception) -> bool:
@@ -496,6 +539,8 @@ def _is_retryable_error(exc: Exception) -> bool:
     """
     if isinstance(exc, _RETRYABLE_EXCEPTIONS):
         return True
+    if _is_retryable_ssl_error(exc):
+        return True
     # IMPORTANT: Check HTTPError BEFORE URLError because HTTPError is a subclass of URLError
     if isinstance(exc, urllib.error.HTTPError):
         # Retry on 5xx server errors and 429 rate limiting
@@ -504,13 +549,15 @@ def _is_retryable_error(exc: Exception) -> bool:
         # URLError wrapping a retryable socket error
         if isinstance(exc.reason, _RETRYABLE_EXCEPTIONS):
             return True
+        if _is_retryable_ssl_error(exc.reason):
+            return True
         # URLError wrapping OSError with retryable errno
         if isinstance(exc.reason, OSError):
-            return True
+            return exc.reason.errno in _RETRYABLE_ERRNOS
         return False
     if isinstance(exc, OSError):
-        # Generic OS-level network errors (ECONNRESET, etc.)
-        return True
+        # Only network-related errnos; ENOSPC/EACCES etc. are not transient
+        return exc.errno in _RETRYABLE_ERRNOS
     return False
 
 
@@ -609,7 +656,12 @@ def _fetch_with_cache_fallback(
     3. Make HTTP request with appropriate timeout
     4. Fall back to cached data on timeout
     5. Save new data to cache on success
-    
+
+    Error handling (per config.allow_exit_on_304 and config.critical):
+    - HTTP 304: return cached data, or mark stale when no cache exists
+    - Other HTTP errors and network errors: log and re-raise
+    - Any other error: mark stale and fall back to cached data
+
     Args:
         url: URL to fetch data from
         config: APIConfig with timeout and cache settings
@@ -630,167 +682,208 @@ def _fetch_with_cache_fallback(
         if progress_logger:
             progress_logger(message)
     
-    # Check cache age AND validate cache can be loaded
-    cache_age = _cache_manager.get_cache_age(api_name)
-    
-    # Pre-load cache to verify it's valid (will be reused on timeout fallback)
-    cached_data = None
-    if cache_age is not None:
-        cached_data = _load_cache(api_name)
-        if cached_data is None:
-            cache_age = None
-            log_progress("cache file exists but is invalid, treating as no cache...")
-    
-    # If cache is fresh and valid, optionally return immediately
-    if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
-        cache_age_display = cache_age / 3600 if cache_age >= 3600 else cache_age / 60
-        cache_unit = "hours" if cache_age >= 3600 else "minutes"
-        log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
-        _mark_ready(api_name)
-        item_count = len(cached_data.get(config.count_field, []))
-        log_progress(f"loaded {item_count} items from {display_name} cache")
-        return cached_data
-    
-    # Determine timeout based on cache state
-    if cache_age is None:
-        timeout_seconds = config.timeout_stale_cache
-        timeout_display = timeout_seconds / 60
-        log_progress(f"no valid cache exists, using {timeout_display:.0f} minute timeout for initial fetch...")
-    elif cache_age >= cache_max_age_seconds:
-        cache_hours_actual = cache_age / 3600
-        timeout_seconds = config.timeout_stale_cache
-        timeout_display = timeout_seconds / 60
-        log_progress(f"cache is {cache_hours_actual:.1f} hours old (>={cache_max_age_hours}h), using {timeout_display:.0f} minute timeout to refresh...")
-    else:
-        cache_minutes = cache_age / 60
-        timeout_seconds = config.timeout_fresh_cache
-        log_progress(f"cache is {cache_minutes:.1f} minutes old (<{cache_max_age_hours}h), using {timeout_seconds} second timeout...")
-    
-    # Build request with optional conditional headers
-    headers = dict(config.custom_headers) if config.custom_headers else {}
-    if config.use_conditional_requests:
-        prev_timestamp = _read_timestamp(api_name)
-        if prev_timestamp:
-            headers["If-Modified-Since"] = prev_timestamp
-    
-    if headers:
-        conn = urllib.request.Request(url, headers=headers)
-    else:
-        conn = urllib.request.Request(url)
-    
-    # Determine retry count: skip retries when fresh cache is available (fast fallback)
-    has_fresh_cache = cached_data is not None and cache_age is not None and cache_age < cache_max_age_seconds
-    if has_fresh_cache and not config.retry_on_fresh_cache:
-        effective_retries = 0
-    else:
-        effective_retries = config.retry_count
-    
-    # Try to fetch with TOTAL timeout (not just socket timeout) + retry with backoff
-    # Falls back to cache on exhausted retries or non-retryable errors
-    fetch_start = time.time()
     try:
-        api_response = _retry_with_backoff(
-            fetch_fn=_fetch_url_with_total_timeout,
-            args=(url, timeout_seconds, headers if headers else None),
-            retry_count=effective_retries,
-            retry_delay_base=config.retry_delay_base,
-            log_fn=log_progress,
-            operation_name=display_name,
-        )
-    except TotalTimeoutError as e:
-        elapsed = time.time() - fetch_start
-        log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
-        if cached_data:
-            log_progress(f"using cached {display_name} data due to timeout")
+        # Check cache age AND validate cache can be loaded
+        cache_age = _cache_manager.get_cache_age(api_name)
+    
+        # Pre-load cache to verify it's valid (will be reused on timeout fallback)
+        cached_data = None
+        if cache_age is not None:
+            cached_data = _load_cache(api_name)
+            if cached_data is None:
+                cache_age = None
+                log_progress("cache file exists but is invalid, treating as no cache...")
+    
+        # If cache is fresh and valid, optionally return immediately
+        if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
+            log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
             _mark_ready(api_name)
+            item_count = len(cached_data.get(config.count_field, []))
+            log_progress(f"loaded {item_count} items from {display_name} cache")
             return cached_data
+    
+        # Determine timeout based on cache state
+        if cache_age is None:
+            timeout_seconds = config.timeout_stale_cache
+            timeout_display = timeout_seconds / 60
+            log_progress(f"no valid cache exists, using {timeout_display:.0f} minute timeout for initial fetch...")
+        elif cache_age >= cache_max_age_seconds:
+            cache_hours_actual = cache_age / 3600
+            timeout_seconds = config.timeout_stale_cache
+            timeout_display = timeout_seconds / 60
+            log_progress(f"cache is {cache_hours_actual:.1f} hours old (>={cache_max_age_hours}h), using {timeout_display:.0f} minute timeout to refresh...")
         else:
-            log_progress("no cached data available after timeout")
-            _mark_stale(api_name, f"Total timeout after {timeout_seconds}s with no cache")
-            return None
-    except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
-        elapsed = time.time() - fetch_start
-        is_timeout = (
-            isinstance(e, (socket.timeout, TimeoutError)) or 
-            (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
-        )
-        
-        if is_timeout:
-            log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
+            cache_minutes = cache_age / 60
+            timeout_seconds = config.timeout_fresh_cache
+            log_progress(f"cache is {cache_minutes:.1f} minutes old (<{cache_max_age_hours}h), using {timeout_seconds} second timeout...")
+    
+        # Build request with optional conditional headers
+        headers = dict(config.custom_headers) if config.custom_headers else {}
+        if config.use_conditional_requests:
+            prev_timestamp = _read_timestamp(api_name)
+            if prev_timestamp:
+                headers["If-Modified-Since"] = prev_timestamp
+    
+        # Validate the URL early so malformed URLs surface here; the actual
+        # fetch constructs the same Request inside _fetch_url_with_total_timeout
+        if headers:
+            urllib.request.Request(url, headers=headers)
+        else:
+            urllib.request.Request(url)
+    
+        # Determine retry count: skip retries when fresh cache is available (fast fallback)
+        has_fresh_cache = cached_data is not None and cache_age is not None and cache_age < cache_max_age_seconds
+        if has_fresh_cache and not config.retry_on_fresh_cache:
+            effective_retries = 0
+        else:
+            effective_retries = config.retry_count
+    
+        # Try to fetch with TOTAL timeout (not just socket timeout) + retry with backoff
+        # Falls back to cache on exhausted retries or non-retryable errors
+        fetch_start = time.time()
+        try:
+            api_response = _retry_with_backoff(
+                fetch_fn=_fetch_url_with_total_timeout,
+                args=(url, timeout_seconds, headers if headers else None),
+                retry_count=effective_retries,
+                retry_delay_base=config.retry_delay_base,
+                log_fn=log_progress,
+                operation_name=display_name,
+            )
+        except TotalTimeoutError:
+            elapsed = time.time() - fetch_start
+            log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
             if cached_data:
                 log_progress(f"using cached {display_name} data due to timeout")
                 _mark_ready(api_name)
                 return cached_data
             else:
                 log_progress("no cached data available after timeout")
-                _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
+                _mark_stale(api_name, f"Total timeout after {timeout_seconds}s with no cache")
                 return None
-        else:
-            raise
-    except urllib.error.HTTPError:
-        # Let the @handle_http_errors decorator handle HTTP errors (304, 4xx, 5xx)
-        raise
-    except Exception as e:
-        # Non-retryable error after exhausting retries
-        elapsed = time.time() - fetch_start
-        log_progress(f"request failed after {elapsed:.1f}s: {type(e).__name__}: {e}")
-        if cached_data:
-            log_progress(f"using cached {display_name} data due to error")
-            _mark_ready(api_name)
-            return cached_data
-        else:
-            log_progress("no cached data available after error")
-            _mark_stale(api_name, f"Error: {type(e).__name__}: {e}")
+        except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
+            elapsed = time.time() - fetch_start
+            is_timeout = (
+                isinstance(e, (socket.timeout, TimeoutError)) or 
+                (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
+            )
+        
+            if is_timeout:
+                log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
+                if cached_data:
+                    log_progress(f"using cached {display_name} data due to timeout")
+                    _mark_ready(api_name)
+                    return cached_data
+                else:
+                    log_progress("no cached data available after timeout")
+                    _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
+                    return None
+            else:
+                raise
+        except Exception as e:
+            # Non-retryable error after exhausting retries
+            elapsed = time.time() - fetch_start
+            log_progress(f"request failed after {elapsed:.1f}s: {type(e).__name__}: {e}")
+            if cached_data:
+                log_progress(f"using cached {display_name} data due to error")
+                _mark_ready(api_name)
+                return cached_data
+            else:
+                log_progress("no cached data available after error")
+                _mark_stale(api_name, f"Error: {type(e).__name__}: {e}")
+                return None
+    
+        fetch_elapsed = time.time() - fetch_start
+    
+        # Parse JSON response with explicit error handling
+        log_progress("parsing JSON response...")
+        try:
+            data = json.loads(api_response.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+            log_progress(f"failed to parse JSON response: {e}")
+            if cached_data:
+                log_progress(f"using cached {display_name} data due to parse error")
+                _mark_ready(api_name)
+                return cached_data
+            _mark_stale(api_name, f"JSON parse error: {e}")
             return None
     
-    fetch_elapsed = time.time() - fetch_start
+        # Validate response if validator provided
+        if validator and not validator(data):
+            log_progress(f"warning: invalid {display_name} data structure")
+            if cached_data:
+                log_progress("using cached data due to invalid response structure")
+                _mark_ready(api_name)
+                return cached_data
+            return None
     
-    # Parse JSON response with explicit error handling
-    log_progress("parsing JSON response...")
-    try:
-        data = json.loads(api_response.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
-        log_progress(f"failed to parse JSON response: {e}")
+        # Cache the data
+        log_progress(f"caching {display_name} data...")
+        _save_cache(api_name, data)
+    
+        # Write timestamp for future conditional requests
+        if config.use_conditional_requests:
+            timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
+            _write_timestamp(api_name, timestamp_str)
+    
+        # Mark as ready
+        _mark_ready(api_name)
+    
+        # Log success with elapsed time
+        item_count = len(data.get(config.count_field, []))
+        retry_info = f" (with {effective_retries} retries available)" if effective_retries > 0 else ""
+        log_progress(f"successfully fetched {item_count} items from {display_name} API in {fetch_elapsed:.1f}s{retry_info}")
+    
+        return data
+
+    except urllib.error.HTTPError as err:
+        if err.code == 304:
+            # No update since last run - use cached data
+            log_progress(f"no {display_name} update since last run, using cached data...")
+            cached_data = _load_cache(api_name)
+            if cached_data:
+                _mark_ready(api_name)
+                return cached_data
+            elif config.allow_exit_on_304:
+                log_progress(f"no {display_name} update since last run, dying peacefully...")
+                # Don't call sys.exit(1) from worker threads - it only kills the thread
+                # Instead, mark as stale and return None to let coordinator handle gracefully
+                _mark_stale(api_name, f"No cached {display_name} data available (304 with no cache)")
+                return None
+            else:
+                log_progress(f"no {display_name} update since last run and no cache, skipping {display_name} data...")
+                _mark_stale(api_name, f"No cached {display_name} data available")
+                return None
+        else:
+            log_progress(f"HTTP error fetching {display_name} data: {err.code}")
+            raise
+
+    except urllib.error.URLError as err:
+        log_progress(f"network error fetching {display_name} data: {err}")
+        log_progress("check your internet connection and try again")
+        log_progress("in CI environments, this might be a temporary network issue")
+        raise
+
+    except Exception as e:
+        error_msg = f"Failed to fetch {display_name}: {str(e)}"
+        log_progress(f"error: {error_msg}")
+        _mark_stale(api_name, error_msg)
+
+        # Try to return cached data as fallback
+        cached_data = _load_cache(api_name)
         if cached_data:
-            log_progress(f"using cached {display_name} data due to parse error")
-            _mark_ready(api_name)
+            log_progress(f"using cached {display_name} data as fallback")
             return cached_data
-        _mark_stale(api_name, f"JSON parse error: {e}")
-        return None
-    
-    # Validate response if validator provided
-    if validator and not validator(data):
-        log_progress(f"warning: invalid {display_name} data structure")
-        if cached_data:
-            log_progress("using cached data due to invalid response structure")
-            _mark_ready(api_name)
-            return cached_data
-        return None
-    
-    # Cache the data
-    log_progress(f"caching {display_name} data...")
-    _save_cache(api_name, data)
-    
-    # Write timestamp for future conditional requests
-    if config.use_conditional_requests:
-        timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
-        _write_timestamp(api_name, timestamp_str)
-    
-    # Mark as ready
-    _mark_ready(api_name)
-    
-    # Log success with elapsed time
-    item_count = len(data.get(config.count_field, []))
-    retry_info = f" (with {effective_retries} retries available)" if effective_retries > 0 else ""
-    log_progress(f"successfully fetched {item_count} items from {display_name} API in {fetch_elapsed:.1f}s{retry_info}")
-    
-    return data
+        else:
+            if config.critical:
+                log_progress("no cached data available, cannot continue")
+            else:
+                log_progress(f"no cached data available, continuing without {display_name} data")
+            return None
 
 # ============================================================================
 
 
-@handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
-                   allow_exit_on_304=True, critical=True)
 def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
     Fetch onionoo details data with smart caching and timeout fallback.
@@ -804,22 +897,13 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     Returns:
         dict: JSON response from onionoo API
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=onionoo_url,
         config=DETAILS_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
     )
 
 
-@handle_http_errors("onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
-                   allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
     Fetch onionoo uptime data with smart caching and timeout fallback.
@@ -836,12 +920,10 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     return _fetch_with_cache_fallback(
         url=onionoo_url,
         config=UPTIME_CONFIG,
-        progress_logger=progress_logger,
+        progress_logger=progress_logger or print,
     )
 
 
-@handle_http_errors("onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
-                   allow_exit_on_304=False, critical=False)
 def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidth", cache_hours=12, progress_logger=None):
     """
     Fetch onionoo historical bandwidth data with smart caching and timeout fallback.
@@ -860,7 +942,7 @@ def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidt
     return _fetch_with_cache_fallback(
         url=onionoo_url,
         config=BANDWIDTH_CONFIG,
-        progress_logger=progress_logger,
+        progress_logger=progress_logger or print,
         cache_hours_override=cache_hours,
         return_fresh_cache=True,  # Return fresh cache immediately without fetching
     )
@@ -872,8 +954,6 @@ def _validate_aroi_response(data: dict) -> bool:
     return all(key in data for key in required_keys)
 
 
-@handle_http_errors("AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
-                   allow_exit_on_304=False, critical=False)
 def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json", progress_logger=None):
     """
     Fetch AROI validation data with smart caching and timeout fallback.
@@ -889,17 +969,10 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     Returns:
         dict: JSON response with AROI validation data
     """
-    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-    
     return _fetch_with_cache_fallback(
         url=aroi_url,
         config=AROI_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,  # Return fresh cache immediately without fetching
         validator=_validate_aroi_response,
     )
@@ -922,8 +995,6 @@ def _validate_exit_dns_health_response(data) -> bool:
     return True
 
 
-@handle_http_errors("Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
-                   allow_exit_on_304=False, critical=False)
 def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/latest.json", progress_logger=None):
     """
     Fetch Exit DNS Health data with smart caching and timeout fallback.
@@ -938,16 +1009,10 @@ def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/la
     Returns:
         dict: JSON response with exit DNS health data
     """
-    def log_wrapper(message):
-        if progress_logger:
-            progress_logger(message)
-        else:
-            print(message)
-
     return _fetch_with_cache_fallback(
         url=exit_dns_health_url,
         config=EXIT_DNS_HEALTH_CONFIG,
-        progress_logger=log_wrapper,
+        progress_logger=progress_logger or print,
         return_fresh_cache=True,
         validator=_validate_exit_dns_health_response,
     )
@@ -996,6 +1061,11 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             log_progress(f"loaded {relay_count} relays from collector consensus cache")
             return cached_data
     
+    # Initialized before the try so the exception handler can always
+    # reference them, even if the failure happens before they are set
+    cached_data = None
+    timeout_seconds = COLLECTOR_TIMEOUT_STALE_CACHE
+
     try:
         fetch_start = time.time()
         
@@ -1709,3 +1779,87 @@ def fetch_consensus_health(progress_logger=None):
 
 # Initialize state on module import
 _load_state() 
+
+
+# ============================================================================
+# API WORKER REGISTRY (single source of truth - coordinator derives from this)
+# ============================================================================
+# The last args_fn element is a progress-logger placeholder; the coordinator
+# replaces it with an API-specific logger before calling the worker.
+# To add a new API source:
+#   1. Create a fetch function above
+#   2. Create/extend an APIConfig entry and add it to API_CONFIGS
+#   3. Handle the data in Relays.enrich_with_api_data()
+
+COLLECTOR_CONSENSUS_CONFIG = APIConfig(
+    api_name='collector_consensus',
+    display_name='collector consensus',
+    cache_max_age_hours=COLLECTOR_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=COLLECTOR_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=COLLECTOR_TIMEOUT_STALE_CACHE,
+    progress_name='CollecTor Consensus API',
+    feature_flag='consensus_evaluation',
+)
+
+COLLECTOR_DESCRIPTORS_CONFIG = APIConfig(
+    api_name='collector_descriptors',
+    display_name='collector descriptors',
+    cache_max_age_hours=DESCRIPTORS_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=COLLECTOR_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=COLLECTOR_TIMEOUT_STALE_CACHE,
+    progress_name='CollecTor Descriptors API',
+    feature_flag='consensus_evaluation',
+)
+
+# Planned feature path (see plan Phase 3): registered but dormant so it is
+# part of the one registry instead of an orphan fetcher.
+CONSENSUS_HEALTH_CONFIG = APIConfig(
+    api_name='consensus_health',
+    display_name='consensus health',
+    cache_max_age_hours=1,
+    timeout_fresh_cache=10,
+    timeout_stale_cache=30,
+    progress_name='Authority Health API',
+    enabled=False,
+)
+
+DETAILS_CONFIG.worker_fn = fetch_onionoo_details
+DETAILS_CONFIG.group = 'details'  # runs in both --apis modes
+DETAILS_CONFIG.progress_name = 'Details API'
+DETAILS_CONFIG.args_fn = lambda c: [c.onionoo_details_url, c._noop_logger]
+
+UPTIME_CONFIG.worker_fn = fetch_onionoo_uptime
+UPTIME_CONFIG.progress_name = 'Uptime API'
+UPTIME_CONFIG.args_fn = lambda c: [c.onionoo_uptime_url, c._noop_logger]
+
+BANDWIDTH_CONFIG.worker_fn = fetch_onionoo_bandwidth
+BANDWIDTH_CONFIG.progress_name = 'Historical Bandwidth API'
+BANDWIDTH_CONFIG.args_fn = lambda c: [c.onionoo_bandwidth_url, c.bandwidth_cache_hours, c._noop_logger]
+
+AROI_CONFIG.worker_fn = fetch_aroi_validation
+AROI_CONFIG.progress_name = 'AROI Validation API'
+AROI_CONFIG.args_fn = lambda c: [c.aroi_url, c._noop_logger]
+
+EXIT_DNS_HEALTH_CONFIG.worker_fn = fetch_exit_dns_health
+EXIT_DNS_HEALTH_CONFIG.progress_name = 'Exit DNS Health API'
+EXIT_DNS_HEALTH_CONFIG.args_fn = lambda c: [c.exit_dns_health_url, c._noop_logger]
+
+COLLECTOR_CONSENSUS_CONFIG.worker_fn = fetch_collector_consensus_data
+COLLECTOR_CONSENSUS_CONFIG.args_fn = lambda c: [None, c._noop_logger]
+
+COLLECTOR_DESCRIPTORS_CONFIG.worker_fn = fetch_collector_descriptors
+COLLECTOR_DESCRIPTORS_CONFIG.args_fn = lambda c: [c._noop_logger]
+
+CONSENSUS_HEALTH_CONFIG.worker_fn = fetch_consensus_health
+CONSENSUS_HEALTH_CONFIG.args_fn = lambda c: [c._noop_logger]
+
+API_CONFIGS = [
+    DETAILS_CONFIG,
+    UPTIME_CONFIG,
+    BANDWIDTH_CONFIG,
+    AROI_CONFIG,
+    EXIT_DNS_HEALTH_CONFIG,
+    COLLECTOR_CONSENSUS_CONFIG,
+    COLLECTOR_DESCRIPTORS_CONFIG,
+    CONSENSUS_HEALTH_CONFIG,
+]

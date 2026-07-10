@@ -15,7 +15,7 @@ import urllib.request
 import urllib.error
 import socket
 import concurrent.futures
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import logging
 import time
@@ -24,7 +24,6 @@ import time
 from ..workers import (
     _fetch_url_with_total_timeout,
     _retry_with_backoff,
-    _is_retryable_error,
     TotalTimeoutError,
 )
 
@@ -216,15 +215,7 @@ from .flag_thresholds import (
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
-    GUARD_WFU_DEFAULT,
     HSDIR_TK_DEFAULT,
-    HSDIR_WFU_DEFAULT,
-    FAST_BW_GUARANTEE,
-    parse_wfu_threshold,
-    format_time_as_days,
-    check_guard_eligibility,
-    check_hsdir_eligibility,
-    check_fast_eligibility,
     check_stable_eligibility,
 )
 
@@ -1095,12 +1086,16 @@ class CollectorFetcher:
                 'bw_met': guard_bw_eligible,
             })
             
-            # Stable flag eligibility
+            # Stable flag eligibility - dir-spec OR-condition via the
+            # shared helper. An authority publishing no thresholds no longer
+            # marks every relay eligible (votes carry no relay uptime, so
+            # only the MTBF arm can be satisfied here).
             stable_uptime = thresholds.get('stable-uptime', 0)
             stable_mtbf = thresholds.get('stable-mtbf', 0)
             relay_mtbf = vote_info.get('mtbf', 0)
-            
-            stable_eligible = relay_mtbf >= stable_mtbf if stable_mtbf > 0 else True
+
+            stable_eligible = check_stable_eligibility(
+                None, relay_mtbf, stable_uptime, stable_mtbf)['eligible']
             if stable_eligible:
                 eligibility['stable']['eligible_count'] += 1
             

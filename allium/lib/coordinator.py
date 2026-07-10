@@ -7,16 +7,9 @@ Phase 2 implementation: multiple API support, threading, and incremental renderi
 """
 
 import threading
-import time
-from .workers import (
-    fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
-    fetch_aroi_validation, fetch_exit_dns_health, fetch_collector_consensus_data,
-    fetch_collector_descriptors,
-    get_worker_status, get_all_worker_status
-)
+from .workers import get_all_worker_status
 from .relays import Relays
 from .progress_logger import ProgressLogger
-from .error_handlers import handle_worker_errors, handle_calculation_errors
 from .first_seen_correction import correct_first_seen
 
 
@@ -62,22 +55,16 @@ class Coordinator:
             self.base_url = kwargs.get('base_url', '')
             self.mp_workers = kwargs.get('mp_workers', 4)
         
-        self.start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None) or time.time()
-        self.progress_step = kwargs.get('progress_step', 0)
-        self.total_steps = kwargs.get('total_steps', 53)
-        
-        # Use injected progress logger or create new one
-        if progress_logger is not None:
-            self.progress_logger = progress_logger
-            # Sync state from injected logger
-            self.start_time = progress_logger.start_time
-            self.progress_step = progress_logger.get_current_step()
-            self.total_steps = progress_logger.total_steps
-        else:
-            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        # ONE ProgressLogger instance is threaded through the whole pipeline
+        # (allium.py → coordinator → relays → page_writer). Use the injected
+        # instance when provided; otherwise create one (tests / direct use).
+        if progress_logger is None:
+            start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None)
+            progress_logger = ProgressLogger(start_time, progress_enabled=self.progress)
+        self.progress_logger = progress_logger
+        self.start_time = progress_logger.start_time
         
         # Worker management
-        self.workers = {}
         self.worker_data = {}
         self.worker_threads = []
         
@@ -88,17 +75,10 @@ class Coordinator:
     # =========================================================================
     # API WORKER REGISTRY
     # =========================================================================
-    # Declarative list of API workers. Each entry defines:
-    #   name:       Internal identifier for the API
-    #   fetch_fn:   Function to call (from workers.py)
-    #   group:      Which --apis mode includes this worker ('details' or 'all')
-    #   args_fn:    Lambda returning the argument list for fetch_fn
-    #   enabled_fn: Optional callable returning bool (for feature flags)
-    #
-    # To add a new API source:
-    #   1. Create a fetch function in workers.py
-    #   2. Add one entry here
-    #   3. Handle the data in Relays.enrich_with_api_data()
+    # Derived from workers.API_CONFIGS - the single source of truth. To add a
+    # new API source: create a fetch function + APIConfig entry in workers.py
+    # and handle the data in Relays.enrich_with_api_data(). The progress step
+    # count (allium.py) follows automatically.
     # =========================================================================
     # The last element in each args_fn list is a progress logger placeholder.
     # _run_worker() replaces it with an API-specific logger before calling the
@@ -106,79 +86,39 @@ class Coordinator:
     # call if _run_worker replacement is ever skipped (e.g., in tests).
     _noop_logger = staticmethod(lambda *args, **kwargs: None)
 
-    API_WORKER_REGISTRY = [
-        {
-            "name": "onionoo_details",
-            "fetch_fn": fetch_onionoo_details,
-            "group": "details",  # Included in both 'details' and 'all' modes
-            "args_fn": lambda self: [self.onionoo_details_url, self._noop_logger],
-        },
-        {
-            "name": "onionoo_uptime",
-            "fetch_fn": fetch_onionoo_uptime,
-            "group": "all",
-            "args_fn": lambda self: [self.onionoo_uptime_url, self._noop_logger],
-        },
-        {
-            "name": "onionoo_bandwidth",
-            "fetch_fn": fetch_onionoo_bandwidth,
-            "group": "all",
-            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._noop_logger],
-        },
-        {
-            "name": "aroi_validation",
-            "fetch_fn": fetch_aroi_validation,
-            "group": "all",
-            "args_fn": lambda self: [self.aroi_url, self._noop_logger],
-        },
-        {
-            "name": "exit_dns_health",
-            "fetch_fn": fetch_exit_dns_health,
-            "group": "all",
-            "args_fn": lambda self: [self.exit_dns_health_url, self._noop_logger],
-        },
-        {
-            "name": "collector_consensus",
-            "fetch_fn": fetch_collector_consensus_data,
-            "group": "all",
-            "args_fn": lambda self: [None, self._noop_logger],
-            "enabled_fn": None,  # Checked dynamically in _build_api_workers
-        },
-        {
-            "name": "collector_descriptors",
-            "fetch_fn": fetch_collector_descriptors,
-            "group": "all",
-            "args_fn": lambda self: [self._noop_logger],
-            "enabled_fn": None,  # Checked dynamically in _build_api_workers
-        },
-    ]
-    
+    @classmethod
+    def iter_enabled_worker_entries(cls, enabled_apis):
+        """Yield APIConfig entries enabled for this run.
+
+        Single source of truth for worker gating - used by
+        _build_api_workers AND by allium.py's total_steps derivation, so
+        the progress step count follows the registry automatically.
+        """
+        from .consensus import is_consensus_evaluation_enabled
+        from .workers import API_CONFIGS
+
+        feature_flags = {
+            "consensus_evaluation": is_consensus_evaluation_enabled,
+        }
+
+        for config in API_CONFIGS:
+            if not config.enabled:
+                continue
+            # 'details' workers run in all modes, 'all' workers only when
+            # --apis=all
+            if config.group != "details" and enabled_apis != "all":
+                continue
+            flag_fn = feature_flags.get(config.feature_flag)
+            if flag_fn and not flag_fn():
+                continue
+            yield config
+
     def _build_api_workers(self):
         """Build the list of API workers based on enabled_apis mode and feature flags."""
-        from .consensus import is_consensus_evaluation_enabled
-        
-        # Feature flag checks by worker name (avoids import issues in class-level lambdas)
-        feature_flags = {
-            "collector_consensus": is_consensus_evaluation_enabled,
-            "collector_descriptors": is_consensus_evaluation_enabled,
-        }
-        
-        workers = []
-        for entry in self.API_WORKER_REGISTRY:
-            # Include if group matches: 'details' workers run in all modes,
-            # 'all' workers only run when --apis=all
-            group = entry["group"]
-            if group == "details" or self.enabled_apis == "all":
-                # Check feature flag if present
-                flag_fn = feature_flags.get(entry["name"])
-                if flag_fn and not flag_fn():
-                    continue
-                workers.append((
-                    entry["name"],
-                    entry["fetch_fn"],
-                    entry["args_fn"](self),
-                ))
-        return workers
+        return [
+            (config.api_name, config.worker_fn, config.args_fn(self))
+            for config in self.iter_enabled_worker_entries(self.enabled_apis)
+        ]
         
     def _run_worker(self, api_name, worker_func, args):
         """Run a single API worker in a thread"""
@@ -193,18 +133,18 @@ class Coordinator:
             
             # Log API-specific start message
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - fetching data...")
+            self.progress_logger.log(f"{api_display_name} - fetching data...")
             
             result = worker_func(*args_with_api_logger)
             self.worker_data[api_name] = result
             if result is not None:
-                self._log_progress_with_step_increment(f"{api_display_name} - completed successfully")
+                self.progress_logger.log(f"{api_display_name} - completed successfully")
             else:
-                self._log_progress_with_step_increment(f"{api_display_name} - warning: returned no data")
+                self.progress_logger.log(f"{api_display_name} - warning: returned no data")
         except Exception as e:
             # Use centralized error handling approach
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
+            self.progress_logger.log(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
             
             # CI debugging with centralized approach
@@ -215,25 +155,12 @@ class Coordinator:
                 traceback.print_exc()
 
     def _get_api_display_name(self, api_name):
-        """Get display name for API"""
-        if api_name == "onionoo_details":
-            return "Details API"
-        elif api_name == "onionoo_uptime":
-            return "Uptime API"
-        elif api_name == "onionoo_bandwidth":
-            return "Historical Bandwidth API"
-        elif api_name == "aroi_validation":
-            return "AROI Validation API"
-        elif api_name == "exit_dns_health":
-            return "Exit DNS Health API"
-        elif api_name == "collector_consensus":
-            return "CollecTor Consensus API"
-        elif api_name == "collector_descriptors":
-            return "CollecTor Descriptors API"
-        elif api_name == "consensus_health":
-            return "Authority Health API"
-        else:
-            return api_name.replace("_", " ").title()
+        """Get progress display name for API (from the registry configs)"""
+        from .workers import API_CONFIGS
+        for config in API_CONFIGS:
+            if config.api_name == api_name and config.progress_name:
+                return config.progress_name
+        return api_name.replace("_", " ").title()
 
     def _create_api_specific_logger(self, api_name):
         """Create a progress logger that includes API name in messages.
@@ -248,28 +175,9 @@ class Coordinator:
         def api_logger(message):
             # Format message with API name prefix but DON'T increment step
             # This keeps step count predictable (only start/complete increment)
-            formatted_message = f"{api_display_name} - {message}"
-            self._log_progress_without_increment(formatted_message)
-        
+            self.progress_logger.log_without_increment(f"{api_display_name} - {message}")
+
         return api_logger
-
-    def _log_progress(self, message):
-        """Log progress message with step increment.
-        
-        Compatibility wrapper preserving the original _log_progress interface.
-        Forwards to _log_progress_with_step_increment for consistent behavior.
-        """
-        self._log_progress_with_step_increment(message)
-
-    def _log_progress_without_increment(self, message):
-        """Log progress message without incrementing progress step (for intermediate messages)"""
-        self.progress_logger.log_without_increment(message)
-
-    def _log_progress_with_step_increment(self, message):
-        """Log progress message and increment progress step"""
-        self.progress_logger.log_with_increment(message)
-        # Keep progress_step in sync for backwards compatibility
-        self.progress_step = self.progress_logger.get_current_step()
 
     def fetch_all_apis_threaded(self):
         """
@@ -277,7 +185,7 @@ class Coordinator:
         """
         if self.progress:
             self.progress_logger.start_section("API Fetching")
-            self._log_progress_with_step_increment("Starting threaded API fetching...")
+            self.progress_logger.log("Starting threaded API fetching...")
         
         # Start all API workers in threads
         for api_name, worker_func, args in self.api_workers:
@@ -295,7 +203,7 @@ class Coordinator:
             # Don't log thread join messages to avoid clutter
         
         if self.progress:
-            self._log_progress_with_step_increment("All API workers completed")
+            self.progress_logger.log("All API workers completed")
             self.progress_logger.end_section("API Fetching")
         
         return self.worker_data
@@ -312,7 +220,7 @@ class Coordinator:
             all_data = self.fetch_all_apis_threaded()
         except Exception as e:
             if self.progress:
-                self._log_progress_with_step_increment(f"Error during threaded API fetching: {e}")
+                self.progress_logger.log(f"Error during threaded API fetching: {e}")
             print(f"❌ Error: Failed to fetch API data: {e}")
             print("🔧 This might be due to network connectivity issues")
             return None
@@ -323,7 +231,7 @@ class Coordinator:
             return details_data
         else:
             if self.progress:
-                self._log_progress_with_step_increment("Failed to fetch onionoo details data")
+                self.progress_logger.log("Failed to fetch onionoo details data")
             print("❌ Error: No details data available from onionoo API")
             print("🔧 This might be due to:")
             print("   - Network connectivity issues")
@@ -361,12 +269,6 @@ class Coordinator:
         """
         return self.worker_data.get('consensus_health')
 
-    def get_collector_data(self):
-        """
-        Get collector data if available (legacy)
-        """
-        return self.worker_data.get('collector')
-
     def get_collector_consensus_data(self):
         """
         Get CollecTor consensus data if available.
@@ -391,7 +293,7 @@ class Coordinator:
         """
         if self.progress:
             self.progress_logger.start_section("Data Processing")
-            self._log_progress_with_step_increment("Creating relay set with Details API data...")
+            self.progress_logger.log("Creating relay set with Details API data...")
 
         # Workaround for onionoo's mass `first_seen` reset bug (upstream
         # issues #40018/#40028/#40033/#40042). Repair relay['first_seen']
@@ -413,9 +315,6 @@ class Coordinator:
             relay_data=relay_data,
             use_bits=self.use_bits,
             progress=self.progress,
-            start_time=self.start_time,
-            progress_step=self.progress_step,
-            total_steps=self.total_steps,
             filter_downtime_days=self.filter_downtime_days,
             base_url=self.base_url,
             progress_logger=self.progress_logger,
@@ -424,7 +323,7 @@ class Coordinator:
         
         if relay_set.json is None:
             if self.progress:
-                self._log_progress_with_step_increment("Failed to create relay set")
+                self.progress_logger.log("Failed to create relay set")
             return None
 
         # Surface first_seen correction stats for diagnostics (api_diagnostics,
@@ -445,12 +344,9 @@ class Coordinator:
             consensus_health_data=self.get_consensus_health_data(),
             collector_descriptors_data=self.get_collector_descriptors_data(),
         )
-        
-        # Sync progress state
-        relay_set.progress_step = self.progress_step
-        
+
         if self.progress:
-            self._log_progress_with_step_increment("Relay set created successfully with Details API and Uptime API data")
+            self.progress_logger.log("Relay set created successfully with Details API and Uptime API data")
             self.progress_logger.end_section("Data Processing")
         
         return relay_set
@@ -466,7 +362,20 @@ class Coordinator:
             return None
         
         # Create Relays instance with the data
-        return self.create_relay_set(relay_data)
+        relay_set = self.create_relay_set(relay_data)
+
+        # Probe authority latency here (not during page rendering) so page
+        # generation is pure rendering; misc-authorities consumes the result
+        if relay_set is not None:
+            from .page_writer import probe_authority_latency
+            try:
+                relay_set.authority_latency_status = probe_authority_latency(relay_set)
+            except Exception as e:
+                # Non-fatal: rendering falls back to its inline probe path
+                self.progress_logger.log_without_increment(
+                    f"authority latency probe failed: {e}")
+
+        return relay_set
     
     def get_worker_status_summary(self):
         """Get summary of all worker statuses for debugging/monitoring"""

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from allium.lib.first_seen_correction import correct_first_seen
+from allium.lib.network_health import calculate_network_health_metrics
 from allium.lib.relays import Relays
 from allium.lib.time_utils import parse_onionoo_timestamp
 
@@ -385,7 +386,7 @@ def test_corrected_first_seen_flows_into_network_health_metrics():
             output_dir=tmpdir, onionoo_url='http://localhost',
             relay_data=relay_data, progress=False,
         )
-        relay_set._calculate_network_health_metrics()
+        calculate_network_health_metrics(relay_set)
 
     health = relay_set.json['network_health']
 
