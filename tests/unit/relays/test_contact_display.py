@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
 from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
+from allium.lib.operator_analysis import compute_contact_display_data, format_intelligence_rating
 from allium.lib.relays import Relays
 
 
@@ -85,35 +86,35 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_format_intelligence_rating_poor(self):
         """Test color-coded formatting for Poor intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Poor, 1 network')
+        result = format_intelligence_rating('Poor, 1 network')
         expected = '<span class="al-rating-poor">Poor</span>, 1 network'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_okay(self):
         """Test color-coded formatting for Okay intelligence ratings.""" 
-        result = self.relays._format_intelligence_rating('Okay, 2 countries')
+        result = format_intelligence_rating('Okay, 2 countries')
         expected = '<span class="al-rating-okay">Okay</span>, 2 countries'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_great(self):
         """Test color-coded formatting for Great intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Great, 4 networks (2 rare)')
+        result = format_intelligence_rating('Great, 4 networks (2 rare)')
         expected = '<span class="al-rating-great">Great</span>, 4 networks (2 rare)'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_invalid_format(self):
         """Test handling of invalid rating format."""
-        result = self.relays._format_intelligence_rating('Invalid format')
+        result = format_intelligence_rating('Invalid format')
         self.assertEqual(result, 'Invalid format')
 
     def test_format_intelligence_rating_empty_string(self):
         """Test handling of empty string."""
-        result = self.relays._format_intelligence_rating('')
+        result = format_intelligence_rating('')
         self.assertEqual(result, '')
 
     def test_format_intelligence_rating_none(self):
         """Test handling of None input."""
-        result = self.relays._format_intelligence_rating(None)
+        result = format_intelligence_rating(None)
         self.assertEqual(result, None)
 
     @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
@@ -121,8 +122,8 @@ class TestContactDisplayData(unittest.TestCase):
         """Test bandwidth breakdown formatting with mixed relay types."""
         mock_format_bw.side_effect = lambda bw, unit: f"{bw/1000000:.1f}"  # Convert to MB
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         # Should include all three bandwidth types
@@ -140,8 +141,8 @@ class TestContactDisplayData(unittest.TestCase):
         relay_data = self.sample_relay_data.copy()
         relay_data['middle_bandwidth'] = 0  # Zero middle bandwidth
         
-        result = self.relays._compute_contact_display_data(
-            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         breakdown = result['bandwidth_breakdown']
@@ -151,8 +152,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_consensus_weight_breakdown(self):
         """Test consensus weight breakdown with filtering of zero values."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         self.assertIn('consensus_weight_breakdown', result)
@@ -168,8 +169,8 @@ class TestContactDisplayData(unittest.TestCase):
         relay_data = self.sample_relay_data.copy()
         relay_data['middle_consensus_weight_fraction'] = 0  # Zero middle consensus weight
         
-        result = self.relays._compute_contact_display_data(
-            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         breakdown = result['consensus_weight_breakdown']
@@ -182,8 +183,8 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 100.0
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
@@ -194,8 +195,8 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 99.99
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
@@ -206,8 +207,8 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 99.9  # Below 99.99 threshold
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
@@ -215,8 +216,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_outliers_calculation(self):
         """Test statistical outliers calculation and tooltip generation."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         outliers = result['outliers']
@@ -243,8 +244,8 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['outliers'] = {'low_outliers': [], 'high_outliers': []}
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         outliers = result['outliers']
@@ -252,8 +253,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_operator_intelligence_formatting(self):
         """Test operator intelligence data formatting with color coding."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -284,8 +285,8 @@ class TestContactDisplayData(unittest.TestCase):
             
             relays_no_intel.json = {}  # No intelligence data
             
-            result = relays_no_intel._compute_contact_display_data(
-                self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+            result = compute_contact_display_data(
+                self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], relays_no_intel
             )
         
         # Should handle gracefully when no intelligence data exists
@@ -304,8 +305,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_no_reliability_data(self):
         """Test handling when no reliability data is available."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', None, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', None, 'test_contact_hash', [], self.relays
         )
         
         # Should handle gracefully when no reliability data exists
@@ -329,8 +330,8 @@ class TestContactDisplayData(unittest.TestCase):
             'exit_consensus_weight_fraction': 0
         }
         
-        result = self.relays._compute_contact_display_data(
-            single_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            single_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         # Should only include guard information (no middle/exit)
@@ -353,8 +354,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -378,8 +379,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -402,8 +403,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'new in series', 'version': '0.4.8.9'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -444,8 +445,8 @@ class TestContactDisplayData(unittest.TestCase):
             # No obsolete, experimental, new in series, or unrecommended
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -473,8 +474,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -497,8 +498,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -520,8 +521,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_version_empty_members(self):
         """Test version compliance/status handling with empty member list."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -540,8 +541,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'version_status': 'recommended', 'version': '0.4.8.8'},  # Missing recommended_version
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -568,8 +569,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -589,8 +590,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -611,8 +612,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.1-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -631,8 +632,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -651,8 +652,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'recommended', 'version': '0.4.8.9'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -672,8 +673,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -693,8 +694,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -713,8 +714,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']

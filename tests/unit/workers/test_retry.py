@@ -7,6 +7,7 @@ and the integration of retry into _fetch_with_cache_fallback().
 
 import socket
 import time
+import errno
 import urllib.error
 
 import pytest
@@ -55,8 +56,13 @@ class TestIsRetryableError:
         assert _is_retryable_error(err) is True
 
     def test_url_error_with_os_error_reason_is_retryable(self):
-        err = urllib.error.URLError(reason=OSError("Network is unreachable"))
+        err = urllib.error.URLError(
+            reason=OSError(errno.ENETUNREACH, "Network is unreachable"))
         assert _is_retryable_error(err) is True
+
+    def test_url_error_with_local_os_error_reason_not_retryable(self):
+        err = urllib.error.URLError(reason=OSError(errno.ENOSPC, "disk full"))
+        assert _is_retryable_error(err) is False
 
     def test_http_500_is_retryable(self):
         err = urllib.error.HTTPError(
@@ -120,8 +126,28 @@ class TestIsRetryableError:
         except json.JSONDecodeError as e:
             assert _is_retryable_error(e) is False
 
-    def test_os_error_is_retryable(self):
-        assert _is_retryable_error(OSError("Network unreachable")) is True
+    def test_ssl_eof_error_is_retryable(self):
+        # SSLError.errno holds OpenSSL codes (8 = EOF), not system errnos;
+        # transient TLS handshake failures must retry (audit finding)
+        import ssl
+        err = ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+        assert _is_retryable_error(err) is True
+        assert _is_retryable_error(urllib.error.URLError(reason=err)) is True
+
+    def test_ssl_cert_verification_error_not_retryable(self):
+        import ssl
+        err = ssl.SSLCertVerificationError(1, "certificate verify failed")
+        assert _is_retryable_error(err) is False
+        assert _is_retryable_error(urllib.error.URLError(reason=err)) is False
+
+    def test_darwin_eprototype_is_retryable(self):
+        assert _is_retryable_error(OSError(errno.EPROTOTYPE, "quirk")) is True
+
+    def test_os_error_with_network_errno_is_retryable(self):
+        assert _is_retryable_error(OSError(errno.ENETUNREACH, "Network unreachable")) is True
+
+    def test_os_error_with_local_errno_not_retryable(self):
+        assert _is_retryable_error(OSError(errno.EACCES, "denied")) is False
 
 
 # ============================================================================

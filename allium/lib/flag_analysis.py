@@ -116,240 +116,193 @@ def apply_statistical_coloring(relays, network_statistics):
         # Join with forward slashes
         relay["uptime_api_display"] = "/".join(display_parts)
 
-def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_formatter):
+def _process_flag_metric_display(relays, metric, no_priority_msg, periods,
+                                 build_period_parts, all_dash_display=None):
     """
-    Process flag bandwidth data into display format with tooltips.
-    
-    Calculates flag-specific bandwidth display strings using priority system:
-    Exit > Guard > Fast > Running flags. Only shows flags the relay actually has.
-    
-    Args:
-        network_flag_statistics (dict): Network-wide flag statistics for comparison
+    Shared skeleton for flag uptime/bandwidth display processing: priority
+    flag selection (Exit > Guard > Fast > Running, only flags the relay
+    actually has), N/A fallbacks, per-period part collection, and result
+    storage. All metric-specific formatting lives in build_period_parts,
+    which maps (relay, selected_flag, flag_periods, period, period_short) to
+    a (display_part, tooltip_part) pair — keeping each variant's output
+    byte-identical. When all_dash_display is set and every period produced a
+    dash, it is stored instead (the uptime variant's "Match" case).
     """
+    data_key = f"_flag_{metric}_data"
+    display_key = f"flag_{metric}_display"
+    tooltip_key = f"flag_{metric}_tooltip"
+
     for relay in relays:
-        # Get actual flags this relay has
         relay_flags = set(relay.get('flags', []))
-        flag_data = relay.get("_flag_bandwidth_data", {})
-        
+        flag_data = relay.get(data_key, {})
+
         if not flag_data or not relay_flags:
-            relay["flag_bandwidth_display"] = "N/A"
-            relay["flag_bandwidth_tooltip"] = "No flag bandwidth data available"
+            relay[display_key] = "N/A"
+            relay[tooltip_key] = f"No flag {metric} data available"
             continue
-        
+
         # Determine priority flag from flags the relay ACTUALLY HAS
         selected_flag = None
         best_priority = float('inf')
-        
         for flag in flag_data.keys():
-            # Only consider flags the relay actually has
             if flag in FLAG_PRIORITY and flag in relay_flags and FLAG_PRIORITY[flag] < best_priority:
                 selected_flag = flag
                 best_priority = FLAG_PRIORITY[flag]
-        
+
         if not selected_flag or selected_flag not in flag_data:
-            relay["flag_bandwidth_display"] = "N/A"
-            relay["flag_bandwidth_tooltip"] = "No prioritized flag bandwidth data available"
+            relay[display_key] = "N/A"
+            relay[tooltip_key] = no_priority_msg
             continue
-        
-        # Build display string with formatting
+
         display_parts = []
         tooltip_parts = []
         flag_display = FLAG_DISPLAY_NAMES[selected_flag]
-        
-        for period in ['6_months', '1_year', '5_years']:
-            # Map to short period names for tooltip
-            period_short = PERIOD_SHORT_NAMES[period]
-            
-            if period in flag_data[selected_flag] and flag_data[selected_flag][period] > 0:
-                bandwidth_val = flag_data[selected_flag][period]
-                data_points = 0  # Not tracked in simplified structure
-                
-                # Format bandwidth value
-                unit = bandwidth_formatter.determine_unit(bandwidth_val)
-                formatted_bw = bandwidth_formatter.format_bandwidth_with_unit(bandwidth_val, unit)
-                bandwidth_str = f"{formatted_bw} {unit}"
-                
-                # Apply FLAG BANDWIDTH color coding
-                color_class = ''
-                if (selected_flag in network_flag_statistics and 
-                    period in network_flag_statistics[selected_flag] and
-                    network_flag_statistics[selected_flag][period]):
-                    
-                    net_stats = network_flag_statistics[selected_flag][period]
-                    
-                    # Color coding based on statistical position
-                    if bandwidth_val <= net_stats['two_sigma_low']:
-                        color_class = 'statistical-outlier-low'
-                    elif bandwidth_val > net_stats['two_sigma_high']:
-                        color_class = 'statistical-outlier-high'
-                    elif bandwidth_val < net_stats['mean']:
-                        color_class = 'below-mean'
-                    # High performance threshold (top 10% or above 2x mean)
-                    elif bandwidth_val > net_stats['mean'] * 2:
-                        color_class = 'high-performance'
-                
-                # Apply color styling based on class
-                if color_class == 'high-performance':
-                    styled_bandwidth = f'<span class="al-status-success-bold">{bandwidth_str}</span>'
-                elif color_class == 'statistical-outlier-low':
-                    styled_bandwidth = f'<span class="al-status-danger-bold">{bandwidth_str}</span>'
-                elif color_class == 'statistical-outlier-high':
-                    styled_bandwidth = f'<span class="al-status-success-bold">{bandwidth_str}</span>'
-                elif color_class == 'below-mean':
-                    styled_bandwidth = f'<span class="al-status-warning-bold">{bandwidth_str}</span>'
-                else:
-                    styled_bandwidth = bandwidth_str
-                
-                display_parts.append(styled_bandwidth)
-                tooltip_parts.append(f"{period_short}: {bandwidth_str} ({data_points} data points)")
-            else:
-                # No data for this period
-                display_parts.append("—")
-                tooltip_parts.append(f"{period_short}: No flag bandwidth data")
-        
-        # Store results
-        relay["flag_bandwidth_display"] = "/".join(display_parts)
-        # Generate tooltip in same format as flag reliability
-        relay["flag_bandwidth_tooltip"] = f"{flag_display} flag bandwidth over time periods: " + ", ".join(tooltip_parts)
+        for period in periods:
+            display_part, tooltip_part = build_period_parts(
+                relay, selected_flag, flag_data[selected_flag], period, PERIOD_SHORT_NAMES[period]
+            )
+            display_parts.append(display_part)
+            tooltip_parts.append(tooltip_part)
+
+        # If all periods show dashes (no differences), show the match display instead
+        if all_dash_display and all(part == "—" for part in display_parts):
+            relay[display_key] = all_dash_display
+            relay[tooltip_key] = f"{flag_display} flag {metric} matches overall uptime across all periods"
+        else:
+            relay[display_key] = "/".join(display_parts)
+            relay[tooltip_key] = f"{flag_display} flag {metric} over time periods: " + ", ".join(tooltip_parts)
+
+# Maps flag bandwidth color classes to the bold al-status-* span classes
+# (flag uptime uses the non-bold variants inline below — do not unify)
+_FLAG_BANDWIDTH_SPAN_CLASSES = {
+    'high-performance': 'al-status-success-bold',
+    'statistical-outlier-low': 'al-status-danger-bold',
+    'statistical-outlier-high': 'al-status-success-bold',
+    'below-mean': 'al-status-warning-bold',
+}
+
+def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_formatter):
+    """
+    Process flag bandwidth data into display format with tooltips.
+
+    Calculates flag-specific bandwidth display strings using priority system:
+    Exit > Guard > Fast > Running flags. Only shows flags the relay actually has.
+
+    Args:
+        network_flag_statistics (dict): Network-wide flag statistics for comparison
+    """
+    def build_period_parts(relay, selected_flag, flag_periods, period, period_short):
+        if not (period in flag_periods and flag_periods[period] > 0):
+            return "—", f"{period_short}: No flag bandwidth data"
+
+        bandwidth_val = flag_periods[period]
+        data_points = 0  # Not tracked in simplified structure
+        unit = bandwidth_formatter.determine_unit(bandwidth_val)
+        formatted_bw = bandwidth_formatter.format_bandwidth_with_unit(bandwidth_val, unit)
+        bandwidth_str = f"{formatted_bw} {unit}"
+
+        # Apply FLAG BANDWIDTH color coding based on statistical position
+        color_class = ''
+        if (selected_flag in network_flag_statistics and
+            period in network_flag_statistics[selected_flag] and
+            network_flag_statistics[selected_flag][period]):
+
+            net_stats = network_flag_statistics[selected_flag][period]
+            if bandwidth_val <= net_stats['two_sigma_low']:
+                color_class = 'statistical-outlier-low'
+            elif bandwidth_val > net_stats['two_sigma_high']:
+                color_class = 'statistical-outlier-high'
+            elif bandwidth_val < net_stats['mean']:
+                color_class = 'below-mean'
+            # High performance threshold (top 10% or above 2x mean)
+            elif bandwidth_val > net_stats['mean'] * 2:
+                color_class = 'high-performance'
+
+        span_class = _FLAG_BANDWIDTH_SPAN_CLASSES.get(color_class)
+        styled_bandwidth = f'<span class="{span_class}">{bandwidth_str}</span>' if span_class else bandwidth_str
+        return styled_bandwidth, f"{period_short}: {bandwidth_str} ({data_points} data points)"
+
+    _process_flag_metric_display(
+        relays, 'bandwidth', "No prioritized flag bandwidth data available",
+        ['6_months', '1_year', '5_years'], build_period_parts
+    )
 
 def process_flag_uptime_display(relays, network_flag_statistics):
     """
     Process flag uptime data into display format with tooltips.
-    
+
     Calculates flag-specific uptime display strings using priority system:
     Exit > Guard > Fast > Running flags. Only shows flags the relay actually has.
     Only displays flag uptime values when they differ from regular uptime.
-    
+
     Args:
         network_flag_statistics (dict): Network-wide flag statistics for comparison
     """
-    for relay in relays:
-        # Get actual flags this relay has
-        relay_flags = set(relay.get('flags', []))
-        flag_data = relay.get("_flag_uptime_data", {})
-        
-        if not flag_data or not relay_flags:
-            relay["flag_uptime_display"] = "N/A"
-            relay["flag_uptime_tooltip"] = "No flag uptime data available"
-            continue
-        
-        # Determine priority flag from flags the relay ACTUALLY HAS
-        selected_flag = None
-        best_priority = float('inf')
-        
-        for flag in flag_data.keys():
-            # Only consider flags the relay actually has
-            if flag in FLAG_PRIORITY and flag in relay_flags and FLAG_PRIORITY[flag] < best_priority:
-                selected_flag = flag
-                best_priority = FLAG_PRIORITY[flag]
-        
-        if not selected_flag or selected_flag not in flag_data:
-            relay["flag_uptime_display"] = "N/A"
-            relay["flag_uptime_tooltip"] = "No prioritized flag data available"
-            continue
-        
-        # Build display string with color coding and prefix
-        display_parts = []
-        tooltip_parts = []
-        flag_display = FLAG_DISPLAY_NAMES[selected_flag]
-        
-        # Get regular uptime percentages for comparison
-        regular_uptime = relay.get("uptime_percentages", {})
-        
-        for period in ['1_month', '6_months', '1_year', '5_years']:
-            # Map to short period names for tooltip
-            period_short = PERIOD_SHORT_NAMES[period]
-            
-            if period in flag_data[selected_flag]:
-                uptime_val = flag_data[selected_flag][period]['uptime']
-                data_points = flag_data[selected_flag][period].get('data_points', 0)
-                
-                # Compare flag uptime with regular uptime before adding prefix
-                regular_uptime_val = regular_uptime.get(period, 0.0)
-                
-                # Only show flag uptime if it differs from regular uptime (allowing for small floating point differences)
-                if abs(uptime_val - regular_uptime_val) < 0.1:
-                    # Values are essentially the same, skip showing flag uptime for this period
-                    display_parts.append("—")  # Show dash to indicate "same as uptime"
-                    tooltip_parts.append(f"{period_short}: Same as uptime ({uptime_val:.1f}%)")
-                    continue
-                
-                # Format without prefix
-                percentage_str = f"{uptime_val:.1f}%"
-                
-                # Apply FLAG RELIABILITY color coding (not uptime color coding)
-                color_class = ''
-                
-                # Add network comparison for color determination
-                if (selected_flag in network_flag_statistics and 
-                    period in network_flag_statistics[selected_flag] and
-                    network_flag_statistics[selected_flag][period]):
-                    
-                    net_stats = network_flag_statistics[selected_flag][period]
-                    net_mean = net_stats.get('mean', 0)
-                    two_sigma_low = net_stats.get('two_sigma_low', 0)
-                    two_sigma_high = net_stats.get('two_sigma_high', float('inf'))
-                    
-                    # Enhanced color coding logic matching flag reliability:
-                    # Special handling for very low values (≤1%) - likely to be statistical outliers
-                    if uptime_val <= 1.0:
-                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
-                    elif uptime_val <= two_sigma_low:
-                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
-                    elif uptime_val >= 99.0:
-                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
-                    elif uptime_val > two_sigma_high:
-                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
-                    elif uptime_val < net_mean:
-                        colored_str = f'<span class="al-status-warning">{percentage_str}</span>'  # Yellow
-                    else:
-                        # Above mean but within normal range - no special coloring
-                        colored_str = percentage_str
-                else:
-                    # Fallback color coding when no network statistics available
-                    if uptime_val <= 1.0:
-                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
-                    elif uptime_val >= 99.0:
-                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
-                    else:
-                        # Default: no special coloring
-                        colored_str = percentage_str
-                
-                display_parts.append(colored_str)
-                
-                # Add network comparison for tooltip (if available)
-                network_comparison = ""
-                if (selected_flag in network_flag_statistics and 
-                    period in network_flag_statistics[selected_flag] and
-                    network_flag_statistics[selected_flag][period]):
-                    
-                    net_stats = network_flag_statistics[selected_flag][period]
-                    net_mean = net_stats.get('mean', 0)
-                    if net_mean > 0:
-                        if uptime_val >= net_stats.get('two_sigma_high', float('inf')):
-                            network_comparison = f" (exceptional vs network μ {net_mean:.1f}%)"
-                        elif uptime_val <= net_stats.get('two_sigma_low', 0):
-                            network_comparison = f" (low vs network μ {net_mean:.1f}%)"
-                        elif uptime_val < net_mean:
-                            network_comparison = f" (below network μ {net_mean:.1f}%)"
-                        else:
-                            network_comparison = f" (above network μ {net_mean:.1f}%)"
-                
-                tooltip_parts.append(f"{period_short}: {uptime_val:.1f}%{network_comparison}")
+    def build_period_parts(relay, selected_flag, flag_periods, period, period_short):
+        if period not in flag_periods:
+            return "—", f"{period_short}: No flag data"
+
+        uptime_val = flag_periods[period]['uptime']
+
+        # Only show flag uptime if it differs from regular uptime (allowing for
+        # small floating point differences); a dash indicates "same as uptime"
+        regular_uptime_val = relay.get("uptime_percentages", {}).get(period, 0.0)
+        if abs(uptime_val - regular_uptime_val) < 0.1:
+            return "—", f"{period_short}: Same as uptime ({uptime_val:.1f}%)"
+
+        percentage_str = f"{uptime_val:.1f}%"
+        network_comparison = ""
+
+        if (selected_flag in network_flag_statistics and
+            period in network_flag_statistics[selected_flag] and
+            network_flag_statistics[selected_flag][period]):
+
+            net_stats = network_flag_statistics[selected_flag][period]
+            net_mean = net_stats.get('mean', 0)
+            two_sigma_low = net_stats.get('two_sigma_low', 0)
+            two_sigma_high = net_stats.get('two_sigma_high', float('inf'))
+
+            # FLAG RELIABILITY color coding; very low values (≤1%) are likely
+            # statistical outliers, values above mean within normal range stay plain
+            if uptime_val <= 1.0:
+                colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
+            elif uptime_val <= two_sigma_low:
+                colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
+            elif uptime_val >= 99.0:
+                colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
+            elif uptime_val > two_sigma_high:
+                colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
+            elif uptime_val < net_mean:
+                colored_str = f'<span class="al-status-warning">{percentage_str}</span>'  # Yellow
             else:
-                # No data for this period
-                display_parts.append("—")
-                tooltip_parts.append(f"{period_short}: No flag data")
-        
-        # Store results
-        # If all periods show dashes (no differences), show "N/A" instead
-        if all(part == "—" for part in display_parts):
-            relay["flag_uptime_display"] = "Match"
-            relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime matches overall uptime across all periods"
+                colored_str = percentage_str
+
+            # Add network comparison for tooltip (if available)
+            if net_mean > 0:
+                if uptime_val >= two_sigma_high:
+                    network_comparison = f" (exceptional vs network μ {net_mean:.1f}%)"
+                elif uptime_val <= two_sigma_low:
+                    network_comparison = f" (low vs network μ {net_mean:.1f}%)"
+                elif uptime_val < net_mean:
+                    network_comparison = f" (below network μ {net_mean:.1f}%)"
+                else:
+                    network_comparison = f" (above network μ {net_mean:.1f}%)"
         else:
-            relay["flag_uptime_display"] = "/".join(display_parts)
-            # Generate tooltip in same format as flag reliability
-            relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime over time periods: " + ", ".join(tooltip_parts)
+            # Fallback color coding when no network statistics available
+            if uptime_val <= 1.0:
+                colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
+            elif uptime_val >= 99.0:
+                colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
+            else:
+                colored_str = percentage_str
+
+        return colored_str, f"{period_short}: {uptime_val:.1f}%{network_comparison}"
+
+    _process_flag_metric_display(
+        relays, 'uptime', "No prioritized flag data available",
+        ['1_month', '6_months', '1_year', '5_years'], build_period_parts,
+        all_dash_display="Match"
+    )
 
 def basic_uptime_processing(relays):
     """

@@ -14,6 +14,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from allium.lib.page_writer import write_misc
+
 
 GABELMOO_FP = 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281'
 
@@ -213,7 +215,8 @@ def test_write_directory_authorities(mock_urlopen, make_relays, temp_dir, mock_u
     relays = make_relays(main_response_with_authorities)
 
     # Call write_misc directly since write_directory_authorities no longer exists
-    relays.write_misc(
+    write_misc(
+        relays,
         template="misc-authorities.html",
         path="misc/authorities.html"
     )
@@ -430,7 +433,8 @@ def test_template_validation(make_relays, temp_dir):
     relays = make_relays(minimal_authority_data)
 
     # Test template compilation and rendering (any exception fails the test)
-    relays.write_misc(
+    write_misc(
+        relays,
         template="misc-authorities.html",
         path="misc/authorities.html"
     )
@@ -485,10 +489,10 @@ def test_allium_integration(mock_urlopen, make_relays):
     assert relays.json is not None
     assert len(relays.json['relays']) == 1
 
-    # Test that write_misc method can handle misc-authorities.html template
+    # Test authorities processing integration via the page_writer module function
     # (any exception fails the test)
-    assert callable(getattr(relays, 'write_misc', None))
-    relays.write_misc(
+    write_misc(
+        relays,
         template="misc-authorities.html",
         path="misc/authorities.html"
     )
