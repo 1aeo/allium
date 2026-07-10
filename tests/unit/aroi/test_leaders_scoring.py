@@ -4,7 +4,317 @@ Tests for reliability_masters and legacy_titans categories
 """
 import pytest
 
-from allium.lib.aroileaders import _calculate_reliability_score, _classify_v3_tier_local
+from allium.lib.aroileaders import (
+    _calculate_reliability_score,
+    _classify_v3_tier_local,
+    _rank_operators,
+    _top_n,
+)
+
+
+def _make_operator(**overrides):
+    """Build a complete operator metrics dict with all keys read by
+    _rank_operators, defaulting everything to 0 so tests only specify
+    the metrics they care about."""
+    base = {
+        'total_relays': 0,
+        'total_bandwidth': 0,
+        'total_consensus_weight': 0.0,
+        'exit_consensus_weight': 0.0,
+        'guard_consensus_weight': 0.0,
+        'exit_count': 0,
+        'guard_count': 0,
+        'reliability_6m_score': 0.0,
+        'reliability_5y_score': 0.0,
+        'diversity_score': 0.0,
+        'non_linux_count': 0,
+        'platform_count': 0,
+        'non_eu_count': 0,
+        'non_eu_country_count': 0,
+        'rare_country_count': 0,
+        'relays_in_rare_countries': 0,
+        'veteran_score': 0.0,
+        'unique_ipv4_count': 0,
+        'unique_ipv6_count': 0,
+        'bandwidth_6m_score': 0.0,
+        'bandwidth_5y_score': 0.0,
+        'validated_relay_count': 0,
+        'total_data_transferred': 0,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestTopNTiebreakers:
+    """_top_n tiebreakers parameter: multi-key descending sort."""
+
+    def test_no_tiebreakers_preserves_single_key_behavior(self):
+        ops = {
+            'a': _make_operator(non_linux_count=5),
+            'b': _make_operator(non_linux_count=10),
+            'c': _make_operator(non_linux_count=1),
+        }
+        result = [k for k, _ in _top_n(ops, 'non_linux_count')]
+        assert result == ['b', 'a', 'c']
+
+    def test_tiebreakers_order_equal_primaries(self):
+        ops = {
+            'low_tb': _make_operator(non_linux_count=5, platform_count=1, total_bandwidth=999),
+            'high_tb': _make_operator(non_linux_count=5, platform_count=3, total_bandwidth=1),
+            'top': _make_operator(non_linux_count=9, platform_count=1, total_bandwidth=1),
+        }
+        result = [k for k, _ in _top_n(ops, 'non_linux_count',
+                                       tiebreakers=['platform_count', 'total_bandwidth'])]
+        assert result == ['top', 'high_tb', 'low_tb']
+
+    def test_second_tiebreaker_used_when_first_ties(self):
+        ops = {
+            'small_bw': _make_operator(non_linux_count=5, platform_count=2, total_bandwidth=10),
+            'big_bw': _make_operator(non_linux_count=5, platform_count=2, total_bandwidth=100),
+        }
+        result = [k for k, _ in _top_n(ops, 'non_linux_count',
+                                       tiebreakers=['platform_count', 'total_bandwidth'])]
+        assert result == ['big_bw', 'small_bw']
+
+    def test_missing_tiebreaker_key_defaults_to_zero(self):
+        ops = {
+            'has_key': _make_operator(non_linux_count=5, platform_count=2),
+            'missing_key': {k: v for k, v in _make_operator(non_linux_count=5).items()
+                            if k != 'platform_count'},
+        }
+        result = [k for k, _ in _top_n(ops, 'non_linux_count',
+                                       tiebreakers=['platform_count'])]
+        assert result == ['has_key', 'missing_key']
+
+
+class TestVolumeBreadthBoards:
+    """The four co-equal diversity boards: Volume and Breadth specialists
+    must each top their own board (neither kind of diversity is buried
+    under the other's metric)."""
+
+    @pytest.fixture
+    def operators(self):
+        return {
+            # Volume specialist: 634 non-Linux relays, all one OS (e.g. FreeBSD-only fleet)
+            'volume_king': _make_operator(
+                total_relays=634, non_linux_count=634, platform_count=1,
+                non_eu_count=634, non_eu_country_count=1, total_bandwidth=5000),
+            # Breadth specialist: 15 relays across 6 OSes / 14 non-EU countries
+            'breadth_king': _make_operator(
+                total_relays=15, non_linux_count=7, platform_count=6,
+                non_eu_count=15, non_eu_country_count=14, total_bandwidth=100),
+            # Mixed mid-size operator: Linux + FreeBSD (2 OSes)
+            'mixed': _make_operator(
+                total_relays=50, non_linux_count=10, platform_count=2,
+                non_eu_count=30, non_eu_country_count=3, total_bandwidth=1000),
+            # Single-OS Linux-only operator (never on the polyglot board)
+            'linux_only': _make_operator(
+                total_relays=100, non_linux_count=0, platform_count=1,
+                non_eu_count=0, non_eu_country_count=0, total_bandwidth=2000),
+        }
+
+    def test_volume_specialist_tops_platform_volume(self, operators):
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['platform_volume']]
+        assert ranked[0] == 'volume_king'
+
+    def test_breadth_specialist_tops_platform_breadth(self, operators):
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['platform_breadth']]
+        assert ranked[0] == 'breadth_king'
+
+    def test_platform_breadth_excludes_single_os_operators(self, operators):
+        """OS Polyglots requires >= 2 distinct OSes (incl. Linux)."""
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['platform_breadth']]
+        assert 'volume_king' not in ranked   # 1 OS -> filtered
+        assert 'linux_only' not in ranked    # 1 OS -> filtered
+        assert 'mixed' in ranked             # 2 OSes (Linux+FreeBSD) -> included
+
+    def test_platform_count_includes_linux(self, operators):
+        """The polyglot metric counts ALL OSes: a Linux+FreeBSD operator
+        qualifies with platform_count=2 even with few non-Linux relays."""
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['platform_breadth']]
+        assert ranked == ['breadth_king', 'mixed']
+
+    def test_volume_specialist_tops_non_eu_volume(self, operators):
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['non_eu_volume']]
+        assert ranked[0] == 'volume_king'
+
+    def test_breadth_specialist_tops_non_eu_breadth(self, operators):
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['non_eu_breadth']]
+        assert ranked[0] == 'breadth_king'
+
+    def test_non_eu_breadth_has_no_minimum_filter(self, operators):
+        """Unlike OS Polyglots, the non-EU breadth board lists everyone,
+        including 0/1-country operators (they sort to the bottom)."""
+        boards = _rank_operators(operators)
+        ranked = [k for k, _ in boards['non_eu_breadth']]
+        assert 'linux_only' in ranked
+        assert ranked[-1] == 'linux_only'
+
+    def test_platform_volume_tiebreak_by_distinct_os_then_bandwidth(self):
+        ops = {
+            'one_os': _make_operator(non_linux_count=10, platform_count=1, total_bandwidth=999),
+            'three_os': _make_operator(non_linux_count=10, platform_count=3, total_bandwidth=1),
+        }
+        boards = _rank_operators(ops)
+        assert [k for k, _ in boards['platform_volume']] == ['three_os', 'one_os']
+
+    def test_non_eu_volume_tiebreak_by_distinct_countries(self):
+        ops = {
+            'concentrated': _make_operator(non_eu_count=20, non_eu_country_count=1),
+            'spread': _make_operator(non_eu_count=20, non_eu_country_count=10),
+        }
+        boards = _rank_operators(ops)
+        assert [k for k, _ in boards['non_eu_volume']] == ['spread', 'concentrated']
+
+    def test_non_eu_breadth_tiebreak_by_relay_count(self):
+        ops = {
+            'few_relays': _make_operator(non_eu_count=5, non_eu_country_count=5),
+            'many_relays': _make_operator(non_eu_count=25, non_eu_country_count=5),
+        }
+        boards = _rank_operators(ops)
+        assert [k for k, _ in boards['non_eu_breadth']] == ['many_relays', 'few_relays']
+
+    def test_frontier_builders_tiebreak_by_rare_relays(self):
+        ops = {
+            'few_rare_relays': _make_operator(rare_country_count=3, relays_in_rare_countries=3),
+            'many_rare_relays': _make_operator(rare_country_count=3, relays_in_rare_countries=9),
+        }
+        boards = _rank_operators(ops)
+        assert [k for k, _ in boards['frontier_builders']] == ['many_rare_relays', 'few_rare_relays']
+
+    def test_old_category_keys_removed(self, operators):
+        """Breaking change: platform_diversity / non_eu_leaders are gone."""
+        boards = _rank_operators(operators)
+        assert 'platform_diversity' not in boards
+        assert 'non_eu_leaders' not in boards
+        for key in ('platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth'):
+            assert key in boards
+
+
+class TestDistinctDiversityMetrics:
+    """_collect_operator_metrics computes the breadth metrics correctly:
+    platform_count counts ALL distinct OSes (incl. Linux) and
+    non_eu_country_count counts distinct non-EU countries."""
+
+    def _build_relays_instance(self, relay_specs):
+        """Minimal relays_instance for _collect_operator_metrics.
+
+        relay_specs: list of (platform, country) tuples for ONE operator.
+        """
+        import types
+        relays = []
+        for i, (platform, country) in enumerate(relay_specs):
+            relays.append({
+                'fingerprint': f'FP{i:038d}',
+                'nickname': f'relay{i}',
+                'contact': 'email:op@example.com url:example.com ciissversion:2',
+                'aroi_domain': 'example.com',
+                'platform': platform,
+                'country': country,
+                'or_addresses': [f'192.0.2.{i + 1}:9001'],
+                'observed_bandwidth': 1000,
+                'consensus_weight': 10,
+                'consensus_weight_fraction': 0.0001,
+                'flags': ['Running'],
+                'running': True,
+                'first_seen': '2020-01-01 00:00:00',
+                'as': 'AS64500',
+                'total_data': {},
+            })
+        instance = types.SimpleNamespace()
+        instance.json = {
+            'relays': relays,
+            'sorted': {
+                'contact': {
+                    'hash1': {
+                        'relays': list(range(len(relays))),
+                        'bandwidth': 1000 * len(relays),
+                        'unique_as_count': 1,
+                    }
+                },
+                'country': {},
+                'as': {},
+            },
+        }
+        return instance
+
+    def test_platform_count_includes_linux_and_dedupes(self):
+        from allium.lib.aroileaders import _collect_operator_metrics
+        instance = self._build_relays_instance([
+            ('Linux', 'DE'),
+            ('FreeBSD', 'US'),
+            ('FreeBSD', 'BR'),
+            ('OpenBSD', 'JP'),
+        ])
+        ops = _collect_operator_metrics(instance)
+        assert len(ops) == 1
+        metrics = next(iter(ops.values()))
+        # Linux + FreeBSD + OpenBSD = 3 distinct OSes (FreeBSD deduped)
+        assert metrics['platform_count'] == 3
+        # 3 relays run a non-Linux OS
+        assert metrics['non_linux_count'] == 3
+
+    def test_non_eu_country_count_distinct_vs_relay_count(self):
+        from allium.lib.aroileaders import _collect_operator_metrics
+        instance = self._build_relays_instance([
+            ('Linux', 'DE'),   # EU
+            ('Linux', 'US'),   # non-EU
+            ('Linux', 'US'),   # non-EU (same country)
+            ('Linux', 'JP'),   # non-EU
+        ])
+        ops = _collect_operator_metrics(instance)
+        metrics = next(iter(ops.values()))
+        # 3 relays outside the EU (volume metric)...
+        assert metrics['non_eu_count'] == 3
+        # ...but only 2 distinct non-EU countries (breadth metric)
+        assert metrics['non_eu_country_count'] == 2
+
+    def test_geographic_achievement_uses_non_eu_countries_only(self):
+        """Regression test (PR #217 Bugbot): the non-EU boards' achievement
+        title must be derived from the operator's NON-EU countries only.
+        An EU-heavy operator with a single US relay must get a North
+        America title, not a 'Europe Champion' title, on the non-EU
+        podium."""
+        from allium.lib.aroileaders import (
+            _collect_operator_metrics,
+            _rank_operators,
+            _format_leaderboard_entries,
+        )
+
+        instance = self._build_relays_instance([
+            ('Linux', 'DE'),   # EU
+            ('Linux', 'FR'),   # EU
+            ('Linux', 'NL'),   # EU
+            ('Linux', 'ES'),   # EU
+            ('Linux', 'US'),   # the ONLY non-EU relay
+        ])
+
+        # Stub bandwidth formatter for _format_leaderboard_entries
+        class _StubFormatter:
+            def determine_unit(self, value):
+                return 'MB/s'
+
+            def format_bandwidth_with_unit(self, value, unit, decimal_places=1):
+                return f'{value / 1e6:.{decimal_places}f}'
+
+        instance.bandwidth_formatter = _StubFormatter()
+        instance.timestamp = '2026-01-01 00:00:00'
+
+        ops = _collect_operator_metrics(instance)
+        boards = _rank_operators(ops)
+        formatted = _format_leaderboard_entries(boards, ops, instance)
+
+        entry = formatted['leaderboards']['non_eu_breadth'][0]
+        # Derived from ['US'] only -> North America title, never a
+        # European one (old bug: all 5 countries -> 'Europe Champion').
+        assert entry['geographic_achievement'] == 'North America Champion'
+        assert 'Europe' not in entry['geographic_achievement']
 
 
 class TestV3TierLeaderboardPropagation:
@@ -156,7 +466,8 @@ class TestReliabilityScoring:
         category_order = [
             'bandwidth', 'consensus_weight', 'exit_authority', 'exit_operators', 
             'guard_operators', 'reliability_masters', 'legacy_titans', 'most_diverse',
-            'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'
+            'platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth',
+            'frontier_builders', 'network_veterans'
         ]
         
         reliability_masters_pos = category_order.index('reliability_masters')
@@ -209,11 +520,12 @@ class TestReliabilityIntegration:
         all_categories = [
             'bandwidth', 'consensus_weight', 'exit_authority', 'exit_operators',
             'guard_operators', 'reliability_masters', 'legacy_titans', 'most_diverse',
-            'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'
+            'platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth',
+            'frontier_builders', 'network_veterans'
         ]
         
-        # Check that all 12 categories are present
-        assert len(all_categories) == 12
+        # Check that all 14 categories are present
+        assert len(all_categories) == 14
         assert 'reliability_masters' in all_categories
         assert 'legacy_titans' in all_categories
         
