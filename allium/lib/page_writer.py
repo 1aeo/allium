@@ -7,6 +7,7 @@ page writing functions.
 Extracted from relays.py for better modularity.
 """
 
+import logging
 import multiprocessing as mp
 import os
 import time
@@ -41,6 +42,8 @@ from .operator_analysis import (
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize_path_component(value: str) -> str:
@@ -799,6 +802,68 @@ def get_directory_authorities_data(relay_set):
             authority['uptime_zscore'] = None
             authority['uptime_outlier_status'] = 'insufficient_data'
     
+    # ------------------------------------------------------------------
+    # Retain recently-removed authorities (as offline) for historical context.
+    # A directory authority removed from the consensus eventually ages out of ALL
+    # live data sources (Onionoo drops it ~1 week after its last consensus; CollecTor
+    # 'recent/' keeps only ~3-4 days), so it would silently vanish from this page. We
+    # merge in a SMALL hardcoded list of known-offline authorities, but ONLY those not
+    # already present dynamically from Onionoo. If such an authority returns to
+    # Onionoo, the live row wins (dedupe) and the page refreshes it automatically.
+    #
+    # Display-only: these entries are never counted as voters and never affect the
+    # reachability/consensus denominators. Totals below use the DYNAMIC (pre-merge)
+    # authority count so the hardcoded rows can't inflate any counts.
+    # ------------------------------------------------------------------
+    dynamic_authority_count = len(authorities)
+    dynamic_fingerprints = {a.get('fingerprint', '').upper() for a in authorities}
+    dynamic_nicknames = {a.get('nickname', '').lower() for a in authorities}
+    try:
+        from .consensus.collector_fetcher import get_known_offline_authorities
+        known_offline = get_known_offline_authorities()
+    except Exception as e:
+        logger.warning(f"Failed to load known offline authorities ({e}), skipping offline-retention rows")
+        known_offline = []
+    for entry in known_offline:
+        entry_fp = (entry.get('fingerprint') or '').upper()
+        entry_nick = (entry.get('nickname') or '').lower()
+        # Skip if already present dynamically (authority returned / never fully left)
+        if (entry_fp and entry_fp in dynamic_fingerprints) or \
+           (entry_nick and entry_nick in dynamic_nicknames):
+            continue
+        # Build a complete authority-shaped dict so the template renders safely.
+        # Intentionally NO 'collector_data'/'latency_*' keys -> those columns render as
+        # a muted "-" rather than an alarming red 0 / X.
+        authorities.append({
+            'nickname': entry.get('nickname', ''),
+            'fingerprint': entry.get('fingerprint', ''),
+            'running': False,
+            'country': entry.get('country'),
+            'country_name': entry.get('country_name'),
+            'as': None,
+            'as_name': None,
+            'uptime_percentages': {},
+            'uptime_zscore': None,
+            'uptime_outlier_status': 'insufficient_data',
+            'version': None,
+            'recommended_version': None,
+            'first_seen': None,
+            'first_seen_relative': None,
+            'first_seen_timestamp': None,
+            'last_restarted': None,
+            'is_known_offline': True,
+            'offline_since': entry.get('offline_since'),
+            'offline_note': entry.get('note', 'Removed from the directory authority list.'),
+        })
+    # Re-sort so any appended offline rows slot into alphabetical position
+    authorities = sorted(authorities, key=lambda x: x.get('nickname', '').lower())
+
+    # Offline summary is DYNAMIC: any authority currently not running - includes live
+    # (stage 1/2) offline authorities AND hardcoded (stage 3) entries. Drives the
+    # header sub-bullet, so it auto-updates for ANY future DA going offline.
+    offline_names = sorted(a.get('nickname', '') for a in authorities if not a.get('running', False))
+    offline_count = len(offline_names)
+
     # Build consensus status
     voted_count = sum(1 for a in authorities if a.get('collector_data', {}).get('voted', False))
     consensus_status = {
@@ -820,8 +885,19 @@ def get_directory_authorities_data(relay_set):
         collector_flag_thresholds = collector_data.get('flag_thresholds', {})
     
     # Use voting authority count from collector (actual voters) rather than Onionoo authority flag count
-    # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote
-    voting_authority_count = len(collector_flag_thresholds) if collector_flag_thresholds else len(authorities)
+    # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote.
+    # When flag_thresholds is absent but votes were seen, the voting registry (updated from the vote
+    # keys in enrich_with_api_data) still holds the real voter count, so prefer it over the Onionoo
+    # Authority-flag count. Only with no vote data at all fall back to the DYNAMIC (pre-merge) Onionoo
+    # count, so hardcoded offline rows never inflate the denominator.
+    if collector_flag_thresholds:
+        voting_authority_count = len(collector_flag_thresholds)
+    else:
+        from .consensus.collector_fetcher import get_authority_registry
+        registry = get_authority_registry()
+        voting_authority_count = (registry.get_voting_authority_count()
+                                  if registry.has_dynamic_voting_authorities()
+                                  else dynamic_authority_count)
     
     # Extract consensus method info from collector data (for Happy Family migration tracking)
     consensus_method_info = None
@@ -832,10 +908,12 @@ def get_directory_authorities_data(relay_set):
         'authorities_data': authorities,
         'authorities_summary': {
             'total_authorities': voting_authority_count,
-            'total_with_authority_flag': len(authorities),  # Keep for reference
+            'total_with_authority_flag': dynamic_authority_count,  # Live Onionoo count (excludes hardcoded offline rows)
             'above_average_uptime': above_average_uptime,
             'below_average_uptime': below_average_uptime,
-            'problem_uptime': problem_uptime
+            'problem_uptime': problem_uptime,
+            'offline_count': offline_count,  # Dynamic: any authority not running (live + hardcoded)
+            'offline_names': offline_names,
         },
         'authority_network_stats': authority_network_stats,
         'uptime_metadata': (getattr(relay_set, 'uptime_data', {}) or {}).get('relays_published', 'Unknown'),

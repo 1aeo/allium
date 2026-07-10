@@ -77,6 +77,50 @@ AUTHORITY_COUNTRIES = {
 
 
 # ============================================================================
+# KNOWN OFFLINE / REMOVED AUTHORITIES - small hardcoded bridge list
+# ============================================================================
+# Directory-authority membership changing is rare but critical. When an authority
+# is removed from the consensus it eventually ages out of ALL live data sources
+# (Onionoo drops a relay ~1 week after its last consensus; CollecTor 'recent/' only
+# retains ~3-4 days), so it would silently disappear from every page. To preserve
+# historical context, we keep a SMALL hardcoded list of recently-removed authorities
+# and surface them (as offline) on the dedicated Directory Authorities page ONLY.
+#
+# This list is display-only: entries here are NEVER fed into the voting registry,
+# never counted as voters, and never affect reachability/consensus math. Each entry
+# is shown only if the authority is NOT already present dynamically from Onionoo, so
+# if it ever returns the live data supersedes the hardcoded row automatically.
+#
+# Keep this list SMALL: add an entry only when an authority is actually removed, and
+# prune it once the authority is permanently gone (no longer needs context) or has
+# returned. The 'fingerprint' is the Onionoo RELAY fingerprint (used for dedupe
+# against live Onionoo data) - NOT the V3 signing key used in vote filenames.
+KNOWN_OFFLINE_AUTHORITIES = [
+    {
+        'nickname': 'gabelmoo',
+        'fingerprint': 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281',
+        # Uppercase to match _preprocess_template_data (relay["country"] = country.upper())
+        # and the country-page URL convention (country/DE/), so the offline row links correctly.
+        'country': 'DE',
+        'country_name': 'Germany',
+        'offline_since': '2026-06-30',  # last vote 2026-06-29 23:00 UTC (CollecTor archive)
+        'note': ('Went offline on 2026-06-30 (last vote 2026-06-29) and was '
+                 'subsequently removed from the directory authority list.'),
+    },
+]
+
+
+def get_known_offline_authorities() -> List[dict]:
+    """Return the (small) hardcoded list of known removed/offline authorities.
+
+    Display-only, used to keep recently-removed authorities visible (as offline) on
+    the dedicated Directory Authorities page after they age out of live data sources.
+    Returns copies so callers can't mutate the module-level entries.
+    """
+    return [dict(entry) for entry in KNOWN_OFFLINE_AUTHORITIES]
+
+
+# ============================================================================
 # DYNAMIC AUTHORITY REGISTRY - Prefers Onionoo data, falls back to hardcoded
 # ============================================================================
 class AuthorityRegistry:
@@ -95,6 +139,12 @@ class AuthorityRegistry:
         self._discovered_authorities = []  # From Onionoo
         self._authority_names = None  # Cached sorted names
         self._using_fallback = True
+        # Dynamic voting-authority list, derived from the authorities that actually
+        # produced a vote in the most recent consensus round (CollecTor). None means
+        # "not yet discovered" -> fall back to the hardcoded voting list. This makes
+        # the voting set track reality when authorities are added/removed (e.g. an
+        # authority going offline like gabelmoo) instead of a stale hardcoded 9.
+        self._voting_authority_names = None
     
     def update_from_onionoo(self, relays: list) -> int:
         """
@@ -146,17 +196,63 @@ class AuthorityRegistry:
         """Check if using fallback data (Onionoo not available)."""
         return self._using_fallback
     
+    def update_voting_authorities(self, vote_authority_names) -> int:
+        """
+        Set the actively-voting authority list from CollecTor vote data.
+
+        Args:
+            vote_authority_names: iterable of authority names that produced a vote
+                this consensus round (e.g. flag_thresholds.keys() or votes.keys()).
+
+        Empty/falsy input is ignored so a failed or empty fetch never wipes the list
+        (the previous value, or the hardcoded fallback, is kept). This keeps the
+        voting set - used for reachability denominators, per-authority tables, and
+        diagnostics - consistent with the authorities that actually voted.
+
+        Returns:
+            The effective number of voting authorities in use after the update
+            (the dynamic list if set, otherwise the hardcoded fallback) - so an
+            ignored empty update never reads as "zero voters".
+        """
+        names = sorted({n for n in (vote_authority_names or []) if n})
+        if names:
+            self._voting_authority_names = names
+            logger.info(
+                f"AuthorityRegistry: {len(names)} voting authorities discovered "
+                f"from CollecTor: {names}"
+            )
+        return self.get_voting_authority_count()
+
+    def clear_voting_authorities(self) -> None:
+        """Reset the dynamic voting list back to the hardcoded fallback.
+
+        Primarily for test isolation and fresh generation runs, since the module
+        registry is a shared singleton.
+        """
+        self._voting_authority_names = None
+
+    def has_dynamic_voting_authorities(self) -> bool:
+        """True when the voting list was discovered from CollecTor vote data
+        (via update_voting_authorities) rather than the hardcoded fallback."""
+        return self._voting_authority_names is not None
+
     def get_voting_authority_names(self) -> List[str]:
         """
-        Get sorted list of VOTING authority names (9 authorities).
-        NOTE: Serge has Authority flag but doesn't vote.
+        Get sorted list of VOTING authority names.
+
+        Prefers the dynamic list discovered from CollecTor votes (via
+        update_voting_authorities); falls back to the hardcoded 9 voting authorities
+        when no vote data is available. NOTE: Serge has Authority flag but doesn't vote.
+        Returns a copy so callers can't mutate the registry's internal state.
         """
-        # If we have Onionoo data, filter out non-voting authorities
-        # For now, we use the signing key mapping as source of truth for voters
-        return _FALLBACK_VOTING_AUTHORITY_NAMES
+        if self._voting_authority_names:
+            return list(self._voting_authority_names)
+        return list(_FALLBACK_VOTING_AUTHORITY_NAMES)
     
     def get_voting_authority_count(self) -> int:
-        """Get number of voting authorities (9)."""
+        """Get number of voting authorities (dynamic from CollecTor, else fallback 9)."""
+        if self._voting_authority_names:
+            return len(self._voting_authority_names)
         return _FALLBACK_VOTING_AUTHORITY_COUNT
     
     def get_signing_key_to_name(self) -> Dict[str, str]:
@@ -200,6 +296,15 @@ def get_voting_authority_names() -> List[str]:
 def get_voting_authority_count() -> int:
     """Get voting authority count (9 - excludes non-voting authorities like Serge)."""
     return _authority_registry.get_voting_authority_count()
+
+
+def update_voting_authorities(vote_authority_names) -> int:
+    """Update the global registry's voting-authority list from CollecTor vote data.
+
+    See AuthorityRegistry.update_voting_authorities. Empty input is ignored (keeps
+    the previous/fallback list). Returns the current voting authority count.
+    """
+    return _authority_registry.update_voting_authorities(vote_authority_names)
 
 
 # Signing key mapping - always hardcoded (different from relay fingerprints)
