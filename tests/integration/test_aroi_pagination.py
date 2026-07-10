@@ -30,11 +30,12 @@ class TestAROIPaginationSystem(unittest.TestCase):
         self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
         self.jinja_env.filters['format_time_ago'] = format_time_ago
         
-        # Create mock AROI leaderboard data for all 12 categories
+        # Create mock AROI leaderboard data for all 14 categories
         self.mock_leaderboards = {}
         categories = [
             'bandwidth', 'consensus_weight', 'exit_authority', 'exit_operators',
-            'guard_operators', 'most_diverse', 'platform_diversity', 'non_eu_leaders',
+            'guard_operators', 'most_diverse', 'platform_volume', 'platform_breadth',
+            'non_eu_volume', 'non_eu_breadth',
             'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'
         ]
         
@@ -65,6 +66,11 @@ class TestAROIPaginationSystem(unittest.TestCase):
                 entry.non_linux_count = 1 + (i // 3)
                 entry.non_eu_count = 1 + (i // 2)
                 entry.non_eu_count_with_percentage = f'{1 + (i // 2)} ({50 + i}%)'
+                entry.non_eu_country_count = 1 + (i // 4)
+                entry.platform_volume_summary = f'{1 + (i // 3)} non-Linux relays ({1 + (i // 3)} OSes)'
+                entry.platform_breadth_summary = f'{1 + (i // 3)} OSes ({1 + (i // 3)} non-Linux relays)'
+                entry.non_eu_volume_summary = f'{1 + (i // 2)} relays ({1 + (i // 4)} countries)'
+                entry.non_eu_breadth_summary = f'{1 + (i // 4)} countries ({1 + (i // 2)} relays)'
                 entry.rare_country_count = 1 + (i // 10)
                 entry.relays_in_rare_countries = 1 + (i // 8)
                 entry.veteran_days = 100 + (i * 10)
@@ -96,10 +102,12 @@ class TestAROIPaginationSystem(unittest.TestCase):
                                 'exit_authority': 'Exit Authorities', 
                                 'exit_operators': 'Exit Champions',
                                 'guard_operators': 'Guard Gatekeepers',
-                                'most_diverse': 'Most Diverse Operators',
-                                'platform_diversity': 'Platform Diversity Heroes',
-                                'non_eu_leaders': 'Non-EU Leaders',
-                                'frontier_builders': 'Frontier Builders',
+                                'most_diverse': 'Diversity All-Rounders (Overall)',
+                                'platform_volume': 'Non-Linux Powerhouses (Platform Volume)',
+                                'platform_breadth': 'OS Polyglots (Platform Breadth)',
+                                'non_eu_volume': 'Global Powerhouses (Non-EU Volume)',
+                                'non_eu_breadth': 'Jurisdiction Globetrotters (Non-EU Breadth)',
+                                'frontier_builders': 'Frontier Builders (Rare-Country Breadth)',
                                 'network_veterans': 'Network Veterans',
                                 'reliability_masters': 'Reliability Masters',
                                 'legacy_titans': 'Legacy Titans'
@@ -120,13 +128,14 @@ class TestAROIPaginationSystem(unittest.TestCase):
         }
 
     def test_pagination_structure_all_categories(self):
-        """Test that all 12 categories have proper pagination structure."""
+        """Test that all 14 categories have proper pagination structure."""
         template = self.jinja_env.get_template('aroi-leaderboards.html')
         rendered = template.render(**self.template_context)
         
         categories = [
             'bandwidth', 'consensus_weight', 'exit_authority', 'exit_operators',
-            'guard_operators', 'most_diverse', 'platform_diversity', 'non_eu_leaders', 
+            'guard_operators', 'most_diverse', 'platform_volume', 'platform_breadth',
+            'non_eu_volume', 'non_eu_breadth',
             'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'
         ]
         
@@ -149,13 +158,13 @@ class TestAROIPaginationSystem(unittest.TestCase):
         
         # Test pagination-section class exists for all pages
         pagination_sections = re.findall(r'class="pagination-section"', rendered)
-        # Should have 3 sections × 12 categories = 36 pagination sections
-        self.assertEqual(len(pagination_sections), 36)
+        # Should have 3 sections × 14 categories = 42 pagination sections
+        self.assertEqual(len(pagination_sections), 42)
         
         # Test pagination navigation class exists
         navigation_sections = re.findall(r'class="pagination-nav-bottom"', rendered)
-        # Should have 12 navigation sections (one per category)
-        self.assertEqual(len(navigation_sections), 12)
+        # Should have 14 navigation sections (one per category)
+        self.assertEqual(len(navigation_sections), 14)
 
     def test_data_distribution_across_pages(self):
         """Test that data is properly distributed across pagination pages."""
