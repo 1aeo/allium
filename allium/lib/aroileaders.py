@@ -87,7 +87,7 @@ def _incomplete_aroi_display_name(contact_info, contact_hash) -> str:
     return f"contact_{contact_hash[:8]}"
 
 
-def _top_n(operators, metric, n=50, filter_fn=None):
+def _top_n(operators, metric, n=50, filter_fn=None, tiebreakers=None):
     """
     Return the top-n operators sorted by a metric key, optionally pre-filtered.
     
@@ -98,16 +98,23 @@ def _top_n(operators, metric, n=50, filter_fn=None):
         metric (str): Key in the metrics dict to sort by
         n (int): Number of top entries to return (default 50)
         filter_fn (callable, optional): If provided, only include operators where filter_fn(v) is True
+        tiebreakers (list, optional): Ordered list of secondary metric keys used to
+            break ties on the primary metric. All keys sort descending (higher is
+            better), matching the primary metric's direction.
     
     Returns:
         list: Top-n (operator_key, metrics) tuples sorted by metric descending
     """
     source = operators if filter_fn is None else {k: v for k, v in operators.items() if filter_fn(v)}
-    # Ties break by relay count (bigger operator wins), then operator key
-    # purely to pin byte-stable output across runs (dict insertion order
-    # previously decided ties nondeterministically).
+    # Explicit tiebreakers (if any) break ties on the primary metric; remaining
+    # ties break by relay count (bigger operator wins), then operator key purely
+    # to pin byte-stable output across runs (dict insertion order previously
+    # decided ties nondeterministically).
+    extra_keys = list(tiebreakers or [])
     return sorted(source.items(),
-                  key=lambda x: (-x[1][metric], -x[1].get('total_relays', 0), x[0]))[:n]
+                  key=lambda x: (-x[1][metric],
+                                 *(-x[1].get(k, 0) for k in extra_keys),
+                                 -x[1].get('total_relays', 0), x[0]))[:n]
 
 
 def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decimal_places=1):
@@ -737,6 +744,11 @@ def _collect_operator_metrics(relays_instance):
         sorted_all_country_breakdown = sorted(all_country_breakdown.items(), key=_sort_key)
         sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), key=_sort_key)
         
+        # Distinct non-EU country count (geographic BREADTH metric for the
+        # Jurisdiction Globetrotters leaderboard; non_eu_count above is the
+        # per-relay VOLUME metric for Global Powerhouses)
+        non_eu_country_count = len(non_eu_country_breakdown)
+        
 
         
 
@@ -869,6 +881,7 @@ def _collect_operator_metrics(relays_instance):
             'non_linux_bandwidth': non_linux_bandwidth,
             'non_eu_count': non_eu_count,
             'non_eu_bandwidth': non_eu_bandwidth,
+            'non_eu_country_count': non_eu_country_count,
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
             'rare_country_bandwidth': rare_country_bandwidth,
@@ -976,7 +989,15 @@ def _rank_operators(aroi_operators):
     _bw_masters_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0
     _bw_legends_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0
     _validated_filter = lambda v: v['validated_relay_count'] > 0
+    # OS Polyglots: only operators running >= 2 distinct OSes (incl. Linux) qualify
+    _polyglot_filter = lambda v: v['platform_count'] >= 2
 
+    # DIVERSITY CLUSTER: each diversity dimension has two co-equal boards —
+    # a VOLUME board (scale of non-dominant contribution: relay count) and a
+    # BREADTH board (internal spread: distinct count) — so a 600-relay
+    # single-OS operator and a 15-relay six-OS operator can each top the
+    # board that reflects their kind of diversity. Neither is buried under
+    # the other's metric.
     leaderboards = {
         'bandwidth':          _top_n(aroi_operators, 'total_bandwidth'),
         'consensus_weight':   _top_n(aroi_operators, 'total_consensus_weight'),
@@ -987,9 +1008,22 @@ def _rank_operators(aroi_operators):
         'reliability_masters': _top_n(aroi_operators, 'reliability_6m_score', filter_fn=_reliability_filter),
         'legacy_titans':      _top_n(aroi_operators, 'reliability_5y_score', filter_fn=_legacy_filter),
         'most_diverse':       _top_n(aroi_operators, 'diversity_score'),
-        'platform_diversity': _top_n(aroi_operators, 'non_linux_count'),
-        'non_eu_leaders':     _top_n(aroi_operators, 'non_eu_count'),
-        'frontier_builders':  _top_n(aroi_operators, 'rare_country_count'),
+        # Platform diversity — Volume: most non-Linux relays contributed
+        'platform_volume':    _top_n(aroi_operators, 'non_linux_count',
+                                     tiebreakers=['platform_count', 'total_bandwidth']),
+        # Platform diversity — Breadth: most distinct OSes (incl. Linux), >=2 to qualify
+        'platform_breadth':   _top_n(aroi_operators, 'platform_count',
+                                     filter_fn=_polyglot_filter,
+                                     tiebreakers=['non_linux_count', 'total_bandwidth']),
+        # Geographic diversity — Volume: most relays outside the EU
+        'non_eu_volume':      _top_n(aroi_operators, 'non_eu_count',
+                                     tiebreakers=['non_eu_country_count', 'total_bandwidth']),
+        # Geographic diversity — Breadth: most distinct non-EU countries
+        'non_eu_breadth':     _top_n(aroi_operators, 'non_eu_country_count',
+                                     tiebreakers=['non_eu_count', 'total_bandwidth']),
+        # Geographic diversity — Rare-country breadth
+        'frontier_builders':  _top_n(aroi_operators, 'rare_country_count',
+                                     tiebreakers=['relays_in_rare_countries', 'total_bandwidth']),
         'network_veterans':   _top_n(aroi_operators, 'veteran_score'),
         'ipv4_leaders':       _top_n(aroi_operators, 'unique_ipv4_count'),
         'ipv6_leaders':       _top_n(aroi_operators, 'unique_ipv6_count'),
@@ -1020,8 +1054,6 @@ _PRIMARY_BANDWIDTH_KEYS = {
 _ACHIEVEMENT_TITLES = {
     'frontier_builders': ('frontier_achievement_title', 'rare_country_breakdown',
                           {1: "🌟 Frontier Legend", 2: "⭐ Frontier Master", 3: "✨ Frontier Champion"}),
-    'platform_diversity': ('platform_hero_title', None,
-                           {1: "🏆 Platform Legend", 2: "💻 Platform Master", 3: "🖥️ Platform Champion"}),
     'most_diverse': ('diversity_master_title', None,
                      {1: "🌍 Diversity Legend", 2: "🌟 Diversity Master", 3: "🌐 Diversity Champion"}),
     'ipv4_leaders': ('ipv4_achievement_title', None,
@@ -1052,7 +1084,7 @@ _PCT_KEYS = ('total_consensus_weight', 'exit_consensus_weight', 'guard_consensus
 _PASSTHROUGH_KEYS = (
     'aroi_domain', 'contact_hash', 'contact_info', 'total_relays', 'guard_count', 'exit_count',
     'middle_count', 'measured_count', 'unique_as_count', 'platform_count', 'non_linux_count',
-    'non_eu_count', 'rare_country_count', 'relays_in_rare_countries', 'veteran_days',
+    'non_eu_count', 'non_eu_country_count', 'rare_country_count', 'relays_in_rare_countries', 'veteran_days',
     'veteran_relay_scaling_factor', 'unique_ipv4_count', 'unique_ipv6_count', 'ipv4_relay_count',
     'ipv6_relay_count', 'ipv4_total_bandwidth', 'ipv6_total_bandwidth', 'ipv4_guard_count',
     'ipv4_exit_count', 'ipv4_middle_count', 'ipv6_guard_count', 'ipv6_exit_count', 'ipv6_middle_count',
@@ -1066,7 +1098,7 @@ _PASSTHROUGH_KEYS = (
 _ENTRY_EXTRAS_DEFAULTS = dict.fromkeys((
     'geographic_achievement', 'geographic_breakdown_details', 'geographic_breakdown_tooltip',
     'rare_country_details', 'rare_country_tooltip', 'frontier_achievement_title',
-    'platform_hero_title', 'platform_breakdown_details', 'platform_breakdown_tooltip',
+    'platform_breakdown_details', 'platform_breakdown_tooltip',
     'diversity_master_title', 'diversity_breakdown_details', 'diversity_breakdown_tooltip',
     'veteran_details_short', 'veteran_tooltip', 'reliability_details_short', 'reliability_tooltip',
     'bandwidth_details_short', 'bandwidth_tooltip', 'ipv4_achievement_title', 'ipv6_achievement_title',
@@ -1085,11 +1117,16 @@ def _truncate_with_ellipsis(text, max_chars):
 
 
 def _geographic_extras(category, metrics, bandwidth_formatter):
-    """non_eu_leaders: dynamic geographic achievement + non-EU country breakdown
-    (used for the specialization column instead of all countries)."""
+    """non_eu_volume / non_eu_breadth: dynamic geographic achievement + non-EU
+    country breakdown (used for the specialization column instead of all countries).
+
+    Bugbot fix (PR #217): derive the achievement from the operator's NON-EU
+    countries only — these boards rank non-EU presence, so an EU-heavy operator
+    must not earn EU-derived titles here."""
+    non_eu_countries = [country for country, _count in metrics['non_eu_country_breakdown']]
     details, tooltip = _format_breakdown_details(metrics['non_eu_country_breakdown'], 52)
     return {
-        'geographic_achievement': calculate_geographic_achievement(metrics['countries']),
+        'geographic_achievement': calculate_geographic_achievement(non_eu_countries),
         'geographic_breakdown_details': details,
         'geographic_breakdown_tooltip': tooltip,
     }
@@ -1107,11 +1144,15 @@ def _frontier_extras(category, metrics, bandwidth_formatter):
 
 
 def _platform_extras(category, metrics, bandwidth_formatter):
-    """platform_diversity: non-Linux platform breakdown for the specialization column."""
+    """platform_volume / platform_breadth: platform breakdown for the
+    specialization column. platform_volume (Non-Linux Powerhouses) shows
+    non-Linux relays only; platform_breadth (OS Polyglots) counts ALL OSes
+    incl. Linux, so its breakdown includes Linux too."""
+    include_linux = (category == 'platform_breadth')
     platform_breakdown = {}
     for relay in metrics['relays']:
         platform = relay.get('platform', 'Unknown')
-        if platform and not platform.lower().startswith('linux'):
+        if platform and (include_linux or not platform.lower().startswith('linux')):
             # Extract short platform name (before first space or version number)
             short_platform = platform.split()[0] if platform else 'Unknown'
             # Map common platform names to shorter versions
@@ -1218,9 +1259,11 @@ def _validated_extras(category, metrics, bandwidth_formatter):
 
 # Dispatch table: category -> extras handler (absent categories use defaults only).
 _CATEGORY_EXTRAS = {
-    'non_eu_leaders': _geographic_extras,
+    'non_eu_volume': _geographic_extras,
+    'non_eu_breadth': _geographic_extras,
     'frontier_builders': _frontier_extras,
-    'platform_diversity': _platform_extras,
+    'platform_volume': _platform_extras,
+    'platform_breadth': _platform_extras,
     'most_diverse': _diversity_extras,
     'network_veterans': _veteran_extras,
     'reliability_masters': _score_extras,
@@ -1291,6 +1334,19 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             exit_percentage = (metrics['exit_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
             non_eu_percentage = (metrics['non_eu_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
 
+            # === VOLUME/BREADTH SUMMARY STRINGS (diversity cluster boards) ===
+            # Every diversity board shows BOTH numbers (volume + breadth) so the
+            # ranking is transparent: the board's primary metric leads, the
+            # other appears in parentheses.
+            _os_n = metrics['platform_count']
+            _nl_n = metrics['non_linux_count']
+            _neu_n = metrics['non_eu_count']
+            _neuc_n = metrics['non_eu_country_count']
+            _os_word = "OS" if _os_n == 1 else "OSes"
+            _nl_word = "relay" if _nl_n == 1 else "relays"
+            _neu_word = "relay" if _neu_n == 1 else "relays"
+            _neuc_word = "country" if _neuc_n == 1 else "countries"
+
             # Assemble the entry: raw passthrough metrics, per-role bandwidth columns,
             # consensus weight percentages, computed display fields, then category extras
             formatted_entry = {key: metrics[key] for key in _PASSTHROUGH_KEYS}
@@ -1320,6 +1376,11 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'countries': metrics['countries'][:5],  # Top 5 countries for display
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
+                # === VOLUME/BREADTH SUMMARIES (diversity cluster) ===
+                'platform_volume_summary': f"{_nl_n} non-Linux {_nl_word} ({_os_n} {_os_word})",
+                'platform_breadth_summary': f"{_os_n} {_os_word} ({_nl_n} non-Linux {_nl_word})",
+                'non_eu_volume_summary': f"{_neu_n} {_neu_word} ({_neuc_n} {_neuc_word})",
+                'non_eu_breadth_summary': f"{_neuc_n} {_neuc_word} ({_neu_n} {_neu_word})",
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
@@ -1367,10 +1428,12 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             'legacy_titans': '👑 Legacy Titans (5-Year Uptime)',
             'bandwidth_masters': '🚀 Bandwidth Served Masters (6-Month Historic)',
             'bandwidth_legends': '🌟 Bandwidth Served Legends (5-Year Historic)',
-            'most_diverse': 'Most Diverse Operators',
-            'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
-            'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
-            'frontier_builders': 'Frontier Builders (Rare Countries)',
+            'most_diverse': 'Diversity All-Rounders (Overall)',
+            'platform_volume': 'Non-Linux Powerhouses (Platform Volume)',
+            'platform_breadth': 'OS Polyglots (Platform Breadth)',
+            'non_eu_volume': 'Global Powerhouses (Non-EU Volume)',
+            'non_eu_breadth': 'Jurisdiction Globetrotters (Non-EU Breadth)',
+            'frontier_builders': 'Frontier Builders (Rare-Country Breadth)',
             'network_veterans': 'Network Veterans',
             'ipv4_leaders': 'IPv4 Address Leaders',
             'ipv6_leaders': 'IPv6 Address Leaders',

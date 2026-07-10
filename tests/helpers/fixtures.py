@@ -22,6 +22,36 @@ from allium.lib.relays import Relays
 # For backward compatibility with any code that uses ALLIUM_ROOT
 ALLIUM_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 
+# AROI leaderboard categories rendered through the paginated generic ranking
+# tables, and the display titles used for them in mock template contexts.
+# Shared by conftest fixtures and pagination tests so the category matrix
+# lives in one place.
+AROI_PAGINATED_CATEGORIES = [
+    'bandwidth', 'consensus_weight', 'exit_authority', 'guard_authority',
+    'exit_operators',
+    'guard_operators', 'most_diverse', 'platform_volume', 'platform_breadth',
+    'non_eu_volume', 'non_eu_breadth',
+    'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'
+]
+
+AROI_CATEGORY_TITLES = {
+    'bandwidth': 'Bandwidth Contributed',
+    'consensus_weight': 'Network Heavyweight Rankings',
+    'exit_authority': 'Exit Authorities',
+    'guard_authority': 'Guard Authority Champions',
+    'exit_operators': 'Exit Champions',
+    'guard_operators': 'Guard Gatekeepers',
+    'most_diverse': 'Diversity All-Rounders (Overall)',
+    'platform_volume': 'Non-Linux Powerhouses (Platform Volume)',
+    'platform_breadth': 'OS Polyglots (Platform Breadth)',
+    'non_eu_volume': 'Global Powerhouses (Non-EU Volume)',
+    'non_eu_breadth': 'Jurisdiction Globetrotters (Non-EU Breadth)',
+    'frontier_builders': 'Frontier Builders (Rare-Country Breadth)',
+    'network_veterans': 'Network Veterans',
+    'reliability_masters': 'Reliability Masters',
+    'legacy_titans': 'Legacy Titans',
+}
+
 
 class TestDataFactory:
     """Factory class for creating common test data structures."""
@@ -182,6 +212,11 @@ class TestDataFactory:
         entry.non_linux_count = 1 + (rank // 3)
         entry.non_eu_count = 1 + (rank // 2)
         entry.non_eu_count_with_percentage = f'{1 + (rank // 2)} ({50 + rank}%)'
+        entry.non_eu_country_count = 1 + (rank // 4)
+        entry.platform_volume_summary = f'{1 + (rank // 3)} non-Linux relays ({1 + (rank // 3)} OSes)'
+        entry.platform_breadth_summary = f'{1 + (rank // 3)} OSes ({1 + (rank // 3)} non-Linux relays)'
+        entry.non_eu_volume_summary = f'{1 + (rank // 2)} relays ({1 + (rank // 4)} countries)'
+        entry.non_eu_breadth_summary = f'{1 + (rank // 4)} countries ({1 + (rank // 2)} relays)'
         entry.rare_country_count = 1 + (rank // 10)
         entry.relays_in_rare_countries = 1 + (rank // 8)
         entry.veteran_days = 100 + (rank * 10)
@@ -190,6 +225,22 @@ class TestDataFactory:
         entry.reliability_average = f'{90.0 + rank:.1f}%'
         entry.unique_ipv4_count = 10 + rank
         entry.unique_ipv6_count = 5 + rank
+        # Diversity-board bandwidth columns and breakdown details/tooltips
+        # (representative non-empty values so template branches that read
+        # these fields fail loudly if a field is renamed or removed)
+        entry.non_linux_bandwidth = f'{0.5 + (rank * 0.05):.1f}'
+        entry.non_linux_bandwidth_unit = 'MB/s'
+        entry.non_eu_bandwidth = f'{0.5 + (rank * 0.05):.1f}'
+        entry.non_eu_bandwidth_unit = 'MB/s'
+        entry.platform_breakdown_details = 'Win: 2, FreeBSD: 1'
+        entry.platform_breakdown_tooltip = 'Platform Distribution: 2 Win relays, 1 FreeBSD relays'
+        entry.geographic_breakdown_details = 'US: 2, JP: 1'
+        entry.geographic_breakdown_tooltip = '2 relays in US, 1 relay in JP'
+        entry.diversity_breakdown_tooltip = 'Diversity breakdown tooltip'
+        entry.rare_country_tooltip = 'Rare country tooltip'
+        entry.veteran_tooltip = 'Veteran tooltip'
+        entry.reliability_tooltip = 'Reliability tooltip'
+        entry.ip_address_tooltip = 'IP address tooltip'
         return entry
 
 
@@ -264,28 +315,23 @@ class TestSetupHelpers:
     def setup_jinja_environment():
         """Set up Jinja2 environment with common filters for template testing."""
         from jinja2 import Environment, FileSystemLoader, select_autoescape
-        
+
+        from allium.lib.bandwidth_formatter import (
+            determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter,
+        )
+        from allium.lib.time_utils import format_time_ago
+
         template_dir = os.path.join(ALLIUM_ROOT, 'allium', 'templates')
         jinja_env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
-        
-        # Add common filters
-        try:
-            from allium.lib.relays import (
-                determine_unit_filter, 
-                format_bandwidth_with_unit, 
-                format_bandwidth_filter, 
-                format_time_ago
-            )
-            jinja_env.filters['determine_unit'] = determine_unit_filter
-            jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
-            jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
-            jinja_env.filters['format_time_ago'] = format_time_ago
-        except ImportError:
-            pass  # Filters may not be available in all test contexts
-        
+
+        jinja_env.filters['determine_unit'] = determine_unit_filter
+        jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+        jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
+        jinja_env.filters['format_time_ago'] = format_time_ago
+
         return jinja_env
 
 

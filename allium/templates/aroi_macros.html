@@ -27,10 +27,14 @@
                             <span title="Active guard relays serving as critical network entry points">{{ champion.guard_count }} guard relays</span>
                         {% elif category_key == "most_diverse" %}
                             <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ champion.diversity_score }} diversity</span>
-                        {% elif category_key == "platform_diversity" %}
-                            <span title="Relays promoting OS diversity beyond Linux dominance">{{ champion.non_linux_count }} non-Linux relays</span>
-                        {% elif category_key == "non_eu_leaders" %}
-                            <span title="Relays expanding Tor geographic reach beyond European Union">{{ champion.non_eu_count }} non-EU relays</span>
+                        {% elif category_key == "platform_volume" %}
+                            <span title="Volume diversity: most non-Linux relays contributed to the network">{{ champion.non_linux_count }} non-Linux relays</span>
+                        {% elif category_key == "platform_breadth" %}
+                            <span title="Breadth diversity: most distinct operating systems (including Linux) run by one operator">{{ champion.platform_count }} operating systems</span>
+                        {% elif category_key == "non_eu_volume" %}
+                            <span title="Volume diversity: most relays operated outside the European Union">{{ champion.non_eu_count }} non-EU relays</span>
+                        {% elif category_key == "non_eu_breadth" %}
+                            <span title="Breadth diversity: most distinct non-EU countries with relay presence">{{ champion.non_eu_country_count }} non-EU countries</span>
                         {% elif category_key == "frontier_builders" %}
                             <span title="Countries with strategic importance but underrepresented in Tor network">{{ champion.rare_country_count }} rare countries</span>
                         {% elif category_key == "network_veterans" %}
@@ -60,6 +64,14 @@
                             <span title="Complete relay infrastructure operated by guard authority champion">{{ champion.guard_count }} guard relays</span>
                         {% elif category_key == "most_diverse" %}
                             <span title="Geographic distribution of relay operations">{{ champion.country_count }} countries</span>
+                        {% elif category_key == "platform_volume" %}
+                            <span title="Breadth counterpart: distinct operating systems run by this operator (including Linux)">{{ champion.platform_count }} operating system{{ 's' if champion.platform_count != 1 else '' }}</span>
+                        {% elif category_key == "platform_breadth" %}
+                            <span title="Volume counterpart: non-Linux relays contributed by this operator">{{ champion.non_linux_count }} non-Linux relay{{ 's' if champion.non_linux_count != 1 else '' }}</span>
+                        {% elif category_key == "non_eu_volume" %}
+                            <span title="Breadth counterpart: distinct non-EU countries with relay presence">{{ champion.non_eu_country_count }} non-EU countr{{ 'ies' if champion.non_eu_country_count != 1 else 'y' }}</span>
+                        {% elif category_key == "non_eu_breadth" %}
+                            <span title="Volume counterpart: relays operated outside the European Union">{{ champion.non_eu_count }} non-EU relay{{ 's' if champion.non_eu_count != 1 else '' }}</span>
                         {% elif category_key == "validated_relays" %}
                             <span title="Invalid relays with failed AROI proofs">{{ champion.invalid_relay_count }} invalid</span>
                         {% else %}
@@ -96,12 +108,10 @@
                             </strong>
                         </td>
                         <td>
-                            {% if performance_type == "non_eu_leaders" %}
+                            {% if performance_type == "non_eu_breadth" %}
                                 <span title="Geographic achievement expanding Tor reach beyond European Union">{{ entry.geographic_achievement }}</span>
                             {% elif performance_type == "most_diverse" and entry.diversity_master_title %}
                                 <span title="Dynamic achievement title for diversity mastery">{{ entry.diversity_master_title }}</span>
-                            {% elif performance_type == "platform_diversity" and entry.platform_hero_title %}
-                                <span title="Dynamic achievement title for platform diversity leadership">{{ entry.platform_hero_title }}</span>
                             {% elif performance_type == "frontier_builders" and entry.frontier_achievement_title %}
                                 <span title="Dynamic achievement title for frontier expansion">{{ entry.frontier_achievement_title }}</span>
                             {% elif performance_type == "ipv4_leaders" and entry.ipv4_achievement_title %}
@@ -132,10 +142,14 @@
                                 <span title="Number of active guard relays serving as critical network entry points">{{ entry.guard_count }} active guard relays</span>
                             {% elif performance_type == "most_diverse" %}
                                 <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ entry.diversity_score }} diversity</span></span>
-                            {% elif performance_type == "platform_diversity" %}
-                                <span title="Non-Linux relays promoting OS diversity and their bandwidth capacity">{{ entry.non_linux_count }} non-Linux relays, {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}</span>
-                            {% elif performance_type == "non_eu_leaders" %}
-                                <span title="Non-EU relays expanding Tor network beyond European Union concentration. This is the primary ranking metric for Global Expansion Leaders.">{{ entry.non_eu_count }} non-EU relays in {{ entry.country_count }} countries</span>
+                            {% elif performance_type == "platform_volume" %}
+                                <span title="Volume diversity: non-Linux relays contributed (primary ranking metric) with distinct OS count">{{ entry.platform_volume_summary }}</span>
+                            {% elif performance_type == "platform_breadth" %}
+                                <span title="Breadth diversity: distinct operating systems including Linux (primary ranking metric) with non-Linux relay count">{{ entry.platform_breadth_summary }}</span>
+                            {% elif performance_type == "non_eu_volume" %}
+                                <span title="Volume diversity: relays outside the European Union (primary ranking metric) with distinct country count">{{ entry.non_eu_volume_summary }}</span>
+                            {% elif performance_type == "non_eu_breadth" %}
+                                <span title="Breadth diversity: distinct non-EU countries (primary ranking metric) with non-EU relay count">{{ entry.non_eu_breadth_summary }}</span>
                             {% elif performance_type == "frontier_builders" %}
                                 <span title="{{ entry.rare_country_tooltip }}">{{ entry.relays_in_rare_countries }} relays in {{ entry.rare_country_count }} rare countries</span>
                             {% elif performance_type == "network_veterans" %}
@@ -202,8 +216,10 @@
     <section id="{{ category_key }}" class="aroi-section">
         <h3 title="Operators ranked by 
         {%- if category_key == 'most_diverse' -%}combined geographic, platform, and network diversity scores
-        {%- elif category_key == 'platform_diversity' -%}number of non-Linux relays promoting OS diversity
-        {%- elif category_key == 'non_eu_leaders' -%}number of relays operated outside the European Union
+        {%- elif category_key == 'platform_volume' -%}volume diversity: number of non-Linux relays contributed to the network (distinct OS count breaks ties)
+        {%- elif category_key == 'platform_breadth' -%}breadth diversity: number of distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties)
+        {%- elif category_key == 'non_eu_volume' -%}volume diversity: number of relays operated outside the European Union (distinct country count breaks ties)
+        {%- elif category_key == 'non_eu_breadth' -%}breadth diversity: number of distinct non-EU countries with relay presence (non-EU relay count breaks ties)
         {%- elif category_key == 'frontier_builders' -%}rare country scores from strategically important countries
         {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
         {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
@@ -213,28 +229,30 @@
         {%- endif -%}">{% if emoji %}{{ emoji }} {% endif %}{{ category_name }}</h3>
         {% if category_data %}
         <div class="table-responsive">
-            <table class="table table-striped table-condensed aroi-rankings-table {% if category_key == 'non_eu_leaders' %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% elif category_key == 'platform_diversity' %}aroi-platform-table{% else %}aroi-category-table{% endif %}">
+            <table class="table table-striped table-condensed aroi-rankings-table {% if category_key in ['non_eu_volume', 'non_eu_breadth'] %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% elif category_key in ['platform_volume', 'platform_breadth'] %}aroi-platform-table{% else %}aroi-category-table{% endif %}">
                 <thead>
                     <tr>
                         <th title="Position in {{ category_name.lower() }} leaderboard">Rank</th>
                         <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
-                        {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
+                        {% if category_key not in ['platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders'] %}
                         <th title="{% if category_key == 'network_veterans' %}Total relay count: number of relays currently operated. For veterans, higher relay counts with early start dates result in higher veteran scores{% elif category_key == 'reliability_masters' %}Total relay count: number of relays contributing to reliability calculations. More relays provide larger sample size for uptime measurements{% elif category_key == 'legacy_titans' %}Total relay count: number of relays contributing to long-term reliability scores. Sustained relay operations over 5 years demonstrate commitment{% else %}Total number of relays operated by this operator{% endif %}">Relays</th>
                         {% endif %}
                         <th title="Primary ranking metric for 
                         {%- if category_key == 'most_diverse' -%}diversity score calculation
-                        {%- elif category_key == 'platform_diversity' -%}non-Linux relay count
-                        {%- elif category_key == 'non_eu_leaders' -%}non-EU relay count with percentage
+                        {%- elif category_key == 'platform_volume' -%}volume diversity: non-Linux relay count (distinct OS count breaks ties)
+                        {%- elif category_key == 'platform_breadth' -%}breadth diversity: distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties)
+                        {%- elif category_key == 'non_eu_volume' -%}volume diversity: non-EU relay count (distinct country count breaks ties)
+                        {%- elif category_key == 'non_eu_breadth' -%}breadth diversity: distinct non-EU country count (non-EU relay count breaks ties)
                         {%- elif category_key == 'frontier_builders' -%}rare country relay count
                         {%- elif category_key == 'network_veterans' -%}veteran score calculation: days since first relay start date × total relay count. Higher scores indicate longer network service with more relays
                         {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
                         {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
-                                            {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
-                        <th title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from non-Linux relays only (matches diverse relay count){% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from non-EU relays only (matches diverse relay count){% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
-                        {% if category_key != 'platform_diversity' %}
+                                            {%- endif -%}">{% if category_key == 'platform_volume' %}Non-Linux Relays{% elif category_key == 'platform_breadth' %}Distinct OSes{% elif category_key == 'non_eu_volume' %}Non-EU Relays{% elif category_key == 'non_eu_breadth' %}Distinct Countries{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
+                        <th title="{% if category_key in ['platform_volume', 'platform_breadth'] %}Bandwidth capacity from non-Linux relays only{% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}Bandwidth capacity from non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
+                        {% if category_key not in ['platform_volume', 'platform_breadth'] %}
                         <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                         {% endif %}
-                        {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' and category_key != 'platform_diversity' %}
+                        {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                         <th title="{% if category_key == 'network_veterans' %}Platform diversity: number of different operating systems used. Diversified platforms reduce monoculture risks and demonstrate technical sophistication{% elif category_key == 'reliability_masters' %}Platform diversity: number of different operating systems used. Platform diversity for reliable operators indicates varied technical infrastructure{% elif category_key == 'legacy_titans' %}Platform diversity: number of different operating systems used. Platform diversity for long-term operators shows sustained technical variety{% else %}Number of different operating systems used{% endif %}">Platforms</th>
                         {% endif %}
                         {% if category_key == 'most_diverse' %}
@@ -249,14 +267,16 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
+                        {% if category_key not in ['platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders'] %}
                                             <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
                         {% endif %}
                         <td>
                             <strong>
                             {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
-                            {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
-                            {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
+                            {% elif category_key == 'platform_volume' %}<span title="Volume diversity: non-Linux relays contributed to the network (distinct OS count in parentheses)">{{ entry.platform_volume_summary }}</span>
+                            {% elif category_key == 'platform_breadth' %}<span title="Breadth diversity: distinct operating systems including Linux (non-Linux relay count in parentheses)">{{ entry.platform_breadth_summary }}</span>
+                            {% elif category_key == 'non_eu_volume' %}<span title="Volume diversity: relays outside the European Union (distinct country count in parentheses)">{{ entry.non_eu_volume_summary }}</span>
+                            {% elif category_key == 'non_eu_breadth' %}<span title="Breadth diversity: distinct non-EU countries (non-EU relay count in parentheses)">{{ entry.non_eu_breadth_summary }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="Relays in countries with strategic importance but underrepresented in Tor network">{{ entry.relays_in_rare_countries }}</span>
                             {% elif category_key == 'network_veterans' %}<span title="Veteran Score Calculation: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'Days since first relay started × total relay count. Higher scores indicate longer continuous network service with more relays operated' }}">{{ entry.veteran_score }}</span>
                             {% elif category_key == 'reliability_masters' %}
@@ -266,10 +286,10 @@
                             {% endif %}
                             </strong>
                         </td>
-                        <td title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
-                            {%- if category_key == 'platform_diversity' -%}
+                        <td title="{% if category_key in ['platform_volume', 'platform_breadth'] %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
+                            {%- if category_key in ['platform_volume', 'platform_breadth'] -%}
                                 {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}
-                            {%- elif category_key == 'non_eu_leaders' -%}
+                            {%- elif category_key in ['non_eu_volume', 'non_eu_breadth'] -%}
                                 {{ entry.non_eu_bandwidth }} {{ entry.non_eu_bandwidth_unit }}
                             {%- elif category_key == 'frontier_builders' -%}
                                 {{ entry.rare_country_bandwidth }} {{ entry.rare_country_bandwidth_unit }}
@@ -277,18 +297,18 @@
                                 {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}
                             {%- endif -%}
                         </td>
-                        {% if category_key != 'platform_diversity' %}
+                        {% if category_key not in ['platform_volume', 'platform_breadth'] %}
                         <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
                         {% endif %}
-                        {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' and category_key != 'platform_diversity' %}
+                        {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                         <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                         {% endif %}
                         {% if category_key == 'most_diverse' %}
                         <td title="Number of unique Autonomous Systems providing network distribution">{{ entry.unique_as_count }}</td>
                         {% elif category_key != 'reliability_masters' and category_key != 'legacy_titans' %}
                         <td>
-                            {% if category_key == 'platform_diversity' %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
-                            {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
+                            {% if category_key in ['platform_volume', 'platform_breadth'] %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
+                            {% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                             {% elif category_key == 'network_veterans' %}<span title="Network longevity specialization: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'This operator has been contributing to the Tor network for an extended period, demonstrating long-term commitment and operational stability' }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
                             {% elif category_key == 'ipv4_leaders' %}<span title="{{ entry.ip_address_tooltip }}">{{ entry.ip_address_details if entry.ip_address_details else 'IPv4 infrastructure' }}</span>
@@ -817,18 +837,20 @@
 {# Generic Ranking Table Paginated - Just the table part for pagination #}
 {% macro generic_ranking_table_paginated(category_key, category_data, page_ctx, use_bits=false) %}
     <div class="table-responsive">
-        <table class="table table-striped table-condensed aroi-rankings-table {% if category_key == 'non_eu_leaders' %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% elif category_key == 'platform_diversity' %}aroi-platform-table{% else %}aroi-category-table{% endif %}">
+        <table class="table table-striped table-condensed aroi-rankings-table {% if category_key in ['non_eu_volume', 'non_eu_breadth'] %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% elif category_key in ['platform_volume', 'platform_breadth'] %}aroi-platform-table{% else %}aroi-category-table{% endif %}">
             <thead>
                 <tr>
                     <th title="Position in leaderboard">Rank</th>
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
-                    {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
+                    {% if category_key not in ['platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders'] %}
                     <th title="{% if category_key == 'network_veterans' %}Total relay count: number of relays currently operated. For veterans, higher relay counts with early start dates result in higher veteran scores{% elif category_key == 'reliability_masters' %}Total relay count: number of relays contributing to reliability calculations. More relays provide larger sample size for uptime measurements{% elif category_key == 'legacy_titans' %}Total relay count: number of relays contributing to long-term reliability scores. Sustained relay operations over 5 years demonstrate commitment{% elif category_key == 'bandwidth_masters' %}Total relay count: number of relays contributing to bandwidth calculations. More relays provide larger sample size for bandwidth served measurements{% elif category_key == 'bandwidth_legends' %}Total relay count: number of relays contributing to long-term bandwidth scores. Sustained relay operations over 5 years demonstrate commitment{% else %}Total number of relays operated by this operator{% endif %}">Relays</th>
                     {% endif %}
                     <th title="Primary ranking metric for 
                     {%- if category_key == 'most_diverse' -%}diversity score calculation
-                    {%- elif category_key == 'platform_diversity' -%}non-Linux relay count
-                    {%- elif category_key == 'non_eu_leaders' -%}non-EU relay count with percentage
+                    {%- elif category_key == 'platform_volume' -%}volume diversity: non-Linux relay count (distinct OS count breaks ties)
+                    {%- elif category_key == 'platform_breadth' -%}breadth diversity: distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties)
+                    {%- elif category_key == 'non_eu_volume' -%}volume diversity: non-EU relay count (distinct country count breaks ties)
+                    {%- elif category_key == 'non_eu_breadth' -%}breadth diversity: distinct non-EU country count (non-EU relay count breaks ties)
                     {%- elif category_key == 'frontier_builders' -%}rare country relay count
                     {%- elif category_key == 'network_veterans' -%}veteran score calculation: days since first relay start date × total relay count. Higher scores indicate longer network service with more relays
                     {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
@@ -836,14 +858,14 @@
                     {%- elif category_key == 'bandwidth_masters' -%}6-month bandwidth score: simple average bandwidth served from Onionoo API (25+ relays). Measures recent bandwidth served performance and network contribution
                     {%- elif category_key == 'bandwidth_legends' -%}5-year bandwidth score: simple average bandwidth served from Onionoo API (25+ relays). Measures sustained bandwidth served capacity and long-term network contribution
                     {%- elif category_key == 'total_data_champions' -%}total cumulative data transferred (read + write) over bandwidth history from Onionoo API. Recognizes operators for sustained traffic contribution to the Tor network
-                    {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% elif category_key == 'bandwidth_masters' %}Bandwidth Score{% elif category_key == 'bandwidth_legends' %}Bandwidth Score{% elif category_key == 'total_data_champions' %}Total Data{% else %}Key Metric{% endif %}</th>
+                    {%- endif -%}">{% if category_key == 'platform_volume' %}Non-Linux Relays{% elif category_key == 'platform_breadth' %}Distinct OSes{% elif category_key == 'non_eu_volume' %}Non-EU Relays{% elif category_key == 'non_eu_breadth' %}Distinct Countries{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% elif category_key == 'bandwidth_masters' %}Bandwidth Score{% elif category_key == 'bandwidth_legends' %}Bandwidth Score{% elif category_key == 'total_data_champions' %}Total Data{% else %}Key Metric{% endif %}</th>
                     {% if category_key not in ('bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
-                    <th title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from non-Linux relays only (matches diverse relay count){% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from non-EU relays only (matches diverse relay count){% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
+                    <th title="{% if category_key in ['platform_volume', 'platform_breadth'] %}Bandwidth capacity from non-Linux relays only{% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}Bandwidth capacity from non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
                     {% endif %}
-                    {% if category_key != 'platform_diversity' %}
+                    {% if category_key not in ['platform_volume', 'platform_breadth'] %}
                     <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% elif category_key == 'bandwidth_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for bandwidth served operators indicates distributed service infrastructure{% elif category_key == 'bandwidth_legends' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term bandwidth served operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                     {% endif %}
-                    {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' and category_key != 'platform_diversity' %}
+                    {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                     <th title="{% if category_key == 'network_veterans' %}Platform diversity: number of different operating systems used. Diversified platforms reduce monoculture risks and demonstrate technical sophistication{% elif category_key == 'reliability_masters' %}Platform diversity: number of different operating systems used. Platform diversity for reliable operators indicates varied technical infrastructure{% elif category_key == 'legacy_titans' %}Platform diversity: number of different operating systems used. Platform diversity for long-term operators shows sustained technical variety{% elif category_key == 'bandwidth_masters' %}Platform diversity: number of different operating systems used. Platform diversity for bandwidth served operators indicates varied technical infrastructure{% elif category_key == 'bandwidth_legends' %}Platform diversity: number of different operating systems used. Platform diversity for long-term bandwidth served operators shows sustained technical variety{% else %}Number of different operating systems used{% endif %}">Platforms</th>
                     {% endif %}
                     {% if category_key == 'most_diverse' %}
@@ -858,14 +880,16 @@
                 <tr>
                     <td>{{ rank_badge(entry.rank) }}</td>
                     <td>{{ operator_link(entry, page_ctx) }}</td>
-                    {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
+                    {% if category_key not in ['platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders'] %}
                     <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
                     {% endif %}
                     <td>
                         <strong>
                         {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
-                        {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
-                        {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
+                        {% elif category_key == 'platform_volume' %}<span title="Volume diversity: non-Linux relays contributed to the network (distinct OS count in parentheses)">{{ entry.platform_volume_summary }}</span>
+                        {% elif category_key == 'platform_breadth' %}<span title="Breadth diversity: distinct operating systems including Linux (non-Linux relay count in parentheses)">{{ entry.platform_breadth_summary }}</span>
+                        {% elif category_key == 'non_eu_volume' %}<span title="Volume diversity: relays outside the European Union (distinct country count in parentheses)">{{ entry.non_eu_volume_summary }}</span>
+                        {% elif category_key == 'non_eu_breadth' %}<span title="Breadth diversity: distinct non-EU countries (non-EU relay count in parentheses)">{{ entry.non_eu_breadth_summary }}</span>
                         {% elif category_key == 'frontier_builders' %}<span title="Relays in countries with strategic importance but underrepresented in Tor network">{{ entry.relays_in_rare_countries }}</span>
                         {% elif category_key == 'network_veterans' %}<span title="Veteran Score Calculation: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'Days since first relay started × total relay count. Higher scores indicate longer continuous network service with more relays operated' }}">{{ entry.veteran_score }}</span>
                         {% elif category_key == 'reliability_masters' %}
@@ -882,10 +906,10 @@
                         </strong>
                     </td>
                     {% if category_key not in ('bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
-                    <td title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
-                        {%- if category_key == 'platform_diversity' -%}
+                    <td title="{% if category_key in ['platform_volume', 'platform_breadth'] %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
+                        {%- if category_key in ['platform_volume', 'platform_breadth'] -%}
                             {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}
-                        {%- elif category_key == 'non_eu_leaders' -%}
+                        {%- elif category_key in ['non_eu_volume', 'non_eu_breadth'] -%}
                             {{ entry.non_eu_bandwidth }} {{ entry.non_eu_bandwidth_unit }}
                         {%- elif category_key == 'frontier_builders' -%}
                             {{ entry.rare_country_bandwidth }} {{ entry.rare_country_bandwidth_unit }}
@@ -894,18 +918,18 @@
                         {%- endif -%}
                     </td>
                     {% endif %}
-                    {% if category_key != 'platform_diversity' %}
+                    {% if category_key not in ['platform_volume', 'platform_breadth'] %}
                     <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
                     {% endif %}
-                    {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' and category_key != 'platform_diversity' %}
+                    {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                     <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                     {% endif %}
                     {% if category_key == 'most_diverse' %}
                     <td title="Number of unique Autonomous Systems providing network distribution">{{ entry.unique_as_count }}</td>
                     {% elif category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <td>
-                        {% if category_key == 'platform_diversity' %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
-                        {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
+                        {% if category_key in ['platform_volume', 'platform_breadth'] %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
+                        {% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                         {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                         {% elif category_key == 'network_veterans' %}<span title="Network longevity specialization: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'This operator has been contributing to the Tor network for an extended period, demonstrating long-term commitment and operational stability' }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
                         {% endif %}
