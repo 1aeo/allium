@@ -96,14 +96,14 @@ cd www && python3 -m http.server 8000
 </details>
 
 <details>
-<summary><strong>AROI Leaderboards (18 Categories)</strong></summary>
+<summary><strong>AROI Leaderboards (20 Categories)</strong></summary>
 
 Authenticated Relay Operator Identification system ranking verified operators:
 
 **Capacity**: Bandwidth Contributed, Consensus Weight Leaders  
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
 **Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
-**Diversity**: Most Diverse, Platform Diversity (non-Linux), Non-EU Leaders, Frontier Builders (rare countries)  
+**Diversity** (two co-equal boards per dimension — Volume = scale of non-dominant contribution, Breadth = distinct spread within one operator): Diversity All-Rounders (overall), Non-Linux Powerhouses (platform volume), OS Polyglots (platform breadth, 2+ distinct OSes incl. Linux), Global Powerhouses (non-EU volume), Jurisdiction Globetrotters (non-EU breadth), Frontier Builders (rare-country breadth)  
 **Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions (with v2/v3 split columns + tiered migration badges 🔍/🔁/🚀/🏆)
 
 - Paginated rankings (Top 10, 11-20, 21-25) with CSS-only navigation

@@ -52,16 +52,22 @@ Authenticated Relay Operator Identification system ranking verified operators.
 10. **Bandwidth Served Legends** - 5-year bandwidth performance
 
 ### Diversity & Geographic Leadership
-11. **Most Diverse Operators** - Multi-factor diversity scoring
-12. **Platform Diversity Heroes** - Non-Linux operations
-13. **Non-EU Leaders** - Geographic expansion beyond EU
-14. **Frontier Builders** - Operations in rare countries
+Each diversity dimension has two co-equal boards — Volume (relay count on the
+non-dominant side of the network) and Breadth (distinct spread within one
+operator) — so neither kind of diversity is buried under the other's metric.
+
+11. **Diversity All-Rounders (Overall)** - Multi-factor diversity scoring
+12. **Non-Linux Powerhouses (Platform Volume)** - Non-Linux relay count (distinct OS tiebreaker)
+13. **OS Polyglots (Platform Breadth)** - Distinct OSes incl. Linux, 2+ to qualify (non-Linux relay tiebreaker)
+14. **Global Powerhouses (Non-EU Volume)** - Non-EU relay count (distinct country tiebreaker)
+15. **Jurisdiction Globetrotters (Non-EU Breadth)** - Distinct non-EU countries (non-EU relay tiebreaker)
+16. **Frontier Builders (Rare-Country Breadth)** - Distinct rare countries (rare-relay tiebreaker)
 
 ### Innovation & Infrastructure
-15. **Network Veterans** - Scale-weighted tenure
-16. **IPv4 Address Leaders** - Unique IPv4 diversity
-17. **IPv6 Address Leaders** - Unique IPv6 diversity
-18. **AROI Validation Champions** - Verified identity count
+17. **Network Veterans** - Scale-weighted tenure
+18. **IPv4 Address Leaders** - Unique IPv4 diversity
+19. **IPv6 Address Leaders** - Unique IPv6 diversity
+20. **AROI Validation Champions** - Verified identity count
 
 ### Features
 - Champion badge system
