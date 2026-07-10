@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
     
     steps:
     - name: Checkout code
@@ -204,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.11"]  # Test on minimum and latest supported versions
+        python-version: ["3.8", "3.13"]  # Test on minimum and latest supported versions
     
     steps:
     - name: Set up Python ${{ matrix.python-version }}
