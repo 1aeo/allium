@@ -248,7 +248,7 @@ class AuthorityRegistry:
         """
         if self._voting_authority_names:
             return list(self._voting_authority_names)
-        return _FALLBACK_VOTING_AUTHORITY_NAMES
+        return list(_FALLBACK_VOTING_AUTHORITY_NAMES)
     
     def get_voting_authority_count(self) -> int:
         """Get number of voting authorities (dynamic from CollecTor, else fallback 9)."""
