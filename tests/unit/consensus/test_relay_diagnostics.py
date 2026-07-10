@@ -24,6 +24,7 @@ from allium.lib.relay_diagnostics import (
     _check_overload_issues,
     OVERLOAD_THRESHOLD_HOURS,
 )
+from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8
 
 # Constants for testing
 SECONDS_PER_DAY = 86400
@@ -748,4 +749,55 @@ class TestBackwardCompatibility:
             assert 'description' in issue
             assert 'suggestion' in issue
             assert issue['severity'] in ('error', 'warning', 'info')
+
+
+class TestReachabilityAfterAuthorityRemoval:
+    """Regression tests for the stale reachability denominator bug.
+
+    When a directory authority is removed (e.g. gabelmoo went offline), a relay
+    reachable by all remaining voters must NOT be flagged 'Partial IPv4 reachability'
+    (previously it showed a spurious 8/9). A genuine gap (a voter that couldn't reach
+    the relay) must still be flagged, now against the dynamic denominator.
+    """
+
+    # 8 active voters (gabelmoo removed) - the voting_registry_8_voters fixture
+    # from tests/conftest.py loads this same list into the shared registry
+    ACTIVE_VOTERS = ACTIVE_VOTING_AUTHORITIES_8
+
+    def test_no_partial_reachability_when_authority_removed(self, voting_registry_8_voters):
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
+            'reachability': {
+                'ipv4_reachable_count': 8,
+                'ipv4_reachable_authorities': self.ACTIVE_VOTERS,
+                'ipv6_reachable_count': 8,
+                'ipv6_not_tested_authorities': [],
+            },
+            'flag_eligibility': {},
+        }
+        issues = generate_issues_from_consensus(consensus_data)
+        titles = [i['title'] for i in issues]
+        assert 'Partial IPv4 reachability' not in titles
+        assert 'IPv4 reachability issues' not in titles
+
+    def test_partial_reachability_still_flagged_for_real_gap(self, voting_registry_8_voters):
+        """A voter that genuinely can't reach the relay still warns, using 7/8."""
+        reachable = self.ACTIVE_VOTERS[:-1]  # all but 'tor26' can reach (7/8)
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
+            'reachability': {
+                'ipv4_reachable_count': 7,
+                'ipv4_reachable_authorities': reachable,
+                'ipv6_reachable_count': 7,
+                'ipv6_not_tested_authorities': [],
+            },
+            'flag_eligibility': {},
+        }
+        issues = generate_issues_from_consensus(consensus_data)
+        partial = [i for i in issues if i['title'] == 'Partial IPv4 reachability']
+        assert len(partial) == 1
+        assert '7/8' in partial[0]['description']
+        assert 'tor26' in partial[0]['suggestion']  # the one missing voter
 

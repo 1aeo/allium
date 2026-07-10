@@ -72,6 +72,11 @@ TEST_AROI_URL = "https://test.aroi.url/validate"
 TEST_EXIT_DNS_HEALTH_URL = "https://test.exitdnshealth.url/latest.json"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
+# The 8 currently-voting directory authorities (gabelmoo removed) - alphabetical.
+# Shared by the dynamic voting-authority tests (collector fetcher, diagnostics).
+ACTIVE_VOTING_AUTHORITIES_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
+                               'longclaw', 'maatuska', 'moria1', 'tor26']
+
 
 # ============================================================================
 # PYTEST FIXTURES - Common test data and utilities
@@ -82,6 +87,127 @@ def temp_dir():
     """Fixture that provides a temporary directory that's cleaned up after the test."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+
+
+@pytest.fixture
+def voting_registry_8_voters():
+    """Set the shared authority registry to the 8 active voters (gabelmoo removed).
+
+    Updates the module singleton via the global update_voting_authorities()
+    wrapper before the test and restores the hardcoded fallback afterwards, so
+    dynamic-voting tests never leak state into other tests.
+    """
+    from allium.lib.consensus.collector_fetcher import (
+        get_authority_registry,
+        update_voting_authorities,
+    )
+    registry = get_authority_registry()
+    update_voting_authorities(ACTIVE_VOTING_AUTHORITIES_8)
+    yield registry
+    registry.clear_voting_authorities()
+
+
+@pytest.fixture
+def make_relays(temp_dir):
+    """Factory that builds a Relays instance writing into a per-test temp directory.
+
+    Shared setup for the directory-authority integration tests (and any other
+    test that needs a real Relays object without hitting the network).
+    """
+    from allium.lib.relays import Relays
+
+    def _make(relay_data, onionoo_url=TEST_DETAILS_URL) -> Relays:
+        return Relays(temp_dir, onionoo_url, relay_data)
+
+    return _make
+
+
+@pytest.fixture
+def mock_uptime_response():
+    """Onionoo uptime document for three mock directory authorities
+    (moria1: good, tor26: excellent, dannenberg: poor uptime)."""
+    return {
+        "version": "10.0",
+        "build_revision": "unknown",
+        "relays_published": "2025-01-01 00:00:00",
+        "relays": [
+            {
+                "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [99.2, 98.8, 99.1, 99.0, 98.9]  # Good uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [98.5, 98.8, 99.0, 98.7, 98.6]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [97.5, 97.8, 98.0, 97.9, 97.6]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [96.8, 97.0, 97.2, 96.9, 96.7]
+                    }
+                }
+            },
+            {
+                "fingerprint": "847B1F850344D7876491A54892F904934E4EB85D",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [99.8, 99.6, 99.7, 99.5, 99.9]  # Excellent uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [99.6, 99.4, 99.5, 99.3, 99.7]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [99.1, 99.0, 99.2, 98.9, 99.3]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [98.7, 98.5, 98.9, 98.6, 98.8]
+                    }
+                }
+            },
+            {
+                "fingerprint": "7BE683E65D48141321C5ED92F075C55364AC7123",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [89.2, 88.5, 90.1, 87.8, 89.9]  # Poor uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [85.7, 86.2, 85.0, 86.8, 85.3]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [82.1, 83.0, 81.5, 82.8, 81.9]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [78.5, 79.2, 78.0, 79.8, 78.1]
+                    }
+                }
+            }
+        ]
+    }
 
 
 @pytest.fixture
