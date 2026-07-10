@@ -89,8 +89,8 @@ class FileIOManager:
         return None
     
     @handle_file_io_errors("write JSON file", context="")
-    def write_json_file(self, filename: str, data: Any, encoding: str = "utf-8", 
-                       indent: int = 2) -> bool:
+    def write_json_file(self, filename: str, data: Any, encoding: str = "utf-8",
+                       indent: int = 2, sort_keys: bool = False) -> bool:
         """
         Write data to JSON file with error handling.
         
@@ -99,6 +99,7 @@ class FileIOManager:
             data: Data to serialize as JSON
             encoding: Text encoding (default: utf-8)
             indent: JSON indentation (default: 2)
+            sort_keys: Whether to sort object keys for deterministic output
             
         Returns:
             bool: True if successful, False if error
@@ -107,7 +108,7 @@ class FileIOManager:
         # Atomic write: a crash mid-dump must not corrupt the existing file
         tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
         with open(tmp_path, "w", encoding=encoding) as f:
-            json.dump(data, f, indent=indent)
+            json.dump(data, f, indent=indent, sort_keys=sort_keys)
         tmp_path.replace(file_path)
         return True
     
@@ -146,7 +147,7 @@ class CacheManager(FileIOManager):
             bool: True if successful, False if error
         """
         cache_filename = f"{cache_key}.json"
-        return self.write_json_file(cache_filename, data)
+        return self.write_json_file(cache_filename, data, sort_keys=True)
     
     def load_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """
