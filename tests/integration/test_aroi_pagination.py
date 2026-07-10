@@ -15,7 +15,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Categories rendered through the paginated generic ranking tables
 PAGINATED_CATEGORIES = [
-    'bandwidth', 'consensus_weight', 'exit_authority', 'exit_operators',
+    'bandwidth', 'consensus_weight', 'exit_authority', 'guard_authority',
+    'exit_operators',
     'guard_operators', 'most_diverse', 'platform_volume', 'platform_breadth',
     'non_eu_volume', 'non_eu_breadth',
     'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'
@@ -25,6 +26,7 @@ CATEGORY_TITLES = {
     'bandwidth': 'Bandwidth Contributed',
     'consensus_weight': 'Network Heavyweight Rankings',
     'exit_authority': 'Exit Authorities',
+    'guard_authority': 'Guard Authority Champions',
     'exit_operators': 'Exit Champions',
     'guard_operators': 'Guard Gatekeepers',
     'most_diverse': 'Diversity All-Rounders (Overall)',
