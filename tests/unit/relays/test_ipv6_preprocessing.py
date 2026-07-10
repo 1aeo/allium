@@ -7,15 +7,14 @@ Covers the fix for the contact/family page IPv6 column that always rendered
 not survive past {% endfor %}. The fix precomputes relay['ipv6_display_address']
 (and guarantees relay['ipv6_support']) in Python during preprocessing.
 
-NOTE: These tests construct Relays() directly (full unpatched __init__) so the
-real _preprocess_template_data runs. Do NOT use
+NOTE: These tests use the process_relays fixture (tests/conftest.py), which
+runs the full unpatched Relays init pipeline so the real
+_preprocess_template_data executes. Do NOT use
 TestSetupHelpers.create_test_relays_instance here — it patches
 _preprocess_template_data out.
 """
 
-import unittest
-
-from allium.lib.relays import Relays
+import pytest
 
 
 def _make_relay(fingerprint, or_addresses):
@@ -43,93 +42,54 @@ def _make_relay(fingerprint, or_addresses):
     return relay
 
 
-def _preprocess(or_addresses):
-    """Run the full Relays init pipeline on one relay, return the processed dict."""
-    relay_data = {'relays': [_make_relay('A' * 40, or_addresses)]}
-    relays_obj = Relays(
-        output_dir='/tmp/test-ipv6-preprocessing',
-        onionoo_url='https://test.example.com',
-        relay_data=relay_data,
-        use_bits=False,
-        progress=False,
-    )
-    return relays_obj.json['relays'][0]
+@pytest.mark.parametrize(
+    ('or_addresses', 'expected_address', 'expected_support'),
+    [
+        # dual-stack: IPv4 first, IPv6 second
+        (['1.2.3.4:9001', '[2001:db8::1]:9001'], '2001:db8::1', 'both'),
+        # IPv4 only
+        (['1.2.3.4:9001'], '', 'ipv4_only'),
+        # IPv6 only
+        (['[2001:db8::1]:9001'], '2001:db8::1', 'ipv6_only'),
+        # empty or_addresses
+        ([], '', 'none'),
+        # missing or_addresses key entirely
+        (None, '', 'none'),
+        # malformed entry is skipped, valid IPv6 still found
+        (['garbage', '[2001:db8::2]:443'], '2001:db8::2', 'ipv6_only'),
+        # first IPv6 wins when several are present
+        (['[2001:db8::1]:9001', '[2001:db8::2]:9001'], '2001:db8::1', 'ipv6_only'),
+        # uncompressed/zero-padded input is normalized to canonical form
+        (['[2001:0db8:0000:0000:0000:0000:0000:0001]:9001'], '2001:db8::1', 'ipv6_only'),
+        # real-world onionoo ordering from the bug report (reporter's relay)
+        (['195.133.23.252:443', '[2001:470:1f15:16b::1337:c0de]:443'],
+         '2001:470:1f15:16b::1337:c0de', 'both'),
+    ],
+    ids=[
+        'dual_stack', 'ipv4_only', 'ipv6_only', 'empty', 'missing',
+        'malformed_skipped', 'first_ipv6_wins', 'normalized', 'reporter_relay',
+    ],
+)
+def test_ipv6_display_address_preprocessing(process_relays, or_addresses,
+                                            expected_address, expected_support):
+    """relay['ipv6_display_address'] / ['ipv6_support'] from or_addresses."""
+    relays_obj = process_relays([_make_relay('A' * 40, or_addresses)])
+    relay = relays_obj.json['relays'][0]
+    assert relay['ipv6_display_address'] == expected_address
+    assert relay['ipv6_support'] == expected_support
 
 
-class TestIPv6DisplayAddressPreprocessing(unittest.TestCase):
-    """relay['ipv6_display_address'] extraction from or_addresses."""
-
-    def test_dual_stack_relay(self):
-        relay = _preprocess(['1.2.3.4:9001', '[2001:db8::1]:9001'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:db8::1')
-        self.assertEqual(relay['ipv6_support'], 'both')
-
-    def test_ipv4_only_relay(self):
-        relay = _preprocess(['1.2.3.4:9001'])
-        self.assertEqual(relay['ipv6_display_address'], '')
-        self.assertEqual(relay['ipv6_support'], 'ipv4_only')
-
-    def test_ipv6_only_relay(self):
-        relay = _preprocess(['[2001:db8::1]:9001'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:db8::1')
-        self.assertEqual(relay['ipv6_support'], 'ipv6_only')
-
-    def test_empty_or_addresses(self):
-        relay = _preprocess([])
-        self.assertEqual(relay['ipv6_display_address'], '')
-        self.assertEqual(relay['ipv6_support'], 'none')
-
-    def test_missing_or_addresses(self):
-        relay = _preprocess(None)
-        self.assertEqual(relay['ipv6_display_address'], '')
-        self.assertEqual(relay['ipv6_support'], 'none')
-
-    def test_malformed_address_skipped(self):
-        relay = _preprocess(['garbage', '[2001:db8::2]:443'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:db8::2')
-        self.assertEqual(relay['ipv6_support'], 'ipv6_only')
-
-    def test_first_ipv6_wins(self):
-        relay = _preprocess(['[2001:db8::1]:9001', '[2001:db8::2]:9001'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:db8::1')
-        self.assertEqual(relay['ipv6_support'], 'ipv6_only')
-
-    def test_ipv6_address_normalized(self):
-        """Uncompressed/zero-padded input is normalized to canonical form."""
-        relay = _preprocess(['[2001:0db8:0000:0000:0000:0000:0000:0001]:9001'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:db8::1')
-
-    def test_ipv6_after_ipv4(self):
-        """Real-world onionoo ordering: IPv4 first, IPv6 second (reporter's relay)."""
-        relay = _preprocess(['195.133.23.252:443', '[2001:470:1f15:16b::1337:c0de]:443'])
-        self.assertEqual(relay['ipv6_display_address'], '2001:470:1f15:16b::1337:c0de')
-        self.assertEqual(relay['ipv6_support'], 'both')
-
-
-class TestIPv6SupportSetDuringPreprocessing(unittest.TestCase):
+def test_ipv6_support_present_without_network_health(process_relays):
     """ipv6_support must be a guaranteed preprocessing output (not a
     network_health side effect), so header gating and contact_sorting see it
     even if network health metrics were never calculated."""
-
-    def test_ipv6_support_present_without_network_health(self):
-        relay_data = {'relays': [
-            _make_relay('A' * 40, ['1.2.3.4:9001', '[2001:db8::1]:9001']),
-            _make_relay('B' * 40, ['5.6.7.8:9001']),
-        ]}
-        relays_obj = Relays(
-            output_dir='/tmp/test-ipv6-preprocessing',
-            onionoo_url='https://test.example.com',
-            relay_data=relay_data,
-            use_bits=False,
-            progress=False,
-        )
-        # No _calculate_network_health_metrics() call — preprocessing alone
-        # must have set the attribute on every relay.
-        self.assertNotIn('network_health', relays_obj.json)
-        supports = {r['fingerprint']: r['ipv6_support'] for r in relays_obj.json['relays']}
-        self.assertEqual(supports['A' * 40], 'both')
-        self.assertEqual(supports['B' * 40], 'ipv4_only')
-
-
-if __name__ == '__main__':
-    unittest.main()
+    relays_obj = process_relays([
+        _make_relay('A' * 40, ['1.2.3.4:9001', '[2001:db8::1]:9001']),
+        _make_relay('B' * 40, ['5.6.7.8:9001']),
+    ])
+    # No _calculate_network_health_metrics() call — preprocessing alone
+    # must have set the attribute on every relay.
+    assert 'network_health' not in relays_obj.json
+    supports = {r['fingerprint']: r['ipv6_support'] for r in relays_obj.json['relays']}
+    assert supports['A' * 40] == 'both'
+    assert supports['B' * 40] == 'ipv4_only'
