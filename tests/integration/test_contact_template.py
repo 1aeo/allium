@@ -1305,7 +1305,8 @@ class TestContactTemplateIPv6Column(unittest.TestCase):
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
-        from allium.lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        from allium.lib.bandwidth_formatter import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter
+        from allium.lib.time_utils import format_time_ago
         self.jinja_env.filters['determine_unit'] = determine_unit_filter
         self.jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
         self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
