@@ -478,7 +478,28 @@ class Relays:
                 relay["ip_address"] = parsed_ip or UNKNOWN_LOWERCASE
             else:
                 relay["ip_address"] = UNKNOWN_LOWERCASE
-                
+
+            # Pre-parse first IPv6 address for the contact/family page IPv6 column.
+            # (Fixes Jinja2 for-loop scoping bug that made the template always render N/A:
+            # {% set %} inside {% for %} does not survive past {% endfor %}.)
+            # NOTE: named ipv6_display_address, NOT ipv6_address — that key already exists
+            # in the collector/consensus vote dicts with different semantics ('a' line
+            # including brackets and port).
+            relay["ipv6_display_address"] = ""
+            for addr in or_addrs or []:
+                parsed_ip, ip_version = _safe_parse_ip_address(addr)
+                if ip_version == 6:
+                    relay["ipv6_display_address"] = parsed_ip
+                    break
+
+            # Guarantee ipv6_support as a preprocessing output (used by the template's
+            # table_has_ipv6 header gate and contact_sorting.relay_has_ipv6). Previously
+            # only set as a side effect of network_health.calculate_network_health_metrics,
+            # which created a hidden pipeline-ordering dependency. network_health keeps its
+            # idempotent assignment (same function, same input).
+            relay["ipv6_support"] = determine_ipv6_support(or_addrs)
+
+
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = self._calculate_uptime_display(relay)
             

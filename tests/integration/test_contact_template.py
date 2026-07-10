@@ -874,6 +874,22 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
 
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
 
+        # Regression (IPv6 always-N/A bug): the full pipeline must render the
+        # actual IPv6 address in the IPv6 column, not N/A. Relay1 is dual-stack
+        # ([2001:db8::1]:9001); Relay2/Relay3 are IPv4-only.
+        # This test goes through real preprocessing (relay['ipv6_display_address'])
+        # so it guards the Python↔template contract that hand-built contexts can't.
+        for filename in ("index.html", "by-ipv6.html"):
+            with open(os.path.join(contact_dir, filename), encoding="utf8") as f:
+                rendered = f.read()
+            self.assertIn("2001:db8::1", rendered,
+                          f"{filename}: dual-stack relay's IPv6 address missing from IPv6 column")
+            # IPv4-only relay rows must still render N/A in their IPv6 cell
+            relay2_row = next(chunk for chunk in rendered.split("<tr>")
+                              if 'title="Relay2"' in chunk)
+            self.assertNotIn("2001:db8::1", relay2_row)
+            self.assertIn("N/A", relay2_row)
+
     def test_contact_page_generation_threshold_small_contacts(self):
         """Contacts with ≤2 relays should get only index.html (no sort variants)."""
         relay_set = Relays(
@@ -1268,6 +1284,170 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         self.assertIn('🚨', rendered)
         # Pasteable rotation command surfaced
         self.assertIn('tor --keygen-family', rendered)
+
+
+class TestContactTemplateIPv6Column(unittest.TestCase):
+    """Regression tests for the IPv6 column always-N/A bug.
+
+    Root cause: the old template extracted the IPv6 address with {% set %}
+    inside a {% for %} loop; Jinja2 loop-local bindings don't survive past
+    {% endfor %}, so every row rendered N/A. The fix precomputes
+    relay['ipv6_display_address'] in Python and the template does a plain
+    dict lookup. These tests render the real contact.html and assert on the
+    produced HTML (they would have caught the original bug).
+    """
+
+    def setUp(self):
+        template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates')
+        self.jinja_env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=select_autoescape(['html', 'xml'])
+        )
+        from allium.lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        self.jinja_env.filters['determine_unit'] = determine_unit_filter
+        self.jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+        self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
+        self.jinja_env.filters['format_time_ago'] = format_time_ago
+
+    @staticmethod
+    def _make_relay(fingerprint, nickname, dual_stack):
+        """Relay dict as the pipeline produces it (incl. precomputed fields)."""
+        relay = {
+            'fingerprint': fingerprint,
+            'nickname': nickname,
+            'country': 'us',
+            'country_name': 'United States',
+            'observed_bandwidth': 1000000,
+            'running': True,
+            'flags': ['Running', 'Valid'],
+            'flags_escaped': ['Running', 'Valid'],
+            'flags_lower_escaped': ['running', 'valid'],
+            '_flags_html': '',
+            'effective_family': [],
+            'measured': True,
+            'uptime_display': 'UP 5d 12h',
+            'uptime_api_display': '99.5%',
+            'as': 'AS7922',
+            'as_name': 'Comcast Cable',
+            'platform': 'Linux',
+            'first_seen': '2023-01-01 12:00:00',
+            'first_seen_date_escaped': '2023-01-01',
+            'contact_md5': 'abcd1234',
+        }
+        if dual_stack:
+            relay['or_addresses'] = ['1.2.3.4:9001', '[2001:db8::1]:9001']
+            relay['ipv6_display_address'] = '2001:db8::1'
+            relay['ipv6_support'] = 'both'
+        else:
+            relay['or_addresses'] = ['5.6.7.8:9001']
+            relay['ipv6_display_address'] = ''
+            relay['ipv6_support'] = 'ipv4_only'
+        return relay
+
+    def _base_context(self, relay_subset):
+        return {
+            'contact': 'test@example.com',
+            'contact_hash': 'abcd1234',
+            'bandwidth': '150.0',
+            'bandwidth_unit': 'MB/s',
+            'consensus_weight_fraction': 0.025,
+            'network_position': {
+                'label': 'mixed',
+                'formatted_string': 'Mixed (2 total relays)',
+            },
+            'relay_subset': relay_subset,
+            'relays': {
+                'json': {'relay_subset': relay_subset},
+                'use_bits': False,
+                'timestamp': '2026-01-01 00:00:00',
+            },
+            'page_ctx': {'path_prefix': '../'},
+            'contact_rankings': [],
+            'operator_reliability': None,
+            'contact_display_data': {},
+        }
+
+    @staticmethod
+    def _row_for(rendered, nickname):
+        """Return the <tr> chunk for the row with the given relay nickname."""
+        chunks = [c for c in rendered.split('<tr>') if f'title="{nickname}"' in c]
+        assert len(chunks) >= 1, f"no table row found for {nickname}"
+        return chunks[0]
+
+    def test_single_table_mode_renders_ipv6_address(self):
+        """Single-table mode: dual-stack row shows address, v4-only row shows N/A."""
+        relays = [
+            self._make_relay('A' * 40, 'DualStackRelay', dual_stack=True),
+            self._make_relay('B' * 40, 'V4OnlyRelay', dual_stack=False),
+        ]
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self._base_context(relays))
+
+        # The IPv6 column is present (a dual-stack relay is in the table)...
+        self.assertIn('<th>IPv6</th>', rendered)
+        # ...and the actual address is rendered — the original bug rendered
+        # N/A here for every relay.
+        dual_row = self._row_for(rendered, 'DualStackRelay')
+        self.assertIn('2001:db8::1', dual_row)
+
+        # IPv4-only relay must still show N/A in its IPv6 cell (last <td>).
+        v4_row = self._row_for(rendered, 'V4OnlyRelay')
+        self.assertNotIn('2001:db8::1', v4_row)
+        last_cell = v4_row.rsplit('<td>', 1)[-1]
+        self.assertIn('N/A', last_cell)
+
+    def test_ipv6_column_hidden_when_no_ipv6_relays(self):
+        """Column gating unchanged: all-v4 tables omit the IPv6 column."""
+        relays = [
+            self._make_relay('A' * 40, 'V4Relay1', dual_stack=False),
+            self._make_relay('B' * 40, 'V4Relay2', dual_stack=False),
+        ]
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self._base_context(relays))
+        self.assertNotIn('<th>IPv6</th>', rendered)
+
+    def test_sectioned_aroi_mode_renders_ipv6_address(self):
+        """4-section AROI layout renders rows through contact_validation_status
+        section entries (pickled relay copies in production) — assert the
+        validated-relays table shows the IPv6 address, not N/A."""
+        from allium.lib.aroi_validation import get_contact_validation_status
+
+        dual = self._make_relay('A' * 40, 'DualStackRelay', dual_stack=True)
+        v4only = self._make_relay('B' * 40, 'V4OnlyRelay', dual_stack=False)
+        for relay in (dual, v4only):
+            relay['aroi_domain'] = 'example.org'
+            relay['aroi_version'] = '2'
+            relay['aroi_proof_type'] = 'uri-rsa'
+            relay['contact'] = 'test@example.com'
+
+        validation_data = {
+            'metadata': {'timestamp': '2026-01-01T00:00:00Z'},
+            'results': [
+                {'fingerprint': 'A' * 40, 'valid': True,
+                 'proof_type': 'uri-rsa', 'proof_uri': 'https://example.org', 'ciissversion': '2'},
+                {'fingerprint': 'B' * 40, 'valid': True,
+                 'proof_type': 'uri-rsa', 'proof_uri': 'https://example.org', 'ciissversion': '2'},
+            ],
+        }
+        cvs = get_contact_validation_status([dual, v4only], validation_data)
+        self.assertEqual(cvs['validation_status'], 'validated')
+
+        context = self._base_context([dual, v4only])
+        context['contact_validation_status'] = cvs
+        context['aroi_validation_timestamp'] = '2026-01-01 00:00 UTC'
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+
+        # Sectioned layout active (validated table header rendered)
+        self.assertIn('VALIDATED RELAYS', rendered)
+
+        dual_row = self._row_for(rendered, 'DualStackRelay')
+        self.assertIn('2001:db8::1', dual_row)
+        v4_row = self._row_for(rendered, 'V4OnlyRelay')
+        self.assertNotIn('2001:db8::1', v4_row)
+        last_cell = v4_row.rsplit('<td>', 1)[-1]
+        self.assertIn('N/A', last_cell)
 
 
 if __name__ == '__main__':
