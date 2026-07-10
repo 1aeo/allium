@@ -1,120 +1,29 @@
 #!/usr/bin/env python3
 """Tests for the AROI leaderboard pagination system.
 
-Entry mocks come from the shared ``mock_aroi_leaderboard_entry`` fixture
-(tests/conftest.py, backed by helpers.fixtures.TestDataFactory) so the mock
-schema cannot drift from the one used by the rest of the test suite.
+All fixtures live in tests/conftest.py (backed by helpers.fixtures) so the
+mock entry schema and the category matrix cannot drift between test suites:
+
+- ``mock_aroi_leaderboard_entry`` — shared mock entry factory
+- ``mock_aroi_leaderboards`` — 25 entries per paginated category
+- ``aroi_template_context`` / ``rendered_aroi_leaderboards`` — rendered page
+- ``jinja_env`` — template environment with custom filters
 """
 
 import os
 import re
 from unittest.mock import Mock, patch
 
-import pytest
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-# Categories rendered through the paginated generic ranking tables
-PAGINATED_CATEGORIES = [
-    'bandwidth', 'consensus_weight', 'exit_authority', 'guard_authority',
-    'exit_operators',
-    'guard_operators', 'most_diverse', 'platform_volume', 'platform_breadth',
-    'non_eu_volume', 'non_eu_breadth',
-    'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'
-]
-
-CATEGORY_TITLES = {
-    'bandwidth': 'Bandwidth Contributed',
-    'consensus_weight': 'Network Heavyweight Rankings',
-    'exit_authority': 'Exit Authorities',
-    'guard_authority': 'Guard Authority Champions',
-    'exit_operators': 'Exit Champions',
-    'guard_operators': 'Guard Gatekeepers',
-    'most_diverse': 'Diversity All-Rounders (Overall)',
-    'platform_volume': 'Non-Linux Powerhouses (Platform Volume)',
-    'platform_breadth': 'OS Polyglots (Platform Breadth)',
-    'non_eu_volume': 'Global Powerhouses (Non-EU Volume)',
-    'non_eu_breadth': 'Jurisdiction Globetrotters (Non-EU Breadth)',
-    'frontier_builders': 'Frontier Builders (Rare-Country Breadth)',
-    'network_veterans': 'Network Veterans',
-    'reliability_masters': 'Reliability Masters',
-    'legacy_titans': 'Legacy Titans',
-}
-
-TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates')
-
-
-def _build_jinja_env():
-    """Jinja2 environment with the custom filters templates depend on."""
-    from allium.lib.bandwidth_formatter import (
-        determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter,
-    )
-    from allium.lib.time_utils import format_time_ago
-
-    env = Environment(
-        loader=FileSystemLoader(TEMPLATE_DIR),
-        autoescape=select_autoescape(['html', 'xml'])
-    )
-    env.filters['determine_unit'] = determine_unit_filter
-    env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
-    env.filters['format_bandwidth'] = format_bandwidth_filter
-    env.filters['format_time_ago'] = format_time_ago
-    return env
-
-
-@pytest.fixture
-def jinja_env():
-    return _build_jinja_env()
-
-
-@pytest.fixture
-def mock_leaderboards(mock_aroi_leaderboard_entry):
-    """25 shared-schema mock entries per paginated category (3 pages)."""
-    return {
-        category: [
-            mock_aroi_leaderboard_entry(rank=i + 1, contact_hash=f'hash{i + 1}')
-            for i in range(25)
-        ]
-        for category in PAGINATED_CATEGORIES
-    }
-
-
-@pytest.fixture
-def template_context(mock_leaderboards):
-    return {
-        'relays': {
-            'json': {
-                'aroi_leaderboards': {
-                    'leaderboards': mock_leaderboards,
-                    'summary': {
-                        'categories': dict(CATEGORY_TITLES),
-                        'total_operators': 150,
-                        'total_bandwidth_formatted': '1.5 GB/s',
-                        'total_consensus_weight_pct': '25.5%',
-                        'live_categories_count': len(PAGINATED_CATEGORIES),
-                        'update_timestamp': '2025-06-15 01:00:00 UTC'
-                    }
-                }
-            },
-            'use_bits': False
-        },
-        'page_ctx': {
-            'path_prefix': './'
-        }
-    }
-
-
-@pytest.fixture
-def rendered(jinja_env, template_context):
-    template = jinja_env.get_template('aroi-leaderboards.html')
-    return template.render(**template_context)
+from helpers.fixtures import AROI_PAGINATED_CATEGORIES
 
 
 class TestAROIPaginationSystem:
     """Comprehensive tests for AROI leaderboard pagination system."""
 
-    def test_pagination_structure_all_categories(self, rendered):
+    def test_pagination_structure_all_categories(self, rendered_aroi_leaderboards):
         """All paginated categories have proper pagination structure."""
-        for category in PAGINATED_CATEGORIES:
+        rendered = rendered_aroi_leaderboards
+        for category in AROI_PAGINATED_CATEGORIES:
             # Pagination sections exist
             assert f'id="{category}-1-10"' in rendered, category
             assert f'id="{category}-11-20"' in rendered, category
@@ -125,27 +34,27 @@ class TestAROIPaginationSystem:
             assert f'href="#{category}-11-20"' in rendered, category
             assert f'href="#{category}-21-25"' in rendered, category
 
-    def test_pagination_css_classes(self, rendered):
+    def test_pagination_css_classes(self, rendered_aroi_leaderboards):
         """Pagination sections have correct CSS classes."""
         # 3 sections x N categories pagination sections
-        pagination_sections = re.findall(r'class="pagination-section"', rendered)
-        assert len(pagination_sections) == 3 * len(PAGINATED_CATEGORIES)
+        pagination_sections = re.findall(r'class="pagination-section"', rendered_aroi_leaderboards)
+        assert len(pagination_sections) == 3 * len(AROI_PAGINATED_CATEGORIES)
 
         # One navigation section per category
-        navigation_sections = re.findall(r'class="pagination-nav-bottom"', rendered)
-        assert len(navigation_sections) == len(PAGINATED_CATEGORIES)
+        navigation_sections = re.findall(r'class="pagination-nav-bottom"', rendered_aroi_leaderboards)
+        assert len(navigation_sections) == len(AROI_PAGINATED_CATEGORIES)
 
-    def test_data_distribution_across_pages(self, rendered):
+    def test_data_distribution_across_pages(self, rendered_aroi_leaderboards):
         """Data is properly distributed across pagination pages."""
         # Page 1 should have entries 1-10
-        assert 'operator1@example.com' in rendered
-        assert 'operator10@example.com' in rendered
+        assert 'operator1@example.com' in rendered_aroi_leaderboards
+        assert 'operator10@example.com' in rendered_aroi_leaderboards
 
         # All 25 operators should be present somewhere in the rendered output
         for i in range(1, 26):
-            assert f'operator{i}@example.com' in rendered
+            assert f'operator{i}@example.com' in rendered_aroi_leaderboards
 
-    def test_independent_category_pagination_urls(self, rendered):
+    def test_independent_category_pagination_urls(self, rendered_aroi_leaderboards):
         """Each category has independent pagination URLs."""
         test_cases = [
             ('bandwidth', '#bandwidth-1-10'),
@@ -155,29 +64,29 @@ class TestAROIPaginationSystem:
         ]
 
         for category, expected_url in test_cases:
-            assert expected_url in rendered, category
+            assert expected_url in rendered_aroi_leaderboards, category
 
-    def test_pagination_accessibility_and_titles(self, rendered):
+    def test_pagination_accessibility_and_titles(self, rendered_aroi_leaderboards):
         """Pagination accessibility features and descriptive titles."""
         # Pagination navigation has accessible text
-        assert '1-10' in rendered
-        assert '11-20' in rendered
-        assert '21-25' in rendered
+        assert '1-10' in rendered_aroi_leaderboards
+        assert '11-20' in rendered_aroi_leaderboards
+        assert '21-25' in rendered_aroi_leaderboards
 
         # Section headings include rank information (emojis may vary)
-        rank_matches = re.findall(r'Ranks \d+-\d+', rendered)
+        rank_matches = re.findall(r'Ranks \d+-\d+', rendered_aroi_leaderboards)
         assert len(rank_matches) > 0, "Expected to find rank headers in pagination"
 
         # Some pagination sections are properly formed
-        assert 'pagination-section' in rendered
-        assert 'pagination-nav-bottom' in rendered
+        assert 'pagination-section' in rendered_aroi_leaderboards
+        assert 'pagination-nav-bottom' in rendered_aroi_leaderboards
 
-    def test_fallback_no_data_handling(self, jinja_env, template_context):
+    def test_fallback_no_data_handling(self, jinja_env, aroi_template_context):
         """Pagination behavior when category has no data."""
-        template_context['relays']['json']['aroi_leaderboards']['leaderboards']['bandwidth'] = []
+        aroi_template_context['relays']['json']['aroi_leaderboards']['leaderboards']['bandwidth'] = []
 
         template = jinja_env.get_template('aroi-leaderboards.html')
-        rendered = template.render(**template_context)
+        rendered = template.render(**aroi_template_context)
 
         # Should display fallback message when category has no data
         assert 'No data available for this category' in rendered
@@ -187,7 +96,7 @@ class TestAROIPaginationSystem:
         if bandwidth_section:
             assert 'pagination-nav-bottom' not in bandwidth_section.group()
 
-    def test_emoji_integration_with_pagination(self, rendered, mock_leaderboards):
+    def test_emoji_integration_with_pagination(self, rendered_aroi_leaderboards, mock_aroi_leaderboards):
         """Emojis are properly integrated in pagination headers."""
         expected_emojis = {
             'bandwidth': '🚀',
@@ -196,21 +105,23 @@ class TestAROIPaginationSystem:
         }
 
         for category, emoji in expected_emojis.items():
-            if category in mock_leaderboards:
-                assert emoji in rendered, f"Expected emoji '{emoji}' not found for {category}"
+            if category in mock_aroi_leaderboards:
+                assert emoji in rendered_aroi_leaderboards, \
+                    f"Expected emoji '{emoji}' not found for {category}"
 
         # At least some pagination headers with rank info exist
-        assert re.search(r'Ranks \d+-\d+', rendered), "Expected at least some pagination rank headers"
+        assert re.search(r'Ranks \d+-\d+', rendered_aroi_leaderboards), \
+            "Expected at least some pagination rank headers"
 
-    def test_template_macro_integration(self, rendered):
+    def test_template_macro_integration(self, rendered_aroi_leaderboards):
         """Pagination integrates correctly with template macros."""
         # Table structures that indicate macro execution
-        assert 'table-responsive' in rendered
-        assert 'aroi-rankings-table' in rendered
+        assert 'table-responsive' in rendered_aroi_leaderboards
+        assert 'aroi-rankings-table' in rendered_aroi_leaderboards
 
         # generic_ranking_table_paginated macro generates table headers and rows
-        assert '<th title=' in rendered
-        assert 'Operator (AROI)' in rendered
+        assert '<th title=' in rendered_aroi_leaderboards
+        assert 'Operator (AROI)' in rendered_aroi_leaderboards
 
     def test_skeleton_css_integration(self):
         """Pagination CSS is defined in AROI page CSS.
@@ -249,16 +160,16 @@ class TestAROIPaginationSystem:
             skeleton_content = f.read()
         assert '{% block page_css_link %}' in skeleton_content
 
-    def test_pagination_performance_structure(self, rendered):
+    def test_pagination_performance_structure(self, rendered_aroi_leaderboards):
         """Pagination structure is optimized for performance."""
         # Each category should have exactly 3 pagination sections
         for category in ['bandwidth', 'consensus_weight', 'most_diverse']:
             pattern = f'id="{category}-\\d+-\\d+"'
-            matches = re.findall(pattern, rendered)
+            matches = re.findall(pattern, rendered_aroi_leaderboards)
             assert len(matches) == 3, \
                 f"Expected 3 pagination sections for {category}, found {len(matches)}"
 
-    def test_url_fragment_consistency(self, rendered):
+    def test_url_fragment_consistency(self, rendered_aroi_leaderboards):
         """URL fragments follow consistent naming convention."""
         # URL fragment pattern: #{category}-{start}-{end}
         expected_patterns = [
@@ -268,17 +179,17 @@ class TestAROIPaginationSystem:
         ]
 
         for pattern in expected_patterns:
-            matches = re.findall(pattern, rendered)
+            matches = re.findall(pattern, rendered_aroi_leaderboards)
             # Should find pattern for every paginated category
-            assert len(matches) >= len(PAGINATED_CATEGORIES), \
-                f"Expected at least {len(PAGINATED_CATEGORIES)} matches for pattern {pattern}"
+            assert len(matches) >= len(AROI_PAGINATED_CATEGORIES), \
+                f"Expected at least {len(AROI_PAGINATED_CATEGORIES)} matches for pattern {pattern}"
 
 
 class TestPaginationIntegration:
     """Integration tests for pagination with the complete system."""
 
     @patch('allium.lib.relays.Relays._generate_aroi_leaderboards')
-    def test_pagination_with_real_template_context(self, mock_aroi, mock_aroi_leaderboard_entry):
+    def test_pagination_with_real_template_context(self, mock_aroi, jinja_env, mock_aroi_leaderboard_entry):
         """Pagination works with realistic template context structure."""
         mock_aroi.return_value = None
 
@@ -296,7 +207,7 @@ class TestPaginationIntegration:
         }
         relays.use_bits = False
 
-        template = _build_jinja_env().get_template('aroi-leaderboards.html')
+        template = jinja_env.get_template('aroi-leaderboards.html')
         context = {
             'relays': relays,
             'page_ctx': {'path_prefix': './'}
