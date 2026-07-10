@@ -254,6 +254,62 @@ def mock_aroi_leaderboard_entry():
 
 
 @pytest.fixture
+def jinja_env():
+    """Jinja2 environment loading allium templates with the custom filters
+    they depend on (shared helper in helpers.fixtures)."""
+    from helpers.fixtures import TestSetupHelpers
+    return TestSetupHelpers.setup_jinja_environment()
+
+
+@pytest.fixture
+def mock_aroi_leaderboards(mock_aroi_leaderboard_entry):
+    """25 shared-schema mock entries (3 pagination pages) for every AROI
+    category rendered through the paginated generic ranking tables."""
+    from helpers.fixtures import AROI_PAGINATED_CATEGORIES
+    return {
+        category: [
+            mock_aroi_leaderboard_entry(rank=i + 1, contact_hash=f'hash{i + 1}')
+            for i in range(25)
+        ]
+        for category in AROI_PAGINATED_CATEGORIES
+    }
+
+
+@pytest.fixture
+def aroi_template_context(mock_aroi_leaderboards):
+    """Template context for rendering aroi-leaderboards.html with mock data."""
+    from helpers.fixtures import AROI_CATEGORY_TITLES, AROI_PAGINATED_CATEGORIES
+    return {
+        'relays': {
+            'json': {
+                'aroi_leaderboards': {
+                    'leaderboards': mock_aroi_leaderboards,
+                    'summary': {
+                        'categories': dict(AROI_CATEGORY_TITLES),
+                        'total_operators': 150,
+                        'total_bandwidth_formatted': '1.5 GB/s',
+                        'total_consensus_weight_pct': '25.5%',
+                        'live_categories_count': len(AROI_PAGINATED_CATEGORIES),
+                        'update_timestamp': '2025-06-15 01:00:00 UTC'
+                    }
+                }
+            },
+            'use_bits': False
+        },
+        'page_ctx': {
+            'path_prefix': './'
+        }
+    }
+
+
+@pytest.fixture
+def rendered_aroi_leaderboards(jinja_env, aroi_template_context):
+    """aroi-leaderboards.html rendered with the mock AROI template context."""
+    template = jinja_env.get_template('aroi-leaderboards.html')
+    return template.render(**aroi_template_context)
+
+
+@pytest.fixture
 def mock_http_response():
     """Fixture that creates a mock HTTP response object."""
     def _create_response(data):
