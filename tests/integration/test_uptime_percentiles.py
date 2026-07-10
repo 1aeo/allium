@@ -9,6 +9,7 @@ import hashlib
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
+from allium.lib.operator_analysis import calculate_operator_reliability
 from allium.lib.relays import Relays
 
 
@@ -210,23 +211,22 @@ class TestNetworkUptimePercentilesIntegration(unittest.TestCase):
                           if r.get('contact') == 'operator1@example.com']
         
         # Test that the operator reliability calculation can be called
-        if hasattr(relays, '_calculate_operator_reliability'):
-            try:
-                reliability = relays._calculate_operator_reliability(contact_hash, operator_relays)
-                
-                if reliability is not None:
-                    self.assertIsInstance(reliability, dict)
-                    if 'network_uptime_percentiles' in reliability:
-                        net_percentiles = reliability['network_uptime_percentiles']
-                        if net_percentiles is not None and isinstance(net_percentiles, dict):
-                            # Use helper function to safely extract percentiles
-                            actual_percentiles = self._safely_get_percentiles(net_percentiles)
-                            if actual_percentiles:
-                                assert '25th' in actual_percentiles, "25th percentile should be present"
-                                assert '50th' in actual_percentiles, "50th percentile should be present"
-            except Exception:
-                # If the method doesn't work as expected, just pass the test
-                pass
+        try:
+            reliability = calculate_operator_reliability(contact_hash, operator_relays, relays)
+
+            if reliability is not None:
+                self.assertIsInstance(reliability, dict)
+                if 'network_uptime_percentiles' in reliability:
+                    net_percentiles = reliability['network_uptime_percentiles']
+                    if net_percentiles is not None and isinstance(net_percentiles, dict):
+                        # Use helper function to safely extract percentiles
+                        actual_percentiles = self._safely_get_percentiles(net_percentiles)
+                        if actual_percentiles:
+                            assert '25th' in actual_percentiles, "25th percentile should be present"
+                            assert '50th' in actual_percentiles, "50th percentile should be present"
+        except Exception:
+            # If the function doesn't work as expected, just pass the test
+            pass
     
     def test_performance_optimization_caching(self):
         """Test that network percentiles are cached for performance."""

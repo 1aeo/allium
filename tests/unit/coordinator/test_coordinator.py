@@ -64,29 +64,24 @@ class TestCoordinator:
         use_bits = True
         progress = True
         start_time = time.time()
-        progress_step = 5
-        total_steps = 53
-        
+
         coordinator = make_coordinator(
             output_dir=output_dir,
             details_url=onionoo_details_url,
             uptime_url=onionoo_uptime_url,
             use_bits=use_bits,
             progress=progress,
-            start_time=start_time,
-            progress_step=progress_step,
-            total_steps=total_steps
+            start_time=start_time
         )
-        
+
         assert coordinator.output_dir == output_dir
         assert coordinator.onionoo_details_url == onionoo_details_url
         assert coordinator.onionoo_uptime_url == onionoo_uptime_url
         assert coordinator.use_bits == use_bits
         assert coordinator.progress == progress
         assert coordinator.start_time == start_time
-        assert coordinator.progress_step == progress_step
-        assert coordinator.total_steps == total_steps
-        assert coordinator.workers == {}
+        assert coordinator.progress_logger.start_time == start_time
+        assert coordinator.progress_logger.progress_enabled == progress
         assert coordinator.worker_data == {}
     
     def test_coordinator_initialization_uses_default_values_when_minimal_parameters_provided(self):
@@ -98,8 +93,8 @@ class TestCoordinator:
         assert coordinator.onionoo_uptime_url == "https://test.uptime.url"
         assert coordinator.use_bits is False
         assert coordinator.progress is False
-        assert coordinator.progress_step == 0
-        assert coordinator.total_steps == 53
+        assert coordinator.progress_logger.progress_step == 0
+        assert coordinator.progress_logger.total_steps == 53
         assert isinstance(coordinator.start_time, float)
     
     def test_log_progress_outputs_formatted_message_when_progress_enabled(self):
@@ -107,7 +102,7 @@ class TestCoordinator:
         coordinator = make_coordinator(progress=True)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_called_once()
             call_args = mock_print.call_args[0][0]
@@ -119,7 +114,7 @@ class TestCoordinator:
         coordinator = make_coordinator(progress=False)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_not_called()
     
@@ -198,7 +193,8 @@ class TestCoordinator:
                 assert call_kwargs['use_bits'] == True
                 assert call_kwargs['progress'] == True
                 assert call_kwargs['relay_data'] == mock_data
-                assert call_kwargs['total_steps'] == 53
+                # The ONE shared progress logger is threaded through to Relays
+                assert call_kwargs['progress_logger'] is coordinator.progress_logger
                 
                 # Check progress messages
                 assert any("Creating relay set with Details API data" in str(call) for call in mock_print.call_args_list)
@@ -364,13 +360,24 @@ class TestCoordinatorIntegration:
         coordinator = make_coordinator(output_dir="./test_output", progress=True)
         
         # Mock urllib request to return test data
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+        def _fresh_response(*args, **kwargs):
+            # fresh mock per urlopen call: each API worker calls urlopen
+            # and reads until EOF; a shared side_effect list would exhaust
+            resp = MagicMock()
+            resp.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            return resp
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+            from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir), \
+                 patch('allium.lib.workers._cache_manager', create_cache_manager(temp_dir)), \
+                 patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(temp_dir)):
+                # CACHE_DIR alone is not enough: the module-level
+                # _cache_manager/_timestamp_manager were bound at import, so
+                # without rebinding them these tests read/write the REAL
+                # cache dir (test pollution)
                 with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+                    with patch('urllib.request.urlopen', side_effect=_fresh_response):
                         with patch('builtins.print') as mock_print:
                             # Test fetching data
                             data = coordinator.fetch_onionoo_data()
@@ -381,14 +388,24 @@ class TestCoordinatorIntegration:
                             # Check that progress was logged
                             progress_calls = [str(call) for call in mock_print.call_args_list]
                             assert any("Starting threaded API fetching" in call for call in progress_calls)
-                            assert any("successfully fetched 2 relays from onionoo details API" in call for call in progress_calls)
+                            # Current message format (generic _fetch_with_cache_fallback):
+                            # "successfully fetched {count} items from {display_name} API in {elapsed}s"
+                            # - the old per-worker "2 relays" wording is gone
+                            assert any("successfully fetched 2 items from onionoo details API" in call for call in progress_calls)
     
     def test_coordinator_error_recovery(self):
         """Test coordinator behavior during worker errors"""
         coordinator = make_coordinator(output_dir="./test_output", progress=True)
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+            from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir), \
+                 patch('allium.lib.workers._cache_manager', create_cache_manager(temp_dir)), \
+                 patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(temp_dir)):
+                # CACHE_DIR alone is not enough: the module-level
+                # _cache_manager/_timestamp_manager were bound at import, so
+                # without rebinding them these tests read/write the REAL
+                # cache dir (test pollution)
                 with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
                     # Simulate network error
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
@@ -424,7 +441,7 @@ class TestCoordinatorProgressLogging:
         coordinator = make_coordinator(progress=True, start_time=time.time())
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test progress message")
+            coordinator.progress_logger.log("Test progress message")
             
             mock_print.assert_called_once()
             log_message = mock_print.call_args[0][0]
@@ -440,7 +457,7 @@ class TestCoordinatorProgressLogging:
         # Mock resource module to raise an exception
         with patch('resource.getrusage', side_effect=Exception("Memory unavailable")):
             with patch('builtins.print') as mock_print:
-                coordinator._log_progress("Test message")
+                coordinator.progress_logger.log("Test message")
                 
                 mock_print.assert_called_once()
                 log_message = mock_print.call_args[0][0]
@@ -463,15 +480,12 @@ class TestCoordinatorEdgeCases:
         # Test with empty strings using keyword arguments
         coordinator = Coordinator(
             output_dir="", onionoo_details_url="", onionoo_uptime_url="",
-            onionoo_bandwidth_url="", aroi_url="", bandwidth_cache_hours=0,
-            progress_step=-1, total_steps=0
+            onionoo_bandwidth_url="", aroi_url="", bandwidth_cache_hours=0
         )
-        
+
         assert coordinator.output_dir == ""
         assert coordinator.onionoo_details_url == ""
         assert coordinator.onionoo_uptime_url == ""
-        assert coordinator.progress_step == -1
-        assert coordinator.total_steps == 0
     
     def test_create_relay_set_with_empty_data(self):
         """Test creating relay set with empty data"""
@@ -617,16 +631,6 @@ class TestCoordinatorMultiAPI:
         
         result = coordinator.get_consensus_health_data()
         assert result == mock_health_data
-    
-    def test_get_collector_data(self):
-        """Test getting collector data from coordinator"""
-        mock_collector_data = {"authorities": [{"name": "test"}]}
-        
-        coordinator = make_coordinator()
-        coordinator.worker_data = {'collector': mock_collector_data}
-        
-        result = coordinator.get_collector_data()
-        assert result == mock_collector_data
     
     def test_create_relay_set_with_additional_apis(self):
         """Test relay set creation with additional API data attached via enrich_with_api_data"""

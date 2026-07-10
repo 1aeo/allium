@@ -20,7 +20,6 @@ the last detected overload event.
 """
 
 import html as _html
-import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -55,18 +54,15 @@ except ImportError:
     def get_voting_authority_count():
         return 9
 
-# Import bandwidth formatter
+# Import bandwidth formatter (shared cached instances, keyed by use_bits)
 try:
-    from .bandwidth_formatter import BandwidthFormatter
-    _BandwidthFormatterClass = BandwidthFormatter
+    from .bandwidth_formatter import _get_formatter as _get_bw_formatter
 except ImportError:
-    _BandwidthFormatterClass = None
+    _get_bw_formatter = None
 
-# Import canonical overload threshold from stability_utils (DRY)
-from .stability_utils import OVERLOAD_THRESHOLD_HOURS
-
-# Cache formatters
-_bw_formatter_cache = {}
+# Shared overload fact evaluation from stability_utils (DRY).
+# OVERLOAD_THRESHOLD_HOURS is re-exported: tests import it from this module.
+from .stability_utils import OVERLOAD_THRESHOLD_HOURS, evaluate_overload  # noqa: F401
 
 
 def generate_relay_issues(relay: dict, consensus_data: dict = None, 
@@ -98,7 +94,8 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
             relay.get('flags', []),
             relay.get('observed_bandwidth', 0),
             relay.get('version'),
-            relay.get('recommended_version')
+            relay.get('recommended_version'),
+            use_bits
         ))
     
     # Overload issues (6 types) - pass timestamp for efficiency
@@ -112,7 +109,8 @@ def generate_issues_from_consensus(
     current_flags: list = None,
     observed_bandwidth: int = 0,
     version: str = None,
-    recommended_version: bool = None
+    recommended_version: bool = None,
+    use_bits: bool = False
 ) -> List[dict]:
     """
     Consensus-related issue detection.
@@ -274,7 +272,7 @@ def generate_issues_from_consensus(
         
         # Metric thresholds
         if not guard_bw_eligible and observed_bandwidth:
-            bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s"
+            bw_display = _format_rate(observed_bandwidth, use_bits)
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
@@ -520,58 +518,56 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
         List of overload issue dicts
     """
     issues = []
-    now_ts = now_timestamp if now_timestamp is not None else time.time()
-    
+    # Shared fact evaluation (stability_utils.evaluate_overload); presentation
+    # policy below is specific to the diagnostics page — see evaluate_overload
+    # docstring for how it differs from compute_relay_stability.
+    facts = evaluate_overload(relay, now_timestamp)
+
     # =========================================================================
     # SCENARIO 1 & 2: General Overload (overload_general_timestamp)
     # Per Tor spec proposal 328: 72-hour threshold
     # =========================================================================
-    general_ts = relay.get('overload_general_timestamp')
-    if general_ts:
-        # Onionoo timestamps are in milliseconds
-        age_hours = (now_ts - general_ts / 1000) / 3600
-        
-        if age_hours < OVERLOAD_THRESHOLD_HOURS:
+    if facts['general_ts']:
+        if facts['general_active']:
             # Scenario 1: Active overload (within 72 hours)
-            ts_str = datetime.fromtimestamp(general_ts / 1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
             issues.append({
                 'severity': 'error',
                 'category': 'overload',
                 'title': 'General Overload Active',
-                'description': f'Relay reported general overload at {ts_str} UTC. '
+                'description': f"Relay reported general overload at {facts['general_date']} UTC. "
                               'This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion.',
                 'suggestion': 'Check CPU/memory with htop. Review logs for "out of memory" or "onionskins" warnings. '
                              'Consider increasing MaxMemInQueues in torrc. Verify TCP ports available.',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
             })
-        elif age_hours < 168:  # Within 7 days
+        elif facts['general_age_hours'] < 168:  # Within 7 days
             # Scenario 2: Recent overload (stale but notable)
-            days_ago = int(age_hours / 24)
+            # This caller only reports stale overloads within 7 days
+            # (the stability cell reports them no matter how old)
             issues.append({
                 'severity': 'info',
                 'category': 'overload',
                 'title': 'Recent Overload Reported',
-                'description': f'Relay reported overload {days_ago} days ago (no longer active per 72h threshold).',
+                'description': f"Relay reported overload {facts['general_days_ago']} days ago (no longer active per 72h threshold).",
                 'suggestion': 'Monitor for recurring issues. Check system resources periodically.',
             })
-    
+
     # =========================================================================
     # SCENARIO 3: File Descriptor Exhaustion (overload_fd_exhausted)
+    # This caller requires a dict (the stability cell accepts any truthy value)
     # =========================================================================
-    fd_exhausted = relay.get('overload_fd_exhausted')
-    if isinstance(fd_exhausted, dict):
-        issues.append(_create_fd_exhaustion_issue(fd_exhausted.get('timestamp')))
-    
+    if isinstance(facts['fd_exhausted'], dict):
+        issues.append(_create_fd_exhaustion_issue(facts['fd_timestamp']))
+
     # =========================================================================
     # SCENARIOS 4, 5, 6: Rate Limit Issues (overload_ratelimits)
     # =========================================================================
-    ratelimits = relay.get('overload_ratelimits')
-    if ratelimits:
-        rate_limit = ratelimits.get('rate-limit', 0)
-        burst_limit = ratelimits.get('burst-limit', 0)
-        write_count = ratelimits.get('write-count', 0)
-        read_count = ratelimits.get('read-count', 0)
-        
+    if facts['ratelimits']:
+        rate_limit = facts['rate_limit']
+        burst_limit = facts['burst_limit']
+        write_count = facts['write_count']
+        read_count = facts['read_count']
+
         # Format rate using BandwidthFormatter
         rate_str = _format_rate(rate_limit, use_bits)
         
@@ -603,7 +599,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
         
         # Scenario 6: Rate Limit Configuration (info context)
         if rate_limit > 0 and (write_count > 0 or read_count > 0):
-            burst_str = _format_rate(burst_limit, use_bits)
+            burst_str = _format_volume(burst_limit)
             issues.append({
                 'severity': 'info',
                 'category': 'overload',
@@ -650,21 +646,31 @@ def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
     }
 
 
+def _format_volume(volume_bytes: int) -> str:
+    """Format a data volume (e.g. BandwidthBurst token-bucket size).
+
+    Per proposal 328 / dir-spec, overload_ratelimits burst-limit is a
+    quantity of bytes, not a rate - no '/s' suffix.
+    """
+    if not volume_bytes:
+        return "unknown"
+    from .bandwidth_formatter import format_data_volume_with_unit
+    return format_data_volume_with_unit(volume_bytes)
+
+
 def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
     """Format rate limit value for display."""
     if not rate_bytes:
         return "unknown"
-    
-    # Use BandwidthFormatter if available (preferred)
-    if _BandwidthFormatterClass is not None:
-        if use_bits not in _bw_formatter_cache:
-            _bw_formatter_cache[use_bits] = _BandwidthFormatterClass(use_bits=use_bits)
+
+    # Use shared cached BandwidthFormatter if available (preferred)
+    if _get_bw_formatter is not None:
         try:
-            fmt = _bw_formatter_cache[use_bits]
+            fmt = _get_bw_formatter(use_bits=use_bits)
             return fmt.format_bandwidth_with_suffix(rate_bytes, fmt.determine_unit(rate_bytes), decimal_places=0)
         except Exception:
             pass
-    
+
     # Fallback: simple formatting
     value, suffix = (rate_bytes * 8, "bit/s") if use_bits else (rate_bytes, "B/s")
     for threshold, prefix in [(1e9, "G"), (1e6, "M"), (1e3, "K")]:
