@@ -243,9 +243,10 @@ class AuthorityRegistry:
         Prefers the dynamic list discovered from CollecTor votes (via
         update_voting_authorities); falls back to the hardcoded 9 voting authorities
         when no vote data is available. NOTE: Serge has Authority flag but doesn't vote.
+        Returns a copy so callers can't mutate the registry's internal state.
         """
         if self._voting_authority_names:
-            return self._voting_authority_names
+            return list(self._voting_authority_names)
         return _FALLBACK_VOTING_AUTHORITY_NAMES
     
     def get_voting_authority_count(self) -> int:

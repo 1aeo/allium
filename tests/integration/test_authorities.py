@@ -3,8 +3,9 @@
 """
 Test suite for directory authorities functionality.
 
-Pytest-style tests: shared relay construction and temp-directory handling live
-in the make_relays / temp_dir fixtures defined in tests/conftest.py.
+Pytest-style tests: shared relay construction, temp-directory handling, and
+mock uptime data live in the make_relays / temp_dir / mock_uptime_response
+fixtures defined in tests/conftest.py.
 """
 
 import json
@@ -15,97 +16,6 @@ import pytest
 
 
 GABELMOO_FP = 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281'
-
-
-# ============================================================================
-# Shared mock data
-# ============================================================================
-
-@pytest.fixture
-def mock_uptime_response():
-    """Onionoo uptime document for the three mock authorities."""
-    return {
-        "version": "10.0",
-        "build_revision": "unknown",
-        "relays_published": "2025-01-01 00:00:00",
-        "relays": [
-            {
-                "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
-                "uptime": {
-                    "1_month": {
-                        "factor": 0.01,
-                        "count": 720,
-                        "values": [99.2, 98.8, 99.1, 99.0, 98.9]  # Good uptime
-                    },
-                    "6_months": {
-                        "factor": 0.01,
-                        "count": 4320,
-                        "values": [98.5, 98.8, 99.0, 98.7, 98.6]
-                    },
-                    "1_year": {
-                        "factor": 0.01,
-                        "count": 8760,
-                        "values": [97.5, 97.8, 98.0, 97.9, 97.6]
-                    },
-                    "5_years": {
-                        "factor": 0.01,
-                        "count": 43800,
-                        "values": [96.8, 97.0, 97.2, 96.9, 96.7]
-                    }
-                }
-            },
-            {
-                "fingerprint": "847B1F850344D7876491A54892F904934E4EB85D",
-                "uptime": {
-                    "1_month": {
-                        "factor": 0.01,
-                        "count": 720,
-                        "values": [99.8, 99.6, 99.7, 99.5, 99.9]  # Excellent uptime
-                    },
-                    "6_months": {
-                        "factor": 0.01,
-                        "count": 4320,
-                        "values": [99.6, 99.4, 99.5, 99.3, 99.7]
-                    },
-                    "1_year": {
-                        "factor": 0.01,
-                        "count": 8760,
-                        "values": [99.1, 99.0, 99.2, 98.9, 99.3]
-                    },
-                    "5_years": {
-                        "factor": 0.01,
-                        "count": 43800,
-                        "values": [98.7, 98.5, 98.9, 98.6, 98.8]
-                    }
-                }
-            },
-            {
-                "fingerprint": "7BE683E65D48141321C5ED92F075C55364AC7123",
-                "uptime": {
-                    "1_month": {
-                        "factor": 0.01,
-                        "count": 720,
-                        "values": [89.2, 88.5, 90.1, 87.8, 89.9]  # Poor uptime
-                    },
-                    "6_months": {
-                        "factor": 0.01,
-                        "count": 4320,
-                        "values": [85.7, 86.2, 85.0, 86.8, 85.3]
-                    },
-                    "1_year": {
-                        "factor": 0.01,
-                        "count": 8760,
-                        "values": [82.1, 83.0, 81.5, 82.8, 81.9]
-                    },
-                    "5_years": {
-                        "factor": 0.01,
-                        "count": 43800,
-                        "values": [78.5, 79.2, 78.0, 79.8, 78.1]
-                    }
-                }
-            }
-        ]
-    }
 
 
 def _dynamic_authorities(authorities):

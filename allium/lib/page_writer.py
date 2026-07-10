@@ -763,7 +763,8 @@ def get_directory_authorities_data(relay_set):
     try:
         from .consensus.collector_fetcher import get_known_offline_authorities
         known_offline = get_known_offline_authorities()
-    except Exception:
+    except Exception as e:
+        print(f"Warning: Failed to load known offline authorities ({e}), skipping offline-retention rows")
         known_offline = []
     for entry in known_offline:
         entry_fp = (entry.get('fingerprint') or '').upper()
