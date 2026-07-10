@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from allium.lib.page_writer import build_template_args, write_pages_by_key
 from allium.lib.relays import Relays
 
 
@@ -23,7 +24,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
         )
         
         # Add custom filters for template compatibility
-        from allium.lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        from allium.lib.bandwidth_formatter import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter
+        from allium.lib.time_utils import format_time_ago
         self.jinja_env.filters['determine_unit'] = determine_unit_filter
         self.jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
         self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
@@ -726,8 +728,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         the_prefixed = ["United States"]
         validated_aroi_domains = set()
         
-        template_args = relay_set._build_template_args(
-            "contact", contact_hash, contact_data, the_prefixed, validated_aroi_domains
+        template_args = build_template_args(
+            relay_set, "contact", contact_hash, contact_data, the_prefixed, validated_aroi_domains
         )
         
         # Verify critical contact metadata is in template args
@@ -769,8 +771,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         contact_data["is_validated_aroi"] = True
         
         # Build template args
-        template_args = relay_set._build_template_args(
-            "contact", contact_hash, contact_data, [], set()
+        template_args = build_template_args(
+            relay_set, "contact", contact_hash, contact_data, [], set()
         )
         
         # Verify flat storage is used (not nested precomputed dict)
@@ -842,7 +844,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             mp_workers=0,
         )
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertGreater(len(contact_hashes), 0)
@@ -901,7 +903,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             mp_workers=0,
         )
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertGreater(len(contact_hashes), 0)
@@ -949,7 +951,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             progress=False,
             mp_workers=0,
         )
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertEqual(len(contact_hashes), 1)
         contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
@@ -999,7 +1001,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         contact_data["is_validated_aroi"] = True
         contact_data["aroi_domain"] = "example.org"
 
-        relay_set.write_pages_by_key("contact")
+        write_pages_by_key(relay_set, "contact")
 
         vanity_dir = os.path.join(self.temp_dir, "example.org")
         self.assertTrue(os.path.isdir(vanity_dir))
@@ -1072,7 +1074,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """No pill strip when operator has 0 v2 + 0 v3 relays."""
         rendered = self._render_pills({
             'v2_relay_count': 0, 'v3_relay_count': 0,
-            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 0.0, 'v3_migration_progress_pct': 0.0, 'is_mixed_migration': False,
             'v3_tier': 'none', 'is_v3_adopter': False,
         })
         self.assertNotIn('v2:', rendered)
@@ -1082,7 +1084,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """Operator with only v2 relays: gray v2 pill, no v3 pill."""
         rendered = self._render_pills({
             'v2_relay_count': 5, 'v3_relay_count': 0,
-            'v3_relay_percentage': 0.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 0.0, 'v3_migration_progress_pct': 0.0, 'is_mixed_migration': False,
             'v3_tier': 'none', 'is_v3_adopter': False,
         })
         self.assertIn('v2: 5', rendered)
@@ -1092,7 +1094,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """100% v3 operator: pill + 🏆 v3 complete badge."""
         rendered = self._render_pills({
             'v2_relay_count': 0, 'v3_relay_count': 10,
-            'v3_relay_percentage': 100.0, 'is_mixed_migration': False,
+            'v3_pct_of_total': 100.0, 'v3_migration_progress_pct': 100.0, 'is_mixed_migration': False,
             'v3_tier': 'complete', 'is_v3_adopter': True,
         })
         self.assertIn('v3: 10', rendered)
@@ -1103,7 +1105,7 @@ class TestB3V3RelayInfoRendering(unittest.TestCase):
         """Mixed v2/v3 operator: shows 🔁 migration percentage."""
         rendered = self._render_pills({
             'v2_relay_count': 7, 'v3_relay_count': 3,
-            'v3_relay_percentage': 30.0, 'is_mixed_migration': True,
+            'v3_pct_of_total': 30.0, 'v3_migration_progress_pct': 30.0, 'is_mixed_migration': True,
             'v3_tier': 'migrating', 'is_v3_adopter': True,
         })
         self.assertIn('v2: 7', rendered)

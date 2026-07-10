@@ -15,7 +15,7 @@ import sys
 import time
 import urllib.parse
 from lib.coordinator import create_relay_set_with_coordinator
-from lib.progress_logger import create_progress_logger
+from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ def ensure_output_directory(output_dir):
     """
     try:
         os.makedirs(output_dir, exist_ok=True)
-    except PermissionError as e:
+    except PermissionError:
         print(f"❌ Error: Permission denied creating output directory '{output_dir}'")
         print(f"💡 Try running with a different output directory:")
         print(f"   python3 allium.py --out ~/allium-output --progress")
@@ -246,57 +246,36 @@ if __name__ == "__main__":
 
     start_time = time.time()
     
-    # Progress step breakdown (total: 57 steps):
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Setup (4 steps):
-    #   1. Starting allium
-    #   2. Creating output directory
-    #   3. Output directory ready
-    #   4. Initializing relay data
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - API Fetching (18 steps, FIXED count):
-    #   - Section start (1)
-    #   - Starting threaded API fetching (1)
-    #   - 7 API workers start messages (7) - details, uptime, bandwidth, aroi, exit_dns_health, collector, descriptors
-    #   - 7 API workers complete messages (7)
-    #   - All workers completed (1)
-    #   - Section end (1)
-    #   Note: Intermediate messages (cache status, parsing, etc.) are logged
-    #   but don't increment the counter, making total predictable.
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - Data Processing (4 steps):
-    #   - Section start (1)
-    #   - Creating relay set (1) - internal messages don't increment
-    #   - Relay set created (1)
-    #   - Section end (1)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Page Generation (33 steps):
-    #   - Details API data loaded (1)
-    #   - Section start (1)
-    #   - Index page (generating + generated) x2
-    #   - Top 500 page x2
-    #   - All relays page x2
-    #   - AROI leaderboards page x2
-    #   - Network health dashboard x2
-    #   - Directory authorities x2
-    #   - API diagnostics page x2
-    #   - Miscellaneous sorted pages x2
-    #   - 7 key type pages complete (family, contact, as, country, flag, platform, first_seen)
-    #   - Individual relay pages x2
-    #   - Static files x2
-    #   - Search index x2
-    #   - Prometheus metrics x2
-    #   - Section end (1)
-    #   - Completion message (1)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
-    setup_steps = 4
-    coordinator_steps = 22  # API Fetching (18) + Data Processing (4)
-    page_generation_steps = 35  # Page generation and completion (+2 for Prometheus metrics)
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 59 total steps
+    # Progress step accounting - DERIVED from the structures that emit the
+    # steps, so adding an API worker or page type updates the total
+    # automatically (hard-coded 4+22+35 previously drifted: comments said
+    # 57/59 while runs logged 61, and --apis details overcounted).
+    from lib.coordinator import Coordinator
+    from lib.site_generator import STANDALONE_PAGES, SORTED_PAGE_KEYS
 
-    # Create unified progress logger
-    progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
+    # Setup: starting, creating output dir, dir ready, init relay data
+    setup_steps = 4
+
+    # API fetching: section start + threaded-start + one start and one
+    # complete per enabled worker + all-workers-complete + section end;
+    # data processing: section start, creating relay set, created, section
+    # end (intermediate messages log without incrementing the counter).
+    enabled_workers = sum(
+        1 for _ in Coordinator.iter_enabled_worker_entries(args.enabled_apis))
+    coordinator_steps = (4 + 2 * enabled_workers) + 4
+
+    # Page generation: details-loaded + section start, generating+generated
+    # per standalone page, misc sorted pages x2, one completion per detail
+    # page key, then relay pages / static files / search index / prometheus
+    # metrics x2 each, section end + completion message.
+    page_generation_steps = (2 + 2 * len(STANDALONE_PAGES)
+                             + 2 + len(SORTED_PAGE_KEYS)
+                             + 2 + 2 + 2 + 2 + 2)
+
+    total_steps = setup_steps + coordinator_steps + page_generation_steps
+
+    # Create the single ProgressLogger threaded through the whole pipeline
+    progress_logger = ProgressLogger(start_time, total_steps, args.progress)
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
