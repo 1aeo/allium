@@ -195,6 +195,22 @@ class TestDataFactory:
         entry.reliability_average = f'{90.0 + rank:.1f}%'
         entry.unique_ipv4_count = 10 + rank
         entry.unique_ipv6_count = 5 + rank
+        # Diversity-board bandwidth columns and breakdown details/tooltips
+        # (representative non-empty values so template branches that read
+        # these fields fail loudly if a field is renamed or removed)
+        entry.non_linux_bandwidth = f'{0.5 + (rank * 0.05):.1f}'
+        entry.non_linux_bandwidth_unit = 'MB/s'
+        entry.non_eu_bandwidth = f'{0.5 + (rank * 0.05):.1f}'
+        entry.non_eu_bandwidth_unit = 'MB/s'
+        entry.platform_breakdown_details = 'Win: 2, FreeBSD: 1'
+        entry.platform_breakdown_tooltip = 'Platform Distribution: 2 Win relays, 1 FreeBSD relays'
+        entry.geographic_breakdown_details = 'US: 2, JP: 1'
+        entry.geographic_breakdown_tooltip = '2 relays in US, 1 relay in JP'
+        entry.diversity_breakdown_tooltip = 'Diversity breakdown tooltip'
+        entry.rare_country_tooltip = 'Rare country tooltip'
+        entry.veteran_tooltip = 'Veteran tooltip'
+        entry.reliability_tooltip = 'Reliability tooltip'
+        entry.ip_address_tooltip = 'IP address tooltip'
         return entry
 
 

@@ -10,7 +10,7 @@
 
 - **Static site output** in `allium/www/` — serve locally or deploy anywhere static files can be hosted
 - **Relay + operator analytics** — bandwidth, consensus weight, diversity views, uptime/reliability, and more
-- **AROI leaderboards** — 18 specialized categories recognizing authenticated relay operators
+- **AROI leaderboards** — 21 specialized categories recognizing authenticated relay operators
 
 ### Why Allium?
 
@@ -96,11 +96,11 @@ cd www && python3 -m http.server 8000
 </details>
 
 <details>
-<summary><strong>AROI Leaderboards (20 Categories)</strong></summary>
+<summary><strong>AROI Leaderboards (21 Categories)</strong></summary>
 
 Authenticated Relay Operator Identification system ranking verified operators:
 
-**Capacity**: Bandwidth Contributed, Consensus Weight Leaders  
+**Capacity**: Bandwidth Contributed, Consensus Weight Leaders, Total Data Transferred Champions (5yr)  
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
 **Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
 **Diversity** (two co-equal boards per dimension — Volume = scale of non-dominant contribution, Breadth = distinct spread within one operator): Diversity All-Rounders (overall), Non-Linux Powerhouses (platform volume), OS Polyglots (platform breadth, 2+ distinct OSes incl. Linux), Global Powerhouses (non-EU volume), Jurisdiction Globetrotters (non-EU breadth), Frontier Builders (rare-country breadth)  
