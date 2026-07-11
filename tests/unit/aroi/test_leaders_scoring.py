@@ -40,6 +40,16 @@ def _make_operator(**overrides):
         'bandwidth_5y_score': 0.0,
         'validated_relay_count': 0,
         'total_data_transferred': 0,
+        # Diversity Index fields (annotated by diversity_index.annotate_operators
+        # in the production pipeline before _rank_operators runs)
+        'diversity_index': 0,
+        'geo_score': 0,
+        'platform_score': 0,
+        'network_score': 0,
+        'scale_score': 0,
+        'as_rarity_sum': 0.0,
+        'rare_as_count': 0,
+        'diverse_relay_count': 0,
     }
     base.update(overrides)
     return base
@@ -286,6 +296,7 @@ class TestDistinctDiversityMetrics:
             _rank_operators,
             _format_leaderboard_entries,
         )
+        from allium.lib.diversity_index import annotate_operators
 
         instance = self._build_relays_instance([
             ('Linux', 'DE'),   # EU
@@ -307,6 +318,9 @@ class TestDistinctDiversityMetrics:
         instance.timestamp = '2026-01-01 00:00:00'
 
         ops = _collect_operator_metrics(instance)
+        # Production pipeline annotates Diversity Index fields between
+        # collection and ranking (network-adaptive yardsticks)
+        annotate_operators(ops, n_countries=5, n_ases=1)
         boards = _rank_operators(ops)
         formatted = _format_leaderboard_entries(boards, ops, instance)
 

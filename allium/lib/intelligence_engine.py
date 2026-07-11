@@ -171,7 +171,8 @@ class IntelligenceEngine:
                 'regional_concentration_tooltip': 'Regional analysis unavailable'
             }},
             'capacity_distribution': {'template_optimized': {
-                'gini_coefficient': '0.000', 'diversity_status': 'UNKNOWN',
+                'gini_coefficient': '0.000', 'capacity_spread_status': 'UNKNOWN',
+                'capacity_spread_phrase': 'insufficient data',
                 'exit_capacity_status': 'UNKNOWN', 'guard_capacity_percentage': '0.0',
                 'exit_capacity_percentage': '0.0', 'gini_tooltip': 'Gini coefficient calculation unavailable'
             }},
@@ -411,18 +412,30 @@ class IntelligenceEngine:
             gini = self._calculate_gini_coefficient(sorted(consensus_weights))
             template_values['gini_coefficient'] = f"{gini:.3f}"
             
+            # capacity_spread_status: Gini measures INEQUALITY of capacity, not
+            # diversity (renamed from the misleading 'diversity_status').
+            # The verdict word carries the judgment; the shared tooltip always
+            # explains the Gini scale so "is high or low good?" is unambiguous.
+            gini_explainer = (
+                f"Gini coefficient {gini:.3f}. Measures how evenly network capacity is "
+                f"spread across relays: 0.0 = perfectly even (best), 1.0 = one relay "
+                f"holds everything (worst). Lower is better. Under 0.4 = EXCELLENT "
+                f"spread, 0.4-0.6 = GOOD, over 0.6 = POOR (concentrated)."
+            )
             if gini < 0.4:
-                template_values['diversity_status'] = 'EXCELLENT'
-                template_values['gini_tooltip'] = 'Low inequality - excellent capacity distribution'
+                template_values['capacity_spread_status'] = 'EXCELLENT'
+                template_values['capacity_spread_phrase'] = 'capacity evenly spread across many relays'
             elif gini < 0.6:
-                template_values['diversity_status'] = 'GOOD'
-                template_values['gini_tooltip'] = 'Moderate inequality - good capacity distribution'
+                template_values['capacity_spread_status'] = 'GOOD'
+                template_values['capacity_spread_phrase'] = 'capacity reasonably spread across relays'
             else:
-                template_values['diversity_status'] = 'POOR'
-                template_values['gini_tooltip'] = 'High inequality - concentrated capacity distribution'
+                template_values['capacity_spread_status'] = 'POOR'
+                template_values['capacity_spread_phrase'] = 'a few relays hold most capacity'
+            template_values['gini_tooltip'] = gini_explainer
         else:
             template_values['gini_coefficient'] = '0.000'
-            template_values['diversity_status'] = 'UNKNOWN'
+            template_values['capacity_spread_status'] = 'UNKNOWN'
+            template_values['capacity_spread_phrase'] = 'insufficient data'
             template_values['gini_tooltip'] = 'Insufficient data for Gini calculation'
         
         # Guard and Exit capacity analysis
@@ -605,7 +618,13 @@ class IntelligenceEngine:
                 else:
                     geo_rating = "Great"
                 
-                geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
+                # Q6 tweak (reviewer-approved): append the relay count so the
+                # country spread is readable in context, e.g.
+                # "Great, 14 countries (15 relays)"
+                geo_risk = (
+                    f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'} "
+                    f"({total_relays} relay{'' if total_relays == 1 else 's'})"
+                )
                 
                 # 4. Performance Insights - using pre-computed data
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]

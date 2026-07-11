@@ -531,7 +531,12 @@ Network Health Dashboard
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" class="al-link-plain">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
-                <!-- NEW: Top 3 Countries by Consensus Weight -->
+                <!-- Concentration & Jurisdiction: these metrics measure how
+                     concentrated capacity is (geographically and by legal
+                     jurisdiction) — the network-level mirror of operator
+                     diversity, deliberately NOT labeled "diversity" -->
+                <div style="font-size: 0.85em; font-weight: bold; color: #666; margin: 8px 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px;" title="How concentrated the network's capacity is across countries and legal jurisdictions. Lower concentration = more resilient network.">Concentration &amp; Jurisdiction</div>
+                <!-- Top 3 Countries by Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     {% for country in relays.json.network_health.top_3_countries %}
                     <div class="metric-item" title="Country ranked #{{ country.rank }} by consensus weight concentration in the Tor network.">
@@ -557,15 +562,17 @@ Network Health Dashboard
                 </div>
                 <!-- Second Row: Five Eyes and Fourteen Eyes Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Total consensus weight held by relays in Five Eyes intelligence alliance countries (US, UK, CA, AU, NZ). Shows Five Eyes influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in Five Eyes intelligence alliance countries (US, UK, CA, AU, NZ). Measures jurisdictional concentration of network routing power.">
                         <span class="metric-value">{{ relays.json.network_health.jurisdiction_five_eyes }}%</span>
                         <span class="metric-label">Five Eyes Consensus Weight</span>
                     </div>
-                    <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Shows extended intelligence alliance influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Measures extended jurisdictional concentration of network routing power.">
                         <span class="metric-value">{{ relays.json.network_health.jurisdiction_fourteen_eyes }}%</span>
                         <span class="metric-label">Fourteen Eyes Consensus Weight</span>
                     </div>
                 </div>
+                <!-- Participation & Reach -->
+                <div style="font-size: 0.85em; font-weight: bold; color: #666; margin: 8px 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px;" title="Where operators and relay capabilities are located.">Participation &amp; Reach</div>
                 <!-- Top 3 Countries by Validated AROI Operators -->
                 {% if relays.json.network_health.top_3_aroi_countries %}
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
