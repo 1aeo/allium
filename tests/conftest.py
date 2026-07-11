@@ -370,6 +370,13 @@ def uptime_data():
 
 
 @pytest.fixture
+def stub_bandwidth_formatter():
+    """Lightweight bandwidth formatter stub for AROI leaderboard unit tests."""
+    from helpers.fixtures import StubBandwidthFormatter
+    return StubBandwidthFormatter()
+
+
+@pytest.fixture
 def mock_aroi_leaderboard_entry():
     """Fixture that creates a mock AROI leaderboard entry.
 
