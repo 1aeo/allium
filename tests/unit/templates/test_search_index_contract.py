@@ -2,23 +2,25 @@
 
 import json
 import re
+from typing import Any, Dict
 
 from allium.lib.aroi_validation import get_v3_search_index_thresholds
 from allium.lib.search_index import PARALLEL_THRESHOLD, generate_search_index
 
 
-def _generate_index(tmp_path, relays_data, filename, use_parallel):
+def _generate_index(
+        tmp_path, relays_data, filename, use_parallel) -> Dict[str, Any]:
     output_path = tmp_path / filename
     generate_search_index(
         relays_data,
         str(output_path),
-        validated_aroi_domains={'example.org'},
+        validated_aroi_domains={'zeta.example', 'example.org'},
         use_parallel=use_parallel,
     )
     return json.loads(output_path.read_text(encoding='utf-8'))
 
 
-def _assert_search_index_contract(index):
+def _assert_search_index_contract(index) -> None:
     assert {'meta', 'relays', 'families', 'lookups'}.issubset(index)
     assert isinstance(index['meta'].get('version'), str)
     assert re.fullmatch(r'\d+\.\d+', index['meta']['version'])
@@ -37,12 +39,15 @@ def _assert_search_index_contract(index):
     assert {'f', 'n', 'as', 'cc', 'ip', 'a', 'c'}.issubset(relay)
 
 
-def _assert_lookup_key_order(index):
+def _assert_lookup_key_order(index) -> None:
     lookups = index['lookups']
     assert list(lookups['as_names']) == sorted(lookups['as_names'])
     assert list(lookups['country_names']) == sorted(lookups['country_names'])
     assert lookups['platforms'] == sorted(lookups['platforms'])
     assert lookups['flags'] == sorted(lookups['flags'])
+    assert len(lookups['validated_aroi_domains']) >= 2
+    assert lookups['validated_aroi_domains'] == sorted(
+        lookups['validated_aroi_domains'])
 
 
 def test_generated_search_index_contract(
@@ -60,22 +65,27 @@ def test_generated_search_index_contract(
 
 def test_generated_search_index_contract_parallel(
         tmp_path, search_index_parallel_contract_relays_data):
+    parallel_filename = 'parallel-search-index.json'
+    sequential_filename = 'sequential-search-index.json'
+
     parallel_index = _generate_index(
         tmp_path,
         search_index_parallel_contract_relays_data,
-        'parallel-search-index.json',
+        parallel_filename,
         use_parallel=True,
     )
     sequential_index = _generate_index(
         tmp_path,
         search_index_parallel_contract_relays_data,
-        'sequential-search-index.json',
+        sequential_filename,
         use_parallel=False,
     )
 
     assert parallel_index['meta']['relay_count'] > PARALLEL_THRESHOLD
     _assert_search_index_contract(parallel_index)
     _assert_lookup_key_order(parallel_index)
+    assert ((tmp_path / parallel_filename).read_bytes() ==
+            (tmp_path / sequential_filename).read_bytes())
     assert parallel_index['lookups'] == sequential_index['lookups']
     assert parallel_index['relays'] == sequential_index['relays']
 
