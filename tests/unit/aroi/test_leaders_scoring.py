@@ -275,46 +275,110 @@ class TestDistinctDiversityMetrics:
         # ...but only 2 distinct non-EU countries (breadth metric)
         assert metrics['non_eu_country_count'] == 2
 
-    def test_geographic_achievement_uses_non_eu_countries_only(self):
-        """Regression test (PR #217 Bugbot): the non-EU boards' achievement
-        title must be derived from the operator's NON-EU countries only.
-        An EU-heavy operator with a single US relay must get a North
-        America title, not a 'Europe Champion' title, on the non-EU
-        podium."""
+    def _format_boards(self, relay_specs, stub_bandwidth_formatter) -> dict:
+        """Build relays, attach shared stub formatter, return formatted boards."""
         from allium.lib.aroileaders import (
             _collect_operator_metrics,
             _rank_operators,
             _format_leaderboard_entries,
         )
 
-        instance = self._build_relays_instance([
+        instance = self._build_relays_instance(relay_specs)
+        instance.bandwidth_formatter = stub_bandwidth_formatter
+        instance.timestamp = '2026-01-01 00:00:00'
+        ops = _collect_operator_metrics(instance)
+        boards = _rank_operators(ops)
+        return _format_leaderboard_entries(boards, ops, instance)
+
+    def test_geographic_achievement_uses_non_eu_countries_only(
+        self, stub_bandwidth_formatter
+    ):
+        """Regression test (PR #217 Bugbot): the non-EU boards' achievement
+        title must be derived from the operator's NON-EU countries only.
+        An EU-heavy operator with a single US relay must get a North
+        America title, not a 'Europe Champion' title, on the non-EU
+        podium."""
+        formatted = self._format_boards([
             ('Linux', 'DE'),   # EU
             ('Linux', 'FR'),   # EU
             ('Linux', 'NL'),   # EU
             ('Linux', 'ES'),   # EU
             ('Linux', 'US'),   # the ONLY non-EU relay
-        ])
-
-        # Stub bandwidth formatter for _format_leaderboard_entries
-        class _StubFormatter:
-            def determine_unit(self, value):
-                return 'MB/s'
-
-            def format_bandwidth_with_unit(self, value, unit, decimal_places=1):
-                return f'{value / 1e6:.{decimal_places}f}'
-
-        instance.bandwidth_formatter = _StubFormatter()
-        instance.timestamp = '2026-01-01 00:00:00'
-
-        ops = _collect_operator_metrics(instance)
-        boards = _rank_operators(ops)
-        formatted = _format_leaderboard_entries(boards, ops, instance)
+        ], stub_bandwidth_formatter)
 
         entry = formatted['leaderboards']['non_eu_breadth'][0]
         # Derived from ['US'] only -> North America title, never a
         # European one (old bug: all 5 countries -> 'Europe Champion').
         assert entry['geographic_achievement'] == 'North America Champion'
         assert 'Europe' not in entry['geographic_achievement']
+
+    def test_diversity_summary_cells_omit_primary_unit_words(
+        self, stub_bandwidth_formatter
+    ):
+        """Key Metric cells for the four diversity boards use a bare primary
+        count (column header already names the unit) with a labeled
+        parenthetical for the tiebreaker — matching other numeric columns.
+        """
+        import re
+
+        # Multi-OS, multi-non-EU operator so all four boards have an entry.
+        formatted = self._format_boards([
+            ('Linux', 'DE'),      # EU, Linux
+            ('FreeBSD', 'US'),    # non-EU, non-Linux
+            ('FreeBSD', 'US'),    # non-EU, non-Linux (same country)
+            ('OpenBSD', 'JP'),    # non-EU, non-Linux
+        ], stub_bandwidth_formatter)
+        lbs = formatted['leaderboards']
+
+        # Metrics: platform_count=3 (Linux/FreeBSD/OpenBSD), non_linux=3,
+        # non_eu_count=3, non_eu_country_count=2 (US, JP)
+        pv = lbs['platform_volume'][0]['platform_volume_summary']
+        pb = lbs['platform_breadth'][0]['platform_breadth_summary']
+        nv = lbs['non_eu_volume'][0]['non_eu_volume_summary']
+        nb = lbs['non_eu_breadth'][0]['non_eu_breadth_summary']
+
+        assert pv == '3 (3 OSes)'
+        assert pb == '3 (3 non-Linux relays)'
+        assert nv == '3 (2 countries)'
+        assert nb == '2 (3 relays)'
+
+        assert re.fullmatch(r'\d+ \(\d+ OS(es)?\)', pv)
+        assert re.fullmatch(r'\d+ \(\d+ non-Linux relays?\)', pb)
+        assert re.fullmatch(r'\d+ \(\d+ countr(y|ies)\)', nv)
+        assert re.fullmatch(r'\d+ \(\d+ relays?\)', nb)
+
+        # Primary unit words must not appear outside the parenthetical.
+        assert 'non-Linux' not in pv.split('(')[0]
+        assert 'OS' not in pb.split('(')[0]
+        assert 'relay' not in nv.split('(')[0]
+        assert 'countr' not in nb.split('(')[0]
+
+    def test_diversity_summary_cells_use_singular_labels(
+        self, stub_bandwidth_formatter
+    ):
+        """Parenthetical tiebreaker labels use singular forms when count is 1."""
+        # FreeBSD-only non-EU: exercises singular OS / country / relay.
+        formatted = self._format_boards([
+            ('FreeBSD', 'US'),
+        ], stub_bandwidth_formatter)
+        lbs = formatted['leaderboards']
+
+        assert lbs['platform_volume'][0]['platform_volume_summary'] == '1 (1 OS)'
+        assert lbs['non_eu_volume'][0]['non_eu_volume_summary'] == '1 (1 country)'
+        assert lbs['non_eu_breadth'][0]['non_eu_breadth_summary'] == '1 (1 relay)'
+        # Single-OS operators do not qualify for OS Polyglots (>= 2 OSes).
+        assert not any(
+            (e.get('display_name') or e.get('aroi_domain')) == 'example.com'
+            for e in lbs.get('platform_breadth', [])
+        )
+
+        # Linux + one FreeBSD: breadth qualifies with singular non-Linux relay.
+        formatted2 = self._format_boards([
+            ('Linux', 'DE'),
+            ('FreeBSD', 'US'),
+        ], stub_bandwidth_formatter)
+        pb = formatted2['leaderboards']['platform_breadth'][0]['platform_breadth_summary']
+        assert pb == '2 (1 non-Linux relay)'
 
 
 class TestV3TierLeaderboardPropagation:
