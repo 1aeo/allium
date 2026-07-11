@@ -61,7 +61,7 @@ Each diversity dimension has two co-equal boards — Volume (relay count on the
 non-dominant side of the network) and Breadth (distinct spread within one
 operator) — so neither kind of diversity is buried under the other's metric.
 
-- **12. Diversity All-Rounders (Overall)** - Multi-factor diversity scoring
+- **12. Diversity All-Rounders (Overall)** - Diversity Index (0-100): mean of four co-equal sub-scores (Geographic, Platform, Network, Scale = diverse relays differing from the operator's dominant OS/country/AS); every yardstick derived from the live network each run
 - **13. Non-Linux Powerhouses (Platform Volume)** - Non-Linux relay count (distinct OS tiebreaker)
 - **14. OS Polyglots (Platform Breadth)** - Distinct OSes incl. Linux, 2+ to qualify (non-Linux relay tiebreaker)
 - **15. Global Powerhouses (Non-EU Volume)** - Non-EU relay count (distinct country tiebreaker)
