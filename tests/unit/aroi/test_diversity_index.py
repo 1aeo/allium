@@ -70,6 +70,30 @@ class TestCountDiverseRelays:
         # mode country is c0 (2 relays); the other 13 differ
         assert count_diverse_relays(relays) == 13
 
+    def test_count_is_order_independent_under_tied_modes(self):
+        """CodeRabbit (PR #222): tied modes must break deterministically
+        (lexicographically smallest), so the same relay multiset yields the
+        same diverse-relay count regardless of input order."""
+        from itertools import permutations
+        relays = [
+            _relay('A', 'X', '1'),
+            _relay('A', 'Y', '2'),
+            _relay('B', 'X', '2'),
+            _relay('B', 'Y', '1'),
+        ]
+        counts = {count_diverse_relays(list(p)) for p in permutations(relays)}
+        assert len(counts) == 1, f"order-dependent counts: {counts}"
+        # Deterministic modes = (A, X, 1) -> only relay (A, X, 1) matches all
+        assert counts == {3}
+
+    def test_tied_mode_breaks_to_smallest_key(self):
+        # 1x FreeBSD + 1x Linux (tie): mode platform must be 'FreeBSD'
+        # (lexicographically smallest), regardless of insertion order
+        for order in ([_relay('Linux'), _relay('FreeBSD')],
+                      [_relay('FreeBSD'), _relay('Linux')]):
+            # mode = FreeBSD -> the Linux relay is the diverse one
+            assert count_diverse_relays(order) == 1
+
 
 class TestNetworkAdaptiveCaps:
     def test_caps_derive_from_network_structure(self):
@@ -153,6 +177,17 @@ class TestOperatorScores:
                     'scale_score', 'diversity_index'):
             assert scores[key] == 100
 
+    def test_index_equals_mean_of_displayed_rounded_scores(self):
+        """CodeRabbit (PR #222): the tooltip states the Index is the average
+        of the four visible scores, so it must be computed from the ROUNDED
+        components, not the raw values."""
+        scores = compute_operator_scores(_operator(
+            country_count=3, non_eu_count=7, platform_count=2, non_linux_count=3,
+            unique_as_count=4, as_rarity_sum=11.0, diverse_relay_count=9), self.CAPS)
+        expected = round((scores['geo_score'] + scores['platform_score']
+                          + scores['network_score'] + scores['scale_score']) / 4)
+        assert scores['diversity_index'] == expected
+
 
 class TestAnnotateOperators:
     def test_annotation_adds_scores_and_tooltips(self):
@@ -170,6 +205,20 @@ class TestAnnotateOperators:
         assert str(caps['countries']) in a['geo_cell_tooltip']
         assert 'diverse relays' in a['scale_cell_tooltip']
         assert 'four co-equal components' in a['index_tooltip']
+
+    def test_small_population_tooltips_say_largest_available(self):
+        """CodeRabbit (PR #222): with fewer than 5 operators the volume caps
+        fall back to the smallest available value, so tooltips must not claim
+        a '5th-largest' cohort."""
+        ops = {'only': _operator(non_eu_count=3, diverse_relay_count=3)}
+        annotate_operators(ops, n_countries=10, n_ases=100)
+        assert 'largest available' in ops['only']['geo_cell_tooltip']
+        assert '5th-largest' not in ops['only']['scale_cell_tooltip']
+
+    def test_full_population_tooltips_say_5th_largest(self):
+        ops = {f'op{i}': _operator(non_eu_count=i + 1) for i in range(6)}
+        annotate_operators(ops, n_countries=10, n_ases=100)
+        assert "5th-largest" in ops['op0']['geo_cell_tooltip']
 
 
 class TestCapacitySpreadRename:
@@ -200,6 +249,11 @@ class TestCapacitySpreadRename:
         values = engine._layer13_capacity_distribution()['template_optimized']
         assert 'Lower is better' in values['gini_tooltip']
         assert '0.0 = perfectly even (best)' in values['gini_tooltip']
+        # CodeRabbit (PR #222): finite-sample Gini max is (n-1)/n, so the
+        # tooltip must not claim 1.0 means "one relay holds everything";
+        # and the POOR band starts AT 0.6 (gini >= 0.6), not above it.
+        assert 'approaching' in values['gini_tooltip']
+        assert '0.6 and above = POOR' in values['gini_tooltip']
 
 
 class TestGeoLineRelayCount:
