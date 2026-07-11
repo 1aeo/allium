@@ -103,9 +103,9 @@ def get_v3_search_index_thresholds() -> Dict[str, int]:
     """
     return {
         'explorer': 1,
-        'migrating': int(round(V3_TIER_MIGRATING * 100)),
-        'mostly': int(round(V3_TIER_MOSTLY * 100)),
-        'complete': int(round(V3_TIER_COMPLETE * 100)),
+        'migrating': round(V3_TIER_MIGRATING * 100),
+        'mostly': round(V3_TIER_MOSTLY * 100),
+        'complete': round(V3_TIER_COMPLETE * 100),
     }
 
 

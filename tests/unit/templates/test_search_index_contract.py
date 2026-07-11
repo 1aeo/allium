@@ -33,7 +33,14 @@ def _assert_search_index_contract(index) -> None:
         'flags',
         'validated_aroi_domains',
     }.issubset(lookups)
-    assert lookups['v3_thresholds'] == get_v3_search_index_thresholds()
+    expected_v3_thresholds = {
+        'explorer': 1,
+        'migrating': 25,
+        'mostly': 75,
+        'complete': 100,
+    }
+    assert get_v3_search_index_thresholds() == expected_v3_thresholds
+    assert lookups['v3_thresholds'] == expected_v3_thresholds
 
     relay = index['relays'][0]
     assert {'f', 'n', 'as', 'cc', 'ip', 'a', 'c'}.issubset(relay)
