@@ -94,6 +94,21 @@ V3_TIER_COMPLETE = 1.0      # 100% of relays on v3
 V3_LISTING_ICON_THRESHOLD = V3_TIER_MIGRATING
 
 
+def get_v3_search_index_thresholds() -> Dict[str, int]:
+    """Return v3 tier thresholds in search-index JSON units.
+
+    The search index exposes percentages as integers because the Pages
+    Function is JavaScript and should not duplicate Allium's float constants.
+    ``explorer`` is the one count-based threshold: at least one v3 relay.
+    """
+    return {
+        'explorer': 1,
+        'migrating': round(V3_TIER_MIGRATING * 100),
+        'mostly': round(V3_TIER_MOSTLY * 100),
+        'complete': round(V3_TIER_COMPLETE * 100),
+    }
+
+
 # Module-state for one-time schema warning logging.
 _warned_schema_versions = set()
 
