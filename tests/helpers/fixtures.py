@@ -213,10 +213,10 @@ class TestDataFactory:
         entry.non_eu_count = 1 + (rank // 2)
         entry.non_eu_count_with_percentage = f'{1 + (rank // 2)} ({50 + rank}%)'
         entry.non_eu_country_count = 1 + (rank // 4)
-        entry.platform_volume_summary = f'{1 + (rank // 3)} non-Linux relays ({1 + (rank // 3)} OSes)'
-        entry.platform_breadth_summary = f'{1 + (rank // 3)} OSes ({1 + (rank // 3)} non-Linux relays)'
-        entry.non_eu_volume_summary = f'{1 + (rank // 2)} relays ({1 + (rank // 4)} countries)'
-        entry.non_eu_breadth_summary = f'{1 + (rank // 4)} countries ({1 + (rank // 2)} relays)'
+        entry.platform_volume_summary = f'{1 + (rank // 3)} ({1 + (rank // 3)} OSes)'
+        entry.platform_breadth_summary = f'{1 + (rank // 3)} ({1 + (rank // 3)} non-Linux relays)'
+        entry.non_eu_volume_summary = f'{1 + (rank // 2)} ({1 + (rank // 4)} countries)'
+        entry.non_eu_breadth_summary = f'{1 + (rank // 4)} ({1 + (rank // 2)} relays)'
         entry.rare_country_count = 1 + (rank // 10)
         entry.relays_in_rare_countries = 1 + (rank // 8)
         entry.veteran_days = 100 + (rank * 10)

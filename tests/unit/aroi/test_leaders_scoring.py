@@ -316,6 +316,64 @@ class TestDistinctDiversityMetrics:
         assert entry['geographic_achievement'] == 'North America Champion'
         assert 'Europe' not in entry['geographic_achievement']
 
+    def test_diversity_summary_cells_omit_primary_unit_words(self):
+        """Key Metric cells for the four diversity boards use a bare primary
+        count (column header already names the unit) with a labeled
+        parenthetical for the tiebreaker — matching other numeric columns.
+        """
+        import re
+        from allium.lib.aroileaders import (
+            _collect_operator_metrics,
+            _rank_operators,
+            _format_leaderboard_entries,
+        )
+
+        # Multi-OS, multi-non-EU operator so all four boards have an entry.
+        instance = self._build_relays_instance([
+            ('Linux', 'DE'),      # EU, Linux
+            ('FreeBSD', 'US'),    # non-EU, non-Linux
+            ('FreeBSD', 'US'),    # non-EU, non-Linux (same country)
+            ('OpenBSD', 'JP'),    # non-EU, non-Linux
+        ])
+
+        class _StubFormatter:
+            def determine_unit(self, value):
+                return 'MB/s'
+
+            def format_bandwidth_with_unit(self, value, unit, decimal_places=1):
+                return f'{value / 1e6:.{decimal_places}f}'
+
+        instance.bandwidth_formatter = _StubFormatter()
+        instance.timestamp = '2026-01-01 00:00:00'
+
+        ops = _collect_operator_metrics(instance)
+        boards = _rank_operators(ops)
+        formatted = _format_leaderboard_entries(boards, ops, instance)
+        lbs = formatted['leaderboards']
+
+        # Metrics: platform_count=3 (Linux/FreeBSD/OpenBSD), non_linux=3,
+        # non_eu_count=3, non_eu_country_count=2 (US, JP)
+        pv = lbs['platform_volume'][0]['platform_volume_summary']
+        pb = lbs['platform_breadth'][0]['platform_breadth_summary']
+        nv = lbs['non_eu_volume'][0]['non_eu_volume_summary']
+        nb = lbs['non_eu_breadth'][0]['non_eu_breadth_summary']
+
+        assert pv == '3 (3 OSes)'
+        assert pb == '3 (3 non-Linux relays)'
+        assert nv == '3 (2 countries)'
+        assert nb == '2 (3 relays)'
+
+        assert re.fullmatch(r'\d+ \(\d+ OS(es)?\)', pv)
+        assert re.fullmatch(r'\d+ \(\d+ non-Linux relays?\)', pb)
+        assert re.fullmatch(r'\d+ \(\d+ countr(y|ies)\)', nv)
+        assert re.fullmatch(r'\d+ \(\d+ relays?\)', nb)
+
+        # Primary unit words must not appear outside the parenthetical.
+        assert 'non-Linux' not in pv.split('(')[0]
+        assert 'OS' not in pb.split('(')[0]
+        assert 'relay' not in nv.split('(')[0]
+        assert 'countr' not in nb.split('(')[0]
+
 
 class TestV3TierLeaderboardPropagation:
     """B4.test (re-opened): verify aroileaders.py uses the same tier
