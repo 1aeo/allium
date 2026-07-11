@@ -314,6 +314,70 @@ def sample_relay_data():
 
 
 @pytest.fixture
+def search_index_contract_relays_data():
+    """Small relay set for the search-index public contract tests."""
+    return {
+        'relays': [
+            {
+                'fingerprint': 'A' * 40,
+                'nickname': 'contractRelay',
+                'aroi_domain': 'example.org',
+                'contact_md5': '0123456789abcdef0123456789abcdef',
+                'as': 'AS64500',
+                'as_name': 'Example Network',
+                'country': 'DE',
+                'country_name': 'Germany',
+                'or_addresses': ['203.0.113.7:9001'],
+                'platform': 'Tor 0.4.8.x on Linux',
+                'flags': ['Running', 'Fast', 'Guard'],
+            }
+        ],
+        'sorted': {'family': {}},
+        'relays_published': '2026-05-05 00:00:00',
+    }
+
+
+@pytest.fixture
+def search_index_parallel_contract_relays_data():
+    """Relay set large enough to force search-index threaded processing."""
+    from allium.lib.search_index import PARALLEL_THRESHOLD
+
+    countries = [('de', 'Germany'), ('us', 'United States'),
+                 ('fr', 'France'), ('nl', 'Netherlands'), ('se', 'Sweden')]
+    relays = []
+    for i in range(PARALLEL_THRESHOLD + 200):
+        country, country_name = countries[i % len(countries)]
+        relays.append({
+            'fingerprint': f'{i:040X}',
+            'nickname': f'contractRelay{i}',
+            'aroi_domain': 'example.org' if i % 17 == 0 else '',
+            'contact_md5': f'{i % 65536:032x}',
+            'as': f'AS{i % 400}',
+            'as_name': f'Provider {i % 400}',
+            'country': country,
+            'country_name': country_name,
+            'or_addresses': [f'203.0.113.{i % 255}:9001'],
+            'platform': f'Tor 0.4.{i % 3}.x on Linux',
+            'flags': ['Running', 'Fast'] + (['Exit'] if i % 4 == 0 else []),
+        })
+
+    return {
+        'relays': relays,
+        'sorted': {'family': {}},
+        'relays_published': '2026-05-05 00:00:00',
+    }
+
+
+@pytest.fixture
+def sorted_json_cache_payload():
+    """Nested payload for verifying deterministic JSON cache rendering."""
+    return {
+        'z': 1,
+        'a': {'d': 4, 'b': 2},
+    }
+
+
+@pytest.fixture
 def onionoo_response():
     """Fixture that provides realistic onionoo API response data with 5 relays."""
     relays = []

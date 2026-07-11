@@ -440,8 +440,8 @@ class CollectorFetcher:
             result['errors'].append(f"consensus_method_info: {e}")
             result['consensus_method_info'] = {}
         
-        result['bw_authorities'] = list(self.bw_authorities)
-        result['ipv6_testing_authorities'] = list(self.ipv6_testing_authorities)
+        result['bw_authorities'] = sorted(self.bw_authorities)
+        result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
         result['timings'] = self._timings
         
         # Log performance metrics
@@ -604,20 +604,23 @@ class CollectorFetcher:
                 future = executor.submit(self._fetch_and_parse_vote, url, auth_fp)
                 future_to_auth[future] = auth_fp
             
+            fetched_votes = {}
             for future in concurrent.futures.as_completed(future_to_auth):
                 auth_fp = future_to_auth[future]
                 try:
                     vote_data = future.result()
                     if vote_data:
                         auth_name = AUTHORITIES.get(auth_fp, auth_fp[:8])
-                        votes[auth_name] = vote_data
-                        
+                        fetched_votes[auth_name] = vote_data
+
                         # Track if this authority runs a bandwidth scanner
                         if vote_data.get('has_bandwidth_file_headers'):
                             self.bw_authorities.add(auth_name)
                 except Exception as e:
                     logger.warning(f"Failed to fetch vote for {auth_fp}: {e}")
-        
+
+        votes = {auth_name: fetched_votes[auth_name]
+                 for auth_name in sorted(fetched_votes)}
         logger.info(f"Fetched {len(votes)} authority votes")
         return votes
     
@@ -872,7 +875,7 @@ class CollectorFetcher:
         self.relay_index = {}
         self.flag_thresholds = {}  # Extract thresholds in same loop
         
-        for auth_name, vote_data in self.votes.items():
+        for auth_name, vote_data in sorted(self.votes.items()):
             if not vote_data:
                 continue
             
@@ -885,7 +888,7 @@ class CollectorFetcher:
             if not relays:
                 continue
             
-            for fingerprint, relay_data in relays.items():
+            for fingerprint, relay_data in sorted(relays.items()):
                 if fingerprint not in self.relay_index:
                     self.relay_index[fingerprint] = {
                         'fingerprint': fingerprint,
@@ -908,7 +911,7 @@ class CollectorFetcher:
                 }
         
         # Add bandwidth measurements from bandwidth files
-        for fingerprint, bw_data in self.bandwidth_files.items():
+        for fingerprint, bw_data in sorted(self.bandwidth_files.items()):
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
         
