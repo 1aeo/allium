@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 # Import existing utilities (DRY - avoid reimplementing)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .string_utils import is_valid_aroi
+from .aroi_validation import get_v3_search_index_thresholds
 
 
 # =============================================================================
@@ -458,16 +459,10 @@ def generate_search_index(
             'flags': sorted(flags),
             'validated_aroi_domains': validated_aroi_list,
             # B5.1 (v1.6): tier thresholds for the Cloudflare Pages Function
-            # to use without hardcoding. Mirrors V3_TIER_* constants in
-            # aroi_validation.py exactly so contact-page pills, listing
-            # icons, leaderboard badges, and search-frontend badges
-            # all agree.
-            'v3_thresholds': {
-                'explorer': 1,    # >=1 v3 relay (special: count, not pct)
-                'migrating': 25,
-                'mostly': 75,
-                'complete': 100,
-            },
+            # to use without hardcoding. Sourced from aroi_validation.py so
+            # contact-page pills, listing icons, leaderboard badges, and
+            # search-frontend badges all agree.
+            'v3_thresholds': get_v3_search_index_thresholds(),
         }
     }
 

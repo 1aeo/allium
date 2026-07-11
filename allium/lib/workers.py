@@ -1229,7 +1229,8 @@ def _group_family_keys(fp_to_key):
     family_groups = {}
     for fp, key in fp_to_key.items():
         family_groups.setdefault(key, []).append(fp)
-    return {k: sorted(v) for k, v in family_groups.items() if v}
+    return {k: sorted(family_groups[k]) for k in sorted(family_groups)
+            if family_groups[k]}
 
 
 def _parse_descriptor_published(value):
@@ -1477,8 +1478,8 @@ def fetch_collector_descriptors(progress_logger=None):
                     
                     # Cache this file's parsed result
                     file_cache[filename] = {
-                        'cert': list(cert_fps),
-                        'no_cert': list(no_cert_fps),
+                        'cert': sorted(cert_fps),
+                        'no_cert': sorted(no_cert_fps),
                         'cert_keys': fp_to_family_key,
                         'cert_published': cert_published,
                         'no_cert_published': no_cert_published,
@@ -1584,7 +1585,7 @@ def fetch_collector_descriptors(progress_logger=None):
                     (prior_line_cert_fps - raw_line_cert_fps)
                     | (set(prior_fp_to_key.keys()) - set(raw_fp_to_key.keys()))
                 )
-                for fp in downgrade_candidates:
+                for fp in sorted(downgrade_candidates):
                     prev = pending_no_cert.get(fp, {})
                     count = int(prev.get('count', 0)) + 1
                     pending_no_cert[fp] = {
