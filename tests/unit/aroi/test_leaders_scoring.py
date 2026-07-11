@@ -275,7 +275,7 @@ class TestDistinctDiversityMetrics:
         # ...but only 2 distinct non-EU countries (breadth metric)
         assert metrics['non_eu_country_count'] == 2
 
-    def _format_boards(self, relay_specs, stub_bandwidth_formatter):
+    def _format_boards(self, relay_specs, stub_bandwidth_formatter) -> dict:
         """Build relays, attach shared stub formatter, return formatted boards."""
         from allium.lib.aroileaders import (
             _collect_operator_metrics,
