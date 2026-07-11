@@ -103,7 +103,7 @@ Authenticated Relay Operator Identification system ranking verified operators:
 **Capacity**: Bandwidth Contributed, Consensus Weight Leaders, Total Data Transferred Champions (5yr)  
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
 **Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
-**Diversity** (two co-equal boards per dimension — Volume = scale of non-dominant contribution, Breadth = distinct spread within one operator): Diversity All-Rounders (overall), Non-Linux Powerhouses (platform volume), OS Polyglots (platform breadth, 2+ distinct OSes incl. Linux), Global Powerhouses (non-EU volume), Jurisdiction Globetrotters (non-EU breadth), Frontier Builders (rare-country breadth)  
+**Diversity** (two co-equal boards per dimension — Volume = scale of non-dominant contribution, Breadth = distinct spread within one operator): Diversity All-Rounders (overall, ranked by a 0-100 Diversity Index averaging four co-equal Geographic/Platform/Network/Scale sub-scores with yardsticks derived from the live network), Non-Linux Powerhouses (platform volume), OS Polyglots (platform breadth, 2+ distinct OSes incl. Linux), Global Powerhouses (non-EU volume), Jurisdiction Globetrotters (non-EU breadth), Frontier Builders (rare-country breadth)  
 **Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions (with v2/v3 split columns + tiered migration badges 🔍/🔁/🚀/🏆)
 
 - Paginated rankings (Top 10, 11-20, 21-25) with CSS-only navigation

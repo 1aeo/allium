@@ -268,6 +268,29 @@ class TestDataFactory:
         entry.veteran_tooltip = 'Veteran tooltip'
         entry.reliability_tooltip = 'Reliability tooltip'
         entry.ip_address_tooltip = 'IP address tooltip'
+        # Diversity Index (Diversity All-Rounders Option-2 table).
+        # The index must equal the mean of the four component scores —
+        # matching production (compute_operator_scores averages the rounded
+        # components) so tests can't pass with impossible leaderboard data.
+        entry.geo_score = 40 + rank
+        entry.platform_score = 30 + rank
+        entry.network_score = 58 + rank
+        entry.scale_score = 20 + rank
+        entry.diversity_index = round(
+            (entry.geo_score + entry.platform_score
+             + entry.network_score + entry.scale_score) / 4
+        )  # = 37 + rank (integral mean by construction)
+        entry.rare_as_count = rank // 2
+        entry.diverse_relay_count = 5 + rank
+        entry.geo_cell = f'{2 + (rank // 5)} countries'
+        entry.platform_cell = f'{1 + (rank // 3)} OSes'
+        entry.network_cell = f'{1 + (rank // 2)} AS'
+        entry.scale_cell = f'{5 + rank} diverse relays'
+        entry.geo_cell_tooltip = 'Geographic score tooltip (yardstick)'
+        entry.platform_cell_tooltip = 'Platform score tooltip (yardstick)'
+        entry.network_cell_tooltip = 'Network score tooltip (yardstick)'
+        entry.scale_cell_tooltip = 'Scale score tooltip (yardstick)'
+        entry.index_tooltip = 'Diversity Index tooltip (four co-equal components)'
         return entry
 
 

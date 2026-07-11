@@ -20,7 +20,7 @@
     <ul style="margin-bottom: 15px;">
         <li><strong>Platforms</strong>: {{ relays.json['sorted'].get('platform', {})|length }} operating systems hosting relays currently detected</li>
 {{ misc.network_relays_bullet(relays) }}
-        <li><strong>Software Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_linux_percentage }}% Linux | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_windows_percentage }}% Windows | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_bsd_percentage }}% BSD variants</li>
+        <li><strong>Platform Concentration</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_linux_percentage }}% Linux | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_bsd_percentage }}% BSD variants | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_windows_percentage }}% Windows</li>
         {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>

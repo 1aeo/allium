@@ -26,7 +26,7 @@
                         {% elif category_key == "guard_operators" %}
                             <span title="Active guard relays serving as critical network entry points">{{ champion.guard_count }} guard relays</span>
                         {% elif category_key == "most_diverse" %}
-                            <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ champion.diversity_score }} diversity</span>
+                            <span title="{{ champion.index_tooltip }}">Diversity Index {{ champion.diversity_index }}/100</span>
                         {% elif category_key == "platform_volume" %}
                             <span title="Volume diversity: most non-Linux relays contributed to the network">{{ champion.non_linux_count }} non-Linux relays</span>
                         {% elif category_key == "platform_breadth" %}
@@ -141,7 +141,7 @@
                             {% elif performance_type == "guard_operators" %}
                                 <span title="Number of active guard relays serving as critical network entry points">{{ entry.guard_count }} active guard relays</span>
                             {% elif performance_type == "most_diverse" %}
-                                <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ entry.diversity_score }} diversity</span></span>
+                                <span title="{{ entry.index_tooltip }}">Index {{ entry.diversity_index }}/100 — {{ entry.geo_cell }}, {{ entry.platform_cell }}, {{ entry.network_cell }}, {{ entry.scale_cell }}</span>
                             {% elif performance_type == "platform_volume" %}
                                 <span title="Volume diversity: non-Linux relays contributed (primary ranking metric) with distinct OS count">{{ entry.platform_volume_summary }}</span>
                             {% elif performance_type == "platform_breadth" %}
@@ -272,7 +272,7 @@
                         {% endif %}
                         <td>
                             <strong>
-                            {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
+                            {% if category_key == 'most_diverse' %}<span title="{{ entry.index_tooltip if entry.index_tooltip else 'Diversity Index (0-100): average of the Geographic, Platform, Network and Scale sub-scores' }}">{{ entry.diversity_index }}</span>
                             {% elif category_key == 'platform_volume' %}<span title="Volume diversity: non-Linux relays contributed to the network (distinct OS count in parentheses)">{{ entry.platform_volume_summary }}</span>
                             {% elif category_key == 'platform_breadth' %}<span title="Breadth diversity: distinct operating systems including Linux (non-Linux relay count in parentheses)">{{ entry.platform_breadth_summary }}</span>
                             {% elif category_key == 'non_eu_volume' %}<span title="Volume diversity: relays outside the European Union (distinct country count in parentheses)">{{ entry.non_eu_volume_summary }}</span>
@@ -834,6 +834,40 @@
     </div>
 {% endmacro %}
 
+{# Diversity All-Rounders Table (paginated slice) - Option-2 display: plain
+   counts in cells, 0-100 sub-scores + today's network-derived yardsticks in
+   tooltips. Index (mean of the four co-equal sub-scores) is the ranking key. #}
+{% macro most_diverse_table_paginated(category_key, category_data, page_ctx, use_bits=false) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-category-table">
+            <thead>
+                <tr>
+                    <th title="Position in leaderboard">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Diversity Index (0-100): average of the Geographic, Platform, Network and Scale sub-scores — four co-equal components, each measured against yardsticks derived from today's network (recomputed every update)">Index</th>
+                    <th title="Geographic component: distinct countries (vs 10% of countries hosting relays today) + non-EU relays (vs today's top-5 operators). Hover a cell for the exact score and yardsticks.">Geographic</th>
+                    <th title="Platform component: distinct OSes incl. Linux (vs the most OSes any single operator runs today) + non-Linux relays (vs today's top-5 operators). Hover a cell for the exact score and yardsticks.">Platform</th>
+                    <th title="Network component: unique ASes (vs 1% of ASes hosting relays today) + AS rarity (vs today's top-5 operators). Hover a cell for the exact score and yardsticks.">Network</th>
+                    <th title="Scale component: diverse relays — relays differing from the operator's most-common OS, country or AS (vs today's top-5 operators). Rewards doing everything at larger scale with genuinely diverse relays.">Scale</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in category_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td><strong><span title="{{ entry.index_tooltip }}">{{ entry.diversity_index }}</span></strong></td>
+                    <td><span title="{{ entry.geo_cell_tooltip }}">{{ entry.geo_cell }}</span></td>
+                    <td><span title="{{ entry.platform_cell_tooltip }}">{{ entry.platform_cell }}</span></td>
+                    <td><span title="{{ entry.network_cell_tooltip }}">{{ entry.network_cell }}</span></td>
+                    <td><span title="{{ entry.scale_cell_tooltip }}">{{ entry.scale_cell }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
 {# Generic Ranking Table Paginated - Just the table part for pagination #}
 {% macro generic_ranking_table_paginated(category_key, category_data, page_ctx, use_bits=false) %}
     <div class="table-responsive">
@@ -845,9 +879,9 @@
                     {% if category_key not in ['platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders'] %}
                     <th title="{% if category_key == 'network_veterans' %}Total relay count: number of relays currently operated. For veterans, higher relay counts with early start dates result in higher veteran scores{% elif category_key == 'reliability_masters' %}Total relay count: number of relays contributing to reliability calculations. More relays provide larger sample size for uptime measurements{% elif category_key == 'legacy_titans' %}Total relay count: number of relays contributing to long-term reliability scores. Sustained relay operations over 5 years demonstrate commitment{% elif category_key == 'bandwidth_masters' %}Total relay count: number of relays contributing to bandwidth calculations. More relays provide larger sample size for bandwidth served measurements{% elif category_key == 'bandwidth_legends' %}Total relay count: number of relays contributing to long-term bandwidth scores. Sustained relay operations over 5 years demonstrate commitment{% else %}Total number of relays operated by this operator{% endif %}">Relays</th>
                     {% endif %}
+                    {# most_diverse renders via most_diverse_table_paginated, not this macro #}
                     <th title="Primary ranking metric for 
-                    {%- if category_key == 'most_diverse' -%}diversity score calculation
-                    {%- elif category_key == 'platform_volume' -%}volume diversity: non-Linux relay count (distinct OS count breaks ties)
+                    {%- if category_key == 'platform_volume' -%}volume diversity: non-Linux relay count (distinct OS count breaks ties)
                     {%- elif category_key == 'platform_breadth' -%}breadth diversity: distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties)
                     {%- elif category_key == 'non_eu_volume' -%}volume diversity: non-EU relay count (distinct country count breaks ties)
                     {%- elif category_key == 'non_eu_breadth' -%}breadth diversity: distinct non-EU country count (non-EU relay count breaks ties)
@@ -868,9 +902,7 @@
                     {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                     <th title="{% if category_key == 'network_veterans' %}Platform diversity: number of different operating systems used. Diversified platforms reduce monoculture risks and demonstrate technical sophistication{% elif category_key == 'reliability_masters' %}Platform diversity: number of different operating systems used. Platform diversity for reliable operators indicates varied technical infrastructure{% elif category_key == 'legacy_titans' %}Platform diversity: number of different operating systems used. Platform diversity for long-term operators shows sustained technical variety{% elif category_key == 'bandwidth_masters' %}Platform diversity: number of different operating systems used. Platform diversity for bandwidth served operators indicates varied technical infrastructure{% elif category_key == 'bandwidth_legends' %}Platform diversity: number of different operating systems used. Platform diversity for long-term bandwidth served operators shows sustained technical variety{% else %}Number of different operating systems used{% endif %}">Platforms</th>
                     {% endif %}
-                    {% if category_key == 'most_diverse' %}
-                    <th title="Number of unique Autonomous Systems (ASNs) used for network diversity">Unique AS</th>
-                    {% elif category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
+                    {% if category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
                     {% endif %}
                 </tr>
@@ -885,8 +917,7 @@
                     {% endif %}
                     <td>
                         <strong>
-                        {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
-                        {% elif category_key == 'platform_volume' %}<span title="Volume diversity: non-Linux relays contributed to the network (distinct OS count in parentheses)">{{ entry.platform_volume_summary }}</span>
+                        {% if category_key == 'platform_volume' %}<span title="Volume diversity: non-Linux relays contributed to the network (distinct OS count in parentheses)">{{ entry.platform_volume_summary }}</span>
                         {% elif category_key == 'platform_breadth' %}<span title="Breadth diversity: distinct operating systems including Linux (non-Linux relay count in parentheses)">{{ entry.platform_breadth_summary }}</span>
                         {% elif category_key == 'non_eu_volume' %}<span title="Volume diversity: relays outside the European Union (distinct country count in parentheses)">{{ entry.non_eu_volume_summary }}</span>
                         {% elif category_key == 'non_eu_breadth' %}<span title="Breadth diversity: distinct non-EU countries (non-EU relay count in parentheses)">{{ entry.non_eu_breadth_summary }}</span>
@@ -924,9 +955,7 @@
                     {% if category_key not in ['frontier_builders', 'non_eu_volume', 'non_eu_breadth', 'platform_volume', 'platform_breadth'] %}
                     <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                     {% endif %}
-                    {% if category_key == 'most_diverse' %}
-                    <td title="Number of unique Autonomous Systems providing network distribution">{{ entry.unique_as_count }}</td>
-                    {% elif category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
+                    {% if category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <td>
                         {% if category_key in ['platform_volume', 'platform_breadth'] %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
                         {% elif category_key in ['non_eu_volume', 'non_eu_breadth'] %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
@@ -1068,6 +1097,8 @@
         {{ guard_operators_table_complete(data_slice, use_bits, page_ctx) }}
     {% elif table_macro_name == 'validated_relays_table_complete' %}
         {{ validated_relays_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'most_diverse_table_paginated' %}
+        {{ most_diverse_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
     {% elif table_macro_name == 'generic_ranking_table_paginated' %}
         {{ generic_ranking_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
     {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
