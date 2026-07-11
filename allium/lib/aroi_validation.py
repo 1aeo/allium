@@ -42,7 +42,8 @@ ALL_PROOF_TYPES = V2_PROOF_TYPES + V3_PROOF_TYPES
 PROOF_TYPE_STAT_KEYS = tuple(p.replace('-', '_') for p in ALL_PROOF_TYPES)
 
 # Map proof type -> ciissversion that declares it. Used to detect operator
-# copy-paste mistakes during migration (e.g. 'ciissversion:2 proof:uri-familyid-ed25519').
+# copy-paste mistakes during migration (for example, declaring
+# 'ciissversion:2 proof:uri-familyid-ed25519').
 #
 # Two key forms are populated so callers can look up by either:
 #   - dashed form ('dns-rsa')      — used by relay ContactInfo strings
@@ -75,9 +76,11 @@ def get_proof_type_version(proof_type):
         return 'unknown'
     return PROOF_TYPE_VERSION.get(proof_type, 'unknown')
 
+
 # Schemas of aroivalidator latest.json that this build was tested against.
 # When upstream emits a schema number outside this tuple, A.1 logs a
-# one-time warning. Schema field appears in metadata.aroivalidator_schema_version.
+# one-time warning. Schema field appears in
+# metadata.aroivalidator_schema_version.
 AROIVALIDATOR_TESTED_SCHEMAS = (1, 2)
 
 # v3 migration tiers (operator-level): inclusive lower bounds.
@@ -141,7 +144,8 @@ def check_schema_version(validation_data: Optional[Dict],
         version_int = int(version)
     except (ValueError, TypeError):
         return None
-    if version_int not in AROIVALIDATOR_TESTED_SCHEMAS and version_int not in _warned_schema_versions:
+    if (version_int not in AROIVALIDATOR_TESTED_SCHEMAS and
+            version_int not in _warned_schema_versions):
         _warned_schema_versions.add(version_int)
         msg = (
             f"⚠️  AROI validator schema version {version_int} is newer than "
@@ -241,8 +245,10 @@ def _render_pasteable_example(example, fingerprint=None, aroi_domain=None):
 V3_CATEGORY_LABELS: Dict[str, Dict[str, Optional[str]]] = {
     'missing_family_ids': {
         'title': 'Onionoo not yet refreshed',
-        # Pasteable diagnostic: operator can verify state without waiting blind.
-        'example': ('curl "https://onionoo.torproject.org/details?lookup=<fingerprint>'
+        # Pasteable diagnostic: operator can verify state without waiting
+        # blind.
+        'example': ('curl "https://onionoo.torproject.org/details?'
+                    'lookup=<fingerprint>'
                     '&fields=family_ids" | jq   # should show your '
                     '.public_family_id within 24h of restarting Tor'),
         'spec_link': None,
@@ -254,7 +260,8 @@ V3_CATEGORY_LABELS: Dict[str, Dict[str, Optional[str]]] = {
                     'TXT "<contents of .public_family_id>"'),
         # v2 (RSA-fingerprint) — TXT record at the bare domain. Per
         # CIISS v2 the record value is "we-run-this-tor-relay <fp>".
-        'example_v2': ('<your-domain> TXT "we-run-this-tor-relay <fingerprint>"   '
+        'example_v2': ('<your-domain> TXT "we-run-this-tor-relay '
+                       '<fingerprint>"   '
                        '# CIISS v2 (RSA-fingerprint proof)'),
         'spec_link': None,
     },
@@ -333,8 +340,9 @@ V3_CATEGORY_LABELS: Dict[str, Dict[str, Optional[str]]] = {
     },
     'secret_key_leaked': {
         'title': '🚨 SECURITY: .secret_family_key published',
-        'example': ('tor --keygen-family <newfile>   '
-                    '# rotate IMMEDIATELY, then publish new .public_family_id'),
+        'example': (
+            'tor --keygen-family <newfile>   '
+            '# rotate IMMEDIATELY, then publish new .public_family_id'),
         'spec_link': None,
     },
     'ciissversion_unsupported': {
@@ -396,10 +404,13 @@ SHARED_ERROR_CATEGORIES = frozenset({
 # v2 and v3 rollups.
 V3_ONLY_ERROR_CATEGORIES = frozenset({
     'missing_family_ids',       # only v3: there are no family_ids in v2
-    'wrong_proof_type_rsa',     # only v3: a v3 contact accidentally declares uri-rsa
-    'missing_proof_field',      # only v3: v3 has the proof: field; v2 doesn't
+    # only v3: a v3 contact accidentally declares uri-rsa
+    'wrong_proof_type_rsa',
+    # only v3: v3 has the proof: field; v2 doesn't
+    'missing_proof_field',
     'secret_key_leaked',        # only v3: v2 has no secret_family_key concept
-    'ciissversion_unsupported', # only v3: v2 doesn't carry ciissversion at all
+    # only v3: v2 doesn't carry ciissversion at all
+    'ciissversion_unsupported',
 })
 
 
@@ -444,7 +455,8 @@ _CIISS_VERSION_RE = re.compile(
     r'\bciissversion:(' + '|'.join(SUPPORTED_CIISSVERSIONS) + r')\b',
     re.IGNORECASE,
 )
-# CIISS legacy: log when a v1 relay is observed (intentional ignore, not a crash).
+# CIISS legacy: log when a v1 relay is observed (intentional ignore, not a
+# crash).
 _CIISS_ANY_VERSION_RE = re.compile(r'\bciissversion:(\d+)\b', re.IGNORECASE)
 _PROOF_TYPE_RE = re.compile(
     r'\bproof:(' + '|'.join(re.escape(p) for p in ALL_PROOF_TYPES) + r')\b',
@@ -516,7 +528,8 @@ def _check_aroi_fields(contact: str) -> Dict:
     Check which AROI fields are present in a relay's contact string.
 
     Recognises both CIISS spec v2 (ciissversion:2 + dns-rsa/uri-rsa) and
-    CIISS spec v3 (ciissversion:3 + dns-familyid-ed25519 / uri-familyid-ed25519).
+    CIISS spec v3 (ciissversion:3 + dns-familyid-ed25519 /
+    uri-familyid-ed25519).
 
     Returns a dict with these keys (all boolean unless noted):
       - has_ciissversion: True if a SUPPORTED ciissversion (2 or 3) is declared
@@ -589,7 +602,9 @@ def _check_aroi_fields(contact: str) -> Dict:
                 _warned_unsupported_ciissversion.add(first_v)
                 logger.info(
                     "AROI: encountered unsupported ciissversion:%s — ignoring "
-                    "(supported: %s)", first_v, ','.join(SUPPORTED_CIISSVERSIONS)
+                    "(supported: %s)",
+                    first_v,
+                    ','.join(SUPPORTED_CIISSVERSIONS),
                 )
                 _record_warning('unsupported_ciissversion', first_v)
 
@@ -608,7 +623,8 @@ def _check_aroi_fields(contact: str) -> Dict:
                 _warned_unsupported_proof_type.add(first_pt)
                 logger.warning(
                     "AROI: unknown proof type '%s' — update ALL_PROOF_TYPES "
-                    "in aroi_validation.py to recognise new proof types", first_pt
+                    "in aroi_validation.py to recognise new proof types",
+                    first_pt,
                 )
                 _record_warning('unsupported_proof_type', first_pt)
 
@@ -713,57 +729,71 @@ def _categorize_by_missing_fields(aroi_fields: Dict, has_contact: bool) -> str:
 
 def _deduplicate_fingerprint_not_found_error(error: str) -> str:
     """
-    Deduplicate error messages that repeat "Fingerprint not found in URL" for multiple URLs.
-    
+    Deduplicate repeated "Fingerprint not found in URL" messages.
+
     Example input:
-        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt; Fingerprint not found in https://www.prsv.ch/.../rsa-fingerprint.txt"
-    
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt; "
+        "Fingerprint not found in https://www.prsv.ch/.../rsa-fingerprint.txt"
+
     Example output:
-        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, https://www.prsv.ch/.../rsa-fingerprint.txt"
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, "
+        "https://www.prsv.ch/.../rsa-fingerprint.txt"
     """
-    # Pattern to match "Fingerprint not found in URL" segments separated by semicolons
+    # Pattern to match "Fingerprint not found in URL" segments separated by
+    # semicolons
     pattern = r'Fingerprint not found in ([^;]+)'
     matches = re.findall(pattern, error)
-    
+
     if len(matches) > 1:
         # Multiple "Fingerprint not found" messages - combine the URLs
         urls = [url.strip() for url in matches]
         return "Fingerprint not found in " + ", ".join(urls)
-    
+
     # No deduplication needed
     return error
 
 
 def _simplify_error_message(error: str) -> tuple:
     """
-    Simplify a verbose error message into a short description with protocol prefix.
-    
+    Simplify a verbose error message into a short protocol-prefixed label.
+
     Returns:
-        Tuple of (simplified_message, proof_type) where proof_type is 'dns', 'uri', or 'other'
+        Tuple of (simplified_message, proof_type), where proof_type is
+        'dns', 'uri', or 'other'.
     """
     e = error.lower()
-    
+
     # DNS-specific errors (check first as they're more specific)
     if 'nxdomain' in e or 'no such domain' in e:
         return ("DNS: Domain not found (NXDOMAIN)", 'dns')
     if 'servfail' in e:
         return ("DNS: Server failure (SERVFAIL)", 'dns')
     if 'txt record' in e or ('txt' in e and 'dns' in e):
-        return ("DNS: TXT record not found", 'dns') if 'not found' in e or 'missing' in e else ("DNS: TXT record error", 'dns')
+        return (
+            "DNS: TXT record not found",
+            'dns') if 'not found' in e or 'missing' in e else (
+            "DNS: TXT record error",
+            'dns')
     if 'dns' in e and 'lookup' in e:
         return ("DNS: Lookup failed", 'dns')
-    
+
     # SSL/TLS errors - check for SSLV3_ALERT_HANDSHAKE_FAILURE specifically
-    if 'sslv3_alert_handshake_failure' in e or ('ssl' in e and 'handshake' in e and 'alert' in e):
+    if 'sslv3_alert_handshake_failure' in e or (
+            'ssl' in e and 'handshake' in e and 'alert' in e):
         return ("URI: SSL/TLS v3 handshake failed", 'uri')
     if 'ssl' in e and ('handshake' in e or 'alert' in e):
         return ("URI: SSL/TLS handshake failed", 'uri')
     if 'certificate' in e:
         return ("URI: SSL certificate error", 'uri')
-    
+
     # HTTP errors (check after DNS patterns)
-    if '404' in error or ('not found' in e and 'dns' not in e and 'txt' not in e):
-        return ("URI: Fingerprint file not found (404)", 'uri') if 'fingerprint' in e else ("URI: Proof file not found (404)", 'uri')
+    if '404' in error or (
+            'not found' in e and 'dns' not in e and 'txt' not in e):
+        return (
+            "URI: Fingerprint file not found (404)",
+            'uri') if 'fingerprint' in e else (
+            "URI: Proof file not found (404)",
+            'uri')
     if '403' in error or 'forbidden' in e:
         return ("URI: Access forbidden (403)", 'uri')
     if 'connection refused' in e or 'refused' in e:
@@ -774,44 +804,53 @@ def _simplify_error_message(error: str) -> tuple:
         return ("URI: Server unreachable", 'uri')
     if 'name or service not known' in e or 'nameresolutionerror' in e:
         return ("URI: Domain resolution failed", 'uri')
-    
+
     # Fingerprint errors
     if 'fingerprint' in e:
         if 'mismatch' in e or 'does not match' in e:
-            return ("DNS: Fingerprint mismatch", 'dns') if 'http' not in e and 'uri' not in e else ("URI: Fingerprint mismatch", 'uri')
+            return (
+                "DNS: Fingerprint mismatch",
+                'dns') if 'http' not in e and 'uri' not in e else (
+                "URI: Fingerprint mismatch",
+                'uri')
         if 'not found' in e:
             return ("URI: Fingerprint not in proof", 'uri')
-    
+
     # Generic HTTP errors
-    if 'failed to fetch' in e or ('http' in e and 'dns' not in e) or 'https' in e:
+    if 'failed to fetch' in e or (
+            'http' in e and 'dns' not in e) or 'https' in e:
         return ("URI: Connection error", 'uri')
-    
+
     # Unknown - truncate if too long
-    return (error[:47] + "...", 'other') if len(error) > 50 else (error, 'other')
+    return (error[:47] + "...",
+            'other') if len(error) > 50 else (error,
+                                              'other')
 
 
-def _simplify_and_categorize_errors(errors: Dict[str, int]) -> Dict[str, Dict[str, int]]:
+def _simplify_and_categorize_errors(
+        errors: Dict[str, int]) -> Dict[str, Dict[str, int]]:
     """
     Simplify error messages and categorize them by proof type.
-    
+
     Args:
         errors: Dict mapping raw error message -> count
-        
+
     Returns:
         Dict with keys 'all', 'dns', 'uri' mapping simplified error -> count
     """
     result = {'all': {}, 'dns': {}, 'uri': {}}
-    
+
     for raw_error, count in errors.items():
         simplified, proof_type = _simplify_error_message(raw_error)
-        
+
         # Add to 'all' category
         result['all'][simplified] = result['all'].get(simplified, 0) + count
-        
+
         # Add to specific proof type category
         if proof_type in ('dns', 'uri'):
-            result[proof_type][simplified] = result[proof_type].get(simplified, 0) + count
-    
+            result[proof_type][simplified] = result[proof_type].get(
+                simplified, 0) + count
+
     return result
 
 
@@ -839,28 +878,30 @@ def _categorize_relay_by_validation(relay: Dict, validation_map: Dict) -> str:
         - 'no_contact':             no contact field at all
         - 'version_proof_mismatch': 3 fields present but proof type
                                     disagrees with declared ciissversion
-                                    (e.g. ciissversion:2 + proof:uri-familyid-ed25519)
+                                    (e.g. ciissversion:2 +
+                                    proof:uri-familyid-ed25519)
         - 'v3_informational':       ciissversion:3 with no url: (spec-legal,
                                     not "incomplete")
     """
     fingerprint = relay.get('fingerprint')
     aroi_domain = relay.get('aroi_domain', 'none')
     contact = relay.get('contact', '')
-    
+
     # Check if has complete AROI setup (all 3 fields)
     has_complete_aroi = aroi_domain and aroi_domain != 'none'
-    
+
     if fingerprint in validation_map:
         result = validation_map[fingerprint]
         if result.get('valid', False):
             return 'validated'
-        
+
         error = result.get('error', '')
-        
-        # If validation attempted but relay has complete AROI, it's a real validation failure
+
+        # If validation attempted but relay has complete AROI, it's a real
+        # validation failure
         if has_complete_aroi:
             return 'unvalidated'
-        
+
         # Check which specific fields are missing
         if error in ('No contact information', 'Missing AROI fields'):
             aroi_fields = _check_aroi_fields(contact)
@@ -875,7 +916,7 @@ def _categorize_relay_by_validation(relay: Dict, validation_map: Dict) -> str:
         # Not in validation map - use local analysis
         if has_complete_aroi:
             return 'unvalidated'
-        
+
         # Check which fields are present - use helper to avoid duplication
         aroi_fields = _check_aroi_fields(contact)
         has_contact = bool(contact and contact.strip())
@@ -910,7 +951,11 @@ def _warn_unknown_error_categories(category_counts: Dict[str, int]) -> None:
 
 def _build_error_rollup(
     relay_results: List[Dict],
-) -> Tuple[List[Tuple[str, str, int]], List[Tuple[str, str, int]], List[Tuple[str, str, int]]]:
+) -> Tuple[
+    List[Tuple[str, str, int]],
+    List[Tuple[str, str, int]],
+    List[Tuple[str, str, int]],
+]:
     """A.6: Consolidate v2 and v3 error counts into shared / v2_only / v3_only.
 
     Args:
@@ -939,7 +984,8 @@ def _build_error_rollup(
             continue
         category = r.get('error_category')
         if not category:
-            continue  # Pre-schema-v2 cached entry, fall through to legacy path.
+            # Pre-schema-v2 cached entry, fall through to legacy path.
+            continue
         version = r.get('ciissversion') or ''
         if category in SHARED_ERROR_CATEGORIES:
             shared_counts[category] += 1
@@ -986,24 +1032,30 @@ def _log_aroi_build_summary(metrics: Dict, progress_logger=None) -> None:
         logger.info(msg)
 
 
-def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optional[Dict] = None, 
-                                       calculate_operator_metrics: bool = True) -> Dict:
+def calculate_aroi_validation_metrics(
+        relays: List[Dict],
+        validation_data: Optional[Dict] = None,
+        calculate_operator_metrics: bool = True) -> Dict:
     """
     Calculate AROI validation metrics for network health dashboard.
-    
+
     Analyzes relay fingerprints against validation data to determine:
-    - RELAY-level: How many relays have valid AROI proofs (dns-rsa or uri-rsa)
-    - OPERATOR-level: How many operators (domains) are validated/invalid (if enabled)
+    - RELAY-level: How many relays have valid AROI proofs (dns-rsa or
+      uri-rsa)
+    - OPERATOR-level: How many operators (domains) are validated/invalid
+      (if enabled)
     - Success rates by proof type (dns-rsa vs uri-rsa)
     - Failure breakdown by proof type
-    
+
     Args:
         relays: List of relay dictionaries from Onionoo API
         validation_data: Optional validation data from aroivalidator.1aeo.com
-        calculate_operator_metrics: If True, also calculate operator-level metrics in same pass
-        
+        calculate_operator_metrics: If True, also calculate operator-level
+            metrics in same pass
+
     Returns:
-        Dict containing validation metrics for health dashboard (relay + operator level)
+        Dict containing validation metrics for health dashboard (relay +
+        operator level)
     """
     # Initialize metrics with safe defaults. Per-proof-type and per-version
     # keys are seeded in a single loop so adding a future proof type is one
@@ -1060,31 +1112,34 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         metrics[f'{stat_key}_total'] = 0
         metrics[f'{stat_key}_valid'] = 0
         metrics[f'{stat_key}_success_rate'] = 0.0
-    
+
     if not relays:
         return metrics
-    
+
     total_relays = len(relays)
-    
+
     # If no validation data available, return early with basic counts
     if not validation_data or 'results' not in validation_data:
         # Count relays with/without AROI based on contact info
         unique_aroi_domains = set()  # Track for operator metrics
-        
+
         for relay in relays:
             aroi_domain = relay.get('aroi_domain', 'none')
             contact = relay.get('contact', '')
-            
+
             if aroi_domain and aroi_domain != 'none':
-                # Has AROI domain (all 3 fields) but no validation data available
+                # Has AROI domain (all 3 fields) but no validation data
+                # available
                 metrics['aroi_unvalidated_count'] += 1
                 if calculate_operator_metrics:
                     unique_aroi_domains.add(aroi_domain)
             else:
-                # Missing some or all AROI fields - categorize specifically using helper
+                # Missing some or all AROI fields - categorize specifically
+                # using helper
                 aroi_fields = _check_aroi_fields(contact)
                 has_contact = bool(contact and contact.strip())
-                category = _categorize_by_missing_fields(aroi_fields, has_contact)
+                category = _categorize_by_missing_fields(
+                    aroi_fields, has_contact)
                 if category == 'no_proof':
                     metrics['aroi_no_proof_count'] += 1
                 elif category == 'no_domain':
@@ -1101,15 +1156,22 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     metrics['relays_version_proof_mismatch'] += 1
                 elif category == 'v3_informational':
                     metrics['relays_v3_informational'] += 1
-        
+
         # Calculate percentages using helper function
-        metrics['aroi_unvalidated_percentage'] = _calc_percentage(metrics['aroi_unvalidated_count'], total_relays)
-        metrics['aroi_no_proof_percentage'] = _calc_percentage(metrics['aroi_no_proof_count'], total_relays)
-        metrics['aroi_no_domain_percentage'] = _calc_percentage(metrics['aroi_no_domain_count'], total_relays)
-        metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(metrics['aroi_no_ciissversion_count'], total_relays)
-        metrics['relays_no_contact_percentage'] = _calc_percentage(metrics['relays_no_contact'], total_relays)
-        metrics['relays_no_aroi_info_percentage'] = _calc_percentage(metrics['relays_no_aroi_info'], total_relays)
-        metrics['relays_missing_two_aroi_percentage'] = _calc_percentage(metrics['relays_missing_two_aroi'], total_relays)
+        metrics['aroi_unvalidated_percentage'] = _calc_percentage(
+            metrics['aroi_unvalidated_count'], total_relays)
+        metrics['aroi_no_proof_percentage'] = _calc_percentage(
+            metrics['aroi_no_proof_count'], total_relays)
+        metrics['aroi_no_domain_percentage'] = _calc_percentage(
+            metrics['aroi_no_domain_count'], total_relays)
+        metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(
+            metrics['aroi_no_ciissversion_count'], total_relays)
+        metrics['relays_no_contact_percentage'] = _calc_percentage(
+            metrics['relays_no_contact'], total_relays)
+        metrics['relays_no_aroi_info_percentage'] = _calc_percentage(
+            metrics['relays_no_aroi_info'], total_relays)
+        metrics['relays_missing_two_aroi_percentage'] = _calc_percentage(
+            metrics['relays_missing_two_aroi'], total_relays)
         # Reviewer-flagged: previously these two newly-added counters
         # were incremented in the early-return fallback branch but
         # their *_percentage companions were never computed. Compute
@@ -1122,26 +1184,30 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         metrics['relays_v3_informational_percentage'] = _calc_percentage(
             metrics['relays_v3_informational'], total_relays
         )
-        
+
         # Add operator-level metrics even without validation data
         if calculate_operator_metrics:
             metrics['unique_aroi_domains_count'] = len(unique_aroi_domains)
-            metrics['validated_aroi_domains_count'] = 0  # Can't validate without data
-            metrics['invalid_aroi_domains_count'] = len(unique_aroi_domains)  # All unknown
+            # Can't validate without data
+            metrics['validated_aroi_domains_count'] = 0
+            metrics['invalid_aroi_domains_count'] = len(
+                unique_aroi_domains)  # All unknown
             metrics['validated_aroi_domains_percentage'] = 0.0
-            metrics['invalid_aroi_domains_percentage'] = 100.0 if len(unique_aroi_domains) > 0 else 0.0
+            metrics['invalid_aroi_domains_percentage'] = 100.0 if len(
+                unique_aroi_domains) > 0 else 0.0
             metrics['top_operators_text'] = "Validation data not available"
-            metrics['_validated_domain_set'] = set()  # Empty set for IPv6 calculation
-        
+            # Empty set for IPv6 calculation
+            metrics['_validated_domain_set'] = set()
+
         return metrics
-    
+
     # Extract validation metadata
     metadata = validation_data.get('metadata', {})
     statistics = validation_data.get('statistics', {})
-    
+
     metrics['validation_data_available'] = True
     metrics['validation_timestamp'] = metadata.get('timestamp', 'Unknown')
-    
+
     # Extract per-proof-type statistics for ALL supported proof types
     # (dns_rsa + uri_rsa for v2; dns_familyid_ed25519 + uri_familyid_ed25519
     # for v3). Loop over PROOF_TYPE_STAT_KEYS so adding a future proof
@@ -1151,7 +1217,8 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         type_stats = proof_types.get(stat_key, {})
         metrics[f'{stat_key}_total'] = type_stats.get('total', 0)
         metrics[f'{stat_key}_valid'] = type_stats.get('valid', 0)
-        metrics[f'{stat_key}_success_rate'] = type_stats.get('success_rate', 0.0)
+        metrics[f'{stat_key}_success_rate'] = type_stats.get(
+            'success_rate', 0.0)
 
     # Aggregate v2/v3 totals from the per-proof-type values just extracted.
     # This is what the dashboard's "v2 success rate" / "v3 success rate"
@@ -1168,31 +1235,36 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     metrics['v3_valid'] = sum(
         metrics[f'{p.replace("-", "_")}_valid'] for p in V3_PROOF_TYPES
     )
-    metrics['v2_success_rate'] = _calc_percentage(metrics['v2_valid'], metrics['v2_total'])
-    metrics['v3_success_rate'] = _calc_percentage(metrics['v3_valid'], metrics['v3_total'])
+    metrics['v2_success_rate'] = _calc_percentage(
+        metrics['v2_valid'], metrics['v2_total'])
+    metrics['v3_success_rate'] = _calc_percentage(
+        metrics['v3_valid'], metrics['v3_total'])
 
     # ciissversion adoption — passthrough of upstream stats when present.
     # ciissversion_declared: what relays declared in ContactInfo.
     # ciissversion_validated: what the validator actually processed.
-    metrics['ciissversion_declared'] = statistics.get('ciissversion_declared', {}) or {}
-    metrics['ciissversion_validated'] = statistics.get('ciissversion_validated', {}) or {}
+    metrics['ciissversion_declared'] = statistics.get(
+        'ciissversion_declared', {}) or {}
+    metrics['ciissversion_validated'] = statistics.get(
+        'ciissversion_validated', {}) or {}
 
     # v3 failure categories — already aggregated by upstream into 13
     # canonical categories. Pass through directly so the dashboard's
     # error-rollup table reads them without re-deriving.
-    metrics['v3_failure_categories'] = statistics.get('v3_failure_categories', {}) or {}
+    metrics['v3_failure_categories'] = statistics.get(
+        'v3_failure_categories', {}) or {}
 
     # A.8 build-time observability: warn once when upstream reports an
     # error_category we don't have a V3_CATEGORY_LABELS entry for.
     _warn_unknown_error_categories(metrics['v3_failure_categories'])
-    
+
     # Build fingerprint -> validation result mapping for O(1) lookup
     validation_map = {}
     for result in validation_data.get('results', []):
         fingerprint = result.get('fingerprint')
         if fingerprint:
             validation_map[fingerprint] = result
-    
+
     # Initialize operator-level tracking (if requested)
     unique_aroi_domains = set()
     domain_has_valid_relay = {}
@@ -1200,11 +1272,12 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     domain_failure_reasons = {}
     domain_country = {}  # Track country for each validated domain
     operator_error_domains = defaultdict(set)
-    
-    # SINGLE PASS: Process each relay for BOTH relay-level AND operator-level metrics
+
+    # SINGLE PASS: Process each relay for BOTH relay-level AND operator-level
+    # metrics
     for relay in relays:
         category = _categorize_relay_by_validation(relay, validation_map)
-        
+
         # Relay-level counting
         if category == 'validated':
             metrics['aroi_validated_count'] += 1
@@ -1226,31 +1299,34 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
             metrics['relays_version_proof_mismatch'] += 1
         elif category == 'v3_informational':
             metrics['relays_v3_informational'] += 1
-        
+
         # Operator-level tracking (in same loop for efficiency)
         if calculate_operator_metrics:
             aroi_domain = relay.get('aroi_domain', 'none')
-            
-            # Only track operators with all 3 required AROI fields (ciissversion:2, proof, url)
-            # aroi_domain is only set if _simple_aroi_parsing found all 3 fields
+
+            # Only track operators with all 3 required AROI fields
+            # (ciissversion:2, proof, url)
+            # aroi_domain is only set if _simple_aroi_parsing found all 3
+            # fields
             if aroi_domain and aroi_domain != 'none':
                 unique_aroi_domains.add(aroi_domain)
-                
+
                 if aroi_domain not in domain_has_valid_relay:
                     domain_has_valid_relay[aroi_domain] = False
                     domain_relays[aroi_domain] = []
                     domain_failure_reasons[aroi_domain] = {}
-                
+
                 # Track country for this domain (use first relay's country)
-                # relay["country"] is already UPPERCASE from _preprocess_template_data()
+                # relay["country"] is already UPPERCASE from
+                # _preprocess_template_data()
                 if aroi_domain not in domain_country:
                     country = relay.get('country', 'unknown')
                     if country and country != 'unknown':
                         domain_country[aroi_domain] = country
-                
+
                 fp = relay.get('fingerprint')
                 domain_relays[aroi_domain].append(fp)
-                
+
                 # Check validation status
                 if fp in validation_map:
                     result = validation_map[fp]
@@ -1258,35 +1334,60 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                         domain_has_valid_relay[aroi_domain] = True
                     else:
                         error = result.get('error', 'Unknown error')
-                        # Only track actual validation failures, not missing AROI fields
-                        # (relays with "Missing AROI fields" shouldn't have aroi_domain set, but defensive check)
-                        if error not in ('Missing AROI fields', 'No contact information'):
-                            domain_failure_reasons[aroi_domain][error] = domain_failure_reasons[aroi_domain].get(error, 0) + 1
+                        # Only track actual validation failures, not missing
+                        # AROI fields. Relays with "Missing AROI fields"
+                        # should not have aroi_domain set, but keep the
+                        # defensive check.
+                        if error not in (
+                            'Missing AROI fields',
+                                'No contact information'):
+                            domain_failure_reasons[aroi_domain][error] = (
+                                domain_failure_reasons[aroi_domain].get(
+                                    error, 0) + 1)
 
     # Phase 2.1: Calculate percentages ONCE after the per-relay loop
     # completes (previously these were inside the loop, computed
     # ~10,867 times per build = ~108k redundant _calc_percentage calls).
     # Counts are stable after the loop; no reason to recompute on every
     # iteration. Net: O(N) → O(1) for percentage calculation.
-    metrics['aroi_validated_percentage'] = _calc_percentage(metrics['aroi_validated_count'], total_relays)
-    metrics['aroi_unvalidated_percentage'] = _calc_percentage(metrics['aroi_unvalidated_count'], total_relays)
-    metrics['aroi_no_proof_percentage'] = _calc_percentage(metrics['aroi_no_proof_count'], total_relays)
-    metrics['aroi_no_domain_percentage'] = _calc_percentage(metrics['aroi_no_domain_count'], total_relays)
-    metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(metrics['aroi_no_ciissversion_count'], total_relays)
-    metrics['relays_no_contact_percentage'] = _calc_percentage(metrics['relays_no_contact'], total_relays)
-    metrics['relays_no_aroi_info_percentage'] = _calc_percentage(metrics['relays_no_aroi_info'], total_relays)
-    metrics['relays_missing_two_aroi_percentage'] = _calc_percentage(metrics['relays_missing_two_aroi'], total_relays)
-    metrics['relays_version_proof_mismatch_percentage'] = _calc_percentage(metrics['relays_version_proof_mismatch'], total_relays)
-    metrics['relays_v3_informational_percentage'] = _calc_percentage(metrics['relays_v3_informational'], total_relays)
+    metrics['aroi_validated_percentage'] = _calc_percentage(
+        metrics['aroi_validated_count'], total_relays)
+    metrics['aroi_unvalidated_percentage'] = _calc_percentage(
+        metrics['aroi_unvalidated_count'], total_relays)
+    metrics['aroi_no_proof_percentage'] = _calc_percentage(
+        metrics['aroi_no_proof_count'], total_relays)
+    metrics['aroi_no_domain_percentage'] = _calc_percentage(
+        metrics['aroi_no_domain_count'], total_relays)
+    metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(
+        metrics['aroi_no_ciissversion_count'], total_relays)
+    metrics['relays_no_contact_percentage'] = _calc_percentage(
+        metrics['relays_no_contact'], total_relays)
+    metrics['relays_no_aroi_info_percentage'] = _calc_percentage(
+        metrics['relays_no_aroi_info'], total_relays)
+    metrics['relays_missing_two_aroi_percentage'] = _calc_percentage(
+        metrics['relays_missing_two_aroi'], total_relays)
+    metrics['relays_version_proof_mismatch_percentage'] = _calc_percentage(
+        metrics['relays_version_proof_mismatch'], total_relays)
+    metrics['relays_v3_informational_percentage'] = _calc_percentage(
+        metrics['relays_v3_informational'], total_relays)
 
     # Build no_aroi_reasons_top5 from the category counts
     no_aroi_reasons = [
         ("No contact info", metrics['relays_no_contact']),
         ("No AROI info", metrics['relays_no_aroi_info']),
         ("Missing 2 AROI fields", metrics['relays_missing_two_aroi']),
-        ("Missing proof field (has domain + ciissversion)", metrics['aroi_no_proof_count']),
-        ("Missing domain/URL field (has proof + ciissversion)", metrics['aroi_no_domain_count']),
-        ("Missing ciissversion (has proof + domain)", metrics['aroi_no_ciissversion_count']),
+        (
+            "Missing proof field (has domain + ciissversion)",
+            metrics['aroi_no_proof_count'],
+        ),
+        (
+            "Missing domain/URL field (has proof + ciissversion)",
+            metrics['aroi_no_domain_count'],
+        ),
+        (
+            "Missing ciissversion (has proof + domain)",
+            metrics['aroi_no_ciissversion_count'],
+        ),
     ]
     # Filter out zero counts and sort by count descending
     metrics['no_aroi_reasons_top5'] = sorted(
@@ -1294,7 +1395,7 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         key=lambda x: x[1],
         reverse=True
     )[:5]
-    
+
     # Calculate overall validation success rate.
     # FIXED: previously this only summed v2 totals (dns_rsa + uri_rsa),
     # silently ignoring v3 (dns_familyid_ed25519 + uri_familyid_ed25519).
@@ -1309,84 +1410,127 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     )
 
     if total_aroi_attempts > 0:
-        metrics['aroi_validation_success_rate'] = (total_aroi_valid / total_aroi_attempts * 100)
+        metrics['aroi_validation_success_rate'] = (
+            total_aroi_valid / total_aroi_attempts * 100)
     else:
         # Use metadata success rate if available
-        metrics['aroi_validation_success_rate'] = metadata.get('success_rate', 0.0)
-    
+        metrics['aroi_validation_success_rate'] = metadata.get(
+            'success_rate', 0.0)
+
     # Calculate operator-level metrics (if requested)
     if calculate_operator_metrics:
         # Count validated vs invalid domains
-        validated_aroi_domains = sum(1 for has_valid in domain_has_valid_relay.values() if has_valid)
-        invalid_aroi_domains = len(unique_aroi_domains) - validated_aroi_domains
-        
-        # Build error details from existing domain_failure_reasons (already populated in main loop)
+        validated_aroi_domains = sum(
+            1 for has_valid in domain_has_valid_relay.values() if has_valid)
+        invalid_aroi_domains = len(
+            unique_aroi_domains) - validated_aroi_domains
+
+        # Build error details from existing domain_failure_reasons (already
+        # populated in main loop)
         relay_errors = {}  # error -> relay count
-        
+
         # Process failed operators to get both relay and operator error counts
         for domain, has_valid in domain_has_valid_relay.items():
             if not has_valid:
                 seen_simplified_errors = set()
-                for error, relay_count in domain_failure_reasons.get(domain, {}).items():
-                    relay_errors[error] = relay_errors.get(error, 0) + relay_count
+                for error, relay_count in domain_failure_reasons.get(
+                        domain, {}).items():
+                    relay_errors[error] = relay_errors.get(
+                        error, 0) + relay_count
                     simplified_error, _ = _simplify_error_message(error)
                     if simplified_error not in seen_simplified_errors:
                         operator_error_domains[simplified_error].add(domain)
                         seen_simplified_errors.add(simplified_error)
-        
+
         # Simplify error messages and categorize by proof type
         simplified_relay_errors = _simplify_and_categorize_errors(relay_errors)
-        
+
         # Store top 5 for general tooltips (simplified messages)
-        metrics['relay_error_top5'] = sorted(simplified_relay_errors['all'].items(), key=lambda x: x[1], reverse=True)[:5]
+        metrics['relay_error_top5'] = sorted(
+            simplified_relay_errors['all'].items(),
+            key=lambda x: x[1],
+            reverse=True)[
+            :5]
         metrics['operator_error_top5'] = sorted(
-            ((reason, len(domains)) for reason, domains in operator_error_domains.items()),
+            (
+                (reason, len(domains))
+                for reason, domains in operator_error_domains.items()
+            ),
             key=lambda x: x[1],
             reverse=True
         )[:5]
-        
+
         # Store categorized top 5 for DNS-RSA and URI-RSA tooltips
-        metrics['dns_error_top5'] = sorted(simplified_relay_errors['dns'].items(), key=lambda x: x[1], reverse=True)[:5]
-        metrics['uri_error_top5'] = sorted(simplified_relay_errors['uri'].items(), key=lambda x: x[1], reverse=True)[:5]
-        
+        metrics['dns_error_top5'] = sorted(
+            simplified_relay_errors['dns'].items(),
+            key=lambda x: x[1],
+            reverse=True)[
+            :5]
+        metrics['uri_error_top5'] = sorted(
+            simplified_relay_errors['uri'].items(),
+            key=lambda x: x[1],
+            reverse=True)[
+            :5]
+
         # Calculate top operators by relay count
-        domain_relay_counts = [(domain, len(fps)) for domain, fps in domain_relays.items()]
+        domain_relay_counts = [(domain, len(fps))
+                               for domain, fps in domain_relays.items()]
         domain_relay_counts.sort(key=lambda x: x[1], reverse=True)
-        top_ops = [f"{domain} ({count:,} relays)" for domain, count in domain_relay_counts[:4]]
-        top_operators_text = ", ".join(top_ops) if top_ops else "No data available"
-        
+        top_ops = [f"{domain} ({count:,} relays)" for domain,
+                   count in domain_relay_counts[:4]]
+        top_operators_text = ", ".join(
+            top_ops) if top_ops else "No data available"
+
         # Add operator metrics
         metrics['unique_aroi_domains_count'] = len(unique_aroi_domains)
         metrics['validated_aroi_domains_count'] = validated_aroi_domains
         metrics['invalid_aroi_domains_count'] = invalid_aroi_domains
-        
+
         if len(unique_aroi_domains) > 0:
-            metrics['validated_aroi_domains_percentage'] = (validated_aroi_domains / len(unique_aroi_domains) * 100)
-            metrics['invalid_aroi_domains_percentage'] = (invalid_aroi_domains / len(unique_aroi_domains) * 100)
+            metrics['validated_aroi_domains_percentage'] = (
+                validated_aroi_domains / len(unique_aroi_domains) * 100)
+            metrics['invalid_aroi_domains_percentage'] = (
+                invalid_aroi_domains / len(unique_aroi_domains) * 100)
         else:
             metrics['validated_aroi_domains_percentage'] = 0.0
             metrics['invalid_aroi_domains_percentage'] = 0.0
-        
+
         metrics['top_operators_text'] = top_operators_text
-        
-        # Build validated domain set once for both IPv6 and country calculations
-        validated_domains = {d for d, valid in domain_has_valid_relay.items() if valid}
+
+        # Build validated domain set once for both IPv6 and country
+        # calculations
+        validated_domains = {
+            d for d, valid in domain_has_valid_relay.items() if valid}
         metrics['_validated_domain_set'] = validated_domains
-        
+
         # Calculate top 3 countries by validated AROI operator count
         country_counts = {}
         for domain in validated_domains:
             if domain in domain_country:
-                country_counts[domain_country[domain]] = country_counts.get(domain_country[domain], 0) + 1
-        
+                country_counts[domain_country[domain]] = country_counts.get(
+                    domain_country[domain], 0) + 1
+
         # Sort and format top 3 for template
         metrics['top_3_aroi_countries'] = [
-            {'rank': i, 'country_code': cc, 'count': cnt, 
-             'percentage': (cnt / validated_aroi_domains * 100) if validated_aroi_domains > 0 else 0.0}
-            for i, (cc, cnt) in enumerate(sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:3], 1)
-        ]
-    
-    # Store validation_map for reuse by contact pages (avoids rebuilding 3,000+ times)
+            {
+                'rank': i,
+                'country_code': cc,
+                'count': cnt,
+                'percentage': (
+                    cnt /
+                    validated_aroi_domains *
+                    100) if validated_aroi_domains > 0 else 0.0} for i,
+            (cc,
+             cnt) in enumerate(
+                sorted(
+                    country_counts.items(),
+                    key=lambda x: x[1],
+                    reverse=True)[
+                        :3],
+                1)]
+
+    # Store validation_map for reuse by contact pages (avoids rebuilding
+    # 3,000+ times)
     metrics['_validation_map'] = validation_map
 
     # A.6: consolidated v2/v3 error rollup keyed by upstream error_category.
@@ -1414,7 +1558,10 @@ def _format_timestamp(timestamp_str):
         return timestamp_str
 
 
-def get_contact_validation_status(relays: List[Dict], validation_data: Optional[Dict] = None, validation_map: Optional[Dict] = None) -> Dict:
+def get_contact_validation_status(
+        relays: List[Dict],
+        validation_data: Optional[Dict] = None,
+        validation_map: Optional[Dict] = None) -> Dict:
     """
     Get AROI validation status for a specific contact's relays (v2 + v3 aware).
 
@@ -1458,7 +1605,9 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     """
     result = {
         'has_aroi': False,
-        'validation_status': 'not_configured',  # validated | unauthorized | misconfigured | incomplete | not_configured
+        # validated | unauthorized | misconfigured | incomplete |
+        # not_configured
+        'validation_status': 'not_configured',
 
         # Complete AROI relays (all 3 fields present, version+proof match)
         'validated_relays': [],
@@ -1519,11 +1668,12 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         'validation_available': False,
         'show_detailed_errors': True,
     }
-    
+
     if not relays:
         return result
-    
-    # Use pre-built validation_map if provided (much faster - avoids rebuilding map 3,000+ times)
+
+    # Use pre-built validation_map if provided (much faster - avoids
+    # rebuilding map 3,000+ times)
     if validation_map is None:
         # FALLBACK: Build fingerprint -> validation result mapping
         validation_map = {}
@@ -1535,7 +1685,7 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             result['validation_available'] = True
     else:
         result['validation_available'] = len(validation_map) > 0
-    
+
     # Single pass through relays - categorize each one
     summary = result['validation_summary']
     for relay in relays:
@@ -1572,7 +1722,9 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                     'fingerprint': fingerprint,
                     'nickname': nickname,
                     'aroi_domain': aroi_domain,
-                    'error': 'Not yet processed by validator (relay may be new)',
+                    'error': (
+                        'Not yet processed by validator (relay may be new)'
+                    ),
                     'proof_type': relay_aroi_proof_type or 'unknown',
                     'aroi_version': relay_aroi_version,
                     'first_seen': first_seen,
@@ -1587,8 +1739,10 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             if val_result.get('valid', False):
                 # VALIDATED: upstream validation passed.
                 summary['validated_count'] += 1
-                # B1.1 (final): per-version validated tally for success-rate pills.
-                _val_version = val_result.get('ciissversion') or relay_aroi_version
+                # B1.1 (final): per-version validated tally for success-rate
+                # pills.
+                _val_version = val_result.get(
+                    'ciissversion') or relay_aroi_version
                 if _val_version == '2':
                     summary['v2_validated_count'] += 1
                 elif _val_version == '3':
@@ -1597,7 +1751,11 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                     'fingerprint': fingerprint,
                     'nickname': nickname,
                     'aroi_domain': aroi_domain,
-                    'proof_type': val_result.get('proof_type') or relay_aroi_proof_type or 'unknown',
+                    'proof_type': (
+                        val_result.get('proof_type') or
+                        relay_aroi_proof_type or
+                        'unknown'
+                    ),
                     'proof_uri': val_result.get('proof_uri', ''),
                     'aroi_version': _val_version,
                     'first_seen': first_seen,
@@ -1620,14 +1778,17 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             # This strengthens the pasteable-examples contract from the
             # plan: operators always see at least one literally-pasteable
             # line, even when upstream hint is mostly prose.
-            _label = (V3_CATEGORY_LABELS.get(error_category) or {}) if error_category else {}
+            _label = (V3_CATEGORY_LABELS.get(error_category)
+                      or {}) if error_category else {}
             # The relay's actual proof_type drives version-aware example
             # selection (URI-RSA → rsa-fingerprint.txt, URI-FamilyID-Ed25519
             # → ed25519-family-id.txt). User-reported bug fix:
             # "URI-RSA fingerprint not found" was rendering the v3 file
             # path because the example was hard-coded to ed25519.
             _resolved_proof_type = (
-                val_result.get('proof_type') or relay_aroi_proof_type or 'unknown'
+                val_result.get('proof_type') or
+                relay_aroi_proof_type or
+                'unknown'
             )
             relay_info = {
                 'fingerprint': fingerprint,
@@ -1635,7 +1796,9 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 'aroi_domain': aroi_domain,
                 'error': error,
                 'proof_type': _resolved_proof_type,
-                'aroi_version': val_result.get('ciissversion') or relay_aroi_version,
+                'aroi_version': (
+                    val_result.get('ciissversion') or relay_aroi_version
+                ),
                 'first_seen': first_seen,
                 'relay': relay,
                 # A.4: pass through upstream's actionable hint verbatim.
@@ -1676,20 +1839,25 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
 
             # A.4: prefer error_category for cascade decisions; fall back
             # to today's substring heuristic when the category is absent.
-            if error_category in ('uri_content_mismatch', 'dns_content_mismatch'):
+            if error_category in (
+                'uri_content_mismatch',
+                    'dns_content_mismatch'):
                 is_unauthorized = True
             elif error_category is not None:
                 is_unauthorized = False
             else:
                 # Pre-schema-v2 fallback heuristic (preserved verbatim).
                 error_lower = error.lower()
-                is_http_error = '404' in error_lower or 'http error' in error_lower
+                is_http_error = (
+                    '404' in error_lower or 'http error' in error_lower)
                 is_unauthorized = (
                     not is_http_error and (
-                        'fingerprint not found' in error_lower or
-                        ('not found' in error_lower and ('dns' in error_lower or 'txt' in error_lower or 'record' in error_lower) and 'nxdomain' not in error_lower)
-                    )
-                )
+                        'fingerprint not found' in error_lower or (
+                            'not found' in error_lower and (
+                                'dns' in error_lower or
+                                'txt' in error_lower or
+                                'record' in error_lower
+                            ) and 'nxdomain' not in error_lower)))
 
             if is_unauthorized:
                 summary['unauthorized_count'] += 1
@@ -1698,11 +1866,12 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 summary['misconfigured_count'] += 1
                 result['misconfigured_relays'].append(relay_info)
         else:
-            # Relay does NOT have complete AROI - categorize as incomplete or not_configured
+            # Relay does NOT have complete AROI - categorize as incomplete or
+            # not_configured
             aroi_fields = _check_aroi_fields(contact)
             has_contact = bool(contact and contact.strip())
             category = _categorize_by_missing_fields(aroi_fields, has_contact)
-            
+
             relay_info = {
                 'fingerprint': fingerprint,
                 'nickname': nickname,
@@ -1712,7 +1881,7 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 'category': category,
                 'relay': relay,
             }
-            
+
             if category in ('no_contact',):
                 # Not configured: no contact at all
                 summary['not_configured_count'] += 1
@@ -1745,7 +1914,8 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                 summary['not_configured_count'] += 1
                 summary['incomplete_v3_informational_count'] += 1
                 relay_info['missing'] = (
-                    "ciissversion:3 with no url (spec-legal informational only)"
+                    "ciissversion:3 with no url "
+                    "(spec-legal informational only)"
                 )
                 # Surface the pasteable-example hint for operators who
                 # actually wanted a domain-bound AROI.
@@ -1764,13 +1934,20 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
 
                 if category == 'no_proof':
                     summary['incomplete_no_proof_count'] += 1
-                    relay_info['missing'] = 'Missing proof field (has domain + ciissversion)'
+                    relay_info['missing'] = (
+                        'Missing proof field (has domain + ciissversion)'
+                    )
                 elif category == 'no_domain':
                     summary['incomplete_no_domain_count'] += 1
-                    relay_info['missing'] = 'Missing domain/URL field (has proof + ciissversion)'
+                    relay_info['missing'] = (
+                        'Missing domain/URL field '
+                        '(has proof + ciissversion)'
+                    )
                 elif category == 'no_ciissversion':
                     summary['incomplete_no_ciissversion_count'] += 1
-                    relay_info['missing'] = 'Missing ciissversion (has proof + domain)'
+                    relay_info['missing'] = (
+                        'Missing ciissversion (has proof + domain)'
+                    )
                 elif category == 'missing_two_aroi':
                     summary['incomplete_missing_two_count'] += 1
                     missing_fields = []
@@ -1780,18 +1957,20 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                         missing_fields.append('url/domain')
                     if not aroi_fields['has_ciissversion']:
                         missing_fields.append('ciissversion')
-                    relay_info['missing'] = f"Missing {' and '.join(missing_fields)}"
+                    relay_info['missing'] = (
+                        f"Missing {' and '.join(missing_fields)}")
                 elif category == 'version_proof_mismatch':
                     # Operator copy-paste error during migration. All 3
                     # fields present but proof type doesn't match declared
                     # ciissversion. Surface pasteable fix.
                     summary['incomplete_version_proof_mismatch_count'] += 1
                     relay_info['missing'] = (
-                        f"ciissversion:{aroi_fields.get('version')} declared but "
+                        f"ciissversion:{aroi_fields.get('version')} "
+                        f"declared but "
                         f"proof:{aroi_fields.get('proof_type')} is for the "
-                        f"other version"
-                    )
-                    mismatch_label = V3_CATEGORY_LABELS.get('version_proof_mismatch', {})
+                        f"other version")
+                    mismatch_label = V3_CATEGORY_LABELS.get(
+                        'version_proof_mismatch', {})
                     _vpm_example = _render_pasteable_example(
                         mismatch_label.get('example'), fingerprint, aroi_domain
                     )
@@ -1802,7 +1981,7 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                     relay_info['missing'] = 'Incomplete AROI configuration'
 
                 result['incomplete_relays'].append(relay_info)
-    
+
     # Determine operator status using cascade logic. The peer issue
     # categories (security_incident, pending_onionoo) DO NOT take
     # precedence; they're rendered alongside whatever the cascade picks
@@ -1862,10 +2041,15 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     )
 
     # Build fingerprint sets for O(1) lookups in templates
-    result['validated_fingerprints'] = {r['fingerprint'] for r in result['validated_relays']}
-    result['unauthorized_fingerprints'] = {r['fingerprint'] for r in result['unauthorized_relays']}
-    result['misconfigured_fingerprints'] = {r['fingerprint'] for r in result['misconfigured_relays']}
-    result['security_incident_fingerprints'] = {r['fingerprint'] for r in result['security_incident_relays']}
-    result['pending_onionoo_fingerprints'] = {r['fingerprint'] for r in result['pending_onionoo_relays']}
+    result['validated_fingerprints'] = {
+        r['fingerprint'] for r in result['validated_relays']}
+    result['unauthorized_fingerprints'] = {
+        r['fingerprint'] for r in result['unauthorized_relays']}
+    result['misconfigured_fingerprints'] = {
+        r['fingerprint'] for r in result['misconfigured_relays']}
+    result['security_incident_fingerprints'] = {
+        r['fingerprint'] for r in result['security_incident_relays']}
+    result['pending_onionoo_fingerprints'] = {
+        r['fingerprint'] for r in result['pending_onionoo_relays']}
 
     return result
