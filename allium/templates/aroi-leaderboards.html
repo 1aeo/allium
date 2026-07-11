@@ -31,7 +31,7 @@
         <a href="#guard_authority" class="aroi-nav-link" title="Guard Authority: Control over guard consensus weight, determining which relays handle the first hop where Tor traffic enters the network">🛡️ Guard Authority</a>
         <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
         <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="aroi-nav-link" title="Diversity All-Rounders: Overall diversity score combining geographic spread (countries × 3.0), AS rarity-weighted network diversity (× 2.0), and platform variety (platforms × 1.0) to measure operational resilience">🌈 Diversity All-Rounders</a>
+        <a href="#most_diverse" class="aroi-nav-link" title="Diversity All-Rounders: Diversity Index (0-100) averaging four co-equal sub-scores — Geographic, Platform, Network and Scale (diverse relays) — each measured against yardsticks derived from today's live network">🌈 Diversity All-Rounders</a>
         <a href="#platform_volume" class="aroi-nav-link" title="Non-Linux Powerhouses (Platform Volume): Most non-Linux relays contributed to the network — volume diversity that shifts Tor away from a Linux monoculture">💻 Non-Linux Powerhouses</a>
         <a href="#platform_breadth" class="aroi-nav-link" title="OS Polyglots (Platform Breadth): Most distinct operating systems (including Linux) run by one operator, minimum 2 to qualify — breadth diversity that makes an operator resilient to any single OS vulnerability">🧩 OS Polyglots</a>
         <a href="#non_eu_volume" class="aroi-nav-link" title="Global Powerhouses (Non-EU Volume): Most relays operated outside the European Union — volume diversity expanding Tor's capacity beyond EU concentration">🌍 Global Powerhouses</a>
@@ -246,7 +246,7 @@
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3 title="Operators ranked by 
-            {%- if category_key == 'most_diverse' -%}combined geographic, AS rarity-weighted network, and platform diversity scores
+            {%- if category_key == 'most_diverse' -%}the Diversity Index (0-100): the average of four co-equal 0-100 sub-scores — Geographic (countries + non-EU relays), Platform (distinct OSes + non-Linux relays), Network (unique ASes + AS rarity) and Scale (diverse relays: relays differing from the operator's most-common OS, country or AS). Every yardstick is derived from today's live network and recomputed each update
             {%- elif category_key == 'platform_volume' -%}volume diversity: number of non-Linux relays contributed to the network (distinct OS count breaks ties). Rewards operators shifting Tor away from a Linux monoculture at scale
             {%- elif category_key == 'platform_breadth' -%}breadth diversity: number of distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties). Rewards operators whose own fleet spans many OSes
             {%- elif category_key == 'non_eu_volume' -%}volume diversity: number of relays operated outside the European Union (distinct country count breaks ties). Rewards operators expanding Tor capacity beyond EU concentration at scale
@@ -261,7 +261,7 @@
             {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
             {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
             {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
-            {{ pagination_section(category_key, emoji if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] else '', category_data, 'generic_ranking_table_paginated', page_ctx, relays.use_bits) }}
+            {{ pagination_section(category_key, emoji if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] else '', category_data, 'most_diverse_table_paginated' if category_key == 'most_diverse' else 'generic_ranking_table_paginated', page_ctx, relays.use_bits) }}
         </section>
     {% endfor %}
 
@@ -300,7 +300,7 @@
                     <li><strong>🛡️ Guard Authorities:</strong> Guard consensus weight percentage (authority over entry traffic)</li>
                     <li><strong>🚪 Exit Champions:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Gatekeepers:</strong> Number of guard relays operated</li>
-                    <li><strong>🌈 Diversity All-Rounders:</strong> Overall diversity score combining geographic, AS rarity-weighted network, and platform diversity</li>
+                    <li><strong>🌈 Diversity All-Rounders:</strong> Diversity Index (0-100) averaging four co-equal sub-scores — Geographic, Platform, Network, Scale — against yardsticks from today's live network</li>
                 </ul>
             </div>
             <div class="col-md-6">
@@ -394,21 +394,40 @@
         <p><em>Example:</em> An operator with 50 relays: 45 relays with valid AROI proofs (DNS-RSA or URI-RSA), 5 relays with failed validation would score: <strong>45 validated relays</strong>, ranking by the count of successfully validated relays.</p>
         <p><strong>Focus:</strong> Promotes operator accountability and transparency by recognizing those who maintain proper AROI cryptographic verification across their relay infrastructure, demonstrating commitment to verified identity and network trust.</p>
         
-        <h4>🌈 Diversity Champion Scoring:</h4>
-        <p><strong>Diversity Score Calculation:</strong> The diversity score combines geographic, network, and platform diversity:</p>
+        <h4>🌈 Diversity All-Rounders Scoring (Diversity Index):</h4>
+        <p><strong>Diversity Index Calculation:</strong> The Diversity Index (0–100) is the average of four <strong>co-equal</strong> 0–100 sub-scores. Each sub-score combines a <em>breadth</em> half (distinct counts, linear ramp) and a <em>volume</em> half (relay counts, logarithmic ramp so raw size can't dominate):</p>
         <ul>
-            <li><strong>Geographic Component:</strong> Number of countries × 3.0 (highest weight for jurisdictional spread)</li>
-            <li><strong>Network Component:</strong> Each unique AS (Autonomous System) is scored 0–5 for rarity, then the sum is divided by 2.5.
-            <ul>
-                <li><strong>Base (0–3) — Consensus Weight:</strong> How much of the network's authority does this AS hold? Dominant ≥5% CW = 0 pts; Major 0.5–5% = 1 pt; Moderate 0.05–0.5% = 2 pts; Small &lt;0.05% = 3 pts</li>
-                <li><strong>Bonus (0–2) — Operator Count:</strong> How many distinct operators share this AS? Popular (10+) = 0 pts; Few (2–10) = +1 pt; Sole operator = +2 pts</li>
-            </ul>
-            <em>Examples: OVH (≥5% CW, 190+ operators) = 0. Flokinet (&lt;0.05% CW, 3 operators) = 3+1 = 4. A sole-operator private AS (&lt;0.05% CW) = 3+2 = 5.</em>
-            </li>
-            <li><strong>Platform Component:</strong> Number of operating systems × 1.0 (promotes OS diversity beyond Linux)</li>
+            <li><strong>Geographic:</strong> ½ × (distinct countries ÷ geo yardstick) + ½ × log-ramp(non-EU relays vs volume yardstick)</li>
+            <li><strong>Platform:</strong> ½ × (distinct OSes incl. Linux − 1, ÷ OS yardstick) + ½ × log-ramp(non-Linux relays vs volume yardstick)</li>
+            <li><strong>Network:</strong> ½ × (unique ASes ÷ AS yardstick) + ½ × log-ramp(AS rarity sum vs volume yardstick)</li>
+            <li><strong>Scale:</strong> log-ramp(<em>diverse relays</em> vs volume yardstick). A <em>diverse relay</em> is one differing from the operator's most-common OS, country, or AS — the relays adding spread beyond the main deployment. A perfect monoculture scores 0 regardless of fleet size.</li>
+        </ul>
+        <p><strong>Network-adaptive yardsticks (no fixed magic numbers):</strong> every yardstick is recomputed from the live network each update — geo: 10% of countries hosting relays; OS: the most OSes any single operator runs; AS: 1% of ASes hosting relays; all volume yardsticks: the 5th-highest operator value ("top-5 cohort"). "100" always means "matches today's network leaders/structure", and the bar moves as the network evolves.</p>
+        <p><strong>Index Formula:</strong> diversity_index = (geographic + platform + network + scale) / 4</p>
+        <p><em>Example:</em> An operator with 14 countries, 6 OSes, 10 rare ASes and 15 of 15 relays off their dominant profile scores roughly geo 80 + platform 67 + network 90 + scale 75 → <strong>Index 78</strong>.</p>
+        <p><strong>Network Component — AS rarity scoring (0–5 per AS):</strong></p>
+        <ul>
+            <li><strong>Base (0–3) — Consensus Weight:</strong> How much of the network's authority does this AS hold? Dominant ≥5% CW = 0 pts; Major 0.5–5% = 1 pt; Moderate 0.05–0.5% = 2 pts; Small &lt;0.05% = 3 pts</li>
+            <li><strong>Bonus (0–2) — Operator Count:</strong> How many distinct operators share this AS? Popular (10+) = 0 pts; Few (2–10) = +1 pt; Sole operator = +2 pts</li>
         </ul>
         <p><strong>AS Rarity Tiers:</strong> <strong>Legendary</strong> (4–5): minimal footprint, sole/few operators; <strong>Epic</strong> (3): small provider or moderate with few operators; <strong>Rare</strong> (2): moderate provider; <strong>Emerging</strong> (1): major provider; <strong>Common</strong> (0): dominant providers like OVH and Hetzner.</p>
-        <p><em>Example:</em> An operator with 4 countries, 2 platforms, and 2 epic AS (score 3 each, sum=6) would score: (4 × 3.0) + (6 / 2.5) + (2 × 1.0) = 12.0 + 2.4 + 2.0 = <strong>16.4 diversity points</strong>.</p>
+        <p><strong>Focus:</strong> Rewards true all-rounders — operators diverse on every dimension <em>and</em> at meaningful scale — instead of letting one dimension (e.g. country count) drown the rest.</p>
+        
+        <h4>💻 Non-Linux Powerhouses Scoring (Platform Volume):</h4>
+        <p><strong>Primary metric:</strong> count of non-Linux relays contributed to the network. <strong>Tiebreakers:</strong> distinct OS count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 633 FreeBSD relays ranks above 32 FreeBSD relays, regardless of how many OSes either operator runs — this board rewards shifting Tor away from a Linux monoculture <em>at scale</em>.</p>
+        
+        <h4>🧩 OS Polyglots Scoring (Platform Breadth):</h4>
+        <p><strong>Primary metric:</strong> count of distinct operating systems <em>including Linux</em> across the operator's fleet. <strong>Tiebreakers:</strong> non-Linux relay count, then bandwidth. <strong>Eligibility:</strong> 2+ distinct OSes.</p>
+        <p><em>Example:</em> 6 OSes on 15 relays (Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, SunOS) ranks above 2 OSes on 1,000 relays — this board rewards fleets that are diverse <em>within themselves</em>, resilient to any single kernel vulnerability.</p>
+        
+        <h4>🌍 Global Powerhouses Scoring (Non-EU Volume):</h4>
+        <p><strong>Primary metric:</strong> count of relays operated outside the European Union. <strong>Tiebreakers:</strong> distinct non-EU country count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 1,000 relays in 2 non-EU countries ranks above 100 relays in 10 non-EU countries — this board rewards expanding Tor capacity beyond EU concentration <em>at scale</em>.</p>
+        
+        <h4>🧭 Jurisdiction Globetrotters Scoring (Non-EU Breadth):</h4>
+        <p><strong>Primary metric:</strong> count of distinct non-EU countries with relay presence. <strong>Tiebreakers:</strong> non-EU relay count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 15 relays across 14 non-EU countries ranks above 1,000 relays in 2 non-EU countries — this board rewards spreading across many legal jurisdictions so no single legal action can reach the whole fleet.</p>
         
         <h4>🏴‍☠️ Frontier Builder Scoring:</h4>
         <p><strong>Rare Country Score Calculation:</strong> The rare country score sums up points from all countries where an operator runs relays using a weighted scoring system:</p>

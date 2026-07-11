@@ -20,6 +20,9 @@ from .country_utils import (
     EU_POLITICAL_REGION
 )
 
+# Diversity Index (Diversity All-Rounders board): network-adaptive scoring
+from .diversity_index import annotate_operators, count_diverse_relays, RARE_AS_TIERS
+
 # Import HTML escaping utility
 from .html_escape_utils import safe_html_escape
 from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
@@ -394,6 +397,15 @@ def _calculate_aroi_leaderboards(relays_instance):
     if not aroi_operators:
         return {}
     
+    # Step 1.5: Annotate every operator with Diversity Index sub-scores +
+    # tooltips. Runs AFTER collection because the index yardsticks are derived
+    # from the full operator population + network structure (adaptive caps).
+    annotate_operators(
+        aroi_operators,
+        n_countries=len(relays_instance.json.get('sorted', {}).get('country', {})),
+        n_ases=len(relays_instance.json.get('sorted', {}).get('as', {})),
+    )
+    
     # Step 2: Sort operators into leaderboard category rankings
     leaderboards = _rank_operators(aroi_operators)
     
@@ -764,6 +776,24 @@ def _collect_operator_metrics(relays_instance):
             as_diversity_score=as_diversity_score
         )
         
+        # === DIVERSITY INDEX INPUTS (Diversity All-Rounders board) ===
+        # rare_as_count: how many of the operator's unique ASes are rare/epic/
+        # legendary hosting choices (AS breadth facet, shown in Network cell).
+        # as_diversity_score above already IS the AS rarity sum (volume facet).
+        rare_as_count = 0
+        _seen_as_for_rarity = set()
+        for relay in operator_relays:
+            _as_num = relay.get('as', '')
+            if not _as_num or _as_num in _seen_as_for_rarity:
+                continue
+            _seen_as_for_rarity.add(_as_num)
+            _as_entry = as_sorted_data.get(_as_num)
+            if _as_entry and _as_entry.get('as_rarity_tier', 'common') in RARE_AS_TIERS:
+                rare_as_count += 1
+        # diverse_relay_count: relays differing from the operator's dominant
+        # OS/country/AS profile (Scale component, reviewer-approved Version A).
+        diverse_relay_count = count_diverse_relays(operator_relays)
+        
         # Uptime approximation (new calculation - from running status)
         running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
         uptime_percentage = (running_relays / total_relays * 100) if total_relays > 0 else 0.0
@@ -889,6 +919,12 @@ def _collect_operator_metrics(relays_instance):
             'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
             'non_eu_country_breakdown': sorted_non_eu_country_breakdown,  # Non-EU country breakdown
             'diversity_score': diversity_score,
+            # Diversity Index inputs (scores/index/tooltips are annotated in
+            # bulk by annotate_operators() once all operators are collected,
+            # because the yardsticks derive from the full operator population)
+            'as_rarity_sum': as_diversity_score,
+            'rare_as_count': rare_as_count,
+            'diverse_relay_count': diverse_relay_count,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
             'guard_consensus_weight': guard_consensus_weight,
@@ -1007,7 +1043,11 @@ def _rank_operators(aroi_operators):
         'guard_operators':    _top_n(aroi_operators, 'guard_count'),
         'reliability_masters': _top_n(aroi_operators, 'reliability_6m_score', filter_fn=_reliability_filter),
         'legacy_titans':      _top_n(aroi_operators, 'reliability_5y_score', filter_fn=_legacy_filter),
-        'most_diverse':       _top_n(aroi_operators, 'diversity_score'),
+        # Overall diversity — ranked by the network-adaptive Diversity Index
+        # (mean of co-equal Geographic/Platform/Network/Scale sub-scores);
+        # legacy diversity_score breaks ties for a deterministic order.
+        'most_diverse':       _top_n(aroi_operators, 'diversity_index',
+                                     tiebreakers=['diversity_score', 'total_bandwidth']),
         # Platform diversity — Volume: most non-Linux relays contributed
         'platform_volume':    _top_n(aroi_operators, 'non_linux_count',
                                      tiebreakers=['platform_count', 'total_bandwidth']),
@@ -1092,6 +1132,9 @@ _PASSTHROUGH_KEYS = (
     'validated_middle_count', 'validated_consensus_weight', 'validated_country_count',
     'validated_v2_relay_count', 'validated_v3_relay_count', 'v2_relay_count', 'v3_relay_count',
     'v3_pct_of_total', 'v3_tier',
+    # Diversity Index (annotated by diversity_index.annotate_operators)
+    'diversity_index', 'geo_score', 'platform_score', 'network_score', 'scale_score',
+    'rare_as_count', 'diverse_relay_count',
 )
 
 # Defaults for category-specific entry fields (non-applicable categories keep these).
@@ -1103,6 +1146,10 @@ _ENTRY_EXTRAS_DEFAULTS = dict.fromkeys((
     'veteran_details_short', 'veteran_tooltip', 'reliability_details_short', 'reliability_tooltip',
     'bandwidth_details_short', 'bandwidth_tooltip', 'ipv4_achievement_title', 'ipv6_achievement_title',
     'ip_address_details', 'ip_address_tooltip', 'validated_bandwidth', 'validated_bandwidth_unit',
+    # Diversity All-Rounders Option-2 cells (populated by _diversity_extras)
+    'geo_cell', 'platform_cell', 'network_cell', 'scale_cell',
+    'geo_cell_tooltip', 'platform_cell_tooltip', 'network_cell_tooltip', 'scale_cell_tooltip',
+    'index_tooltip',
 ), "")
 # Score fields default to formatted zero/unity values (matching f"{0.0:.1f}" etc.).
 _ENTRY_EXTRAS_DEFAULTS.update({
@@ -1179,18 +1226,32 @@ def _platform_extras(category, metrics, bandwidth_formatter):
 
 
 def _diversity_extras(category, metrics, bandwidth_formatter):
-    """most_diverse: diversity calculation breakdown + score tooltip."""
+    """most_diverse (Diversity All-Rounders): Option-2 display cells.
+
+    Cells show plain counts anyone can read; the exact sub-scores and today's
+    network-derived yardsticks live in the cell tooltips (built alongside the
+    scores in diversity_index.annotate_operators)."""
     country_count = metrics['country_count']
     platform_count = metrics['platform_count']
     as_count = metrics['unique_as_count']
+    diverse_count = metrics['diverse_relay_count']
 
     # Create short format (max 20 chars): "5 Countries, 3 OS, 8 AS"
     diversity_breakdown_full = f"{country_count} Countries, {platform_count} OS, {as_count} AS"
 
-    # Create full tooltip with calculation details
     return {
         'diversity_breakdown_details': _truncate_with_ellipsis(diversity_breakdown_full, 20),
-        'diversity_breakdown_tooltip': f"Diversity Score: {country_count} countries x 3.0 + {as_count} AS (rarity-weighted) x 2.0 + {platform_count} platforms x 1.0 = {metrics['diversity_score']:.1f}",
+        'diversity_breakdown_tooltip': metrics['index_tooltip'],
+        # Option-2 cells: counts in cells, scores in tooltips
+        'geo_cell': f"{country_count} countr{'y' if country_count == 1 else 'ies'}",
+        'platform_cell': f"{platform_count} OS{'' if platform_count == 1 else 'es'}",
+        'network_cell': f"{as_count} AS",
+        'scale_cell': f"{diverse_count} diverse relay{'' if diverse_count == 1 else 's'}",
+        'geo_cell_tooltip': metrics['geo_cell_tooltip'],
+        'platform_cell_tooltip': metrics['platform_cell_tooltip'],
+        'network_cell_tooltip': metrics['network_cell_tooltip'],
+        'scale_cell_tooltip': metrics['scale_cell_tooltip'],
+        'index_tooltip': metrics['index_tooltip'],
     }
 
 
