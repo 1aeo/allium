@@ -418,9 +418,10 @@ class IntelligenceEngine:
             # explains the Gini scale so "is high or low good?" is unambiguous.
             gini_explainer = (
                 f"Gini coefficient {gini:.3f}. Measures how evenly network capacity is "
-                f"spread across relays: 0.0 = perfectly even (best), 1.0 = one relay "
-                f"holds everything (worst). Lower is better. Under 0.4 = EXCELLENT "
-                f"spread, 0.4-0.6 = GOOD, over 0.6 = POOR (concentrated)."
+                f"spread across relays: 0.0 = perfectly even (best), values approaching "
+                f"1.0 = maximally concentrated (worst). Lower is better. Under 0.4 = "
+                f"EXCELLENT spread, 0.4 to under 0.6 = GOOD, 0.6 and above = POOR "
+                f"(concentrated)."
             )
             if gini < 0.4:
                 template_values['capacity_spread_status'] = 'EXCELLENT'

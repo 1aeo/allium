@@ -71,20 +71,47 @@ def _log_ramp(value, cap):
     return min(math.log(1 + max(value, 0)) / math.log(1 + cap), 1.0)
 
 
-def _rank_n_value(values, n=VOLUME_CAP_RANK, floor=VOLUME_CAP_FLOOR):
-    """The n-th highest value in `values` (top-n cohort anchor), floored."""
+def _rank_n_value(values, n=VOLUME_CAP_RANK, floor=VOLUME_CAP_FLOOR) -> float:
+    """The n-th highest value in `values` (top-n cohort anchor), floored.
+
+    Falls back to the lowest available value when fewer than n values exist
+    (see _volume_yardstick_label for the matching tooltip wording).
+    """
     xs = sorted(values, reverse=True)
     if not xs:
         return floor
     return max(xs[min(n - 1, len(xs) - 1)], floor)
 
 
+def _volume_yardstick_label(n_operators) -> str:
+    """Human wording for the volume-cap cohort anchor used in tooltips.
+
+    With fewer than VOLUME_CAP_RANK operators, _rank_n_value() falls back to
+    the smallest available value, so describing it as the "5th-largest"
+    would be wrong — call it "largest available" instead.
+    """
+    if n_operators >= VOLUME_CAP_RANK:
+        return f"today's {VOLUME_CAP_RANK}th-largest"
+    return "today's largest available"
+
+
+def _mode(counter):
+    """Deterministic mode: highest count, ties broken by smallest key.
+
+    Counter.most_common(1) breaks ties by insertion order, which would let
+    the same relay multiset produce different dominant profiles (and thus
+    different diverse-relay counts) depending on input order.
+    """
+    return min(counter, key=lambda k: (-counter[k], k))
+
+
 def count_diverse_relays(operator_relays):
     """Count relays differing from the operator's dominant profile.
 
     Dominant profile = the operator's most-common platform, most-common
-    country and most-common AS. A relay is "diverse" if it differs in >= 1
-    of the three (reviewer-approved Version A definition).
+    country and most-common AS (ties broken lexicographically so the result
+    is independent of relay input order). A relay is "diverse" if it differs
+    in >= 1 of the three (reviewer-approved Version A definition).
 
     Returns:
         int: number of diverse relays (0 for a perfect monoculture)
@@ -94,9 +121,9 @@ def count_diverse_relays(operator_relays):
     platforms = Counter((r.get('platform') or '?') for r in operator_relays)
     countries = Counter((r.get('country') or '?') for r in operator_relays)
     ases = Counter((r.get('as') or '?') for r in operator_relays)
-    mode_platform = platforms.most_common(1)[0][0]
-    mode_country = countries.most_common(1)[0][0]
-    mode_as = ases.most_common(1)[0][0]
+    mode_platform = _mode(platforms)
+    mode_country = _mode(countries)
+    mode_as = _mode(ases)
     return sum(
         1 for r in operator_relays
         if (r.get('platform') or '?') != mode_platform
@@ -160,44 +187,55 @@ def compute_operator_scores(metrics, caps):
         'network_score': round(net),
         'scale_score': round(scale),
     }
-    scores['diversity_index'] = round((geo + plat + net + scale) / 4)
+    # Average the ROUNDED components so the displayed Index always equals the
+    # mean of the four visible sub-scores (the tooltip states exactly that).
+    scores['diversity_index'] = round(
+        (scores['geo_score'] + scores['platform_score']
+         + scores['network_score'] + scores['scale_score']) / 4
+    )
     return scores
 
 
-def build_cell_tooltips(metrics, caps, n_countries, n_ases):
+def build_cell_tooltips(metrics, caps, n_countries, n_ases, n_operators=VOLUME_CAP_RANK):
     """Build the Option-2 hover tooltips for the four All-Rounders cells.
 
     Each tooltip states the sub-score, the raw facts, and TODAY'S yardsticks
     (which recompute from the live network every update).
+
+    Args:
+        n_operators: size of the operator population — drives the volume
+            yardstick wording ("5th-largest" vs "largest available" when
+            fewer than VOLUME_CAP_RANK operators exist).
 
     Returns:
         dict: geo_cell_tooltip, platform_cell_tooltip, network_cell_tooltip,
               scale_cell_tooltip, index_tooltip
     """
     yardstick_note = "Yardsticks recompute from the live network every update."
+    cohort = _volume_yardstick_label(n_operators)
     return {
         'geo_cell_tooltip': (
             f"Geographic score {metrics['geo_score']}/100 — {metrics['country_count']} countries "
             f"(yardstick: {caps['countries']} = 10% of the {n_countries} countries hosting relays) "
             f"+ {metrics['non_eu_count']} non-EU relays "
-            f"(yardstick: {caps['non_eu_relays']} = today's 5th-largest non-EU fleet). {yardstick_note}"
+            f"(yardstick: {caps['non_eu_relays']} = {cohort} non-EU fleet). {yardstick_note}"
         ),
         'platform_cell_tooltip': (
             f"Platform score {metrics['platform_score']}/100 — {metrics['platform_count']} distinct OSes incl. Linux "
             f"(yardstick: {caps['oses']} = the most OSes any single operator runs today) "
             f"+ {metrics['non_linux_count']} non-Linux relays "
-            f"(yardstick: {caps['non_linux_relays']} = today's 5th-largest non-Linux fleet). {yardstick_note}"
+            f"(yardstick: {caps['non_linux_relays']} = {cohort} non-Linux fleet). {yardstick_note}"
         ),
         'network_cell_tooltip': (
             f"Network score {metrics['network_score']}/100 — {metrics['unique_as_count']} unique ASes, "
             f"{metrics['rare_as_count']} rare (yardstick: {caps['unique_as']} AS = 1% of the {n_ases} ASes hosting relays) "
             f"+ AS rarity sum {metrics['as_rarity_sum']:.0f} "
-            f"(yardstick: {caps['as_rarity_sum']:.0f} = today's 5th-highest). {yardstick_note}"
+            f"(yardstick: {caps['as_rarity_sum']:.0f} = {cohort} AS rarity sum). {yardstick_note}"
         ),
         'scale_cell_tooltip': (
             f"Scale score {metrics['scale_score']}/100 — {metrics['diverse_relay_count']} diverse relays: "
             f"relays differing from this operator's most-common OS, country or AS "
-            f"(yardstick: {caps['diverse_relays']} = today's 5th-largest diverse fleet). {yardstick_note}"
+            f"(yardstick: {caps['diverse_relays']} = {cohort} diverse fleet). {yardstick_note}"
         ),
         'index_tooltip': (
             f"Diversity Index {metrics['diversity_index']}/100 = average of Geographic "
@@ -216,7 +254,8 @@ def annotate_operators(aroi_operators, n_countries, n_ases):
     index_tooltip) and returns the caps used.
     """
     caps = compute_network_caps(aroi_operators, n_countries, n_ases)
+    n_operators = len(aroi_operators)
     for metrics in aroi_operators.values():
         metrics.update(compute_operator_scores(metrics, caps))
-        metrics.update(build_cell_tooltips(metrics, caps, n_countries, n_ases))
+        metrics.update(build_cell_tooltips(metrics, caps, n_countries, n_ases, n_operators))
     return caps
