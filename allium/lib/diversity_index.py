@@ -95,7 +95,7 @@ def _volume_yardstick_label(n_operators) -> str:
     return "today's largest available"
 
 
-def _mode(counter):
+def _mode(counter) -> str:
     """Deterministic mode: highest count, ties broken by smallest key.
 
     Counter.most_common(1) breaks ties by insertion order, which would let
