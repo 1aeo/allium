@@ -1438,10 +1438,12 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
                 # === VOLUME/BREADTH SUMMARIES (diversity cluster) ===
-                'platform_volume_summary': f"{_nl_n} non-Linux {_nl_word} ({_os_n} {_os_word})",
-                'platform_breadth_summary': f"{_os_n} {_os_word} ({_nl_n} non-Linux {_nl_word})",
-                'non_eu_volume_summary': f"{_neu_n} {_neu_word} ({_neuc_n} {_neuc_word})",
-                'non_eu_breadth_summary': f"{_neuc_n} {_neuc_word} ({_neu_n} {_neu_word})",
+                # Primary metric is a bare count (column header already names the
+                # unit); parenthetical keeps the tiebreaker label for clarity.
+                'platform_volume_summary': f"{_nl_n} ({_os_n} {_os_word})",
+                'platform_breadth_summary': f"{_os_n} ({_nl_n} non-Linux {_nl_word})",
+                'non_eu_volume_summary': f"{_neu_n} ({_neuc_n} {_neuc_word})",
+                'non_eu_breadth_summary': f"{_neuc_n} ({_neu_n} {_neu_word})",
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
