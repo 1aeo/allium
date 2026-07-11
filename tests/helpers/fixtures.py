@@ -53,6 +53,20 @@ AROI_CATEGORY_TITLES = {
 }
 
 
+class StubBandwidthFormatter:
+    """Minimal bandwidth formatter for AROI leaderboard unit tests.
+
+    Matches the methods ``_format_leaderboard_entries`` calls without
+    pulling in the full production formatter.
+    """
+
+    def determine_unit(self, _value) -> str:
+        return 'MB/s'
+
+    def format_bandwidth_with_unit(self, value, _unit, decimal_places=1) -> str:
+        return f'{value / 1e6:.{decimal_places}f}'
+
+
 class TestDataFactory:
     """Factory class for creating common test data structures."""
     
@@ -213,10 +227,23 @@ class TestDataFactory:
         entry.non_eu_count = 1 + (rank // 2)
         entry.non_eu_count_with_percentage = f'{1 + (rank // 2)} ({50 + rank}%)'
         entry.non_eu_country_count = 1 + (rank // 4)
-        entry.platform_volume_summary = f'{1 + (rank // 3)} ({1 + (rank // 3)} OSes)'
-        entry.platform_breadth_summary = f'{1 + (rank // 3)} ({1 + (rank // 3)} non-Linux relays)'
-        entry.non_eu_volume_summary = f'{1 + (rank // 2)} ({1 + (rank // 4)} countries)'
-        entry.non_eu_breadth_summary = f'{1 + (rank // 4)} ({1 + (rank // 2)} relays)'
+        # Match production singular/plural labels in aroileaders summaries.
+        platform_word = 'OS' if entry.platform_count == 1 else 'OSes'
+        non_linux_word = 'relay' if entry.non_linux_count == 1 else 'relays'
+        country_word = 'country' if entry.non_eu_country_count == 1 else 'countries'
+        non_eu_word = 'relay' if entry.non_eu_count == 1 else 'relays'
+        entry.platform_volume_summary = (
+            f'{entry.non_linux_count} ({entry.platform_count} {platform_word})'
+        )
+        entry.platform_breadth_summary = (
+            f'{entry.platform_count} ({entry.non_linux_count} non-Linux {non_linux_word})'
+        )
+        entry.non_eu_volume_summary = (
+            f'{entry.non_eu_count} ({entry.non_eu_country_count} {country_word})'
+        )
+        entry.non_eu_breadth_summary = (
+            f'{entry.non_eu_country_count} ({entry.non_eu_count} {non_eu_word})'
+        )
         entry.rare_country_count = 1 + (rank // 10)
         entry.relays_in_rare_countries = 1 + (rank // 8)
         entry.veteran_days = 100 + (rank * 10)
