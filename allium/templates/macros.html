@@ -175,12 +175,13 @@
 {%- endmacro -%}
 
 {# DRY: Overload summary bullet — used by detail_summary (family/AS pages) and contact.html.
-   Hidden entirely when summary is none/empty (0 overloaded relays). #}
+   Hidden entirely when summary is none/empty (0 overloaded relays).
+   Whitespace-stripped so a missing bullet leaves no blank-line residue in the <ul>. #}
 {%- macro overload_bullet(summary) -%}
-{% if summary %}
+{%- if summary -%}
 <li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor proposal 328: out-of-memory, onionskin drops, TCP port exhaustion), hits its configured bandwidth rate limits, or exhausts file descriptors. Sources: Onionoo /details and /bandwidth endpoints.">Overloaded</span>:</strong>
     <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span></li>
-{% endif %}
+{%- endif -%}
 {%- endmacro -%}
 
 {# DRY: Network-wide DNS health bullet — used by all 5 misc listing pages #}
@@ -230,8 +231,8 @@
     {%- endif %}
     {%- if total_data_formatted and total_data_formatted != 'N/A' %}
     <li><strong><span title="Total data transferred (read + write) over bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}{% if total_data_pct %} ({{ total_data_pct }}){% endif %}</li>
-    {%- endif %}
-    {{ overload_bullet(overload_summary) }}
+    {%- endif -%}
+    {{- overload_bullet(overload_summary) -}}
     {%- if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this group. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
         <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
