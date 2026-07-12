@@ -6,7 +6,6 @@ import pytest
 SAMPLE_SUMMARY = {
     'overloaded': 2,
     'total': 10,
-    'pct': 20.0,
     'pct_formatted': '20.0%',
 }
 
@@ -71,7 +70,6 @@ def test_overload_bullet_macro_singular(jinja_env):
     rendered = template.render(summary={
         'overloaded': 1,
         'total': 1,
-        'pct': 100.0,
         'pct_formatted': '100.0%',
     })
     assert '100.0% (1 of 1 relay)' in rendered

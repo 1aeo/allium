@@ -28,8 +28,8 @@ def test_mixed_overloaded_counts():
     assert summary is not None
     assert summary['overloaded'] == 3
     assert summary['total'] == 8
-    assert summary['pct'] == pytest.approx(37.5)
     assert summary['pct_formatted'] == '37.5%'
+    assert 'pct' not in summary
 
 
 def test_all_overloaded():
