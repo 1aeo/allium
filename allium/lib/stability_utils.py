@@ -208,38 +208,17 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
 
 
 def compute_group_overload_summary(members):
-    """Summarize overload status for a group of relays (operator/family/AS).
-
-    Counts relays whose precomputed stability_is_overloaded flag is set
-    (same single source of truth as the network health dashboard).
-    Returns None when the group is empty or no relay is overloaded —
-    callers use this to hide the summary bullet entirely.
-
-    Args:
-        members: Iterable of relay dicts (already resolved from sorted-group indices).
-
-    Returns:
-        None, or dict with:
-        - overloaded (int): count of overloaded relays
-        - total (int): group size
-        - pct (float): 100 * overloaded / total
-        - pct_formatted (str): e.g. '12.5%' or '<0.1%' for tiny nonzero fractions
-    """
+    """Count overloaded relays in a group; None if zero (hides the bullet)."""
     total = len(members)
-    if total == 0:
+    if not total:
         return None
-    overloaded = sum(1 for r in members if r.get('stability_is_overloaded'))
-    if overloaded == 0:
+    n = sum(1 for r in members if r.get('stability_is_overloaded'))
+    if not n:
         return None
-    pct = 100.0 * overloaded / total
-    pct_formatted = f"{pct:.1f}%"
-    # Never show a lying "0.0%" next to a nonzero count (e.g. 1 of 3000)
-    if pct_formatted == "0.0%":
-        pct_formatted = "<0.1%"
+    pct = 100.0 * n / total
     return {
-        'overloaded': overloaded,
+        'overloaded': n,
         'total': total,
-        'pct': pct,
-        'pct_formatted': pct_formatted,
+        'pct_formatted': f"{pct:.1f}%" if pct >= 0.05 else "<0.1%",
     }
 
