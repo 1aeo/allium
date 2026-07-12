@@ -174,6 +174,15 @@
  of {{ summary.exit_count }} {{ label }}
 {%- endmacro -%}
 
+{# DRY: Overload summary bullet — used by detail_summary (family/AS pages) and contact.html.
+   Hidden entirely when summary is none/empty (0 overloaded relays). #}
+{%- macro overload_bullet(summary) -%}
+{% if summary %}
+<li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor proposal 328: out-of-memory, onionskin drops, TCP port exhaustion), hits its configured bandwidth rate limits, or exhausts file descriptors. Sources: Onionoo /details and /bandwidth endpoints.">Overloaded</span>:</strong>
+    <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span></li>
+{% endif %}
+{%- endmacro -%}
+
 {# DRY: Network-wide DNS health bullet — used by all 5 misc listing pages #}
 {%- macro network_dns_health_bullet(nh) -%}
 {% if nh.exit_dns_health_available %}
@@ -194,7 +203,7 @@
     {%- endif -%}
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none) -%}
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none, overload_summary=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -222,6 +231,7 @@
     {%- if total_data_formatted and total_data_formatted != 'N/A' %}
     <li><strong><span title="Total data transferred (read + write) over bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}{% if total_data_pct %} ({{ total_data_pct }}){% endif %}</li>
     {%- endif %}
+    {{ overload_bullet(overload_summary) }}
     {%- if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this group. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
         <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
