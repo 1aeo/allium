@@ -36,6 +36,9 @@ def test_tiny_fraction_uses_floor():
     """1 of 3000 would round to 0.0% — must show <0.1% instead."""
     members = [{'stability_is_overloaded': True}] + [{}] * 2999
     assert compute_group_overload_summary(members)['pct_formatted'] == '<0.1%'
+    # Boundary: 1 of 1250 = 0.08% is >= 0.05 so .1f rounds it up to "0.1%"
+    members = [{'stability_is_overloaded': True}] + [{}] * 1249
+    assert compute_group_overload_summary(members)['pct_formatted'] == '0.1%'
 
 
 # ---------------------------------------------------------------------------
