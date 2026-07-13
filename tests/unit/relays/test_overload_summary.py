@@ -42,36 +42,9 @@ def test_tiny_fraction_uses_floor():
 
 
 # ---------------------------------------------------------------------------
-# build_template_args wiring — ONE shared Relays instance for all tests
-# (full __init__ pipeline is expensive; 4 relays, 2 overloaded)
+# build_template_args wiring — shared overload_relay_set fixture from
+# tests/conftest.py (module-scoped; one expensive Relays init for all tests)
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope='module')
-def relay_set(tmp_path_factory):
-    from allium.lib.relays import Relays
-
-    n = 4
-    relays = [{
-        'nickname': f'Relay{i}', 'fingerprint': f'{i:040d}', 'running': True,
-        'flags': ['Running', 'Valid'], 'observed_bandwidth': 1_000_000,
-        'consensus_weight': 100, 'consensus_weight_fraction': 0.01,
-        'or_addresses': [f'192.0.2.{i + 1}:9001'],
-        'as': 'AS64500', 'as_name': 'Test AS',
-        'country': 'us', 'country_name': 'United States', 'platform': 'Linux',
-        'first_seen': '2023-01-01 00:00:00', 'last_seen': '2026-07-12 00:00:00',
-        'contact': 'ops@example.com', 'measured': True,
-        'effective_family': [f'{j:040d}' for j in range(n)],
-    } for i in range(n)]
-
-    rs = Relays(output_dir=str(tmp_path_factory.mktemp('overload')),
-                onionoo_url='https://test.example.com',
-                relay_data={'relays': relays},
-                use_bits=False, progress=False, mp_workers=0)
-    # Stability is normally set during bandwidth enrichment; apply after init.
-    for i, relay in enumerate(rs.json['relays']):
-        relay['stability_is_overloaded'] = i < 2  # 2 of 4 overloaded
-    return rs
-
 
 def _args(relay_set, page_key):
     value, group = next(iter(relay_set.json['sorted'][page_key].items()))
@@ -79,24 +52,25 @@ def _args(relay_set, page_key):
 
 
 @pytest.mark.parametrize('page_key', ['contact', 'family', 'as'])
-def test_build_template_args_includes_overload_summary(relay_set, page_key):
-    assert _args(relay_set, page_key)['overload_summary'] == {
+def test_build_template_args_includes_overload_summary(overload_relay_set, page_key):
+    assert _args(overload_relay_set, page_key)['overload_summary'] == {
         'overloaded': 2, 'total': 4, 'pct_formatted': '50.0%'}
 
 
-def test_build_template_args_skips_out_of_scope_pages(relay_set):
+def test_build_template_args_skips_out_of_scope_pages(overload_relay_set):
     """Country pages must not get an overload_summary (out of requested scope)."""
-    assert _args(relay_set, 'country')['overload_summary'] is None
+    assert _args(overload_relay_set, 'country')['overload_summary'] is None
 
 
-def test_build_template_args_hides_when_zero_overloaded(relay_set):
-    saved = [r['stability_is_overloaded'] for r in relay_set.json['relays']]
+def test_build_template_args_hides_when_zero_overloaded(overload_relay_set):
+    relays = overload_relay_set.json['relays']
+    saved = [r['stability_is_overloaded'] for r in relays]
     try:
-        for r in relay_set.json['relays']:
+        for r in relays:
             r['stability_is_overloaded'] = False
-        assert _args(relay_set, 'contact')['overload_summary'] is None
+        assert _args(overload_relay_set, 'contact')['overload_summary'] is None
     finally:
-        for r, flag in zip(relay_set.json['relays'], saved):
+        for r, flag in zip(relays, saved):
             r['stability_is_overloaded'] = flag
 
 
