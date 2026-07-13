@@ -39,6 +39,7 @@ from .operator_analysis import (
     compute_contact_display_data,
     generate_contact_rankings,
 )
+from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -1248,6 +1249,9 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
     family_support_counts = _get_family_support_counts(k, contact_display_data, i)
     # Exit DNS Health summary (DRY helper - precomputed for contacts/families, on-the-fly for others)
     exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
+    # Overload summary bullet (contact/family/as pages only; None hides bullet)
+    overload_summary = (compute_group_overload_summary(members)
+                        if k in ("contact", "family", "as") else None)
 
     display = i.get("display", {})
     
@@ -1302,6 +1306,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'base_url': relay_set.base_url,
         'family_support_counts': family_support_counts,
         'exit_dns_health_summary': exit_dns_health_summary,
+        'overload_summary': overload_summary,
         'sortable_scope': 'contact' if k == 'contact' else 'none',
         'contact_sort_mode': CONTACT_DEFAULT_SORT_MODE if k == 'contact' else None,
         'contact_sort_links': _contact_sort_links() if k == 'contact' else {},

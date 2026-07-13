@@ -590,6 +590,39 @@ def process_relays(tmp_path):
     return _process
 
 
+@pytest.fixture(scope='module')
+def overload_relay_set(tmp_path_factory):
+    """Module-scoped Relays instance with 4 relays (2 flagged overloaded).
+
+    Shared fixture for group-overload summary tests. Module-scoped because the
+    full Relays init pipeline (categorize -> leaderboards -> intelligence) is
+    expensive; one instance serves all wiring tests. stability_is_overloaded is
+    applied post-init since it is normally set during bandwidth enrichment.
+    """
+    from allium.lib.relays import Relays
+
+    n = 4
+    relays = [{
+        'nickname': f'Relay{i}', 'fingerprint': f'{i:040d}', 'running': True,
+        'flags': ['Running', 'Valid'], 'observed_bandwidth': 1_000_000,
+        'consensus_weight': 100, 'consensus_weight_fraction': 0.01,
+        'or_addresses': [f'192.0.2.{i + 1}:9001'],
+        'as': 'AS64500', 'as_name': 'Test AS',
+        'country': 'us', 'country_name': 'United States', 'platform': 'Linux',
+        'first_seen': '2023-01-01 00:00:00', 'last_seen': '2026-07-12 00:00:00',
+        'contact': 'ops@example.com', 'measured': True,
+        'effective_family': [f'{j:040d}' for j in range(n)],
+    } for i in range(n)]
+
+    rs = Relays(output_dir=str(tmp_path_factory.mktemp('overload')),
+                onionoo_url=TEST_DETAILS_URL,
+                relay_data={'relays': relays},
+                use_bits=False, progress=False, mp_workers=0)
+    for i, relay in enumerate(rs.json['relays']):
+        relay['stability_is_overloaded'] = i < 2  # 2 of 4 overloaded
+    return rs
+
+
 # ============================================================================
 # PYTEST HOOKS
 # ============================================================================
