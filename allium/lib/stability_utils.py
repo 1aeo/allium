@@ -206,3 +206,19 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
         'stability_color': '#28a745'
     }
 
+
+def compute_group_overload_summary(members):
+    """Count overloaded relays in a group; None if zero (hides the bullet)."""
+    total = len(members)
+    if not total:
+        return None
+    n = sum(1 for r in members if r.get('stability_is_overloaded'))
+    if not n:
+        return None
+    pct = 100.0 * n / total
+    return {
+        'overloaded': n,
+        'total': total,
+        'pct_formatted': f"{pct:.1f}%" if pct >= 0.05 else "<0.1%",
+    }
+

@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, aroi_v2v3_pills, family_support_inline, dns_health_bullet %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, aroi_v2v3_pills, family_support_inline, dns_health_bullet, overload_bullet %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}
@@ -199,8 +199,8 @@
                     
                     {% if contact_display_data and contact_display_data.total_data_formatted and contact_display_data.total_data_formatted != 'N/A' %}
                     <li><strong><span title="Total data transferred by all relays belonging to this operator (read + write). Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ contact_display_data.total_data_formatted }}{% if contact_display_data.total_data_pct %} ({{ contact_display_data.total_data_pct }}){% endif %}</li>
-                    {% endif %}
-                    
+                    {% endif -%}
+                    {{- overload_bullet(overload_summary) -}}
                     {% if exit_dns_health_summary %}
                     <li><strong><span title="Exit DNS Health: DNS resolution capability of this operator's exit relays. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
                         <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>,
