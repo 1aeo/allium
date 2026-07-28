@@ -104,8 +104,15 @@ def validate_url_arguments(args):
         # to http/https URLs; all other URL arguments require a full URL.
         # Reject scheme-relative URLs like "//evil.example/..." which would
         # inherit the page's protocol and redirect to an attacker-controlled host.
-        if attr == 'base_url' and url.startswith('/') and not url.startswith('//'):
-            continue
+        if attr == 'base_url':
+            # "/" looks like "site root", but downstream link building appends
+            # another slash and yields scheme-relative links (//example.com/...).
+            if url == '/':
+                print("❌ Error: --base-url cannot be '/'")
+                print("   Use an absolute URL (e.g., https://example.com) or a subpath (e.g., /metrics)")
+                sys.exit(1)
+            if url.startswith('/') and not url.startswith('//'):
+                continue
         scheme = urllib.parse.urlsplit(url).scheme.lower()
         if scheme not in ('http', 'https'):
             print(f"❌ Error: {flag_name} must use http:// or https:// scheme")
