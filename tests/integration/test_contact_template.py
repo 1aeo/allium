@@ -1032,6 +1032,65 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # by-ipv6.html should NOT exist (no IPv6 in test data)
         self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
+    def test_contact_page_generation_removes_stale_vanity_when_aroi_removed(self):
+        """A vanity directory should be cleaned when no contact validates that domain anymore."""
+        # Run 1: create vanity pages for a validated domain.
+        contact = "operator@example.org"
+        relay_data_run1 = {"relays": [
+            {"fingerprint": "1" * 40, "nickname": "R1", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 5000000, "consensus_weight": 1000,
+             "flags": ["Running", "Valid", "Guard"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": ["1.1.1.1:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+            {"fingerprint": "2" * 40, "nickname": "R2", "contact": contact,
+             "country": "de", "country_name": "Germany", "as": "AS2", "as_name": "Net2",
+             "observed_bandwidth": 3000000, "consensus_weight": 800,
+             "flags": ["Running", "Valid", "Exit"], "running": True, "measured": True,
+             "first_seen": "2023-06-01 00:00:00", "or_addresses": ["2.2.2.2:9001"],
+             "platform": "Tor 0.4.7.8 on FreeBSD", "effective_family": []},
+            {"fingerprint": "3" * 40, "nickname": "R3", "contact": contact,
+             "country": "fr", "country_name": "France", "as": "AS3", "as_name": "Net3",
+             "observed_bandwidth": 2000000, "consensus_weight": 600,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2024-01-01 00:00:00", "or_addresses": ["3.3.3.3:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+        ]}
+        relay_set1 = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data_run1,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url="https://metrics.1aeo.com",
+        )
+        contact_hash = list(relay_set1.json["sorted"]["contact"].keys())[0]
+        contact_data = relay_set1.json["sorted"]["contact"][contact_hash]
+        contact_data["is_validated_aroi"] = True
+        contact_data["aroi_domain"] = "example.org"
+        relay_set1.write_pages_by_key("contact")
+
+        vanity_dir = os.path.join(self.temp_dir, "example.org")
+        self.assertTrue(os.path.exists(os.path.join(vanity_dir, "index.html")))
+
+        # Run 2: no validated AROI domains remain; stale vanity should be removed.
+        relay_set2 = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,  # baseline fixture has no AROI domains
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url="https://metrics.1aeo.com",
+        )
+        relay_set2.write_pages_by_key("contact")
+
+        self.assertFalse(
+            os.path.exists(os.path.join(vanity_dir, "index.html")),
+            "stale vanity index.html should be removed after AROI domain disappears",
+        )
+
 
 class TestB3V3RelayInfoRendering(unittest.TestCase):
     """B3.2 (re-opened): integration tests for v3 awareness in
