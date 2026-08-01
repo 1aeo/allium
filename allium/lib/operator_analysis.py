@@ -9,7 +9,7 @@ Extracted from relays.py for better modularity.
 import html as _html
 import statistics
 
-from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES
+from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES, ONIONOO_HISTORY_PERIODS
 
 
 def _build_contact_rankings_index(relay_set):
@@ -625,7 +625,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     # lookups; for the largest operators (1aeo.com with 952 relays)
     # the saving is ~952 dict accesses per page render.
     variants = {}
-    td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+    td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
     for r in members:
         # Variant collection
         raw = r.get('contact', '') or ''
@@ -1295,7 +1295,7 @@ def process_operator_flag_reliability(operator_flag_data, network_flag_statistic
             'V2Dir': {'icon': '📁', 'display_name': 'Directory Services'},
             'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
         },
-        periods=['1_month', '6_months', '1_year', '5_years'],
+        periods=ONIONOO_HISTORY_PERIODS,
         period_order=['1M', '6M', '1Y', '5Y'],
         build_period_entry=build_period_entry
     )

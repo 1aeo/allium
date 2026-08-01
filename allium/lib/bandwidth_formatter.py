@@ -15,6 +15,8 @@ Replaces:
 - _format_bandwidth_with_unit() (Relays method)
 """
 
+from .time_utils import ONIONOO_HISTORY_PERIODS
+
 
 class BandwidthFormatter:
     """
@@ -240,7 +242,8 @@ def format_data_volume_with_unit(total_bytes, *, _use_bits=False):
     return f"{value} {unit}"
 
 
-_BEST_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+# Longest-first lookup order, derived from the canonical period tuple
+_BEST_PERIOD_ORDER = tuple(reversed(ONIONOO_HISTORY_PERIODS))
 
 def pick_best_period(sums):
     """Return (total, period) for the longest period with non-zero data.

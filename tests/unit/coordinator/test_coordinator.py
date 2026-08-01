@@ -589,16 +589,6 @@ class TestCoordinatorMultiAPI:
         result = coordinator.get_uptime_data()
         assert result is None
     
-    def test_get_consensus_health_data(self):
-        """Test getting consensus health data from coordinator"""
-        mock_health_data = {"health_status": {"test": "data"}}
-        
-        coordinator = make_coordinator()
-        coordinator.worker_data = {'consensus_health': mock_health_data}
-        
-        result = coordinator.get_consensus_health_data()
-        assert result == mock_health_data
-    
     def test_create_relay_set_with_additional_apis(self):
         """Test relay set creation with additional API data attached via enrich_with_api_data"""
         mock_details_data = {

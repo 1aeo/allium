@@ -23,6 +23,7 @@ from .time_utils import (
     parse_onionoo_timestamp,
     format_timestamp_gmt,
     format_time_ago,
+    ONIONOO_HISTORY_PERIODS,
 )
 from datetime import datetime, timedelta, timezone
 
@@ -559,7 +560,7 @@ class Relays:
                     # Store flag data for flag reliability analysis
                     relay["_flag_uptime_data"] = relay_uptime_data[fingerprint]['flag_data']
                 else:
-                    relay["uptime_percentages"] = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["uptime_percentages"] = {p: 0.0 for p in ONIONOO_HISTORY_PERIODS}
                     relay["_uptime_datapoints"] = {}
                     relay["_flag_uptime_data"] = {}
             
@@ -610,7 +611,7 @@ class Relays:
         try:
             # Use consolidated bandwidth processing with flag analysis
             from .bandwidth_utils import process_all_bandwidth_data_consolidated
-            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol
+            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol, _BEST_PERIOD_ORDER
             
             # SINGLE PASS PROCESSING: Process all bandwidth data in one optimized loop
             # This includes flag bandwidth analysis similar to uptime processing
@@ -660,10 +661,10 @@ class Relays:
                 
                 # Pre-format total data transferred display strings
                 td = relay.get("total_data", {})
-                best = next((p for p in ('5_years', '1_year', '6_months', '1_month') if td.get(p, 0) > 0), None)
+                best = next((p for p in _BEST_PERIOD_ORDER if td.get(p, 0) > 0), None)
                 relay["total_data_display"] = _fmt_data_vol(td[best]) if best else "N/A"
                 relay["total_data_period"] = best.replace('_', ' ') if best else ""
-                for _p in ('1_month', '6_months', '1_year', '5_years'):
+                for _p in ONIONOO_HISTORY_PERIODS:
                     relay[f"total_data_{_p}_display"] = _fmt_data_vol(td.get(_p, 0))
             
             # Process flag bandwidth display data

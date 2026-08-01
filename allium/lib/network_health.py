@@ -9,7 +9,7 @@ import statistics
 
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
-from .time_utils import parse_onionoo_timestamp, create_time_thresholds
+from .time_utils import parse_onionoo_timestamp, create_time_thresholds, ONIONOO_HISTORY_PERIODS
 from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
@@ -623,7 +623,7 @@ def calculate_network_health_metrics(relay_set):
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
     network_total_data = exit_total_data = guard_total_data = middle_total_data = 0
-    network_total_data_by_period = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+    network_total_data_by_period = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -1415,7 +1415,7 @@ def calculate_network_health_metrics(relay_set):
             ('hsdir',     'HSDir',     network_flag_statistics),
         ]
         
-        for period in ['1_month', '6_months', '1_year', '5_years']:
+        for period in ONIONOO_HISTORY_PERIODS:
             for role, flag_key, source in uptime_sources:
                 # Flag-based: source[flag_key][period], non-flag: source[period]
                 period_stats = (source.get(flag_key, {}).get(period, {})
@@ -1434,7 +1434,7 @@ def calculate_network_health_metrics(relay_set):
         health_metrics['uptime_percentiles'] = None
         
         # REFACTORED: Consistent fallback initialization using unified pattern
-        uptime_periods = ['1_month', '6_months', '1_year', '5_years']
+        uptime_periods = ONIONOO_HISTORY_PERIODS
         roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
         stat_types = ['mean', 'median']
         
