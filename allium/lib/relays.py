@@ -920,45 +920,15 @@ class Relays:
         from .categorization import calculate_network_totals
         return calculate_network_totals(self)
 
-    def _sort(self, relay, idx, k, v, cw, cw_fraction):
-        """Populate self.sorted dictionary with values from relay."""
-        from .categorization import sort_relay
-        sort_relay(self, relay, idx, k, v, cw, cw_fraction)
-
     def _categorize(self):
         """Iterate over relays and sort into categories."""
         from .categorization import categorize
         categorize(self)
 
-    def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
-        """Calculate consensus weight fractions for guard, middle, and exit relays."""
-        from .categorization import calculate_consensus_weight_fractions
-        calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw)
-
-    def _calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw):
-        """Calculate family network totals and centralization risk statistics."""
-        from .categorization import calculate_and_cache_family_statistics
-        calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw)
-
-    def _finalize_unique_as_counts(self):
-        """Convert unique AS sets to counts and clean up memory."""
-        from .categorization import finalize_unique_as_counts
-        finalize_unique_as_counts(self)
-
     def _propagate_as_rarity(self):
         """Propagate AS rarity data from sorted AS data to each relay."""
         from .categorization import propagate_as_rarity
         propagate_as_rarity(self)
-
-    def _calculate_contact_derived_data(self):
-        """Calculate derived contact data: primary countries and bandwidth means."""
-        from .categorization import calculate_contact_derived_data
-        calculate_contact_derived_data(self)
-
-    def _precompute_display_values(self):
-        """Pre-compute display strings for misc listing pages."""
-        from .categorization import precompute_display_values
-        precompute_display_values(self)
 
     def _set_family_support_types(self):
         """Set per-relay family_support_type and cache descriptor sets for downstream consumers.

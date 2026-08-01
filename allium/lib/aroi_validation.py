@@ -436,14 +436,6 @@ def classify_v3_tier(v3_relay_count: int, total_relay_count: int) -> str:
     return 'explorer'
 
 
-def _validate_structure(data):
-    """Validate data structure has required fields."""
-    if not isinstance(data, dict):
-        return False
-    required_keys = ['metadata', 'statistics', 'results']
-    return all(key in data for key in required_keys)
-
-
 def _calc_percentage(count: int, total: int) -> float:
     """Calculate percentage safely."""
     return (count / total * 100) if total > 0 else 0.0

@@ -683,11 +683,6 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                     if not has_significant_flags:
                         is_other = True
                 
-                # Special status relays - relays with unique flag combinations not covered by Exit/Guard/Middle
-                # This covers edge cases like relays that might have unusual flag combinations
-                elif not is_exit and not is_guard and (is_authority or is_bad_exit):
-                    is_other = True
-                
                 # Include relays in "other" category that have uptime data
                 if is_other:
                     uptime_value = relay_data['uptime_percentages'].get(period, 0.0)

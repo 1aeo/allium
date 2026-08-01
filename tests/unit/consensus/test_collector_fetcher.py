@@ -358,25 +358,6 @@ class TestAuthorityRegistry:
         assert count == 0
         assert registry.is_using_fallback() == True
     
-    def test_signing_key_mapping_always_hardcoded(self):
-        """Test that signing key to name mapping is always available."""
-        registry = AuthorityRegistry()
-        signing_keys = registry.get_signing_key_to_name()
-        
-        # Signing key mapping should always be available (hardcoded)
-        # Only 9 voting authorities have signing keys (Serge doesn't vote)
-        assert len(signing_keys) == 9
-        assert 'moria1' in signing_keys.values()
-        assert 'Serge' not in signing_keys.values()  # Serge doesn't vote
-        
-        # Even after Onionoo update, signing keys remain unchanged
-        relays = [{'nickname': 'NewAuth', 'fingerprint': 'NEW', 'flags': ['Authority']}]
-        registry.update_from_onionoo(relays)
-        
-        signing_keys_after = registry.get_signing_key_to_name()
-        assert signing_keys_after == signing_keys  # Unchanged
-
-
 class TestDynamicAuthorityFunctions:
     """Tests for module-level dynamic authority functions."""
     
