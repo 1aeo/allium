@@ -10,7 +10,13 @@ import pytest
 from allium.lib.page_writer import build_template_args
 from allium.lib.stability_utils import compute_group_overload_summary
 
-SAMPLE_SUMMARY = {'overloaded': 2, 'total': 10, 'pct_formatted': '20.0%'}
+SAMPLE_RELAYS = [
+    {'nickname': 'BigRelay', 'fingerprint': 'A' * 40, 'observed_bandwidth': 2000000,
+     'stability_is_overloaded': True, 'stability_tooltip': 'Rate limits hit W:2 R:0 (limit: 10 MB/s)'},
+    {'nickname': 'SmallRelay', 'fingerprint': 'B' * 40, 'observed_bandwidth': 1000000,
+     'stability_is_overloaded': True, 'stability_tooltip': 'FD exhaustion reported'},
+]
+SAMPLE_SUMMARY = {'overloaded': 2, 'total': 10, 'pct_formatted': '20.0%', 'relays': SAMPLE_RELAYS}
 
 
 # ---------------------------------------------------------------------------
@@ -22,14 +28,28 @@ SAMPLE_SUMMARY = {'overloaded': 2, 'total': 10, 'pct_formatted': '20.0%'}
     ([{'stability_is_overloaded': False}, {}], None),                # zero overloaded / missing key
     ([{'stability_is_overloaded': True}] * 3
      + [{'stability_is_overloaded': False}] * 5,
-     {'overloaded': 3, 'total': 8, 'pct_formatted': '37.5%'}),       # mixed
+     {'overloaded': 3, 'total': 8, 'pct_formatted': '37.5%',
+      'relays': [{'stability_is_overloaded': True}] * 3}),           # mixed
     ([{'stability_is_overloaded': True}] * 4,
-     {'overloaded': 4, 'total': 4, 'pct_formatted': '100.0%'}),      # all overloaded
+     {'overloaded': 4, 'total': 4, 'pct_formatted': '100.0%',
+      'relays': [{'stability_is_overloaded': True}] * 4}),           # all overloaded
     ([{'stability_is_overloaded': True}, {}, {'nickname': 'x'}],
-     {'overloaded': 1, 'total': 3, 'pct_formatted': '33.3%'}),       # missing keys mixed in
+     {'overloaded': 1, 'total': 3, 'pct_formatted': '33.3%',
+      'relays': [{'stability_is_overloaded': True}]}),               # missing keys mixed in
 ])
 def test_compute_group_overload_summary(members, expected):
     assert compute_group_overload_summary(members) == expected
+
+
+def test_summary_relays_are_references_in_impact_order():
+    """'relays' holds the member dicts themselves (no copies), sorted by
+    observed_bandwidth desc; missing bandwidth is treated as 0 (sorts last)."""
+    small = {'stability_is_overloaded': True, 'observed_bandwidth': 1, 'nickname': 's'}
+    big = {'stability_is_overloaded': True, 'observed_bandwidth': 9, 'nickname': 'b'}
+    no_bw = {'stability_is_overloaded': True, 'nickname': 'n'}
+    summary = compute_group_overload_summary([small, {'healthy': True}, big, no_bw])
+    assert [r['nickname'] for r in summary['relays']] == ['b', 's', 'n']
+    assert summary['relays'][0] is big  # reference, not a copy
 
 
 def test_tiny_fraction_uses_floor():
@@ -53,8 +73,10 @@ def _args(relay_set, page_key):
 
 @pytest.mark.parametrize('page_key', ['contact', 'family', 'as'])
 def test_build_template_args_includes_overload_summary(overload_relay_set, page_key):
-    assert _args(overload_relay_set, page_key)['overload_summary'] == {
-        'overloaded': 2, 'total': 4, 'pct_formatted': '50.0%'}
+    summary = _args(overload_relay_set, page_key)['overload_summary']
+    assert (summary['overloaded'], summary['total'], summary['pct_formatted']) == (2, 4, '50.0%')
+    # relays 0 and 1 are the overloaded ones (fixture flags i < 2)
+    assert sorted(r['fingerprint'] for r in summary['relays']) == [f'{i:040d}' for i in range(2)]
 
 
 def test_build_template_args_skips_out_of_scope_pages(overload_relay_set):
@@ -106,6 +128,10 @@ def test_detail_summary_shows_overload_before_dns(jinja_env):
     assert '20.0% (2 of 10 relays)' in rendered
     assert 'al-status-danger' in rendered
     assert rendered.index('Overloaded') < rendered.index('Exit DNS Health')
+    # Regression guard: family/AS pages (via detail_summary) keep the plain
+    # bullet — no variant link and no per-relay #overload links.
+    assert 'by-overload.html' not in rendered
+    assert '#overload' not in rendered
 
 
 def test_detail_summary_hides_overload_when_none(jinja_env):
@@ -118,6 +144,40 @@ def test_overload_bullet_macro_singular(jinja_env):
     ).render(summary={'overloaded': 1, 'total': 1, 'pct_formatted': '100.0%'})
     assert '100.0% (1 of 1 relay)' in rendered
     assert '1 relays' not in rendered
+    assert '<a ' not in rendered  # defaults render no links at all
+
+
+BULLET_TMPL = ("{% from 'macros.html' import overload_bullet %}"
+               "{{ overload_bullet(summary, link_href, path_prefix) }}")
+
+
+def _render_bullet(jinja_env, link_href=None, path_prefix=None, summary=SAMPLE_SUMMARY):
+    return jinja_env.from_string(BULLET_TMPL).render(
+        summary=summary, link_href=link_href, path_prefix=path_prefix)
+
+
+def test_overload_bullet_link_href_wraps_count(jinja_env):
+    rendered = _render_bullet(jinja_env, link_href='by-overload.html#relay-table')
+    assert '<a href="by-overload.html#relay-table" class="al-status-danger"' in rendered
+    assert '20.0% (2 of 10 relays)' in rendered
+
+
+def test_overload_bullet_path_prefix_renders_expanded_relay_links(jinja_env):
+    rendered = _render_bullet(jinja_env, path_prefix='../../')
+    # Every overloaded relay linked straight to its #overload detail section
+    assert f'href="../../relay/{"A" * 40}/#overload"' in rendered
+    assert f'href="../../relay/{"B" * 40}/#overload"' in rendered
+    assert '>BigRelay</a>' in rendered and '>SmallRelay</a>' in rendered
+    # Impact order (highest bandwidth first) and reason tooltips
+    assert rendered.index('BigRelay') < rendered.index('SmallRelay')
+    assert 'Rate limits hit W:2 R:0 (limit: 10 MB/s)' in rendered
+    # Fully expanded per user requirement — no collapse mechanism
+    assert '<details' not in rendered
+
+
+def test_overload_bullet_no_relay_list_without_path_prefix(jinja_env):
+    rendered = _render_bullet(jinja_env, link_href='by-overload.html#relay-table')
+    assert '#overload' not in rendered.replace('by-overload.html', '')
 
 
 def _contact_context(overload_summary):
@@ -166,3 +226,41 @@ def test_contact_html_shows_overload_before_dns(jinja_env):
 def test_contact_html_hides_overload_when_none(jinja_env):
     rendered = jinja_env.get_template('contact.html').render(**_contact_context(None))
     assert 'Overloaded' not in rendered
+
+
+def test_contact_html_bullet_lists_overloaded_relays_expanded(jinja_env):
+    """Option 2: all overloaded relays linked to their #overload sections,
+    fully expanded (no collapse), even when the sort variant doesn't exist."""
+    rendered = jinja_env.get_template('contact.html').render(**_contact_context(SAMPLE_SUMMARY))
+    assert f'href="../relay/{"A" * 40}/#overload"' in rendered
+    assert f'href="../relay/{"B" * 40}/#overload"' in rendered
+    assert '<details' not in rendered
+    # No by-overload.html variant for this contact (contact_sort_links={}) -> unlinked count
+    assert 'by-overload.html' not in rendered
+
+
+def test_contact_html_bullet_count_links_variant_when_available(jinja_env):
+    """Option 1: the count links to the by-overload.html sort variant."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    context['contact_sort_links'] = {'overload': 'by-overload.html'}
+    rendered = jinja_env.get_template('contact.html').render(**context)
+    assert '<a href="by-overload.html#relay-table" class="al-status-danger"' in rendered
+    assert '20.0% (2 of 10 relays)' in rendered
+
+
+def test_contact_relay_row_overload_badge(jinja_env):
+    """Option 1: overloaded relays get a ⚡ in the Status column linking to
+    their #overload section; healthy relays get no badge."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    relay = context['relay_subset'][0]
+    relay['stability_is_overloaded'] = True
+    relay['stability_tooltip'] = 'General overload at 2026-07-31 06:12 UTC'
+    rendered = jinja_env.get_template('contact.html').render(**context)
+    assert '⚡' in rendered
+    assert f'href="../relay/{relay["fingerprint"]}/#overload"' in rendered
+    assert 'General overload at 2026-07-31 06:12 UTC. Click for overload details.' in rendered
+
+
+def test_contact_relay_row_no_badge_when_not_overloaded(jinja_env):
+    rendered = jinja_env.get_template('contact.html').render(**_contact_context(None))
+    assert '⚡' not in rendered

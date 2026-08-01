@@ -208,17 +208,25 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
 
 
 def compute_group_overload_summary(members):
-    """Count overloaded relays in a group; None if zero (hides the bullet)."""
+    """Summarize overloaded relays in a group; None if zero (hides the bullet).
+
+    Returns a dict with the count fields plus 'relays': the overloaded member
+    dicts themselves (references, not copies) sorted by observed bandwidth
+    descending — impact order, matching the by-overload.html table sort — so
+    templates can link each relay (nickname/fingerprint/stability_tooltip).
+    """
     total = len(members)
     if not total:
         return None
-    n = sum(1 for r in members if r.get('stability_is_overloaded'))
-    if not n:
+    overloaded = [r for r in members if r.get('stability_is_overloaded')]
+    if not overloaded:
         return None
-    pct = 100.0 * n / total
+    overloaded.sort(key=lambda r: -(r.get('observed_bandwidth') or 0))
+    pct = 100.0 * len(overloaded) / total
     return {
-        'overloaded': n,
+        'overloaded': len(overloaded),
         'total': total,
         'pct_formatted': f"{pct:.1f}%" if pct >= 0.05 else "<0.1%",
+        'relays': overloaded,
     }
 

@@ -176,11 +176,27 @@
 
 {# DRY: Overload summary bullet — used by detail_summary (family/AS pages) and contact.html.
    Hidden entirely when summary is none/empty (0 overloaded relays).
-   Whitespace-stripped so a missing bullet leaves no blank-line residue in the <ul>. #}
-{%- macro overload_bullet(summary) -%}
+   Whitespace-stripped so a missing bullet leaves no blank-line residue in the <ul>.
+   Optional (contact pages): link_href wraps the count in a link to the by-overload.html
+   sort variant; path_prefix renders a fully expanded sub-list linking every overloaded
+   relay (impact order) to its relay/<FP>/#overload detail section. Defaults keep
+   family/AS output unchanged. #}
+{%- macro overload_bullet(summary, link_href=none, path_prefix=none) -%}
 {%- if summary -%}
 <li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor proposal 328: out-of-memory, onionskin drops, TCP port exhaustion), hits its configured bandwidth rate limits, or exhausts file descriptors. Sources: Onionoo /details and /bandwidth endpoints.">Overloaded</span>:</strong>
-    <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span></li>
+{% if link_href %}
+    <a href="{{ link_href }}" class="al-status-danger" title="Show the relay table with overloaded relays sorted first">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</a>
+{%- else %}
+    <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span>
+{%- endif %}
+{%- if path_prefix is not none and summary.relays %}
+    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
+        <li style="font-size: 13px;">
+            {%- for r in summary.relays %}<a href="{{ path_prefix }}relay/{{ r['fingerprint']|escape }}/#overload" class="al-status-danger" title="{{ r['stability_tooltip']|escape }}">{{ r['nickname']|escape }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        </li>
+    </ul>
+{%- endif -%}
+</li>
 {%- endif -%}
 {%- endmacro -%}
 
