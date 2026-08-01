@@ -26,6 +26,7 @@ from .diversity_index import annotate_operators, count_diverse_relays, RARE_AS_T
 # Import HTML escaping utility
 from .html_escape_utils import safe_html_escape
 from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
+from .time_utils import ONIONOO_HISTORY_PERIODS
 
 
 # Shared url-token regex (string_utils is the single source of truth) for the
@@ -590,7 +591,7 @@ def _collect_operator_metrics(relays_instance):
         validated_v3_relay_count = 0
         v2_relay_count = 0  # ANY ciissversion:2 declaration (valid or not)
         v3_relay_count = 0  # ANY ciissversion:3 declaration
-        td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+        td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
         
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
@@ -702,7 +703,7 @@ def _collect_operator_metrics(relays_instance):
                     invalid_relay_count += 1
             
             relay_td = relay.get('total_data', {})
-            for _p in ('1_month', '6_months', '1_year', '5_years'):
+            for _p in ONIONOO_HISTORY_PERIODS:
                 td_sums[_p] += relay_td.get(_p, 0)
         
         unique_ipv4_count = len(unique_ipv4_addresses)

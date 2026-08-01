@@ -21,38 +21,36 @@ class Coordinator:
     for backward compatibility with tests.
     """
     
+    # Configuration attributes and their defaults - single source of truth
+    # for both construction paths (argparse namespace and keyword arguments).
+    _CONFIG_DEFAULTS = {
+        'output_dir': './www',
+        'onionoo_details_url': 'https://onionoo.torproject.org/details',
+        'onionoo_uptime_url': 'https://onionoo.torproject.org/uptime',
+        'onionoo_bandwidth_url': 'https://onionoo.torproject.org/bandwidth',
+        'aroi_url': 'https://aroivalidator.1aeo.com/latest.json',
+        'exit_dns_health_url': 'https://exitdnshealth.1aeo.com/latest.json',
+        'bandwidth_cache_hours': 12,
+        'progress': False,
+        'enabled_apis': 'all',
+        'filter_downtime_days': 7,
+        'base_url': '',
+        'mp_workers': 4,
+    }
+
     def __init__(self, args=None, progress_logger=None, **kwargs):
         # Support both args namespace and keyword arguments (for tests/backward compat)
-        if args is not None:
-            # Read from argparse namespace
-            self.output_dir = args.output_dir
-            self.onionoo_details_url = args.onionoo_details_url
-            self.onionoo_uptime_url = args.onionoo_uptime_url
-            self.onionoo_bandwidth_url = args.onionoo_bandwidth_url
-            self.aroi_url = args.aroi_url
-            self.exit_dns_health_url = getattr(args, 'exit_dns_health_url', 'https://exitdnshealth.1aeo.com/latest.json')
-            self.bandwidth_cache_hours = args.bandwidth_cache_hours
-            self.use_bits = args.bandwidth_units == 'bits' if hasattr(args, 'bandwidth_units') else kwargs.get('use_bits', False)
-            self.progress = args.progress
-            self.enabled_apis = args.enabled_apis
-            self.filter_downtime_days = args.filter_downtime_days
-            self.base_url = args.base_url
-            self.mp_workers = args.mp_workers
+        for name, default in self._CONFIG_DEFAULTS.items():
+            if args is not None:
+                setattr(self, name, getattr(args, name, default))
+            else:
+                setattr(self, name, kwargs.get(name, default))
+        # use_bits derives from args.bandwidth_units ('bits'|'bytes') when
+        # provided; tests pass use_bits directly as a kwarg.
+        if args is not None and hasattr(args, 'bandwidth_units'):
+            self.use_bits = args.bandwidth_units == 'bits'
         else:
-            # Backward-compatible keyword arguments (used by tests)
-            self.output_dir = kwargs.get('output_dir', './www')
-            self.onionoo_details_url = kwargs.get('onionoo_details_url', 'https://onionoo.torproject.org/details')
-            self.onionoo_uptime_url = kwargs.get('onionoo_uptime_url', 'https://onionoo.torproject.org/uptime')
-            self.onionoo_bandwidth_url = kwargs.get('onionoo_bandwidth_url', 'https://onionoo.torproject.org/bandwidth')
-            self.aroi_url = kwargs.get('aroi_url', 'https://aroivalidator.1aeo.com/latest.json')
-            self.exit_dns_health_url = kwargs.get('exit_dns_health_url', 'https://exitdnshealth.1aeo.com/latest.json')
-            self.bandwidth_cache_hours = kwargs.get('bandwidth_cache_hours', 12)
             self.use_bits = kwargs.get('use_bits', False)
-            self.progress = kwargs.get('progress', False)
-            self.enabled_apis = kwargs.get('enabled_apis', 'all')
-            self.filter_downtime_days = kwargs.get('filter_downtime_days', 7)
-            self.base_url = kwargs.get('base_url', '')
-            self.mp_workers = kwargs.get('mp_workers', 4)
         
         # ONE ProgressLogger instance is threaded through the whole pipeline
         # (allium.py → coordinator → relays → page_writer). Use the injected
@@ -244,44 +242,6 @@ class Coordinator:
         """
         return self.worker_data.get('onionoo_uptime')
 
-    def get_bandwidth_data(self):
-        """
-        Get historical bandwidth data if available
-        """
-        return self.worker_data.get('onionoo_bandwidth')
-
-    def get_aroi_validation_data(self):
-        """
-        Get AROI validation data if available
-        """
-        return self.worker_data.get('aroi_validation')
-
-    def get_exit_dns_health_data(self):
-        """
-        Get Exit DNS Health data if available.
-        """
-        return self.worker_data.get('exit_dns_health')
-
-    def get_consensus_health_data(self):
-        """
-        Get consensus health data if available.
-        """
-        return self.worker_data.get('consensus_health')
-
-    def get_collector_consensus_data(self):
-        """
-        Get CollecTor consensus data if available.
-        Contains authority votes, relay index, flag thresholds.
-        """
-        return self.worker_data.get('collector_consensus')
-
-    def get_collector_descriptors_data(self):
-        """
-        Get CollecTor server descriptors summary if available.
-        Contains family-cert fingerprints for Happy Family migration tracking.
-        """
-        return self.worker_data.get('collector_descriptors')
-
     def create_relay_set(self, relay_data):
         """
         Create Relays instance with fetched data.
@@ -336,12 +296,12 @@ class Coordinator:
         # Processing order and dependencies are documented in enrich_with_api_data()
         relay_set.enrich_with_api_data(
             uptime_data=self.get_uptime_data(),
-            bandwidth_data=self.get_bandwidth_data(),
-            aroi_validation_data=self.get_aroi_validation_data(),
-            exit_dns_health_data=self.get_exit_dns_health_data(),
-            collector_consensus_data=self.get_collector_consensus_data(),
-            consensus_health_data=self.get_consensus_health_data(),
-            collector_descriptors_data=self.get_collector_descriptors_data(),
+            bandwidth_data=self.worker_data.get('onionoo_bandwidth'),
+            aroi_validation_data=self.worker_data.get('aroi_validation'),
+            exit_dns_health_data=self.worker_data.get('exit_dns_health'),
+            collector_consensus_data=self.worker_data.get('collector_consensus'),
+            consensus_health_data=self.worker_data.get('consensus_health'),
+            collector_descriptors_data=self.worker_data.get('collector_descriptors'),
         )
 
         if self.progress:
