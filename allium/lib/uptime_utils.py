@@ -53,23 +53,6 @@ def _compute_uptime_percentage_and_datapoints(uptime_values):
     return percentage, count
 
 
-def calculate_relay_uptime_average(uptime_values):
-    """
-    Calculate average uptime from a list of raw Onionoo uptime values.
-    
-    OPTIMIZATION: Single-pass calculation eliminates redundant iterations
-    through uptime data (filter + sum + len → single loop).
-    
-    Args:
-        uptime_values (list): List of raw uptime values (0-999 scale)
-        
-    Returns:
-        float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values or uptime <= 1%
-    """
-    percentage, _ = _compute_uptime_percentage_and_datapoints(uptime_values)
-    return percentage
-
-
 def index_relays_by_fingerprint(relays):
     """
     Index a list of relay dicts by their 'fingerprint' key.

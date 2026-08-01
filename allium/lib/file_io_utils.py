@@ -112,21 +112,6 @@ class FileIOManager:
         tmp_path.replace(file_path)
         return True
     
-    def file_exists(self, filename: str) -> bool:
-        """Check if file exists."""
-        return self.get_file_path(filename).exists()
-    
-    def delete_file(self, filename: str) -> bool:
-        """Delete file if it exists."""
-        file_path = self.get_file_path(filename)
-        if file_path.exists():
-            try:
-                file_path.unlink()
-                return True
-            except OSError:
-                return False
-        return True
-
 
 class CacheManager(FileIOManager):
     """Cache file operations with automatic JSON serialization."""

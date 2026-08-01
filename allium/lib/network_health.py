@@ -562,7 +562,7 @@ def calculate_network_health_metrics(relay_set):
         'exit_percentage': _pct(network_totals['exit_count'], total_relays_count)
     }
     
-    # OPTIMIZED: Reuse cached unique families count from _calculate_and_cache_family_statistics()
+    # OPTIMIZED: Reuse cached unique families count from categorization.calculate_and_cache_family_statistics()
     # This eliminates duplicate deduplication loops for better performance
     health_metrics['families_count'] = relay_set.json.get('family_statistics', {}).get('unique_families_count', 0)
     
