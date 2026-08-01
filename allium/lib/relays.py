@@ -577,7 +577,7 @@ class Relays:
             
         # PERFORMANCE OPTIMIZATION: Calculate network-wide uptime percentiles ONCE for all contacts
         # This avoids recalculating the same percentiles for every contact page (major performance optimization)
-        uptime_data = getattr(self, 'uptime_data', None)
+        # (uptime_data local already fetched at the top of this method)
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
             self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")

@@ -246,8 +246,12 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
         'display': display
     }
 
-def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, network_cv_stats=None, bandwidth_formatter=None):
-    """Calculate comprehensive bandwidth reliability metrics for an operator."""
+def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None):
+    """Calculate comprehensive bandwidth reliability metrics for an operator.
+    
+    OPTIMIZATION: Accepts a pre-built bandwidth_map for batch processing so
+    per-contact callers don't rebuild the ~10k-entry map on every call.
+    """
     metrics = {
         'bandwidth_stability': None,
         'peak_performance': None,
@@ -258,8 +262,9 @@ def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, per
     if not operator_relays or not bandwidth_data or mean_bandwidth <= 0:
         return metrics
     
-    # Build shared bandwidth mapping once
-    bandwidth_map = build_bandwidth_map(bandwidth_data)
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if bandwidth_map is None:
+        bandwidth_map = build_bandwidth_map(bandwidth_data)
     
     # Calculate individual metrics
     metrics['bandwidth_stability'] = _calculate_bandwidth_stability(
