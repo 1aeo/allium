@@ -13,35 +13,18 @@ from typing import Dict, List, Optional, Any
 from collections import Counter
 
 # Import flag thresholds from centralized module (DRY - single source of truth)
-try:
-    from .flag_thresholds import (
-        SECONDS_PER_DAY,
-        GUARD_TK_DEFAULT,
-        GUARD_WFU_DEFAULT,
-        GUARD_BW_GUARANTEE,
-        HSDIR_TK_DEFAULT,
-        HSDIR_WFU_DEFAULT,
-        FAST_BW_GUARANTEE,
-        parse_wfu_threshold as _parse_wfu_threshold_impl,
-        format_time_as_days,
-        format_wfu_as_percent,
-        sort_flags as _sort_flags_impl,
-        FLAG_ORDER_MAP,
-    )
-except ImportError:
-    # Fallback values if import fails
-    SECONDS_PER_DAY = 86400
-    GUARD_TK_DEFAULT = 691200
-    GUARD_WFU_DEFAULT = 0.98
-    GUARD_BW_GUARANTEE = 2_000_000
-    HSDIR_TK_DEFAULT = 864000
-    HSDIR_WFU_DEFAULT = 0.98
-    FAST_BW_GUARANTEE = 100_000
-    _parse_wfu_threshold_impl = None
-    format_time_as_days = None
-    format_wfu_as_percent = None
-    _sort_flags_impl = None
-    FLAG_ORDER_MAP = {}
+# NOTE: this module keeps its own FLAG_ORDER/_sort_flags (display order:
+# Simple/Common → Complex/Rare) which intentionally differs from
+# flag_thresholds.sort_flags (canonical alphabetical-ish order).
+from .flag_thresholds import (
+    SECONDS_PER_DAY,
+    GUARD_TK_DEFAULT,
+    GUARD_WFU_DEFAULT,
+    GUARD_BW_GUARANTEE,
+    HSDIR_TK_DEFAULT,
+    FAST_BW_GUARANTEE,
+    parse_wfu_threshold as _parse_wfu_threshold,
+)
 
 # Import authority data from collector_fetcher
 try:
@@ -160,17 +143,6 @@ def _port_in_rules(rules: list, port: int) -> bool:
             except ValueError:
                 continue
     return False
-
-
-def _format_valid_version_display(version: str, recommended_version: bool) -> str:
-    """Format Valid flag version display string."""
-    if not version:
-        return 'Unknown'
-    if recommended_version is True:
-        return f'{version} (Recommended)'
-    elif recommended_version is False:
-        return f'{version} (Not Recommended)'
-    return version
 
 
 def _format_v2dir_display(dir_address: str, has_v2dir_flag: bool) -> str:
@@ -357,19 +329,6 @@ def _sort_flags(flags: list) -> list:
     # Use pre-computed map for O(1) lookup instead of FLAG_ORDER.index() which is O(n)
     max_order = len(FLAG_ORDER)
     return sorted(flags, key=lambda f: FLAG_ORDER_MAP.get(f, max_order + ord(f[0].lower()) if f else 999))
-
-
-def _parse_wfu_threshold(value) -> Optional[float]:
-    """Parse WFU threshold value (can be string like '98%' or float like 0.98)."""
-    # Use centralized implementation from flag_thresholds if available
-    if _parse_wfu_threshold_impl is not None:
-        return _parse_wfu_threshold_impl(value)
-    # Fallback implementation
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return float(value.replace('%', '')) / 100
-    return float(value)
 
 
 def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None, exit_policy_summary: dict = None, dir_address: str = None) -> dict:
@@ -2046,51 +2005,6 @@ def _format_bandwidth_value(value: Any, use_bits: bool = False) -> str:
             return f"{value / 1000000:.1f} MB/s"
         else:
             return f"{value / 1000:.1f} KB/s"
-
-
-def _format_ipv6_status(reachable: Optional[bool], address: Optional[str]) -> str:
-    """Format IPv6 reachability status."""
-    if reachable is True:
-        return f"Yes ({address})" if address else "Yes"
-    elif reachable is False:
-        return "No"
-    else:
-        return "Not tested"
-
-
-def _get_wfu_class(wfu: Optional[float]) -> str:
-    """Get CSS class for WFU value."""
-    if wfu is None:
-        return 'muted'
-    if wfu >= 0.98:
-        return 'success'
-    elif wfu >= 0.95:
-        return 'warning'
-    else:
-        return 'danger'
-
-
-def _get_tk_class(tk: Optional[int]) -> str:
-    """Get CSS class for Time Known value."""
-    if tk is None:
-        return 'muted'
-    days = tk / SECONDS_PER_DAY
-    if days >= 8:  # 8 days = Guard TK requirement
-        return 'success'
-    elif days >= 4:
-        return 'warning'
-    else:
-        return 'danger'
-
-
-def _get_ipv6_class(reachable: Optional[bool]) -> str:
-    """Get CSS class for IPv6 status."""
-    if reachable is True:
-        return 'success'
-    elif reachable is False:
-        return 'danger'
-    else:
-        return 'muted'
 
 
 def _get_latency_class(latency_ms: Optional[float]) -> str:

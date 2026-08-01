@@ -188,10 +188,6 @@ class AuthorityRegistry:
             return len(self._discovered_authorities)
         return _FALLBACK_AUTHORITY_COUNT
     
-    def get_discovered_authorities(self) -> List[dict]:
-        """Get list of discovered authority dicts from Onionoo."""
-        return self._discovered_authorities
-    
     def is_using_fallback(self) -> bool:
         """Check if using fallback data (Onionoo not available)."""
         return self._using_fallback
@@ -255,15 +251,6 @@ class AuthorityRegistry:
             return len(self._voting_authority_names)
         return _FALLBACK_VOTING_AUTHORITY_COUNT
     
-    def get_signing_key_to_name(self) -> Dict[str, str]:
-        """
-        Get signing key fingerprint to name mapping.
-        NOTE: This always uses the hardcoded mapping because signing key fingerprints
-        are different from Onionoo relay fingerprints - we can't discover this dynamically.
-        Only includes the 9 voting authorities.
-        """
-        return _FALLBACK_SIGNING_KEY_TO_NAME
-
 
 # Global registry instance - can be updated when Onionoo data is loaded
 _authority_registry = AuthorityRegistry()

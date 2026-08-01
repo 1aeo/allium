@@ -86,8 +86,8 @@ class Coordinator:
     # call if _run_worker replacement is ever skipped (e.g., in tests).
     _noop_logger = staticmethod(lambda *args, **kwargs: None)
 
-    @classmethod
-    def iter_enabled_worker_entries(cls, enabled_apis):
+    @staticmethod
+    def iter_enabled_worker_entries(enabled_apis):
         """Yield APIConfig entries enabled for this run.
 
         Single source of truth for worker gating - used by

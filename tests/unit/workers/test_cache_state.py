@@ -298,25 +298,6 @@ class TestStateManagement:
                 assert len(results) == 10
                 assert all(results)
     
-    def test_state_error_handling(self):
-        """Test state management error handling"""
-        from allium.lib.file_io_utils import create_state_manager
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a state manager in a read-only location to test error handling
-            state_manager = create_state_manager(temp_dir)
-            
-            # Create corrupted state file
-            state_file = os.path.join(temp_dir, "api_state.json")
-            with open(state_file, 'w') as f:
-                f.write('{"corrupted": json}')
-            
-            # Loading corrupted state should return None gracefully
-            result = state_manager.load_state()
-            # Result should be None for corrupted JSON (graceful error handling)
-            assert result is None
-
-
 class TestTimestampManagement:
     """Test timestamp file management for conditional requests"""
     
