@@ -200,7 +200,11 @@
                     {% if contact_display_data and contact_display_data.total_data_formatted and contact_display_data.total_data_formatted != 'N/A' %}
                     <li><strong><span title="Total data transferred by all relays belonging to this operator (read + write). Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ contact_display_data.total_data_formatted }}{% if contact_display_data.total_data_pct %} ({{ contact_display_data.total_data_pct }}){% endif %}</li>
                     {% endif -%}
-                    {{- overload_bullet(overload_summary) -}}
+                    {#- Overloaded bullet: count links to the by-overload.html sort variant
+                        (only when that variant exists for this contact, i.e. ≥3 relays);
+                        sub-list links every overloaded relay to its #overload section. -#}
+                    {%- set _ov_file = contact_sort_links.get('overload') if contact_sort_links else none -%}
+                    {{- overload_bullet(overload_summary, (_ov_file ~ '#relay-table') if _ov_file else none, page_ctx.path_prefix) -}}
                     {% if exit_dns_health_summary %}
                     <li><strong><span title="Exit DNS Health: DNS resolution capability of this operator's exit relays. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
                         <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>,
