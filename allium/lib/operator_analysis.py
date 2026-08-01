@@ -230,9 +230,31 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     from .uptime_utils import (
         extract_relay_uptime_for_period, 
         calculate_statistical_outliers,
-        find_operator_percentile_position
+        find_operator_percentile_position,
+        build_uptime_map,
     )
-    from .bandwidth_utils import extract_relay_bandwidth_for_period, extract_operator_daily_bandwidth_totals
+    from .bandwidth_utils import (
+        extract_relay_bandwidth_for_period,
+        extract_operator_daily_bandwidth_totals,
+        build_bandwidth_map,
+    )
+    
+    # PERFORMANCE: build the fingerprint->data maps ONCE per relay set and
+    # cache them on it (lazy, also works per-process in forked mp workers).
+    # This function runs per contact (~3,000x per site generation); without
+    # the cache every call rebuilt these ~10k-entry maps up to 14x (5 uptime
+    # periods + 3 bandwidth periods + 3 daily-total calls + 3 builds inside
+    # calculate_bandwidth_reliability_metrics) = ~42,000 redundant rebuilds.
+    uptime_map = None
+    if uptime_data:
+        uptime_map = getattr(relay_set, '_uptime_fp_map', None)
+        if uptime_map is None:
+            uptime_map = relay_set._uptime_fp_map = build_uptime_map(uptime_data)
+    bandwidth_map = None
+    if bandwidth_data:
+        bandwidth_map = getattr(relay_set, '_bandwidth_fp_map', None)
+        if bandwidth_map is None:
+            bandwidth_map = relay_set._bandwidth_fp_map = build_bandwidth_map(bandwidth_data)
     
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']
@@ -278,7 +300,9 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     if uptime_data:
         for period in uptime_periods:
             # Extract uptime data for this period using shared utility
-            period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, period)
+            # (pre-built uptime_map avoids a full map rebuild per period)
+            period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, period,
+                                                            uptime_map=uptime_map)
         
             if period_result['uptime_values']:
                 mean_uptime = statistics.mean(period_result['uptime_values'])
@@ -334,7 +358,9 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         
         for period in bandwidth_periods:
             # Extract individual relay bandwidth data for this period
-            period_result = extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, period)
+            # (pre-built bandwidth_map avoids a full map rebuild per period)
+            period_result = extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, period,
+                                                               bandwidth_map=bandwidth_map)
             
             if period_result['bandwidth_values']:
                 mean_bandwidth = statistics.mean(period_result['bandwidth_values'])
@@ -356,7 +382,8 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
                 from .bandwidth_utils import calculate_bandwidth_reliability_metrics
                 advanced_metrics = calculate_bandwidth_reliability_metrics(
                     operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, 
-                    bandwidth_formatter=relay_set.bandwidth_formatter
+                    bandwidth_formatter=relay_set.bandwidth_formatter,
+                    bandwidth_map=bandwidth_map
                 )
                 
                 # Add advanced metrics to the period data
@@ -445,7 +472,8 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         
         # Calculate daily total bandwidth averages for this operator using existing logic
         for period in bandwidth_periods:
-            daily_totals_result = extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, period)
+            daily_totals_result = extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, period,
+                                                                          bandwidth_map=bandwidth_map)
             if daily_totals_result['daily_totals']:
                 avg_daily_total = daily_totals_result['average_daily_total']
                 

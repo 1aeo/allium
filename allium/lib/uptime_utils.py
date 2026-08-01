@@ -215,17 +215,16 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
             continue
         
         # Calculate average uptime - this includes all relays >1% (includes problem relays)
-        avg_uptime = calculate_relay_uptime_average(period_data['values'])
+        # OPTIMIZATION: single pass returns both the average and the valid
+        # datapoint count, so exclusion reasons are classified without
+        # re-filtering the values list a second time.
+        avg_uptime, valid_count = _compute_uptime_percentage_and_datapoints(period_data['values'])
         
         if avg_uptime == 0.0:
             # Could be insufficient data, low uptime, or invalid data
-            # The calculate_relay_uptime_average function handles the specific filtering
-            values = period_data.get('values', [])
-            valid_values = [v for v in values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
-            
-            if not valid_values:
+            if valid_count == 0:
                 excluded_relays['invalid_data'] += 1
-            elif len(valid_values) < 30:
+            elif valid_count < 30:
                 excluded_relays['insufficient_data'] += 1
             else:
                 # Must be low uptime (≤1% - essentially offline)
@@ -557,74 +556,56 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 # OPTIMIZATION: Use centralized statistical calculation function
                 network_flag_statistics[flag][period] = _calculate_period_statistics(values)
     
-    # Calculate middle relay statistics (non-Exit, non-Guard relays) for network health dashboard
-    # This consolidates all role-specific calculations in one place following DRY principle
-    network_middle_statistics = {}
-    for period in ONIONOO_HISTORY_PERIODS:
-        middle_uptime_values = []
-        
-        # Collect middle relay uptime values for this period
-        for fingerprint, relay_data in relay_uptime_data.items():
-            relay_obj = relay_data['relay_obj']
-            if relay_obj:  # Only process relays that are in our relay set
-                flags = relay_obj.get('flags', [])
-                is_exit = 'Exit' in flags
-                is_guard = 'Guard' in flags
-                
-                # Middle relays are those that are neither Exit nor Guard (same logic as contact pages)
-                if not is_exit and not is_guard:
-                    uptime_value = relay_data['uptime_percentages'].get(period, 0.0)
-                    if uptime_value > 0:  # Only include relays with actual uptime data
-                        middle_uptime_values.append(uptime_value)
-        
-        # OPTIMIZATION: Use centralized statistical calculation function
-        network_middle_statistics[period] = _calculate_period_statistics(middle_uptime_values)
+    # Calculate middle-relay (non-Exit, non-Guard) and "other"-relay statistics
+    # for the network health dashboard. "Other" covers Directory Authorities,
+    # bad relays, and unflagged relays with no significant flags.
+    # OPTIMIZATION: classification is period-independent, so classify each
+    # relay ONCE and collect values for all periods in a single pass over
+    # relay_uptime_data (previously 8 full passes: one per category per period).
+    middle_values_by_period = {p: [] for p in ONIONOO_HISTORY_PERIODS}
+    other_values_by_period = {p: [] for p in ONIONOO_HISTORY_PERIODS}
+    significant_flags = {'Exit', 'Guard', 'Authority', 'BadExit', 'HSDir', 'Fast', 'Stable', 'Running', 'Valid'}
     
-    # Calculate other relay statistics (non-Exit, non-Guard, non-Middle relays) for network health dashboard
-    # "Other" category includes: Directory Authorities, Bad Relays, Unflagged relays, Special status relays
-    # This follows the same pattern as middle relay calculations for consistency
-    network_other_statistics = {}
-    for period in ONIONOO_HISTORY_PERIODS:
-        other_uptime_values = []
+    for relay_data in relay_uptime_data.values():
+        relay_obj = relay_data['relay_obj']
+        if not relay_obj:  # Only process relays that are in our relay set
+            continue
+        flags = relay_obj.get('flags', [])
+        is_exit = 'Exit' in flags
+        is_guard = 'Guard' in flags
         
-        # Collect other relay uptime values for this period
-        for fingerprint, relay_data in relay_uptime_data.items():
-            relay_obj = relay_data['relay_obj']
-            if relay_obj:  # Only process relays that are in our relay set
-                flags = relay_obj.get('flags', [])
-                is_exit = 'Exit' in flags
-                is_guard = 'Guard' in flags
-                is_authority = 'Authority' in flags
-                is_bad_exit = 'BadExit' in flags
-                
-                # Determine if this relay belongs to "other" category
-                is_other = False
-                
-                # Directory Authorities - high priority special relays
-                if is_authority:
-                    is_other = True
-                
-                # Bad relays - flagged relays with potentially different uptime patterns
-                elif is_bad_exit:
-                    is_other = True
-                
-                # Unflagged relays - relays with no major flags (not Exit, Guard, Authority, or BadExit)
-                elif not is_exit and not is_guard and not is_authority and not is_bad_exit:
-                    # Check if relay has no significant flags at all or only minor flags
-                    significant_flags = {'Exit', 'Guard', 'Authority', 'BadExit', 'HSDir', 'Fast', 'Stable', 'Running', 'Valid'}
-                    relay_flags = set(flags)
-                    has_significant_flags = bool(relay_flags.intersection(significant_flags))
-                    if not has_significant_flags:
-                        is_other = True
-                
-                # Include relays in "other" category that have uptime data
+        # Middle relays are those that are neither Exit nor Guard (same logic as contact pages)
+        is_middle = not is_exit and not is_guard
+        
+        # "Other" relays: Directory Authorities (high-priority special relays),
+        # bad relays (potentially different uptime patterns), and unflagged
+        # relays with no significant flags at all
+        if 'Authority' in flags or 'BadExit' in flags:
+            is_other = True
+        else:
+            is_other = is_middle and not significant_flags.intersection(flags)
+        
+        if not (is_middle or is_other):
+            continue
+        
+        uptime_percentages = relay_data['uptime_percentages']
+        for period in ONIONOO_HISTORY_PERIODS:
+            uptime_value = uptime_percentages.get(period, 0.0)
+            if uptime_value > 0:  # Only include relays with actual uptime data
+                if is_middle:
+                    middle_values_by_period[period].append(uptime_value)
                 if is_other:
-                    uptime_value = relay_data['uptime_percentages'].get(period, 0.0)
-                    if uptime_value > 0:  # Only include relays with actual uptime data
-                        other_uptime_values.append(uptime_value)
-        
-        # OPTIMIZATION: Use centralized statistical calculation function
-        network_other_statistics[period] = _calculate_period_statistics(other_uptime_values)
+                    other_values_by_period[period].append(uptime_value)
+    
+    # OPTIMIZATION: Use centralized statistical calculation function
+    network_middle_statistics = {
+        period: _calculate_period_statistics(middle_values_by_period[period])
+        for period in ONIONOO_HISTORY_PERIODS
+    }
+    network_other_statistics = {
+        period: _calculate_period_statistics(other_values_by_period[period])
+        for period in ONIONOO_HISTORY_PERIODS
+    }
     
     return {
         'relay_uptime_data': relay_uptime_data,
@@ -634,7 +615,9 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
         'network_other_statistics': network_other_statistics,
         'processing_summary': {
             'total_relays_processed': len(relay_uptime_data),
-            'network_relays_with_uptime': len([r for r in relay_uptime_data.values() if any(p > 0 for p in r['uptime_percentages'].values())]),
+            # Counted during the main pass (has_any_uptime); avoids another
+            # full scan of relay_uptime_data just to recount the same thing
+            'network_relays_with_uptime': network_relays_with_uptime,
             'flags_found': list(network_flag_data.keys()) if include_flag_analysis else []
         }
     } 
