@@ -1586,20 +1586,6 @@ def format_authority_consensus_evaluation(
     return formatted
 
 
-def _format_consensus_status(consensus_data: dict) -> dict:
-    """Format consensus status display. Retained for test compatibility."""
-    in_consensus = consensus_data.get('in_consensus', False)
-    vote_count = consensus_data.get('vote_count', 0)
-    total = consensus_data.get('total_authorities', get_voting_authority_count())
-    majority = consensus_data.get('majority_required', 5)
-    tpl = ('IN CONSENSUS', 'success', 'is') if in_consensus else ('NOT IN CONSENSUS', 'danger', 'is NOT')
-    return {
-        'status': tpl[0], 'status_class': tpl[1],
-        'display': f"{tpl[0]} ({vote_count}/{total} authorities)",
-        'tooltip': f"Relay {tpl[2]} in consensus. {vote_count} out of {total} authorities voted for this relay (requires {majority}).",
-    }
-
-
 def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> dict:
     """
     Format flag eligibility summary.
@@ -1872,15 +1858,6 @@ def _generate_advice(consensus_data: dict, current_flags: list = None, observed_
     advice_list.sort(key=lambda x: x.get('priority', 3))
     
     return advice_list
-
-
-def _generate_advice_simple(consensus_data: dict) -> List[str]:
-    """
-    Generate simple string advice for backward compatibility.
-    Returns list of advice strings.
-    """
-    detailed_advice = _generate_advice(consensus_data)
-    return [item.get('advice', '') for item in detailed_advice if item.get('advice')]
 
 
 def _format_thresholds_table(flag_thresholds: Dict[str, dict]) -> dict:

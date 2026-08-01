@@ -16,7 +16,6 @@ import unittest
 
 from allium.lib.uptime_utils import (
     calculate_relay_uptime_average,
-    find_relay_uptime_data,
     extract_relay_uptime_for_period,
     calculate_statistical_outliers,
     process_all_uptime_data_consolidated
@@ -90,25 +89,6 @@ class TestRelayUptimeDataExtraction(unittest.TestCase):
             {'fingerprint': 'DEF456', 'nickname': 'TestRelay2'},
             {'fingerprint': 'GHI789', 'nickname': 'TestRelay3'}  # No uptime data
         ]
-    
-    def test_find_relay_uptime_data(self):
-        """Test finding uptime data for specific relay by fingerprint"""
-        # Test existing relay
-        result = find_relay_uptime_data('ABC123', self.sample_uptime_data)
-        self.assertIsNotNone(result)
-        if result:  # Only access fields if result is not None
-            self.assertEqual(result['fingerprint'], 'ABC123')
-            self.assertIn('uptime', result)
-        
-        # Test non-existing relay
-        result = find_relay_uptime_data('NONEXISTENT', self.sample_uptime_data)
-        self.assertIsNone(result)
-        
-        # Test edge cases
-        self.assertIsNone(find_relay_uptime_data('', self.sample_uptime_data))
-        self.assertIsNone(find_relay_uptime_data('ABC123', None))
-        self.assertIsNone(find_relay_uptime_data('ABC123', {}))
-        self.assertIsNone(find_relay_uptime_data(None, self.sample_uptime_data))
     
     def test_extract_relay_uptime_for_period(self):
         """Test extraction of uptime data for all relays in an operator"""

@@ -69,27 +69,6 @@ def calculate_relay_uptime_average(uptime_values):
     return percentage
 
 
-def find_relay_uptime_data(fingerprint, uptime_data):
-    """
-    Find uptime data for a specific relay by fingerprint.
-    
-    Args:
-        fingerprint (str): Relay fingerprint to search for
-        uptime_data (dict): Uptime data from Onionoo API
-        
-    Returns:
-        dict or None: Relay uptime data if found, None otherwise
-    """
-    if not uptime_data or not fingerprint:
-        return None
-    
-    for uptime_relay in uptime_data.get('relays', []):
-        if uptime_relay.get('fingerprint') == fingerprint:
-            return uptime_relay
-    
-    return None
-
-
 def build_uptime_map(uptime_data):
     """
     Build fingerprint-to-uptime mapping once for reuse across multiple operators.

@@ -470,9 +470,11 @@ class TestWorkerStateManagement:
                             )
                             
                             # Get status before second call
-                            status_summary = coordinator2.get_worker_status_summary()
-                            assert status_summary["worker_count"] >= 1
-                            assert status_summary["ready_count"] >= 1
+                            from allium.lib.workers import get_all_worker_status
+                            statuses = get_all_worker_status()
+                            assert len(statuses) >= 1
+                            assert sum(1 for s in statuses.values()
+                                       if s.get("status") == "ready") >= 1
                             
                             relay_set2 = coordinator2.get_relay_set()
                             assert relay_set2 is not None
@@ -494,25 +496,22 @@ class TestWorkerStateManagement:
                         # Clear existing worker state for this test
                         with patch('allium.lib.workers._worker_status', {}):
                             # Import and run multiple workers
-                            from allium.lib.workers import fetch_onionoo_uptime, fetch_collector_data, fetch_consensus_health
+                            from allium.lib.workers import fetch_onionoo_uptime, fetch_collector_consensus_data, fetch_consensus_health
                             
                             # Run placeholder workers
                             fetch_onionoo_uptime()
-                            fetch_collector_data()
+                            fetch_collector_consensus_data()
                             fetch_consensus_health()
                             
-                            # Create coordinator and check status
-                            coordinator = Coordinator(
-                                output_dir=temp_dir,
-                                onionoo_details_url="https://test.details.url",
-                                onionoo_uptime_url="https://test.uptime.url",
-                                progress=True
-                            )
-                            summary = coordinator.get_worker_status_summary()
+                            # Check worker status tracked by the module registry
+                            from allium.lib.workers import get_all_worker_status
+                            statuses = get_all_worker_status()
                             
-                            assert summary["worker_count"] >= 3
-                            assert summary["ready_count"] >= 3
-                            assert summary["stale_count"] == 0
+                            assert len(statuses) >= 3
+                            assert sum(1 for s in statuses.values()
+                                       if s.get("status") == "ready") >= 3
+                            assert sum(1 for s in statuses.values()
+                                       if s.get("status") == "stale") == 0
 
 
 class TestErrorRecoveryIntegration:

@@ -1175,14 +1175,6 @@ def _validate_collector_cache(data):
     return True
 
 
-def fetch_collector_data(progress_logger=None):
-    """
-    Legacy wrapper for fetch_collector_consensus_data.
-    Maintained for backward compatibility.
-    """
-    return fetch_collector_consensus_data(progress_logger=progress_logger)
-
-
 def _parse_descriptor_listing_timestamp(filename):
     """Parse recent descriptor filename timestamp.
     
