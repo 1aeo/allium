@@ -251,39 +251,6 @@ class TestCoordinator:
                 mock_fetch.assert_called_once()
                 mock_create.assert_not_called()
     
-    def test_get_worker_status_summary(self):
-        """Test worker status summary"""
-        mock_status = {
-            "worker1": {"status": "ready", "timestamp": time.time(), "error": None},
-            "worker2": {"status": "stale", "timestamp": time.time(), "error": "Test error"},
-            "worker3": {"status": "ready", "timestamp": time.time(), "error": None}
-        }
-        
-        coordinator = make_coordinator()
-        
-        # Patch the function where it's imported in coordinator
-        with patch('allium.lib.coordinator.get_all_worker_status', return_value=mock_status):
-            summary = coordinator.get_worker_status_summary()
-            
-            assert summary["worker_count"] == 3
-            assert summary["ready_count"] == 2
-            assert summary["stale_count"] == 1
-            assert summary["workers"] == mock_status
-    
-    def test_get_worker_status_summary_empty(self):
-        """Test worker status summary with no workers"""
-        coordinator = make_coordinator()
-        
-        # Patch the function where it's imported in coordinator
-        with patch('allium.lib.coordinator.get_all_worker_status', return_value={}):
-            summary = coordinator.get_worker_status_summary()
-            
-            assert summary["worker_count"] == 0
-            assert summary["ready_count"] == 0
-            assert summary["stale_count"] == 0
-            assert summary["workers"] == {}
-
-
 class TestBackwardsCompatibility:
     """Test create_relay_set_with_coordinator function"""
     

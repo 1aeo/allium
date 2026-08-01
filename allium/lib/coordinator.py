@@ -7,7 +7,6 @@ Phase 2 implementation: multiple API support, threading, and incremental renderi
 """
 
 import threading
-from .workers import get_all_worker_status
 from .relays import Relays
 from .progress_logger import ProgressLogger
 from .first_seen_correction import correct_first_seen
@@ -376,16 +375,6 @@ class Coordinator:
                     f"authority latency probe failed: {e}")
 
         return relay_set
-    
-    def get_worker_status_summary(self):
-        """Get summary of all worker statuses for debugging/monitoring"""
-        statuses = get_all_worker_status()
-        return {
-            "worker_count": len(statuses),
-            "ready_count": len([s for s in statuses.values() if s.get("status") == "ready"]),
-            "stale_count": len([s for s in statuses.values() if s.get("status") == "stale"]),
-            "workers": statuses
-        }
 
 
 def create_relay_set_with_coordinator(args, progress_logger=None):

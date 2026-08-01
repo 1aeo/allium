@@ -16,7 +16,6 @@ import pytest
 from allium.lib.consensus.consensus_evaluation import (
     format_relay_consensus_evaluation,
     format_authority_consensus_evaluation,
-    _format_consensus_status,
     _format_relay_values,
     _format_authority_table_enhanced,
     _format_flag_summary,
@@ -24,7 +23,6 @@ from allium.lib.consensus.consensus_evaluation import (
     _format_bandwidth_summary,
     _identify_issues,
     _generate_advice,
-    _generate_advice_simple,
     _format_thresholds_table,
     _format_bandwidth_value,
 )
@@ -197,38 +195,6 @@ class TestFormatRelayConsensusEvaluation:
         assert result['in_consensus'] == True
         assert result['vote_count'] == 7
         assert result['majority_required'] == 5
-
-
-class TestFormatConsensusStatus:
-    """Tests for _format_consensus_status() function."""
-    
-    def test_in_consensus(self):
-        """Test status when relay is in consensus."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 7,
-            'total_authorities': 9,
-            'majority_required': 5,
-        }
-        result = _format_consensus_status(diagnostics)
-        
-        assert result['status'] == 'IN CONSENSUS'
-        assert result['status_class'] == 'success'
-        assert '7' in result['display']
-        assert '9' in result['display']
-    
-    def test_not_in_consensus(self):
-        """Test status when relay is not in consensus."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 3,
-            'total_authorities': 9,
-            'majority_required': 5,
-        }
-        result = _format_consensus_status(diagnostics)
-        
-        assert result['status'] == 'NOT IN CONSENSUS'
-        assert result['status_class'] == 'danger'
 
 
 class TestFormatRelayValues:
@@ -728,24 +694,6 @@ class TestAdviceGeneration:
         advice_text = ' '.join(advice_texts)
         assert '98%' in advice_text or 'WFU' in advice_text
     
-    def test_advice_simple_returns_strings(self):
-        """Test that _generate_advice_simple returns list of strings."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.90}],
-        }
-        
-        advice = _generate_advice_simple(diagnostics)
-        
-        assert isinstance(advice, list)
-        for item in advice:
-            assert isinstance(item, str)
-
-
 class TestIdentifyIssuesComprehensive:
     """Comprehensive tests for _identify_issues() function."""
     
