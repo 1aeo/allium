@@ -22,7 +22,6 @@ from allium.lib.consensus.consensus_evaluation import (
     _format_reachability_summary,
     _format_bandwidth_summary,
     _identify_issues,
-    _generate_advice,
     _format_thresholds_table,
     _format_bandwidth_value,
 )
@@ -322,82 +321,6 @@ class TestIdentifyIssues:
         assert len(reachability_issues) >= 1
 
 
-class TestGenerateAdvice:
-    """Tests for _generate_advice() function."""
-    
-    def test_advice_for_low_wfu(self):
-        """Test advice generation for low WFU."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 9}},
-            'authority_votes': [
-                {'wfu': 0.95},  # Below 98% threshold
-            ],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        assert len(advice) >= 1
-        # New format returns list of dicts with 'advice' key
-        advice_texts = [a.get('advice', '') for a in advice]
-        wfu_advice = [a for a in advice_texts if 'WFU' in a or 'uptime' in a.lower()]
-        assert len(wfu_advice) >= 1
-    
-    def test_advice_returns_dict_format(self):
-        """Test that advice returns list of properly formatted dicts."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 3,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 3, 'ipv4_reachable_authorities': []},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        assert len(advice) >= 1
-        for item in advice:
-            assert isinstance(item, dict)
-            assert 'category' in item
-            assert 'priority' in item
-            assert 'title' in item
-            assert 'advice' in item
-    
-    def test_advice_priority_ordering(self):
-        """Test that advice is sorted by priority (errors first)."""
-        diagnostics = {
-            'in_consensus': False,  # Error severity
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.85}],  # Warning severity
-        }
-        advice = _generate_advice(diagnostics)
-        
-        # Should be sorted by priority (1=error, 2=warning, 3=info)
-        priorities = [a.get('priority', 999) for a in advice]
-        assert priorities == sorted(priorities)
-    
-    def test_advice_includes_doc_refs(self):
-        """Test that advice includes documentation references where appropriate."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': ['moria1', 'tor26']},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        # At least some advice should have doc_ref
-        has_doc_ref = any(a.get('doc_ref') for a in advice)
-        assert has_doc_ref, "Expected at least some advice to include documentation reference"
-
-
 class TestFormatThresholdsTable:
     """Tests for _format_thresholds_table() function."""
     
@@ -653,47 +576,6 @@ class TestIssueIdentification:
         assert len(guard_issues) >= 1
 
 
-class TestAdviceGeneration:
-    """Tests for advice generation logic."""
-    
-    def test_advice_for_new_relay(self):
-        """Test advice for relay with low Time Known."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 0}},
-            'authority_votes': [
-                {'wfu': 0.99, 'tk': 172800},  # Only 2 days - new relay
-            ],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        # Should give advice about Time Known
-        assert len(advice) >= 1
-    
-    def test_advice_mentions_specific_thresholds(self):
-        """Test that advice mentions specific threshold values."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 5}},
-            'authority_votes': [
-                {'wfu': 0.95},  # Below 98%
-            ],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        # Should mention the 98% threshold in advice text
-        advice_texts = [a.get('advice', '') for a in advice]
-        advice_text = ' '.join(advice_texts)
-        assert '98%' in advice_text or 'WFU' in advice_text
-    
 class TestIdentifyIssuesComprehensive:
     """Comprehensive tests for _identify_issues() function."""
     
@@ -964,100 +846,6 @@ class TestIdentifyIssuesComprehensive:
         # Should have no issues (or only informational)
         errors = [i for i in issues if i['severity'] in ['error', 'warning']]
         assert len(errors) == 0
-
-
-class TestAdviceCategories:
-    """Tests for advice categorization."""
-    
-    def test_consensus_category(self):
-        """Test advice has consensus category for not-in-consensus."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'consensus' in categories
-    
-    def test_reachability_category(self):
-        """Test advice has reachability category for unreachable relay."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 5,
-            'total_authorities': 9,
-            'reachability': {
-                'ipv4_reachable_count': 3,
-                'ipv4_reachable_authorities': ['moria1', 'tor26', 'dizum'],
-            },
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'reachability' in categories
-    
-    def test_guard_category(self):
-        """Test advice has guard category for Guard-related issues."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.90}],  # Low WFU
-        }
-        
-        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'guard' in categories
-
-
-class TestAdviceDocRefs:
-    """Tests for documentation references in advice."""
-    
-    def test_torproject_doc_refs(self):
-        """Test that advice references torproject.org documentation."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': []},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
-        assert len(doc_refs) >= 1
-        # Should reference torproject.org
-        assert any('torproject.org' in ref for ref in doc_refs)
-    
-    def test_spec_doc_refs_for_flags(self):
-        """Test that flag-related advice references dir-spec."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.85, 'tk': 3 * SECONDS_PER_DAY}],  # Below thresholds
-        }
-        
-        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
-        
-        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
-        # Should reference spec.torproject.org for flag requirements
-        assert any('spec.torproject.org' in ref for ref in doc_refs)
 
 
 class TestStableUptimeFeature:

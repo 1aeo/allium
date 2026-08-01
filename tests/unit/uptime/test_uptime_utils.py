@@ -15,11 +15,17 @@ import time
 import unittest
 
 from allium.lib.uptime_utils import (
-    calculate_relay_uptime_average,
+    _compute_uptime_percentage_and_datapoints,
     extract_relay_uptime_for_period,
     calculate_statistical_outliers,
     process_all_uptime_data_consolidated
 )
+
+
+def calculate_relay_uptime_average(uptime_values):
+    """Test shim: average-uptime semantics are the percentage half of
+    _compute_uptime_percentage_and_datapoints (the removed prod wrapper)."""
+    return _compute_uptime_percentage_and_datapoints(uptime_values)[0]
 
 
 class TestUptimeNormalization(unittest.TestCase):
