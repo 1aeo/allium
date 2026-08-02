@@ -271,7 +271,57 @@ def test_contact_overload_sort_mode_is_clearly_labeled(jinja_env):
     context['contact_sort_mode'] = 'overload'
     rendered = jinja_env.get_template('contact.html').render(**context)
 
-    assert '⚡︎ Overloaded relays are shown first (2 currently overloaded).' in rendered
+    label = '⚡︎ Overloaded relays are shown first (2 currently overloaded).'
+    assert label in rendered
+    assert rendered.count('id="relay-table"') == 1
+    assert rendered.index('id="relay-table"') < rendered.index(label) < rendered.index('<table')
+
+
+def test_contact_overload_anchor_follows_v3_upgrade_nudge(jinja_env):
+    """The overload anchor should skip the upgrade card and land on the table label."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    context['contact_sort_mode'] = 'overload'
+    relay = context['relay_subset'][0]
+    context['contact_validation_status'] = {
+        'has_aroi': True,
+        'validation_status': 'validated',
+        'validation_summary': {
+            'total_relays': 1,
+            'validated_count': 1,
+            'unauthorized_count': 0,
+            'misconfigured_count': 0,
+            'incomplete_count': 0,
+            'not_configured_count': 0,
+            'security_incident_count': 0,
+            'v2_relay_count': 1,
+            'v2_validated_count': 1,
+            'v3_relay_count': 0,
+            'v3_validated_count': 0,
+            'is_mixed_migration': False,
+        },
+        'validated_fingerprints': {relay['fingerprint']},
+        'unauthorized_fingerprints': set(),
+        'misconfigured_fingerprints': set(),
+        'security_incident_fingerprints': set(),
+        'pending_onionoo_fingerprints': set(),
+        'validated_relays': [{'relay': relay, 'aroi_domain': 'example.org'}],
+        'unauthorized_relays': [],
+        'misconfigured_relays': [],
+        'security_incident_relays': [],
+        'pending_onionoo_relays': [],
+        'incomplete_relays': [],
+        'not_configured_relays': [],
+    }
+
+    rendered = jinja_env.get_template('contact.html').render(**context)
+    upgrade = 'Want to upgrade to ciissversion:3?'
+    anchor = 'id="relay-table"'
+    label = '⚡︎ Overloaded relays are shown first (2 currently overloaded).'
+    validated = 'VALIDATED RELAYS'
+
+    assert rendered.count(anchor) == 1
+    assert rendered.index(upgrade) < rendered.index(anchor) < rendered.index(label)
+    assert rendered.index(label) < rendered.index(validated)
 
 
 def test_contact_relay_row_overload_badge(jinja_env):

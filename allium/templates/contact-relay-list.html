@@ -29,12 +29,14 @@
    2. When operator has no AROI (not_configured): Single table (original behavior)
    ============================================================================= #}
 
+{% macro relay_table_start() -%}
 <div id="relay-table"></div>
 {% if contact_sort_mode == 'overload' -%}
-<p class="al-status-danger-bold" style="margin: 0 0 8px;">
+<p class="al-status-danger-bold" style="margin: 20px 0 0;">
     ⚡︎ Overloaded relays are shown first{% if overload_summary %} ({{ overload_summary.overloaded }} currently overloaded){% endif %}.
 </p>
 {% endif -%}
+{%- endmacro %}
 
 {# Pre-compute fingerprint sets for O(1) lookups #}
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
@@ -410,6 +412,8 @@
     {%- endif -%}
 {%- endif %}
 
+{{ relay_table_start() }}
+
 {# =============================================================================
    B1.1: PEER ISSUE SECTIONS (rendered above the cascade so urgent
    problems surface first regardless of operator-level status).
@@ -570,6 +574,7 @@
    SINGLE TABLE LAYOUT (original behavior for operators without AROI)
    DRY: Reuses relay_table_header and relay_row macros
    ============================================================================= #}
+{{ relay_table_start() }}
 {% set relay_list = relay_subset[:500] if is_index else relay_subset %}
 {% set single_table_has_ipv6 = relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 <table class="table table-condensed">
