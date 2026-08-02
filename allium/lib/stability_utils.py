@@ -221,7 +221,10 @@ def compute_group_overload_summary(members):
     overloaded = [r for r in members if r.get('stability_is_overloaded')]
     if not overloaded:
         return None
-    overloaded.sort(key=lambda r: -(r.get('observed_bandwidth') or 0))
+    overloaded.sort(key=lambda r: (
+        -int(r.get('observed_bandwidth', 0) or 0),
+        r.get('fingerprint', ''),
+    ))
     pct = 100.0 * len(overloaded) / total
     return {
         'overloaded': len(overloaded),
@@ -229,4 +232,3 @@ def compute_group_overload_summary(members):
         'pct_formatted': f"{pct:.1f}%" if pct >= 0.05 else "<0.1%",
         'relays': overloaded,
     }
-

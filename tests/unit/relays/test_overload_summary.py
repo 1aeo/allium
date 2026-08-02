@@ -52,6 +52,18 @@ def test_summary_relays_are_references_in_impact_order():
     assert summary['relays'][0] is big  # reference, not a copy
 
 
+def test_summary_relay_order_uses_fingerprint_for_bandwidth_ties():
+    """Expanded summary order must match the overload table's tie-breaker."""
+    relay_b = {'stability_is_overloaded': True, 'observed_bandwidth': 9,
+               'fingerprint': 'B' * 40}
+    relay_a = {'stability_is_overloaded': True, 'observed_bandwidth': 9,
+               'fingerprint': 'A' * 40}
+
+    summary = compute_group_overload_summary([relay_b, relay_a])
+
+    assert summary['relays'] == [relay_a, relay_b]
+
+
 def test_tiny_fraction_uses_floor():
     """1 of 3000 would round to 0.0% — must show <0.1% instead."""
     members = [{'stability_is_overloaded': True}] + [{}] * 2999
@@ -152,17 +164,20 @@ BULLET_TMPL = ("{% from 'macros.html' import overload_bullet %}"
 
 
 def _render_bullet(jinja_env, link_href=None, path_prefix=None, summary=SAMPLE_SUMMARY):
+    """Render overload_bullet with its optional contact-page link arguments."""
     return jinja_env.from_string(BULLET_TMPL).render(
         summary=summary, link_href=link_href, path_prefix=path_prefix)
 
 
 def test_overload_bullet_link_href_wraps_count(jinja_env):
+    """Link the summary count to the overload sort variant when provided."""
     rendered = _render_bullet(jinja_env, link_href='by-overload.html#relay-table')
     assert '<a href="by-overload.html#relay-table" class="al-status-danger"' in rendered
     assert '20.0% (2 of 10 relays)' in rendered
 
 
 def test_overload_bullet_path_prefix_renders_expanded_relay_links(jinja_env):
+    """List every overloaded relay when a relay-detail path is available."""
     rendered = _render_bullet(jinja_env, path_prefix='../../')
     # Every overloaded relay linked straight to its #overload detail section
     assert f'href="../../relay/{"A" * 40}/#overload"' in rendered
@@ -176,6 +191,7 @@ def test_overload_bullet_path_prefix_renders_expanded_relay_links(jinja_env):
 
 
 def test_overload_bullet_no_relay_list_without_path_prefix(jinja_env):
+    """Do not expose relay-detail links without a path prefix."""
     rendered = _render_bullet(jinja_env, link_href='by-overload.html#relay-table')
     assert '#overload' not in rendered.replace('by-overload.html', '')
 
@@ -258,9 +274,11 @@ def test_contact_relay_row_overload_badge(jinja_env):
     rendered = jinja_env.get_template('contact.html').render(**context)
     assert '⚡' in rendered
     assert f'href="../relay/{relay["fingerprint"]}/#overload"' in rendered
+    assert 'aria-label="TestRelay is overloaded; view overload details"' in rendered
     assert 'General overload at 2026-07-31 06:12 UTC. Click for overload details.' in rendered
 
 
 def test_contact_relay_row_no_badge_when_not_overloaded(jinja_env):
+    """Do not render an overload badge for a healthy relay."""
     rendered = jinja_env.get_template('contact.html').render(**_contact_context(None))
     assert '⚡' not in rendered
