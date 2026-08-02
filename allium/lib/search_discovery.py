@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 MAX_URLS_PER_SITEMAP = 50_000
+MAX_BYTES_PER_SITEMAP = 52_428_800
 
 ET.register_namespace("", SITEMAP_NAMESPACE)
 
@@ -50,8 +51,11 @@ def _generated_urls(output_dir, base_url):
 
 
 def _write_xml(root, destination):
-    tree = ET.ElementTree(root)
-    tree.write(destination, encoding="utf-8", xml_declaration=True)
+    Path(destination).write_bytes(_serialize_xml(root))
+
+
+def _serialize_xml(root):
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
 def _urlset(urls):
@@ -60,6 +64,39 @@ def _urlset(urls):
         entry = ET.SubElement(root, f"{{{SITEMAP_NAMESPACE}}}url")
         ET.SubElement(entry, f"{{{SITEMAP_NAMESPACE}}}loc").text = url
     return root
+
+
+def _pack_sitemap_urls(
+        urls,
+        max_urls=MAX_URLS_PER_SITEMAP,
+        max_bytes=MAX_BYTES_PER_SITEMAP):
+    """Pack URLs without exceeding either sitemap protocol limit."""
+    sentinel = "x"
+    one_entry_size = len(_serialize_xml(_urlset([sentinel])))
+    added_entry_size = (
+        len(_serialize_xml(_urlset([sentinel, sentinel]))) - one_entry_size
+    )
+    base_size = one_entry_size - added_entry_size
+    groups = []
+    current = []
+    current_size = base_size
+
+    for url in urls:
+        entry_size = len(_serialize_xml(_urlset([url]))) - base_size
+        if base_size + entry_size > max_bytes:
+            raise ValueError(f"sitemap URL is too large to serialize: {url}")
+        if current and (
+                len(current) >= max_urls
+                or current_size + entry_size > max_bytes):
+            groups.append(current)
+            current = []
+            current_size = base_size
+        current.append(url)
+        current_size += entry_size
+
+    if current:
+        groups.append(current)
+    return groups
 
 
 def _remove_old_shards(output_path):
@@ -97,16 +134,16 @@ def generate_search_discovery(output_dir, base_url):
 
     _remove_old_shards(output_path)
     sitemap_path = output_path / "sitemap.xml"
-    if len(urls) <= MAX_URLS_PER_SITEMAP:
-        _write_xml(_urlset(urls), sitemap_path)
+    url_groups = _pack_sitemap_urls(urls)
+    if len(url_groups) == 1:
+        _write_xml(_urlset(url_groups[0]), sitemap_path)
         sitemap_count = 1
     else:
         sitemap_count = 0
         sitemap_index = ET.Element(f"{{{SITEMAP_NAMESPACE}}}sitemapindex")
-        for offset in range(0, len(urls), MAX_URLS_PER_SITEMAP):
+        for shard_urls in url_groups:
             sitemap_count += 1
             shard_name = f"sitemap-{sitemap_count}.xml"
-            shard_urls = urls[offset:offset + MAX_URLS_PER_SITEMAP]
             _write_xml(_urlset(shard_urls), output_path / shard_name)
             entry = ET.SubElement(
                 sitemap_index, f"{{{SITEMAP_NAMESPACE}}}sitemap")
