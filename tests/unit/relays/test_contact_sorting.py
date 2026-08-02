@@ -140,7 +140,8 @@ def test_contact_sort_modes_have_expected_mapping():
     assert "bandwidth" in CONTACT_SORT_MODES
     assert CONTACT_SORT_FILE_MAP["bandwidth"] == "index.html"
     assert "by-bandwidth.html" not in CONTACT_SORT_FILE_MAP.values()
-    assert len(CONTACT_SORT_MODES) == 18
+    assert CONTACT_SORT_FILE_MAP["overload"] == "by-overload.html"
+    assert len(CONTACT_SORT_MODES) == 19
 
 
 def test_contact_sorting_produces_deterministic_order_for_all_modes():
@@ -163,10 +164,21 @@ def test_selected_sort_mode_expected_first_rows():
     assert sort_contact_relays(relays, "flag_uptime")[0]["nickname"] == "beta"
     assert sort_contact_relays(relays, "ipv4")[0]["nickname"] == "beta"
     assert sort_contact_relays(relays, "dns")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "overload")[0]["nickname"] == "beta"  # none overloaded -> bandwidth order
     assert sort_contact_relays(relays, "family")[0]["nickname"] == "beta"
     assert sort_contact_relays(relays, "first_seen")[0]["nickname"] == "beta"  # newest first
     assert sort_contact_relays(relays, "last_restarted")[0]["nickname"] == "beta"  # newest first
     assert sort_contact_relays(relays, "ipv6")[0]["nickname"] == "beta"
+
+
+def test_overload_sort_groups_overloaded_first_by_bandwidth():
+    """Overloaded relays sort first (bandwidth desc within each group)."""
+    relays = _sample_relays()
+    relays[0]["stability_is_overloaded"] = True   # alpha, bw 100
+    relays[2]["stability_is_overloaded"] = True   # gamma, bw 200
+    ordered = [r["nickname"] for r in sort_contact_relays(relays, "overload")]
+    # gamma (overloaded, 200) > alpha (overloaded, 100) > beta (not overloaded, 300)
+    assert ordered == ["gamma", "alpha", "beta"]
 
 
 def test_contact_sort_tie_breaker_uses_fingerprint():

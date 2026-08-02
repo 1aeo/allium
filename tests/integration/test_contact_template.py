@@ -509,7 +509,6 @@ class TestContactTemplateIntegration(unittest.TestCase):
         context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
         context['contact_sort_enabled'] = True
         context['contact_has_ipv6'] = True
-
         template = self.jinja_env.get_template('contact.html')
         rendered = template.render(**context)
 
@@ -1439,6 +1438,21 @@ class TestContactTemplateIPv6Column:
         assert '2001:db8::1' not in v4_row
         last_cell = v4_row.rsplit('<td>', 1)[-1]
         assert 'N/A' in last_cell
+
+
+def test_contact_template_overload_links(jinja_env, overload_relay_set):
+    """Render overload listing and relay-detail links with shared pytest fixtures."""
+    contact, group = next(iter(overload_relay_set.json['sorted']['contact'].items()))
+    context = build_template_args(
+        overload_relay_set, 'contact', contact, group, [], set())
+
+    template = jinja_env.get_template('contact.html')
+    rendered = template.render(relays=overload_relay_set, **context)
+
+    assert 'href="by-overload.html#relay-table"' in rendered
+    path_prefix = context['page_ctx']['path_prefix']
+    for relay in context['overload_summary']['relays']:
+        assert f'href="{path_prefix}relay/{relay["fingerprint"]}/#overload"' in rendered
 
 
 if __name__ == '__main__':
