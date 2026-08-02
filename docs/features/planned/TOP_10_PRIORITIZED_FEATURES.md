@@ -1,0 +1,1098 @@
+# Top Prioritized Future Features for Allium (Updated)
+
+**Status**: 📊 Code Review Complete - Features NOT Yet Implemented  
+**Date**: December 2024  
+**Document Type**: Strategic Feature Prioritization  
+
+---
+
+## Codebase Review Summary
+
+After comprehensive review of the actual Allium codebase, several features from the original list have been **fully or partially implemented**. This updated document focuses only on features that require new development.
+
+### Already Implemented (Removed from Priority List)
+
+| Feature | Implementation Status | Location |
+|---------|----------------------|----------|
+| **AROI Leaderboards** | ✅ Fully implemented (18 categories, champions, rankings) | `aroi-leaderboards.html`, `aroileaders.py` |
+| **Network Health Dashboard** | ✅ Fully implemented (relay counts, bandwidth, uptime, AROI validation) | `network-health-dashboard.html` |
+| **Intelligence Engine** | ✅ Fully implemented (14 layers, contact intelligence) | `intelligence_engine.py` |
+| **Operator Reliability Metrics** | ✅ Fully implemented (uptime, bandwidth stability, flag reliability) | `relays.py`, `contact.html` |
+| **CW/BW Performance Analysis** | ✅ Fully implemented (ratios, percentiles, network comparison) | `intelligence_engine.py`, `contact.html` |
+| **Geographic Diversity Stats** | ✅ Fully implemented (EU/Non-EU, Five Eyes, rare countries) | `network-health-dashboard.html` |
+| **Platform Diversity Tables** | ✅ Fully implemented (non-Linux heroes, platform breakdown) | `aroi-leaderboards.html` |
+| **Bandwidth Stability Analysis** | ✅ Fully implemented (CV, trend, capacity utilization) | `contact.html` |
+
+---
+
+## 🏆 Revised Top Features - NOT YET IMPLEMENTED
+
+### #1: Interactive Geographic Heat Map Dashboard
+**Priority Score: 95/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
+
+#### What's Missing
+- ❌ No D3.js or Chart.js integration
+- ❌ No interactive world map visualization  
+- ❌ No color-coded country rendering
+- ❌ No hover tooltips or click interactions
+- ❌ Current implementation: Static tables only
+
+#### What Exists (Can Be Reused)
+- ✅ Country classification system exists
+- ✅ Country relay counts available in `sorted['country']`
+- ✅ Rare/frontier country categorization exists
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🌍 Tor Network Global Distribution                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│    [Interactive World Map with Color-Coded Countries]           │
+│                                                                 │
+│    ┌────────────────────────────────────────────────────────┐  │
+│    │                                                        │  │
+│    │   🔴 USA (2,847)  🔵 Germany (1,923)  🟢 France (847) │  │
+│    │                                                        │  │
+│    │   [WORLD MAP WITH CLICKABLE REGIONS]                  │  │
+│    │                                                        │  │
+│    │   Color Legend:                                        │  │
+│    │   ■ Legendary (1-5)  ■ Epic (6-20)  ■ Rare (21-49)   │  │
+│    │   ■ Emerging (50-200)  ■ Common (201+)               │  │
+│    │                                                        │  │
+│    └────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│    Hover Tooltip Example:                                       │
+│    ┌─────────────────────────┐                                 │
+│    │ 🇲🇳 Mongolia (MN)       │                                 │
+│    │ 3 relays • 0.1% weight  │                                 │
+│    │ Tier: Legendary 🏆       │                                 │
+│    │ Top Operator: mn-relay   │                                 │
+│    │ [View Country →]         │                                 │
+│    └─────────────────────────┘                                 │
+│                                                                 │
+│ Summary: 195 countries • 8,247 relays • 67% EU / 33% Non-EU    │
+│                                                                 │
+│ [Filter: All] [Guards Only] [Exits Only] [By Tier ▼]           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation Recommendations
+1. **Add D3.js and TopoJSON** for geographic projections
+2. **Create `static/js/geographic-heatmap.js`** with map rendering
+3. **Add `allium/lib/geographic_visualization.py`** for data preparation
+4. **Progressive enhancement**: Static SVG → Interactive → Animated
+
+#### Files to Create/Modify
+- `allium/lib/geographic_visualization.py` (NEW)
+- `allium/templates/geographic_heatmap.html` (NEW)
+- `static/js/geographic-heatmap.js` (NEW)
+- `static/css/visualization.css` (NEW)
+
+---
+
+### #2: AROI Achievement Wheel Visualization
+**Priority Score: 88/100** | **Timeline: 3-4 weeks** | **Status: PARTIALLY IMPLEMENTED**
+
+#### What's Missing
+- ❌ No Chart.js doughnut/wheel visualization
+- ❌ No interactive rotating wheel UI
+- ❌ No animated transitions between categories
+- ❌ Current implementation: Tables only (no charts)
+
+#### What Exists (Can Be Reused)
+- ✅ All 18 AROI categories with full data
+- ✅ Champion badges and rankings
+- ✅ Complete leaderboard calculations in `aroileaders.py`
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏆 AROI Champions Achievement Wheel                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│                    Champions Achievement Wheel                   │
+│                                                                 │
+│                         ⚡ Bandwidth                             │
+│                        torworld.org                              │
+│                            │                                     │
+│                    ┌───────┴───────┐                            │
+│        🏗️ Rare ──┤               ├── 🌍 Geographic              │
+│       Countries   │      🏆       │    globalnet.org             │
+│                   │   CHAMPIONS   │                              │
+│        💻 ────────┤               ├────── ⚖️ Consensus          │
+│      Platform     │               │      heavyweight.net         │
+│                   └───────┬───────┘                              │
+│                           │                                      │
+│               ⏰ Reliability  🚪 Exit                            │
+│                                                                  │
+│    [Click any segment to view full category leaderboard]        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation Recommendations
+1. **Use Chart.js** for doughnut chart with custom segments
+2. **Add click handlers** linking to existing leaderboard sections
+3. **Animate segment highlights** on hover
+4. **Mobile-responsive** with touch interactions
+
+---
+
+### #3: Actionable Improvement Guidance System
+**Priority Score: 85/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
+
+#### What's Missing
+- ❌ No "Path to Improvement" section on operator pages
+- ❌ No gap analysis vs top performers
+- ❌ No personalized action recommendations
+- ❌ No difficulty/impact scoring for suggestions
+- ❌ No progress tracking toward goals
+
+#### What Exists (Can Be Reused)
+- ✅ AROI leaderboard rankings exist
+- ✅ Contact rankings already show position in each category
+- ✅ Performance metrics available (CW/BW, uptime, diversity)
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🎯 Path to Improvement - youroperator.org                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────┐│
+│ │ Bandwidth Gap   │ │ Diversity Gap   │ │ Biggest Opportunity ││
+│ │                 │ │                 │ │                     ││
+│ │ +234.5 Gbps     │ │ +8.2 points     │ │ 🌍 Geographic       ││
+│ │ to reach #1     │ │ to reach #1     │ │ +5 ranks possible   ││
+│ │ (#12 → #1)      │ │ (#23 → #1)      │ │                     ││
+│ └─────────────────┘ └─────────────────┘ └─────────────────────┘│
+│                                                                 │
+│ 🚀 HIGH IMPACT ACTIONS                                          │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ ✅ Add 5 relays in South America                             ││
+│ │    Impact: +2.4 diversity score • Moves you #23 → #18       ││
+│ │    Resources: [Brazil VPS Guide] [Argentina Hosting]         ││
+│ │                                                              ││
+│ │ ✅ Enable IPv6 on 12 relays currently IPv4-only              ││
+│ │    Impact: +3% bandwidth measurement accuracy                ││
+│ │    Difficulty: Low • [IPv6 Setup Guide]                      ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ 📊 PROGRESS TRACKING                                            │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Bandwidth:  ████████████████░░░░ 78% to goal                 ││
+│ │ Diversity:  ██████████░░░░░░░░░░ 52% to goal                 ││
+│ │ Reliability: ███████████████████░ 94% (maintaining)          ││
+│ └──────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation Recommendations
+1. **Create `improvement_guidance.py`** for gap analysis calculations
+2. **Add improvement section to `contact.html`** template
+3. **Build recommendation database** with difficulty/impact scores
+4. **Link to external resources** (VPS guides, setup docs)
+
+---
+
+### #4: Directory Authority Health Dashboard (EXPANDED)
+**Priority Score: 82/100** | **Timeline: 4-6 weeks** | **Status: PARTIALLY IMPLEMENTED**
+
+---
+
+#### Current Implementation Status
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Basic authority table | ✅ Implemented | `misc-authorities.html` |
+| Authority uptime stats (1M/6M/1Y/5Y) | ✅ Implemented | `relays.py` |
+| Z-score outlier detection | ✅ Implemented | `relays.py` |
+| Version compliance tracking | ✅ Implemented | `misc-authorities.html` |
+| `fetch_consensus_health()` | ⚠️ Placeholder only | `workers.py` line 519-551 |
+| Real-time voting status | ❌ Not implemented | — |
+| Latency monitoring | ❌ Not implemented | — |
+| Consensus formation analysis | ❌ Not implemented | — |
+| Alert system | ❌ Not implemented | — |
+| CollecTor API integration | ❌ Not implemented | — |
+
+---
+
+#### What's Missing (Detailed)
+
+##### 1. Real-Time Authority Health Checks
+```python
+# Current placeholder in workers.py:
+def fetch_consensus_health(progress_logger=None):
+    # Placeholder implementation - returns empty data
+    empty_data = {"health_status": {}, "version": "placeholder"}
+    return empty_data
+```
+
+**Needed:**
+- Direct HTTP checks to each authority's directory port
+- Response time measurement (latency in ms)
+- Timeout detection and error classification
+- Status categorization: `online`, `slow`, `degraded`, `timeout`, `offline`
+
+##### 2. Voting Round Monitoring
+- Track when each authority submits its vote
+- Measure voting round duration (typically 127-180 seconds)
+- Detect authorities that miss voting windows
+- Historical voting participation rate
+
+##### 3. Bandwidth Scanning Status
+- Track which authorities are actively measuring relay bandwidth
+- Identify scanning delays or failures
+- Compare measurement consistency across authorities
+
+##### 4. Consensus Formation Analysis
+- Parse consensus documents from CollecTor
+- Track `valid-after`, `fresh-until`, `valid-until` timestamps
+- Detect stale consensus conditions
+- Calculate authority agreement percentage on relay flags
+
+##### 5. Alert System
+- Configurable thresholds for warnings and critical alerts
+- Categories: connectivity, performance, consensus, voting
+- Real-time alert generation and history
+
+---
+
+#### Detailed Mockups
+
+##### Main Dashboard View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏛️ Directory Authority Health Dashboard                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ┌───────────────────┐ ┌───────────────────┐ ┌─────────────────┐│
+│ │ Consensus Status  │ │ Authority Voting  │ │ Network Sync    ││
+│ │                   │ │                   │ │                 ││
+│ │ ✅ CURRENT        │ │ 9/9 ACTIVE        │ │ 99.2% SYNC      ││
+│ │ Fresh: 14:32 UTC  │ │ Last Vote: Recent │ │ 8.9/9 Agreement ││
+│ │ Next: 15:00 UTC   │ │ All Participating │ │                 ││
+│ └───────────────────┘ └───────────────────┘ └─────────────────┘│
+│                                                                 │
+│ Directory Authorities Status (Real-Time):                       │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Authority    │ Status │ Vote │ BW Scan │ Latency │ Uptime   ││
+│ ├──────────────┼────────┼──────┼─────────┼─────────┼──────────┤│
+│ │ moria1       │ 🟢 OK  │ ✅   │ ✅      │ 12ms    │ 99.9%    ││
+│ │ tor26        │ 🟢 OK  │ ✅   │ ✅      │ 8ms     │ 99.9%    ││
+│ │ dizum        │ 🟢 OK  │ ✅   │ ✅      │ 15ms    │ 99.8%    ││
+│ │ gabelmoo     │ 🟢 OK  │ ✅   │ ✅      │ 11ms    │ 99.9%    ││
+│ │ dannenberg   │ 🟢 OK  │ ✅   │ ✅      │ 19ms    │ 99.7%    ││
+│ │ maatuska     │ 🟢 OK  │ ✅   │ ✅      │ 7ms     │ 99.9%    ││
+│ │ faravahar    │ 🟡 SLOW│ ✅   │ ⚠️      │ 89ms    │ 97.8%    ││
+│ │ longclaw     │ 🟢 OK  │ ✅   │ ✅      │ 14ms    │ 99.6%    ││
+│ │ bastet       │ 🟢 OK  │ ✅   │ ✅      │ 16ms    │ 99.5%    ││
+│ └──────────────┴────────┴──────┴─────────┴─────────┴──────────┘│
+│                                                                 │
+│ ⚠️ Active Alerts (1):                                           │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ 🟡 WARNING: faravahar bandwidth scanning slower than usual   ││
+│ │    Response time: 89ms (threshold: 50ms)                     ││
+│ │    Since: 14:15 UTC • Impact: Low                            ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Recent Consensus Events:                                        │
+│ • 14:32 - Consensus published successfully (9/9 authorities)   │
+│ • 14:31 - Voting round completed in 127 seconds                │
+│ • 14:29 - All authorities synchronized                         │
+│                                                                 │
+│ Last updated: 14:45:23 UTC • Auto-refresh: 60s                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+##### Consensus Health Metrics View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 Consensus Health Metrics                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Current Consensus (2025-01-06 15:00:00):                       │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Method: 28              Valid: 15:00-16:00 UTC               ││
+│ │ Relays: 8,247           Voting Delay: 300s                   ││
+│ │ Authorities: 9/9        Distribution Delay: 300s             ││
+│ │ Bandwidth Sum: 1.2TB/s  Consensus Size: 2.3MB               ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Flag Distribution:                                              │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Running  ████████████████████████████████ 7,234 (87.7%)     ││
+│ │ Fast     ████████████████████████████     6,891 (83.6%)     ││
+│ │ Stable   ████████████████████████         5,678 (68.9%)     ││
+│ │ Guard    ████████████████                 2,845 (34.5%)     ││
+│ │ Exit     ███████████                      1,923 (23.3%)     ││
+│ │ V2Dir    ████████████████████████████████ 7,156 (86.8%)     ││
+│ │ HSDir    ███████████████████████████████  6,987 (84.7%)     ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Quality Indicators:                                             │
+│ ✅ Consensus freshness: Excellent (12 minutes until stale)     │
+│ ✅ Authority participation: 100% (9/9)                         │
+│ ✅ Flag consistency: 98.7% agreement across authorities        │
+│ ⚠️  Network diversity: APAC region underrepresented (8.3%)     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+##### Authority Performance Analytics View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📈 Authority Performance Analytics (30 days)                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Performance Scorecard:                                          │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Authority    Uptime  Votes  BW-Scan  Consensus  Score        ││
+│ ├──────────────────────────────────────────────────────────────┤│
+│ │ moria1       99.8%   100%   98.2%    99.1%     ⭐⭐⭐⭐⭐      ││
+│ │ tor26        99.9%   100%   97.8%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ │ dizum        99.4%   99.7%  96.1%    98.9%     ⭐⭐⭐⭐        ││
+│ │ gabelmoo     99.7%   100%   98.9%    99.2%     ⭐⭐⭐⭐⭐      ││
+│ │ dannenberg   99.2%   99.8%  94.3%    98.6%     ⭐⭐⭐⭐        ││
+│ │ maatuska     99.9%   100%   99.1%    99.4%     ⭐⭐⭐⭐⭐      ││
+│ │ faravahar    97.8%   98.9%  89.2%    97.1%     ⭐⭐⭐          ││
+│ │ longclaw     99.5%   100%   97.4%    99.0%     ⭐⭐⭐⭐        ││
+│ │ bastet       99.6%   99.9%  98.7%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Network Impact Analysis:                                        │
+│ • Consensus Reliability: 99.4% (Excellent)                     │
+│ • Authority Redundancy: 9 active (Optimal - tolerates 4 failures)│
+│ • Single Point of Failure Risk: Low                            │
+│ • Geographic Distribution: 6 countries, 3 continents           │
+│                                                                 │
+│ Performance Score Calculation:                                  │
+│ • Uptime: 30% weight (core availability)                       │
+│ • Voting: 25% weight (consensus participation)                 │
+│ • BW Scanning: 20% weight (measurement accuracy)               │
+│ • Consensus Agreement: 25% weight (flag consistency)           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Tor Network Timing Reference
+
+Understanding the Tor consensus cycle is critical for monitoring:
+
+| Event | Frequency | Timing Details |
+|-------|-----------|----------------|
+| **Consensus Published** | Every **1 hour** | At :00 of each hour (00:00, 01:00, 02:00...) |
+| **Authority Votes** | Every **1 hour** | ~5-10 min before consensus (9 votes/hour, one per authority) |
+| **Bandwidth Measurements** | Every **~1 hour** | ~:36-:50 past hour (4-5 files from different scanners) |
+| **Voting Delay** | 300 seconds | Time authorities wait before voting |
+| **Distribution Delay** | 300 seconds | Time after voting before consensus published |
+| **Consensus Valid Period** | 1 hour | `valid-after` to `fresh-until` |
+| **Consensus Expiry** | 3 hours | `valid-after` to `valid-until` |
+
+**Consensus Document Lifecycle:**
+```
+Hour H:00:00 → valid-after (consensus becomes valid)
+Hour H+1:00:00 → fresh-until (new consensus expected)
+Hour H+3:00:00 → valid-until (consensus expires - CRITICAL if no new one)
+```
+
+---
+
+#### Data Sources with Specific CollecTor Endpoints
+
+| Data Point | Source | Endpoint | Update Frequency | File Format |
+|------------|--------|----------|------------------|-------------|
+| **Consensus Documents** | CollecTor | `/recent/relay-descriptors/consensuses/` | Hourly | `YYYY-MM-DD-HH-00-00-consensus` (~3.8MB) |
+| **Authority Votes** | CollecTor | `/recent/relay-descriptors/votes/` | Hourly | `YYYY-MM-DD-HH-00-00-vote-{fingerprint}-{digest}` (~5.7-6.5MB each) |
+| **Bandwidth Measurements** | CollecTor | `/recent/relay-descriptors/bandwidths/` | ~Hourly | `YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}` (~7.2-7.7MB) |
+| **Authority Details** | Onionoo | `/details?flag=Authority` | ~30 min | JSON (✅ implemented) |
+| **Authority Uptime** | Onionoo | `/uptime?flag=Authority` | ~30 min | JSON (✅ implemented) |
+| **Real-time Latency** | Direct HTTP | `http://{authority}:{port}/tor/status-vote/current/consensus` | On-demand | Binary consensus |
+
+**CollecTor Base URL:** `https://collector.torproject.org`
+
+---
+
+#### Consensus Document Fields (from CollecTor)
+
+Key fields to parse from consensus documents:
+
+```
+network-status-version 3
+vote-status consensus
+consensus-method 33                    ← Current consensus method
+valid-after 2025-12-26 03:00:00       ← When this consensus becomes valid
+fresh-until 2025-12-26 04:00:00       ← When new consensus expected
+valid-until 2025-12-26 06:00:00       ← When this consensus expires
+voting-delay 300 300                   ← Voting and distribution delays (seconds)
+known-flags Authority BadExit Exit Fast Guard HSDir...
+dir-source dannenberg {fingerprint}... ← Authority that contributed
+vote-digest {hash}                     ← Digest of authority's vote
+```
+
+---
+
+#### Implementation Plan (Phased - Real-Time First, Historical Later)
+
+**Update Strategy:** Hourly updates aligned with Tor consensus cycle
+
+---
+
+##### 🚀 PHASE 1: Real-Time Authority Health Checks (Week 1-2)
+**Focus:** Direct HTTP latency checks, updated every hour
+
+**Data Source:** Direct HTTP to authority directory ports
+
+```python
+# File: allium/lib/authority_monitor.py
+
+class DirectoryAuthorityMonitor:
+    """Monitor directory authority health in real-time."""
+    
+    # Authoritative list from consensus document dir-source entries
+    AUTHORITIES = {
+        'dannenberg': {
+            'address': '193.23.244.244:80',
+            'fingerprint': '0232AF901C31A04EE9848595AF9BB7620D4C5B2E',
+            'contact': 'Andreas Lehner'
+        },
+        'longclaw': {
+            'address': '199.58.81.140:80',
+            'fingerprint': '23D15D965BC35114467363C165C4F724B64B4F66',
+            'contact': 'Riseup Networks'
+        },
+        'bastet': {
+            'address': '204.13.164.118:80',
+            'fingerprint': '27102BC123E7AF1D4741AE047E160C91ADC76B21',
+            'contact': 'stefani'
+        },
+        'tor26': {
+            'address': '217.196.147.77:80',
+            'fingerprint': '2F3DF9CA0E5D36F2685A2DA67184EB8DCB8CBA8C',
+            'contact': 'Peter Palfrader'
+        },
+        'maatuska': {
+            'address': '171.25.193.9:443',
+            'fingerprint': '49015F787433103580E3B66A1707A00E60F2D15B',
+            'contact': 'Linus Nordberg'
+        },
+        'faravahar': {
+            'address': '216.218.219.41:80',
+            'fingerprint': '70849B868D606BAECFB6128C5E3D782029AA394F',
+            'contact': 'Sina Rabbani'
+        },
+        'dizum': {
+            'address': '45.66.35.11:80',
+            'fingerprint': 'E8A9C45EDE6D711294FADF8E7951F4DE6CA56B58',
+            'contact': 'Alex de Joode'
+        },
+        'gabelmoo': {
+            'address': '131.188.40.189:80',
+            'fingerprint': 'ED03BB616EB2F60BEC80151114BB25CEF515B226',
+            'contact': 'Sebastian Hahn'
+        },
+        'moria1': {
+            'address': '128.31.0.39:9231',
+            'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+            'contact': 'arma'
+        },
+    }
+    
+    async def check_all_authorities(self) -> Dict:
+        """Check health of all 9 authorities in parallel. Run hourly."""
+        tasks = [self._check_single_authority(name, info) 
+                 for name, info in self.AUTHORITIES.items()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return {
+            'authorities': self._process_results(results),
+            'checked_at': datetime.utcnow().isoformat(),
+            'next_check': (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        }
+    
+    async def _check_single_authority(self, name: str, info: Dict) -> Dict:
+        """Check a single authority's directory port for latency."""
+        start = time.time()
+        try:
+            # Request consensus from authority's directory port
+            url = f"http://{info['address']}/tor/status-vote/current/consensus"
+            async with aiohttp.ClientSession() as session:
+                async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    latency_ms = (time.time() - start) * 1000
+                    return {
+                        'name': name,
+                        'fingerprint': info['fingerprint'],
+                        'status': 'online' if response.status == 200 else 'degraded',
+                        'latency_ms': round(latency_ms, 1),
+                        'http_status': response.status,
+                        'checked_at': datetime.utcnow().isoformat()
+                    }
+        except asyncio.TimeoutError:
+            return {'name': name, 'fingerprint': info['fingerprint'], 
+                    'status': 'timeout', 'latency_ms': None, 'error': 'Connection timeout (10s)'}
+        except Exception as e:
+            return {'name': name, 'fingerprint': info['fingerprint'],
+                    'status': 'offline', 'latency_ms': None, 'error': str(e)}
+```
+
+**Output:** Authority latency status, updated hourly
+
+---
+
+##### 🚀 PHASE 2: Consensus Document Parsing (Week 2-3)
+**Focus:** Parse latest consensus from CollecTor, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/consensuses/`
+
+```python
+# File: allium/lib/consensus_health_scraper.py
+
+class ConsensusHealthScraper:
+    """Scrape and parse consensus documents from CollecTor. Run hourly."""
+    
+    COLLECTOR_CONSENSUSES = "https://collector.torproject.org/recent/relay-descriptors/consensuses/"
+    
+    async def fetch_latest_consensus(self) -> Dict:
+        """Fetch the most recent consensus document (published hourly)."""
+        async with aiohttp.ClientSession() as session:
+            # 1. List consensus files to find most recent
+            async with session.get(self.COLLECTOR_CONSENSUSES) as response:
+                html = await response.text()
+                files = re.findall(r'href="(\d{4}-\d{2}-\d{2}-\d{2}-00-00-consensus)"', html)
+                if not files:
+                    return {'error': 'No consensus files found'}
+                latest_file = sorted(files)[-1]  # Most recent
+            
+            # 2. Download consensus document (~3.8MB)
+            consensus_url = f"{self.COLLECTOR_CONSENSUSES}{latest_file}"
+            async with session.get(consensus_url) as response:
+                content = await response.text()
+                return self._parse_consensus_document(content, latest_file)
+    
+    def _parse_consensus_document(self, content: str, filename: str) -> Dict:
+        """Parse consensus and extract key metrics."""
+        lines = content.split('\n')
+        result = {
+            'filename': filename,
+            'fetched_at': datetime.utcnow().isoformat()
+        }
+        
+        # Parse header fields
+        for line in lines[:100]:  # Header is in first 100 lines
+            if line.startswith('valid-after '):
+                result['valid_after'] = line.split(' ', 1)[1]
+            elif line.startswith('fresh-until '):
+                result['fresh_until'] = line.split(' ', 1)[1]
+            elif line.startswith('valid-until '):
+                result['valid_until'] = line.split(' ', 1)[1]
+            elif line.startswith('consensus-method '):
+                result['consensus_method'] = int(line.split(' ')[1])
+            elif line.startswith('voting-delay '):
+                delays = line.split(' ')[1:]
+                result['voting_delay'] = int(delays[0])
+                result['dist_delay'] = int(delays[1])
+            elif line.startswith('dir-source '):
+                # Count authorities that contributed
+                result.setdefault('authorities_voted', 0)
+                result['authorities_voted'] += 1
+        
+        # Count relays and calculate flag distribution
+        result['relay_count'] = len([l for l in lines if l.startswith('r ')])
+        result['flag_distribution'] = self._calculate_flag_distribution(lines)
+        
+        # Calculate consensus freshness
+        result['freshness_status'] = self._assess_freshness(result)
+        
+        return result
+    
+    def _calculate_flag_distribution(self, lines: List[str]) -> Dict:
+        """Count relays with each flag."""
+        flags = {'Running': 0, 'Fast': 0, 'Stable': 0, 'Guard': 0, 
+                 'Exit': 0, 'HSDir': 0, 'V2Dir': 0, 'Authority': 0}
+        for line in lines:
+            if line.startswith('s '):
+                for flag in flags.keys():
+                    if flag in line:
+                        flags[flag] += 1
+        return flags
+    
+    def _assess_freshness(self, consensus: Dict) -> str:
+        """Check if consensus is fresh, stale, or expired."""
+        if 'fresh_until' not in consensus:
+            return 'unknown'
+        fresh_until = datetime.strptime(consensus['fresh_until'], '%Y-%m-%d %H:%M:%S')
+        now = datetime.utcnow()
+        if now < fresh_until:
+            return 'fresh'
+        elif 'valid_until' in consensus:
+            valid_until = datetime.strptime(consensus['valid_until'], '%Y-%m-%d %H:%M:%S')
+            if now < valid_until:
+                return 'stale'
+        return 'expired'
+```
+
+**Output:** Current consensus metrics including freshness, relay count, flag distribution
+
+---
+
+##### 🚀 PHASE 3: Vote Tracking (Week 3)
+**Focus:** Parse authority votes to check voting participation, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/votes/`
+
+```python
+# File: allium/lib/vote_tracker.py
+
+class VoteTracker:
+    """Track authority voting participation. Run hourly."""
+    
+    COLLECTOR_VOTES = "https://collector.torproject.org/recent/relay-descriptors/votes/"
+    
+    async def fetch_latest_votes(self) -> Dict:
+        """Fetch votes for the most recent consensus period."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self.COLLECTOR_VOTES) as response:
+                html = await response.text()
+                
+                # Find all vote files for current hour
+                # Format: YYYY-MM-DD-HH-00-00-vote-{fingerprint}-{digest}
+                current_hour = datetime.utcnow().strftime('%Y-%m-%d-%H')
+                vote_pattern = rf'href="({current_hour}-00-00-vote-([A-F0-9]+)-[A-F0-9]+)"'
+                votes = re.findall(vote_pattern, html)
+                
+                return {
+                    'period': current_hour,
+                    'votes_found': len(votes),
+                    'expected_votes': 9,  # 9 directory authorities
+                    'voting_authorities': [v[1][:16] + '...' for v in votes],
+                    'all_voted': len(votes) == 9,
+                    'checked_at': datetime.utcnow().isoformat()
+                }
+```
+
+**Output:** Voting participation status for current consensus period
+
+---
+
+##### 🚀 PHASE 4: Bandwidth Measurement Tracking (Week 3-4)
+**Focus:** Track bandwidth scanner activity, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/bandwidths/`
+
+```python
+# File: allium/lib/bandwidth_tracker.py
+
+class BandwidthMeasurementTracker:
+    """Track bandwidth scanner activity. Run hourly."""
+    
+    COLLECTOR_BANDWIDTHS = "https://collector.torproject.org/recent/relay-descriptors/bandwidths/"
+    
+    async def fetch_recent_measurements(self) -> Dict:
+        """Check for recent bandwidth measurement files."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self.COLLECTOR_BANDWIDTHS) as response:
+                html = await response.text()
+                
+                # Find bandwidth files from last 2 hours
+                now = datetime.utcnow()
+                recent_files = []
+                
+                # Format: YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}
+                bw_pattern = r'href="(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-bandwidth-[A-F0-9]+)"'
+                all_files = re.findall(bw_pattern, html)
+                
+                for f in all_files[-20:]:  # Check last 20 files
+                    file_time = datetime.strptime(f[:19], '%Y-%m-%d-%H-%M-%S')
+                    age_hours = (now - file_time).total_seconds() / 3600
+                    if age_hours <= 2:
+                        recent_files.append({
+                            'filename': f,
+                            'timestamp': file_time.isoformat(),
+                            'age_minutes': round(age_hours * 60)
+                        })
+                
+                return {
+                    'recent_measurements': len(recent_files),
+                    'expected_per_hour': 4,  # ~4-5 scanners per hour
+                    'files': recent_files,
+                    'status': 'healthy' if len(recent_files) >= 3 else 'degraded',
+                    'checked_at': datetime.utcnow().isoformat()
+                }
+```
+
+**Output:** Bandwidth scanner activity status
+
+---
+
+##### 🚀 PHASE 5: Alert System & Integration (Week 4)
+**Focus:** Combine all data sources, generate alerts, create dashboard
+
+```python
+# File: allium/lib/authority_alerts.py
+
+class AuthorityAlertSystem:
+    """Generate alerts based on authority health status."""
+    
+    THRESHOLDS = {
+        'latency_warning_ms': 100,
+        'latency_critical_ms': 500,
+        'offline_warning': 1,
+        'offline_critical': 3,  # Network at risk if 3+ authorities offline
+        'consensus_stale_warning_min': 30,
+        'bandwidth_files_min': 2,
+    }
+    
+    def generate_alerts(self, health_data: Dict) -> List[Dict]:
+        """Generate alerts from combined health data. Run hourly."""
+        alerts = []
+        
+        # Authority connectivity alerts
+        offline = [a for a in health_data.get('authorities', []) 
+                   if a.get('status') in ['offline', 'timeout']]
+        if len(offline) >= self.THRESHOLDS['offline_critical']:
+            alerts.append({
+                'level': 'critical',
+                'category': 'authority_connectivity',
+                'message': f"CRITICAL: {len(offline)} authorities offline - network consensus at risk",
+                'authorities': [a['name'] for a in offline]
+            })
+        elif len(offline) >= self.THRESHOLDS['offline_warning']:
+            alerts.append({
+                'level': 'warning',
+                'category': 'authority_connectivity',
+                'message': f"{len(offline)} authority offline: {offline[0]['name']}"
+            })
+        
+        # Consensus freshness alert
+        if health_data.get('consensus', {}).get('freshness_status') == 'stale':
+            alerts.append({
+                'level': 'warning',
+                'category': 'consensus_health',
+                'message': 'Consensus is stale - new consensus overdue'
+            })
+        elif health_data.get('consensus', {}).get('freshness_status') == 'expired':
+            alerts.append({
+                'level': 'critical',
+                'category': 'consensus_health',
+                'message': 'CRITICAL: Consensus has expired - network operation impaired'
+            })
+        
+        # Voting participation alert
+        if not health_data.get('votes', {}).get('all_voted', True):
+            missing = 9 - health_data.get('votes', {}).get('votes_found', 0)
+            alerts.append({
+                'level': 'warning',
+                'category': 'voting',
+                'message': f'{missing} authorities did not submit votes this period'
+            })
+        
+        return alerts
+```
+
+---
+
+##### 📅 PHASE 6 (LATER): Historical Data & Trends
+**Deferred to future milestone** - Focus on real-time first
+
+Future enhancements requiring historical data storage:
+- 7-day authority uptime trends
+- Consensus formation time analysis
+- Voting participation history
+- Bandwidth measurement consistency tracking
+- Performance degradation detection
+
+**Requires:** Database or file-based storage for historical data points
+
+---
+
+#### Files to Create/Modify
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `allium/lib/authority_monitor.py` | **CREATE** | Real-time authority HTTP health checks |
+| `allium/lib/consensus_health_scraper.py` | **CREATE** | Parse CollecTor consensus documents |
+| `allium/lib/vote_tracker.py` | **CREATE** | Track authority voting participation |
+| `allium/lib/bandwidth_tracker.py` | **CREATE** | Monitor bandwidth scanner activity |
+| `allium/lib/authority_alerts.py` | **CREATE** | Alert generation from all sources |
+| `allium/lib/authority_analytics.py` | **CREATE** | Performance scoring (Phase 6 - historical) |
+| `allium/lib/workers.py` | **MODIFY** | Replace `fetch_consensus_health()` placeholder |
+| `allium/templates/misc-authorities-health.html` | **CREATE** | New comprehensive dashboard template |
+| `allium/templates/misc-authorities.html` | **MODIFY** | Add link to health dashboard |
+
+---
+
+#### Data Source Summary with CollecTor Reference
+
+| Metric | Data Source | URL | Update Freq | Phase |
+|--------|-------------|-----|-------------|-------|
+| Authority latency | Direct HTTP | `http://{auth_ip}:{port}/tor/status-vote/current/consensus` | On-demand | 1 |
+| Authority details | Onionoo API | `https://onionoo.torproject.org/details?flag=Authority` | ~30 min | ✅ Done |
+| Authority uptime | Onionoo API | `https://onionoo.torproject.org/uptime?flag=Authority` | ~30 min | ✅ Done |
+| Consensus doc | CollecTor | `/recent/relay-descriptors/consensuses/YYYY-MM-DD-HH-00-00-consensus` | Hourly | 2 |
+| Authority votes | CollecTor | `/recent/relay-descriptors/votes/YYYY-MM-DD-HH-00-00-vote-{fp}-{digest}` | Hourly | 3 |
+| BW measurements | CollecTor | `/recent/relay-descriptors/bandwidths/YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}` | Hourly | 4 |
+
+**CollecTor Base URL:** `https://collector.torproject.org`
+
+---
+
+#### Hourly Update Schedule
+
+Align Allium updates with Tor consensus cycle:
+
+```
+:00 - New consensus published on Tor network
+:05 - Allium fetches consensus from CollecTor (wait for propagation)
+:10 - Allium checks authority latency via direct HTTP
+:15 - Allium parses votes and bandwidth files from CollecTor
+:20 - Allium generates alerts and updates dashboard cache
+:55 - Prepare for next cycle
+```
+
+**Recommended cron:** `5,10,15,20 * * * *` (4 jobs per hour)
+
+---
+
+#### Success Criteria
+
+**Phase 1-5 (Real-Time Focus):**
+- [ ] Real-time latency checks for all 9 authorities (< 10s response)
+- [ ] Consensus document parsing from CollecTor (hourly)
+- [ ] Voting participation tracking (hourly - count votes per period)
+- [ ] Bandwidth measurement activity tracking (hourly)
+- [ ] Alert system for offline authorities and stale consensus
+- [ ] Flag distribution from latest consensus
+- [ ] < 2 second page load time
+
+**Phase 6 (Historical - Later):**
+- [ ] 7-day authority uptime trend graphs
+- [ ] Historical voting participation analysis
+- [ ] Performance scorecard with 30-day metrics
+- [ ] Geographic distribution map of authorities
+
+---
+
+#### Dependencies
+
+**Python Libraries:**
+- `aiohttp` - Async HTTP requests for parallel authority checks and CollecTor fetches
+- `asyncio` - Async/await coordination for concurrent data fetching
+- `statistics` - Z-score and performance calculations (already in stdlib)
+- `re` - Regex for parsing CollecTor directory listings and consensus documents
+
+**External APIs:**
+- **CollecTor** (no auth required) - Consensus, votes, bandwidth files
+- **Onionoo** (no auth required) - Authority details and uptime (already integrated)
+- **Direct HTTP** - Authority directory ports for latency checks (no auth, public ports)
+
+---
+
+#### Value Proposition
+
+| Audience | Benefit |
+|----------|---------|
+| **Tor Foundation** | Proactive monitoring of critical infrastructure |
+| **Relay Operators** | Understanding why their relay flags might be delayed |
+| **Researchers** | Transparency into consensus formation process |
+| **Network Watchers** | Early warning for network-wide issues |
+
+---
+
+### #5: Peer Group Performance Comparison
+**Priority Score: 79/100** | **Timeline: 4 weeks** | **Status: NOT IMPLEMENTED**
+
+#### What's Missing
+- ❌ No peer group classification (operators with similar relay count)
+- ❌ No "compare to similar operators" feature
+- ❌ No peer group rankings/percentiles
+- ❌ No "you vs peer average" visualizations
+
+#### What Exists (Can Be Reused)
+- ✅ CW/BW ratio calculations and percentiles
+- ✅ Operator reliability metrics
+- ✅ Contact-level intelligence engine data
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 Peer Group Comparison - youroperator.org (47 relays)         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ 👥 Peer Group: Operators with 25-75 relays (you rank #8 of 23)  │
+│                                                                 │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Metric              │ Your Score │ Peer Avg │ Network │ Rank ││
+│ ├─────────────────────┼────────────┼──────────┼─────────┼──────┤│
+│ │ ⚖️ CW Efficiency    │ 0.67       │ 0.87     │ 0.75    │ ↓23% ││
+│ │ 📈 Bandwidth/Relay  │ 12.4 MB/s  │ 8.1 MB/s │ 6.2 MB/s│ ↑53% ││
+│ │ ⏰ Uptime (6mo)     │ 98.7%      │ 97.5%    │ 94.1%   │ Top15││
+│ │ 🌍 Geographic       │ 4 countries│ 2.1 avg  │ 1.4 avg │ Top20││
+│ │ 🏗️ ASN Diversity   │ 6 ASes     │ 3.2 avg  │ 2.1 avg │ Top10││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ 🏆 Peer Group Leaders (25-75 relay operators):                  │
+│ • #1: topoperator.org - 0.94 CW ratio, 99.1% uptime            │
+│ • #2: reliablenet.com - 0.91 CW ratio, 98.9% uptime            │
+│ • [You: #8] - 0.67 CW ratio, 98.7% uptime                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### #6: Bridge Network Health Dashboard
+**Priority Score: 73/100** | **Timeline: 5-6 weeks** | **Status: NOT IMPLEMENTED**
+
+#### What's Missing
+- ❌ No bridge data processing (only relays)
+- ❌ No bridge-specific pages
+- ❌ No transport protocol analysis (obfs4, webtunnel, etc.)
+- ❌ No bridge distribution channel metrics
+
+#### What Exists (Can Be Reused)
+- ✅ Relay dashboard infrastructure can be adapted
+- ✅ Network health card layout
+- ✅ Bandwidth/uptime calculation patterns
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🌉 Tor Bridge Network Health Dashboard                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────┐│
+│ │ 📊 Bridge Count │ │ 🚇 Transports   │ │ ⏰ Bridge Uptime    ││
+│ │                 │ │                 │ │                     ││
+│ │ 2,739 Total     │ │ 4 Types Active  │ │ 94.2% Average       ││
+│ │ 2,456 Running   │ │ obfs4: 67.4%    │ │                     ││
+│ └─────────────────┘ └─────────────────┘ └─────────────────────┘│
+│                                                                 │
+│ Transport Protocol Analysis:                                    │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ obfs4     ████████████████████████████████████████ 67.4%    ││
+│ │ webtunnel ████████████████ 24.0%                            ││
+│ │ snowflake █████ 6.9%                                        ││
+│ └──────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### #7: Smart Context Links & Suggestions
+**Priority Score: 70/100** | **Timeline: 8-10 weeks** | **Status: PARTIALLY IMPLEMENTED**
+
+#### What's Missing
+- ❌ No "Smart Suggestions" panel on pages
+- ❌ No contextual navigation recommendations
+- ❌ No "similar networks" or "similar operators" features
+- ❌ No cross-page intelligence recommendations
+- ❌ No URL-based smart filtering
+
+#### What Exists (Can Be Reused)
+- ✅ Intelligence Engine with 14 layers
+- ✅ Contact intelligence calculations
+- ✅ Network concentration analysis
+- ✅ Geographic clustering analysis
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ AS12345 - Hetzner Online GmbH                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ 💡 Smart Suggestions                                            │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ • Compare with 5 similar-capacity networks [→]               ││
+│ │ • View geographic impact on Germany [→]                      ││
+│ │ • Analyze 12 operators in this network [→]                   ││
+│ │ • See historical AS growth trends [→]                        ││
+│ └──────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### #8: Predictive Relay Failure Detection
+**Priority Score: 67/100** | **Timeline: 6-8 weeks** | **Status: NOT IMPLEMENTED**
+
+#### What's Missing
+- ❌ No predictive analytics/ML models
+- ❌ No "at-risk relay" detection
+- ❌ No failure prediction scoring
+- ❌ No early warning alerts
+
+#### What Exists (Can Be Reused)
+- ✅ Historical uptime data available
+- ✅ Bandwidth stability metrics (CV)
+- ✅ Offline relay detection in contact pages
+
+#### Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🔮 Predictive Analytics - At-Risk Relays (Next 48h)            │
+├─────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Relay              │ Risk  │ Factors                │ Action ││
+│ ├────────────────────┼───────┼────────────────────────┼────────┤│
+│ │ relay01.example    │ 73% ⚠️│ Declining uptime,      │ Contact││
+│ │                    │       │ BW instability         │ operator││
+│ │ relay23.network    │ 58% ⚠️│ Consensus weight drop  │ Monitor││
+│ └────────────────────┴───────┴────────────────────────┴────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Implementation Roadmap Summary
+
+| Priority | Feature | Timeline | Status | Key Milestone |
+|----------|---------|----------|--------|---------------|
+| **#1** | Geographic Heat Map | 4-6 weeks | Not Started | M1 |
+| **#2** | AROI Achievement Wheel | 3-4 weeks | Data Ready | M1 |
+| **#3** | Improvement Guidance | 4-6 weeks | Not Started | M1-2 |
+| **#4** | Authority Dashboard | 4-6 weeks | Placeholder | M2 |
+| **#5** | Peer Group Comparison | 4 weeks | Not Started | M2 |
+| **#6** | Bridge Health Dashboard | 5-6 weeks | Not Started | M2-3 |
+| **#7** | Smart Context Links | 8-10 weeks | Foundation Ready | M2-3 |
+| **#8** | Predictive Analytics | 6-8 weeks | Not Started | M3 |
+
+---
+
+## Recommended Starting Point
+
+### 🚀 Start with Feature #1: Geographic Heat Map
+
+**Reasons:**
+1. **Foundation Building** - Sets up D3.js/Chart.js infrastructure for #2
+2. **Immediate Visual Impact** - Most dramatic improvement to user experience
+3. **Zero Dependencies** - All country data already exists
+4. **Reusable Components** - Chart framework used by #2, #6, #8
+5. **Community Appeal** - Showcases Tor's global reach
+
+### Week 1-2 Quick Start Plan
+```bash
+# 1. Set up visualization framework
+npm install d3 chart.js topojson-client
+
+# 2. Create geographic data processor
+touch allium/lib/geographic_visualization.py
+
+# 3. Create template and JavaScript
+touch allium/templates/geographic_heatmap.html
+touch static/js/geographic-heatmap.js
+
+# 4. Add CSS framework
+touch static/css/visualization.css
+```
+
+### Success Criteria for Feature #1
+- [ ] Interactive world map with color-coded countries
+- [ ] Hover tooltips showing relay counts and top operators
+- [ ] Click-through to country detail pages
+- [ ] Mobile-responsive with touch zoom/pan
+- [ ] < 2 second load time
+
+---
+
+**Document Status**: Updated after codebase review  
+**Last Updated**: December 2024  
+**Features Removed**: 2 (AROI Leaderboards - fully implemented, Network Health Dashboard - fully implemented)  
+**Features Remaining**: 8 (requiring new development)
