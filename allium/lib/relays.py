@@ -712,7 +712,7 @@ class Relays:
         net_by_period = self.json.get('network_health', {}).get('network_total_data_by_period', {})
         
         for category in self.json.get("sorted", {}):
-            for key, group_data in self.json["sorted"][category].items():
+            for group_data in self.json["sorted"][category].values():
                 sums = {p: 0 for p in BEST_PERIOD_ORDER}
                 for idx in group_data.get("relays", []):
                     td = relays[idx].get("total_data", {})
