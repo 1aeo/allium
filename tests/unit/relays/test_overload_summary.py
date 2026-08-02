@@ -345,3 +345,4 @@ def test_contact_relay_row_no_badge_when_not_overloaded(jinja_env):
     """Do not render an overload badge for a healthy relay."""
     rendered = jinja_env.get_template('contact.html').render(**_contact_context(None))
     assert '⚡' not in rendered
+    assert '<td style="white-space: nowrap;">' not in rendered

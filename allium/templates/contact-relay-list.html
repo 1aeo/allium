@@ -125,7 +125,7 @@
 <tr>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-    <td style="white-space: nowrap;">
+    <td{% if relay.get('stability_is_overloaded') %} style="white-space: nowrap;"{% endif %}>
         {% if relay['running'] -%}
             <span class="circle circle-online" title="This relay is online"></span>
         {% else -%}
