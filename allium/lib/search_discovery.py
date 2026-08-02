@@ -2,8 +2,10 @@
 
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import quote, urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, urljoin, urlsplit
 import xml.etree.ElementTree as ET
+
+from .seo import public_base_url as normalize_public_base_url
 
 
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -14,15 +16,11 @@ ET.register_namespace("", SITEMAP_NAMESPACE)
 
 
 def _public_base_url(base_url):
-    """Return a normalized public HTTPS origin, or ``None`` for local builds."""
-    parsed = urlsplit(base_url or "")
-    if parsed.scheme != "https" or not parsed.netloc:
+    """Return a normalized public HTTPS base URL, including a path prefix."""
+    normalized = normalize_public_base_url(base_url)
+    if normalized is None or urlsplit(normalized).scheme != "https":
         return None
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError("base_url must be a public HTTPS origin")
-    if parsed.path not in ("", "/"):
-        raise ValueError("base_url must not contain a path")
-    return urlunsplit(("https", parsed.netloc, "", "", ""))
+    return normalized
 
 
 def _route_for_html(relative_path):
@@ -55,7 +53,7 @@ class _HeadSignalsParser(HTMLParser):
         elif tag.lower() == "meta":
             if (attrs.get("name") or "").lower() == "robots":
                 directives = (attrs.get("content") or "").lower()
-                self.noindex = "noindex" in directives
+                self.noindex = self.noindex or "noindex" in directives
 
 
 def _canonical_urls_from_html(output_path, base_url):
