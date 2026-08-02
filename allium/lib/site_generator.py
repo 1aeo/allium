@@ -100,6 +100,16 @@ MISC_PAGE_DATA_KEYS = {
     "platforms": "platform",
 }
 
+# These combinations were emitted by older releases even though their tables
+# have no corresponding sort column. Keep the list explicit so reused output
+# directories can remove both the obsolete base document and any paginated
+# descendants before crawler discovery validates every remaining HTML file.
+UNSUPPORTED_MISC_SORT_VARIANTS = frozenset(
+    (page_type, suffix)
+    for page_type in ("contacts", "families")
+    for suffix in ("by-unique-contact-count", "by-unique-family-count")
+)
+
 # Onionoo keys used to generate detail pages by unique value (e.g., AS43350)
 # Ordered with slowest pages first (family, contact have most relays per group)
 SORTED_PAGE_KEYS = [
@@ -133,6 +143,20 @@ def _remove_stale_pagination_files(output_dir, base_filename):
         path = os.path.join(output_dir, filename)
         if os.path.isfile(path):
             os.remove(path)
+            removed += 1
+    return removed
+
+
+def _remove_unsupported_misc_sort_variants(output_root):
+    """Remove obsolete misc-sort outputs left by an earlier generator."""
+    output_dir = os.path.join(output_root, "misc")
+    removed = 0
+    for page_type, suffix in sorted(UNSUPPORTED_MISC_SORT_VARIANTS):
+        base_filename = f"{page_type}-{suffix}.html"
+        removed += _remove_stale_pagination_files(output_dir, base_filename)
+        base_path = os.path.join(output_dir, base_filename)
+        if os.path.isfile(base_path):
+            os.remove(base_path)
             removed += 1
     return removed
 
@@ -221,14 +245,13 @@ def generate_site(relay_set, args, progress_logger):
     # --- Miscellaneous sorted pages ---
     progress_logger.log("Generating miscellaneous sorted pages...")
     standard_contexts = StandardTemplateContexts(relay_set)
+    _remove_unsupported_misc_sort_variants(args.output_dir)
     for suffix, sorted_by in SORTED_BY_VARIANTS.items():
         for page_type, page_title in MISC_SORTED_PAGE_TYPES:
             # misc-contacts and misc-families have no unique-contact/
             # unique-family columns; the variants sorted by them gave no
             # visual indication of the sort, so they are not generated.
-            if (page_type in ("contacts", "families")
-                    and suffix in ("by-unique-contact-count",
-                                   "by-unique-family-count")):
+            if (page_type, suffix) in UNSUPPORTED_MISC_SORT_VARIANTS:
                 continue
             page_ctx = standard_contexts.get_misc_page_context(
                 f"misc-{page_type}.html", page_title, sorted_by=sorted_by
