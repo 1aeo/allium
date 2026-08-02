@@ -6,6 +6,7 @@ import shutil
 from allium.lib.site_generator import (
     _deduplicate_family_listing_items,
     _remove_stale_pagination_files,
+    _remove_unsupported_misc_sort_variants,
     _sync_static_files,
 )
 
@@ -70,6 +71,37 @@ def test_stale_pagination_files_are_removed_without_touching_base(temp_dir):
     assert os.path.exists(os.path.join(output_dir, "families-by-bandwidth.html"))
     assert os.path.exists(
         os.path.join(output_dir, "families-by-consensus-weight-page-2.html")
+    )
+
+
+def test_unsupported_misc_variants_are_removed_from_reused_output(temp_dir):
+    output_dir = os.path.join(temp_dir, "misc")
+    os.makedirs(output_dir)
+    obsolete = {
+        f"{page_type}-{suffix}{page}.html"
+        for page_type in ("contacts", "families")
+        for suffix in ("by-unique-contact-count", "by-unique-family-count")
+        for page in ("", "-page-2")
+    }
+    retained = {
+        "contacts-by-bandwidth.html",
+        "contacts-by-bandwidth-page-2.html",
+        "families-by-consensus-weight.html",
+    }
+    for filename in obsolete | retained:
+        with open(os.path.join(output_dir, filename), "w") as handle:
+            handle.write(filename)
+
+    removed = _remove_unsupported_misc_sort_variants(temp_dir)
+
+    assert removed == len(obsolete)
+    assert all(
+        not os.path.exists(os.path.join(output_dir, filename))
+        for filename in obsolete
+    )
+    assert all(
+        os.path.exists(os.path.join(output_dir, filename))
+        for filename in retained
     )
 
 
