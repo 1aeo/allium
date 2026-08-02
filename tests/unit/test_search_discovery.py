@@ -50,12 +50,18 @@ def test_generates_exact_robots_and_valid_sitemap(temp_dir):
 
 
 def test_local_build_skips_public_discovery_files(temp_dir):
+    for filename in ("robots.txt", "sitemap.xml", "sitemap-1.xml"):
+        with open(os.path.join(temp_dir, filename), "w", encoding="utf-8") as handle:
+            handle.write("stale production content")
+
     assert generate_search_discovery(temp_dir, "") == {
         "generated": False,
         "url_count": 0,
         "sitemap_count": 0,
     }
+    assert not os.path.exists(os.path.join(temp_dir, "robots.txt"))
     assert not os.path.exists(os.path.join(temp_dir, "sitemap.xml"))
+    assert not os.path.exists(os.path.join(temp_dir, "sitemap-1.xml"))
 
 
 @pytest.mark.parametrize(
