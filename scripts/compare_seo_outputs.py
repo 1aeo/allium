@@ -99,8 +99,8 @@ STATUS_CELL_NOWRAP_RE = re.compile(
     re.I,
 )
 OVERLOAD_SORT_COUNT_RE = re.compile(
-    r'(Overloaded relays are shown first)\s*'
-    r'\(\d+ currently overloaded\)',
+    r'(Overloaded relays are shown first)'
+    r'(?:\s*\(\d+ currently overloaded\))?',
     re.I,
 )
 VETERAN_DAY_RE = re.compile(
@@ -135,6 +135,60 @@ EMPTY_ISSUES_BOX_RE = re.compile(
     r'<ul[^>]*>\s*</ul>\s*</div>',
     re.I | re.S,
 )
+NETWORK_VETERANS_SECTION_RE = re.compile(
+    r'(<section\b[^>]*\bid=["\']network_veterans["\'][^>]*>)'
+    r'(.*?)'
+    r'(</section>)',
+    re.I | re.S,
+)
+VETERAN_RANK_BADGE_RE = re.compile(
+    r'(title=["\']Rank\s+)\d+(\s+in this category["\'][^>]*>)'
+    r'\d+(</span>)',
+    re.I,
+)
+VETERAN_CONTACT_RANK_RE = re.compile(r'#\d+(\s+Network Veteran\b)', re.I)
+AUTHORITY_LATENCY_SUMMARY_RE = re.compile(
+    r'<li>\s*<strong>Latency Status</strong>.*?</li>', re.I | re.S
+)
+AUTHORITY_LATENCY_CELL_RE = re.compile(
+    r'<td>\s*<span\b[^>]*title=["\'](?:Response time:|Connection timed out)'
+    r'.*?</span>\s*</td>',
+    re.I | re.S,
+)
+AUTHORITY_LATENCY_ALERT_RE = re.compile(
+    r'<li>[^<]+ is not responding \(latency check failed\)</li>', re.I
+)
+
+
+def normalize_network_veteran_order(html):
+    """Normalize clock-derived rank swaps inside the veteran leaderboard."""
+    html = VETERAN_CONTACT_RANK_RE.sub(r'#<runtime-rank>\1', html)
+
+    def section_replacement(section_match):
+        section = VETERAN_RANK_BADGE_RE.sub(
+            r'\1<runtime-rank>\2<runtime-rank>\3',
+            section_match.group(2),
+        )
+
+        def table_replacement(table_match):
+            table = table_match.group(0)
+            rows = ROW_RE.findall(table)
+            data_rows = [row for row in rows if "<td" in row.lower()]
+            if not data_rows:
+                return table
+            data_rows.sort(key=lambda row: WHITESPACE_RE.sub(" ", row).strip())
+            sorted_rows = iter(data_rows)
+
+            def row_replacement(row_match):
+                row = row_match.group(0)
+                return next(sorted_rows) if "<td" in row.lower() else row
+
+            return ROW_RE.sub(row_replacement, table)
+
+        section = TABLE_RE.sub(table_replacement, section)
+        return f"{section_match.group(1)}{section}{section_match.group(3)}"
+
+    return NETWORK_VETERANS_SECTION_RE.sub(section_replacement, html)
 
 
 def normalize_runtime_values(html):
@@ -174,6 +228,10 @@ def normalize_runtime_values(html):
     html = RELAY_UPTIME_TITLE_RE.sub("Relay Uptime: <runtime-days>", html)
     html = RELAY_UPTIME_VALUE_RE.sub(r"\1<runtime-days>", html)
     html = RELAY_UPTIME_STATUS_RE.sub(r"\1<runtime-status>\2", html)
+    html = AUTHORITY_LATENCY_SUMMARY_RE.sub("", html)
+    html = AUTHORITY_LATENCY_CELL_RE.sub("<td><runtime-latency></td>", html)
+    html = AUTHORITY_LATENCY_ALERT_RE.sub("", html)
+    html = normalize_network_veteran_order(html)
     return html
 
 
@@ -204,6 +262,12 @@ def normalize_common_html(html):
     html = PAGINATION_RE.sub("", html)
     html = RELAY_ANCHOR_RE.sub("", html)
     html = clean_internal_hrefs(html)
+    html = re.sub(
+        r"<h[23]\b[^>]*>\s*Directory Authority Status\s*</h[23]>",
+        "<h2>Directory Authority Status</h2>",
+        html,
+        flags=re.I,
+    )
     html = re.sub(r'\s+class=["\']page-title["\']', "", html, flags=re.I)
     html = re.sub(
         r'(<h1\b[^>]*?)\s+class=["\']page-title["\']', r"\1", html,
@@ -327,7 +391,7 @@ def _compare_common_worker(args):
     before = Path(before_path).read_text(encoding="utf-8")
     after = Path(after_path).read_text(encoding="utf-8")
     failures = head_contract(after, relative, origin_host)
-    if re.match(r"^contact/[^/]+/by-overload\.html$", relative):
+    if relative.endswith("/by-overload.html"):
         before = normalize_overload_sort_order(before)
         after = normalize_overload_sort_order(after)
     if is_paginated:

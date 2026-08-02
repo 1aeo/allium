@@ -6,13 +6,25 @@
 ## Quick Deploy
 
 ```bash
-# Generate site
-cd allium && python3 allium.py --out /var/www/tor-metrics \
-  --base-url https://metrics.example.com --progress
+# Generate into staging, then publish only after a successful exit.
+cd allium
+(
+  set -eu
+  staging_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$staging_dir"' EXIT
+  python3 allium.py --out "$staging_dir" \
+    --base-url https://metrics.example.com --progress
+  rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
+)
 
 # Serve (development)
 cd /var/www/tor-metrics && python3 -m http.server 8000
 ```
+
+The generator exits non-zero when generation fails, including when the final
+crawl-size guard finds an oversized page. Keep generation and publication as
+separate steps: only synchronize the staging directory after the generator
+returns zero. This leaves the currently published site untouched on failure.
 
 ## Subdirectory Hosting
 
@@ -87,10 +99,10 @@ server {
 
 ```bash
 # Generate for GitHub Pages
-python3 allium.py --out ./docs --base-url "/repository-name"
-git add docs/
-git commit -m "Update metrics"
-git push
+python3 allium.py --out ./docs --base-url "/repository-name" && \
+  git add docs/ && \
+  git commit -m "Update metrics" && \
+  git push
 ```
 
 ## Cloudflare Pages
@@ -143,12 +155,16 @@ export async function onRequest(context) {
 
 ## Automated Updates (Cron)
 
+Put the staged generation and `rsync` sequence from Quick Deploy in an
+executable `/path/to/deploy-allium.sh`. The script must use `set -e` (or an
+explicit exit-status check) so a generator failure prevents `rsync`.
+
 ```bash
 # Update every 6 hours
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+0 */6 * * * /path/to/deploy-allium.sh >> /var/log/allium.log 2>&1
 
 # Update daily at 3 AM
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * /path/to/deploy-allium.sh
 ```
 
 ### Memory Considerations
@@ -156,8 +172,9 @@ export async function onRequest(context) {
 For cron jobs on memory-constrained systems:
 
 ```bash
-# Low memory mode (~400MB)
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+# Low memory mode (~400MB): add --apis details to the generator command in
+# deploy-allium.sh, then keep the same failure-gated cron entry.
+0 */6 * * * /path/to/deploy-allium.sh
 ```
 
 ## Disk Space

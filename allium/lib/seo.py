@@ -1,5 +1,7 @@
 """SEO URL helpers and crawler discovery files for generated sites."""
 
+from concurrent.futures import ProcessPoolExecutor
+import os
 from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -82,10 +84,9 @@ def clean_href(path):
     return path[:-5]
 
 
-def rewrite_internal_html_links(output_dir):
-    """Rewrite internal ``.html`` hrefs to their public clean-route forms."""
-    output_path = Path(output_dir)
-    changed_files = changed_links = 0
+def _rewrite_html_file(html_path):
+    """Rewrite one HTML file and return changed-file and changed-link counts."""
+    changed_links = 0
 
     def replacement(match):
         nonlocal changed_links
@@ -102,14 +103,32 @@ def rewrite_internal_html_links(output_dir):
         quote_char = match.group("quote")
         return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
 
-    for html_path in sorted(output_path.rglob("*.html")):
-        if not html_path.is_file():
-            continue
-        original = html_path.read_text(encoding="utf-8")
-        rewritten = _HREF_RE.sub(replacement, original)
-        if rewritten != original:
-            html_path.write_text(rewritten, encoding="utf-8")
-            changed_files += 1
+    path = Path(html_path)
+    original = path.read_text(encoding="utf-8")
+    rewritten = _HREF_RE.sub(replacement, original)
+    if rewritten == original:
+        return 0, changed_links
+    path.write_text(rewritten, encoding="utf-8")
+    return 1, changed_links
+
+
+def rewrite_internal_html_links(output_dir):
+    """Rewrite internal ``.html`` hrefs to their public clean-route forms."""
+    output_path = Path(output_dir)
+    html_paths = [
+        str(path)
+        for path in sorted(output_path.rglob("*.html"))
+        if path.is_file()
+    ]
+    if not html_paths:
+        return {"changed_files": 0, "changed_links": 0}
+    changed_files = changed_links = 0
+    max_workers = min(8, os.cpu_count() or 1)
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for file_count, link_count in executor.map(
+                _rewrite_html_file, html_paths, chunksize=24):
+            changed_files += file_count
+            changed_links += link_count
     return {"changed_files": changed_files, "changed_links": changed_links}
 
 
