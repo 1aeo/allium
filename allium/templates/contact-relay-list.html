@@ -63,7 +63,7 @@
 {% macro relay_table_header(table_has_ipv6) -%}
 <tr>
     {% if is_contact_sortable %}
-        {{ sort_header('Status', 'status', 'Relay online/offline status') }}
+        {{ sort_header('Status', 'status', 'Relay online/offline status. ⚡ = currently overloaded (click it for details).') }}
         {{ sort_header('Nickname', 'nickname') }}
         {{ sort_header('BW Cap (' ~ bandwidth ~ ' ' ~ bandwidth_unit ~ ')', 'bandwidth', 'Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.') }}
         {{ sort_header('Total Data', 'total_data', 'Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.') }}
@@ -137,6 +137,10 @@
             {% else -%}
                 {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps, security_fps, pending_fps, relay.get('aroi_version')) }}
             {% endif -%}
+        {% endif -%}
+        {# Overload badge: links to the relay's #overload detail section (tooltip = reason) #}
+        {% if relay.get('stability_is_overloaded') -%}
+            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details." aria-label="{{ relay['nickname']|escape }} is overloaded; view overload details"><span class="al-status-danger-bold" style="margin-left: 3px;">⚡</span></a>
         {% endif -%}
     </td>
     {% if relay['effective_family']|length > 1 -%}
