@@ -82,7 +82,9 @@ class IntelligenceEngine:
 
             # Underutilized: high bandwidth but disproportionately low weight
             if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:
-                underutilized.add(relay.get('fingerprint', ''))
+                fingerprint = relay.get('fingerprint')
+                if isinstance(fingerprint, str) and fingerprint:
+                    underutilized.add(fingerprint)
             
             if bandwidth > 0:
                 ratio = self._calculate_cw_bw_ratio(consensus_weight, bandwidth)
