@@ -10,6 +10,7 @@ Extracted from relays.py for better modularity.
 import logging
 import multiprocessing as mp
 import os
+import re
 import time
 from shutil import rmtree
 
@@ -19,6 +20,7 @@ from .contact_sorting import (
     CONTACT_SORT_FILE_MAP,
     CONTACT_SORT_MODES,
     CONTACT_DEFAULT_SORT_MODE,
+    CONTACT_SECTION_KEYS,
     adjust_vanity_paths as _adjust_vanity_paths,
     contact_sort_links as _contact_sort_links,
     build_contact_variant_args as _build_contact_variant_args,
@@ -41,10 +43,66 @@ from .operator_analysis import (
 )
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .seo import canonical_url_for_output, clean_href
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 logger = logging.getLogger(__name__)
+
+# Keeps even the densest relay tables comfortably below crawler fetch limits.
+RELAY_PAGE_SIZE = 200
+
+
+def paginated_filename(base_filename, page_number):
+    """Return the generated filename for a 1-based pagination page."""
+    if page_number <= 1:
+        return base_filename
+    stem, extension = os.path.splitext(base_filename)
+    if base_filename == "index.html":
+        return f"page-{page_number}.html"
+    return f"{stem}-page-{page_number}{extension}"
+
+
+def pagination_context(base_filename, page_number, total_pages):
+    """Build compact, clean-route pagination links for a template."""
+    if total_pages <= 1:
+        return None
+
+    def href(number):
+        return clean_href(paginated_filename(base_filename, number))
+
+    return {
+        "current": page_number,
+        "total": total_pages,
+        "previous": href(page_number - 1) if page_number > 1 else None,
+        "next": href(page_number + 1) if page_number < total_pages else None,
+        "first": href(1),
+        "last": href(total_pages),
+    }
+
+
+def _paginated_validation_status(status, visible_relays):
+    """Return a page-filtered validation status while preserving full summary."""
+    if not isinstance(status, dict):
+        return status
+    visible_fingerprints = {
+        relay.get('fingerprint') for relay in visible_relays
+    }
+    page_status = dict(status)
+    for section_key in (
+        *CONTACT_SECTION_KEYS,
+        'pending_onionoo_relays',
+        'security_incident_relays',
+    ):
+        entries = status.get(section_key)
+        if isinstance(entries, list):
+            page_status[section_key] = [
+                entry for entry in entries
+                if isinstance(entry, dict)
+                and entry.get('relay', {}).get('fingerprint')
+                in visible_fingerprints
+            ]
+    return page_status
 
 
 def _sanitize_path_component(value: str) -> str:
@@ -221,14 +279,27 @@ def _render_page_mp(args):
     using forked memory. This avoids serializing large relay_subset data
     through IPC, reducing overhead from ~300KB/page to ~100 bytes/page.
     """
-    html_path, value = args
+    if len(args) == 2:
+        html_path, value = args
+        page_number = total_pages = 1
+        output_filename = "index.html"
+    else:
+        html_path, value, page_number, total_pages, output_filename = args
     
     # Get page data from forked memory (no IPC serialization needed)
     page_data = _mp_relay_set.json["sorted"][_mp_page_type][value]
     
     # Build template args in worker (uses forked memory)
     template_args = build_template_args(
-        _mp_relay_set, _mp_page_type, value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+        _mp_relay_set,
+        _mp_page_type,
+        value,
+        page_data,
+        _mp_the_prefixed,
+        _mp_validated_aroi_domains,
+        page_number=page_number,
+        total_pages=total_pages,
+        output_filename=output_filename,
     )
     
     # Render and write
@@ -447,6 +518,10 @@ def write_misc(
     sorted_by=None,
     reverse=True,
     is_index=False,
+    relay_subset=None,
+    listing_items=None,
+    pagination=None,
+    page_number=1,
 ):
     """
     Render and write unsorted HTML listings to disk
@@ -464,7 +539,8 @@ def write_misc(
     """
     template = ENV.get_template(template)
     # relay_subset passed directly to template for thread safety
-    relay_subset = relay_set.json["relays"]
+    if relay_subset is None:
+        relay_subset = relay_set.json["relays"]
     
     # Handle page context and path prefix
     if page_ctx is None:
@@ -496,12 +572,16 @@ def write_misc(
     template_vars = {
         "relays": relay_set,
         "relay_subset": relay_subset,  # Pass directly for thread safety
+        "listing_items": listing_items,
         "sorted_by": sorted_by,
         "reverse": reverse,
         "is_index": is_index,
         "page_ctx": page_ctx,
         "validated_aroi_domains": relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
         "base_url": relay_set.base_url,
+        "canonical_url": canonical_url_for_output(relay_set.base_url, path),
+        "pagination": pagination,
+        "page_number": page_number,
     }
     
     if template.name == "misc-families.html":
@@ -946,7 +1026,10 @@ def _cleanup_vanity_sort_files(vanity_dir):
     """
     if not os.path.isdir(vanity_dir):
         return
-    for filename in CONTACT_SORT_FILE_MAP.values():
+    generated_name = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
+    for filename in os.listdir(vanity_dir):
+        if filename not in CONTACT_SORT_FILE_MAP.values() and not generated_name.match(filename):
+            continue
         filepath = os.path.join(vanity_dir, filename)
         try:
             os.remove(filepath)
@@ -996,23 +1079,59 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
         modes_to_render = [CONTACT_DEFAULT_SORT_MODE]
 
     for sort_mode in modes_to_render:
-        filename = CONTACT_SORT_FILE_MAP[sort_mode]
-        template_args = _build_contact_variant_args(
+        base_filename = CONTACT_SORT_FILE_MAP[sort_mode]
+        variant_args = _build_contact_variant_args(
             base_template_args, sort_mode,
             contact_sort_enabled=sort_enabled,
             enabled_modes=modes_to_render,
         )
-        template_args['contact_has_ipv6'] = has_ipv6
-        rendered = template.render(relays=relay_set, **template_args)
+        sorted_relays = variant_args.get('relay_subset', [])
+        total_pages = max(
+            1, (len(sorted_relays) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE
+        )
 
-        with open(os.path.join(dir_path, filename), "w", encoding="utf8") as html:
-            html.write(rendered)
-        files_written += 1
+        for page_number in range(1, total_pages + 1):
+            filename = paginated_filename(base_filename, page_number)
+            start = (page_number - 1) * RELAY_PAGE_SIZE
+            visible_relays = sorted_relays[start:start + RELAY_PAGE_SIZE]
 
-        if vanity_dir:
-            adjusted_html = _adjust_vanity_paths(rendered)
-            with open(os.path.join(vanity_dir, filename), "w", encoding="utf8") as vanity_html:
-                vanity_html.write(adjusted_html)
+            template_args = dict(variant_args)
+            template_args['relay_subset'] = visible_relays
+            template_args['contact_has_ipv6'] = has_ipv6
+            template_args['page_number'] = page_number
+            template_args['pagination'] = pagination_context(
+                base_filename, page_number, total_pages
+            )
+
+            # All sort modes canonicalize to the same page of the default
+            # bandwidth ordering. This removes sort duplicates without
+            # collapsing paginated content back onto page one.
+            canonical_filename = paginated_filename("index.html", page_number)
+            canonical_path = (
+                f"{base_template_args['canonical_directory']}/"
+                f"{canonical_filename}"
+            )
+            template_args['canonical_url'] = canonical_url_for_output(
+                relay_set.base_url, canonical_path
+            )
+
+            status = variant_args.get('contact_validation_status')
+            if isinstance(status, dict):
+                template_args['contact_validation_status_full'] = status
+                template_args['contact_validation_status'] = (
+                    _paginated_validation_status(status, visible_relays)
+                )
+
+            rendered = template.render(relays=relay_set, **template_args)
+
+            with open(os.path.join(dir_path, filename), "w", encoding="utf8") as html:
+                html.write(rendered)
+            files_written += 1
+
+            if vanity_dir:
+                adjusted_html = _adjust_vanity_paths(rendered)
+                with open(os.path.join(vanity_dir, filename), "w", encoding="utf8") as vanity_html:
+                    vanity_html.write(adjusted_html)
 
     return files_written
 
@@ -1158,7 +1277,7 @@ def write_pages_by_key(relay_set, k):
         write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time)
         return
     
-    page_count = render_time = io_time = 0
+    page_count = rendered_file_count = render_time = io_time = 0
     
     for v in sorted_values:
         i = relay_set.json["sorted"][k][v]
@@ -1167,21 +1286,30 @@ def write_pages_by_key(relay_set, k):
         dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
 
-        # Shared arg construction with the parallel path (they cannot drift)
-        render_start = time.time()
-        template_args = build_template_args(
-            relay_set, k, v, i, the_prefixed,
-            relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set()
-        )
-        rendered = template.render(relays=relay_set, **template_args)
-        render_time += time.time() - render_start
+        relay_count = len(i.get("relays", []))
+        total_pages = max(1, (relay_count + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+        for page_number in range(1, total_pages + 1):
+            output_filename = paginated_filename("index.html", page_number)
 
-        # Time the file I/O
-        io_start = time.time()
-        html_path = os.path.join(dir_path, "index.html")
-        with open(html_path, "w", encoding="utf8") as html:
-            html.write(rendered)
-        io_time += time.time() - io_start
+            # Shared arg construction with the parallel path (they cannot drift)
+            render_start = time.time()
+            template_args = build_template_args(
+                relay_set, k, v, i, the_prefixed,
+                relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
+                page_number=page_number,
+                total_pages=total_pages,
+                output_filename=output_filename,
+            )
+            rendered = template.render(relays=relay_set, **template_args)
+            render_time += time.time() - render_start
+
+            # Time the file I/O
+            io_start = time.time()
+            html_path = os.path.join(dir_path, output_filename)
+            with open(html_path, "w", encoding="utf8") as html:
+                html.write(rendered)
+            io_time += time.time() - io_start
+            rendered_file_count += 1
 
         page_count += 1
         
@@ -1193,7 +1321,10 @@ def write_pages_by_key(relay_set, k):
     total_time = end_time - start_time
     
     # Log completion with progress increment for granular tracking
-    relay_set.progress_logger.log(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
+    relay_set.progress_logger.log(
+        f"{k} page generation complete - Generated {page_count} groups, "
+        f"{rendered_file_count} files in {total_time:.2f}s"
+    )
     if relay_set.progress:
         # Additional detailed stats (not in standard format, but supporting info)
         print(f"    🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
@@ -1202,7 +1333,17 @@ def write_pages_by_key(relay_set, k):
             print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
         print("---")
 
-def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains):
+def build_template_args(
+    relay_set,
+    k,
+    v,
+    i,
+    the_prefixed,
+    validated_aroi_domains,
+    page_number=1,
+    total_pages=1,
+    output_filename="index.html",
+):
     """Build template arguments for all page types (used by both sequential and parallel paths)."""
     members = [relay_set.json["relays"][idx] for idx in i["relays"]]
     bw = relay_set.bandwidth_formatter
@@ -1248,9 +1389,41 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
                         if k in ("contact", "family", "as") else None)
 
     display = i.get("display", {})
+    group_has_ipv6 = any(
+        member.get('ipv6_support') in ('both', 'ipv6_only')
+        for member in members
+    )
+
+    visible_members = members
+    if k != "contact" and total_pages > 1:
+        start = (page_number - 1) * RELAY_PAGE_SIZE
+        visible_members = members[start:start + RELAY_PAGE_SIZE]
+
+    full_contact_validation_status = None
+    rendered_contact_validation_status = contact_validation_status
+    if k == "family" and total_pages > 1 and isinstance(
+        contact_validation_status, dict
+    ):
+        full_contact_validation_status = contact_validation_status
+        rendered_contact_validation_status = _paginated_validation_status(
+            contact_validation_status, visible_members
+        )
+
+    safe_value = _sanitize_path_component(v)
+    output_component = safe_value.lower() if k == "flag" else safe_value
+    canonical_directory = f"{k}/{output_component}"
+    if k == "contact" and is_validated_aroi and relay_set.base_url:
+        aroi_domain = i.get("aroi_domain")
+        if not aroi_domain and members:
+            aroi_domain = members[0].get("aroi_domain")
+        if aroi_domain and aroi_domain != "none":
+            canonical_directory = _sanitize_path_component(aroi_domain.lower())
+    canonical_relative_path = f"{canonical_directory}/{output_filename}"
     
     return {
-        'relay_subset': members,
+        'relay_subset': visible_members,
+        'group_relay_count': len(members),
+        'group_has_ipv6': group_has_ipv6,
         'total_data_formatted': display.get("total_data_formatted", "N/A"),
         'total_data_pct': display.get("total_data_pct", ""),
         'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
@@ -1273,7 +1446,8 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'operator_reliability': operator_reliability,
         'contact_display_data': contact_display_data,
         'primary_country_data': primary_country_data,
-        'contact_validation_status': contact_validation_status,
+        'contact_validation_status': rendered_contact_validation_status,
+        'contact_validation_status_full': full_contact_validation_status,
         'aroi_validation_timestamp': aroi_validation_timestamp,
         # Family-specific data (extracted once, not per-field)
         **({'family_aroi_domain': i.get("aroi_domain", ""),
@@ -1298,6 +1472,14 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'is_validated_aroi': is_validated_aroi,
         'validated_aroi_domains': validated_aroi_domains,
         'base_url': relay_set.base_url,
+        'canonical_url': canonical_url_for_output(
+            relay_set.base_url, canonical_relative_path
+        ),
+        'canonical_directory': canonical_directory,
+        'pagination': pagination_context(
+            "index.html", page_number, total_pages
+        ),
+        'page_number': page_number,
         'family_support_counts': family_support_counts,
         'exit_dns_health_summary': exit_dns_health_summary,
         'overload_summary': overload_summary,
@@ -1325,10 +1507,15 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         v_safe = _sanitize_path_component(v)
         dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
-        html_path = os.path.join(dir_path, "index.html")
-        # OPTIMIZED: Pass only (html_path, value) - workers build template args from forked memory
-        # Raw v is passed so workers can look up data in relay_set.json["sorted"][k][v]
-        page_args.append((html_path, v))
+        relay_count = len(relay_set.json["sorted"][k][v].get("relays", []))
+        total_pages = max(1, (relay_count + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+        for page_number in range(1, total_pages + 1):
+            output_filename = paginated_filename("index.html", page_number)
+            html_path = os.path.join(dir_path, output_filename)
+            # Raw v is passed so workers can look up shared group data.
+            page_args.append(
+                (html_path, v, page_number, total_pages, output_filename)
+            )
     
     pool = None
     try:
@@ -1341,7 +1528,10 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         pool.join()
 
         total_time = time.time() - start_time
-        relay_set.progress_logger.log(f"{k} page generation complete - Generated {len(page_args)} pages in {total_time:.2f}s")
+        relay_set.progress_logger.log(
+            f"{k} page generation complete - Generated {len(sorted_values)} groups, "
+            f"{len(page_args)} files in {total_time:.2f}s"
+        )
         if relay_set.progress:
             print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
     except Exception as e:
@@ -1423,7 +1613,11 @@ def write_relay_info(relay_set):
             contact_validation_status=contact_validation_status,
             aroi_validation_timestamp=aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
-            base_url=base_url
+            base_url=base_url,
+            canonical_url=canonical_url_for_output(
+                base_url, f"relay/{relay['fingerprint']}/index.html"
+            ),
+            page_number=1,
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
@@ -1436,5 +1630,3 @@ def write_relay_info(relay_set):
             encoding="utf8",
         ) as html:
             html.write(rendered)
-
-

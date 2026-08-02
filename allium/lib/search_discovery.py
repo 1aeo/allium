@@ -1,8 +1,11 @@
-"""Generate crawler discovery files for a completed static site build."""
+"""Generate canonical-aware crawler discovery files for a static build."""
 
+from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote, urljoin, urlsplit
 import xml.etree.ElementTree as ET
+
+from .seo import public_base_url as normalize_public_base_url
 
 
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -13,15 +16,11 @@ ET.register_namespace("", SITEMAP_NAMESPACE)
 
 
 def _public_base_url(base_url):
-    """Return a normalized public HTTPS origin, or ``None`` for local builds."""
-    parsed = urlsplit(base_url or "")
-    if parsed.scheme != "https" or not parsed.netloc:
+    """Return a normalized public HTTPS base URL, including a path prefix."""
+    normalized = normalize_public_base_url(base_url)
+    if normalized is None or urlsplit(normalized).scheme != "https":
         return None
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError("base_url must be a public HTTPS origin")
-    if parsed.path not in ("", "/"):
-        raise ValueError("base_url must not contain a path")
-    return urlunsplit(("https", parsed.netloc, "", "", ""))
+    return normalized
 
 
 def _route_for_html(relative_path):
@@ -37,17 +36,73 @@ def _route_for_html(relative_path):
     return quote(route, safe="/-._~")
 
 
-def _generated_urls(output_dir, base_url):
-    """Enumerate the real HTML routes present in the completed output tree."""
-    output_path = Path(output_dir)
-    urls = []
-    for html_path in output_path.rglob("*.html"):
+class _HeadSignalsParser(HTMLParser):
+    """Extract canonical and robots directives without third-party parsers."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.canonicals = []
+        self.noindex = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = {key.lower(): value for key, value in attrs if key}
+        if tag.lower() == "link":
+            rel_values = (attrs.get("rel") or "").lower().split()
+            if "canonical" in rel_values and attrs.get("href"):
+                self.canonicals.append(attrs["href"])
+        elif tag.lower() == "meta":
+            if (attrs.get("name") or "").lower() == "robots":
+                directives = (attrs.get("content") or "").lower()
+                self.noindex = self.noindex or "noindex" in directives
+
+
+def _canonical_urls_from_html(output_path, base_url):
+    """Collect unique, same-origin canonicals from rendered HTML heads."""
+    urls = set()
+    html_count = noindex_count = 0
+    expected_origin = urlsplit(base_url)
+    for html_path in sorted(output_path.rglob("*.html")):
         if not html_path.is_file():
             continue
-        route = _route_for_html(html_path.relative_to(output_path))
-        if route is not None:
-            urls.append(f"{base_url}{route}")
-    return sorted(set(urls))
+        relative = html_path.relative_to(output_path)
+        if _route_for_html(relative) is None:
+            continue
+
+        parser = _HeadSignalsParser()
+        # SEO signals are head-only. Bounding the read keeps discovery fast
+        # even when a rendered relay table is very large.
+        with html_path.open(encoding="utf-8") as handle:
+            head = handle.read(262_144)
+        head_end = head.lower().find("</head>")
+        if head_end < 0:
+            raise ValueError(
+                f"{relative.as_posix()} has no complete <head> within 262144 bytes"
+            )
+        parser.feed(head[:head_end + len("</head>")])
+        html_count += 1
+        if len(parser.canonicals) != 1:
+            raise ValueError(
+                f"{relative.as_posix()} must contain exactly one canonical link; "
+                f"found {len(parser.canonicals)}"
+            )
+        if parser.noindex:
+            noindex_count += 1
+            continue
+
+        canonical = urljoin(f"{base_url}/", parser.canonicals[0])
+        parsed = urlsplit(canonical)
+        if (parsed.scheme, parsed.netloc) != (
+                expected_origin.scheme, expected_origin.netloc):
+            raise ValueError(
+                f"{relative.as_posix()} has an off-site canonical: {canonical}"
+            )
+        if parsed.path.endswith(".html"):
+            raise ValueError(
+                f"{relative.as_posix()} has a redirecting .html canonical: "
+                f"{canonical}"
+            )
+        urls.add(canonical)
+    return sorted(urls), html_count, noindex_count
 
 
 def _write_xml(root, destination):
@@ -125,12 +180,20 @@ def generate_search_discovery(output_dir, base_url):
     public_base_url = _public_base_url(base_url)
     if public_base_url is None:
         _remove_search_discovery(output_path)
-        return {"generated": False, "url_count": 0, "sitemap_count": 0}
+        return {
+            "generated": False,
+            "url_count": 0,
+            "sitemap_count": 0,
+            "html_count": 0,
+            "noindex_count": 0,
+        }
 
     output_path.mkdir(parents=True, exist_ok=True)
-    urls = _generated_urls(output_path, public_base_url)
+    urls, html_count, noindex_count = _canonical_urls_from_html(
+        output_path, public_base_url
+    )
     if not urls:
-        raise ValueError("cannot generate a sitemap without public HTML routes")
+        raise ValueError("cannot generate a sitemap without indexable canonical URLs")
 
     _remove_old_shards(output_path)
     sitemap_path = output_path / "sitemap.xml"
@@ -162,4 +225,6 @@ def generate_search_discovery(output_dir, base_url):
         "generated": True,
         "url_count": len(urls),
         "sitemap_count": sitemap_count,
+        "html_count": html_count,
+        "noindex_count": noindex_count,
     }

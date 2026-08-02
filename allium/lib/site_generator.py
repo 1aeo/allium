@@ -14,10 +14,18 @@ To add a new sorted-by variant (e.g., "by-latency"):
 
 import filecmp
 import os
+import re
 from shutil import copy2
 
 from .page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
-from .page_writer import write_misc, write_pages_by_key, write_relay_info
+from .page_writer import (
+    RELAY_PAGE_SIZE,
+    paginated_filename,
+    pagination_context,
+    write_misc,
+    write_pages_by_key,
+    write_relay_info,
+)
 
 
 # =============================================================================
@@ -37,7 +45,8 @@ STANDALONE_PAGES = [
      "context": "index", "is_index": True, "label": "top 500 relays page"},
     # All relays
     {"template": "all.html", "output": "misc/all.html",
-     "context": "misc", "context_name": "All Relays", "label": "all relays page"},
+     "context": "misc", "context_name": "All Relays", "label": "all relays page",
+     "paginate": True},
     # AROI leaderboards (misc copy)
     {"template": "aroi-leaderboards.html", "output": "misc/aroi-leaderboards.html",
      "context": "misc", "context_name": "AROI Champions Dashboard", "label": "AROI leaderboards page"},
@@ -83,6 +92,14 @@ MISC_SORTED_PAGE_TYPES = [
     ("platforms", "Browse by Platform"),
 ]
 
+MISC_PAGE_DATA_KEYS = {
+    "families": "family",
+    "networks": "as",
+    "contacts": "contact",
+    "countries": "country",
+    "platforms": "platform",
+}
+
 # Onionoo keys used to generate detail pages by unique value (e.g., AS43350)
 # Ordered with slowest pages first (family, contact have most relays per group)
 SORTED_PAGE_KEYS = [
@@ -99,6 +116,44 @@ SORTED_PAGE_KEYS = [
 # =============================================================================
 # SITE GENERATION
 # =============================================================================
+
+def _remove_stale_pagination_files(output_dir, base_filename):
+    """Remove page 2+ files left by an earlier, longer generated listing."""
+    if not os.path.isdir(output_dir):
+        return 0
+    stem, extension = os.path.splitext(base_filename)
+    page_name = re.compile(
+        rf"^{re.escape(stem)}-page-(?:[2-9]|[1-9][0-9]+)"
+        rf"{re.escape(extension)}$"
+    )
+    removed = 0
+    for filename in os.listdir(output_dir):
+        if not page_name.match(filename):
+            continue
+        path = os.path.join(output_dir, filename)
+        if os.path.isfile(path):
+            os.remove(path)
+            removed += 1
+    return removed
+
+
+def _deduplicate_family_listing_items(listing_items, relay_rows):
+    """Preserve the legacy cross-family relay de-duplication before paging."""
+    processed_fingerprints = set()
+    deduplicated_items = []
+    for item in listing_items:
+        relay_indexes = item[1].get("relays", [])
+        if not relay_indexes:
+            continue
+        first_fingerprint = relay_rows[relay_indexes[0]].get("fingerprint")
+        if first_fingerprint in processed_fingerprints:
+            continue
+        deduplicated_items.append(item)
+        processed_fingerprints.update(
+            relay_rows[index].get("fingerprint") for index in relay_indexes
+        )
+    return deduplicated_items
+
 
 def generate_site(relay_set, args, progress_logger):
     """
@@ -128,13 +183,39 @@ def generate_site(relay_set, args, progress_logger):
     for page_def in STANDALONE_PAGES:
         progress_logger.log(f"Generating {page_def['label']}...")
         page_ctx = _build_page_context(page_def, relay_set)
-        write_misc(
-            relay_set,
-            template=page_def["template"],
-            path=page_def["output"],
-            page_ctx=page_ctx,
-            is_index=page_def.get("is_index", False),
-        )
+        if page_def.get("paginate"):
+            relay_rows = relay_set.json.get("relays", [])
+            total_pages = max(
+                1, (len(relay_rows) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE
+            )
+            output_dir, base_filename = os.path.split(page_def["output"])
+            _remove_stale_pagination_files(
+                os.path.join(args.output_dir, output_dir), base_filename
+            )
+            for page_number in range(1, total_pages + 1):
+                filename = paginated_filename(base_filename, page_number)
+                output = os.path.join(output_dir, filename)
+                start = (page_number - 1) * RELAY_PAGE_SIZE
+                write_misc(
+                    relay_set,
+                    template=page_def["template"],
+                    path=output,
+                    page_ctx=page_ctx,
+                    is_index=page_def.get("is_index", False),
+                    relay_subset=relay_rows[start:start + RELAY_PAGE_SIZE],
+                    pagination=pagination_context(
+                        base_filename, page_number, total_pages
+                    ),
+                    page_number=page_number,
+                )
+        else:
+            write_misc(
+                relay_set,
+                template=page_def["template"],
+                path=page_def["output"],
+                page_ctx=page_ctx,
+                is_index=page_def.get("is_index", False),
+            )
         progress_logger.log(f"Generated {page_def['label']}")
 
     # --- Miscellaneous sorted pages ---
@@ -152,13 +233,44 @@ def generate_site(relay_set, args, progress_logger):
             page_ctx = standard_contexts.get_misc_page_context(
                 f"misc-{page_type}.html", page_title, sorted_by=sorted_by
             )
-            write_misc(
-                relay_set,
-                template=f"misc-{page_type}.html",
-                path=f"misc/{page_type}-{suffix}.html",
-                sorted_by=sorted_by,
-                page_ctx=page_ctx,
+            data_key = MISC_PAGE_DATA_KEYS[page_type]
+            listing_items = list(
+                relay_set.json.get("sorted", {}).get(data_key, {}).items()
             )
+            sort_field = sorted_by.split(",", 1)[0].split(".", 1)[1]
+            listing_items.sort(
+                key=lambda item: item[1].get(sort_field, 0), reverse=True
+            )
+            if page_type == "families":
+                # The legacy single-page template suppresses overlapping
+                # effective-family groups by remembering every relay already
+                # emitted. Do that once before slicing so the de-duplication
+                # state is preserved across pagination boundaries.
+                listing_items = _deduplicate_family_listing_items(
+                    listing_items, relay_set.json.get("relays", [])
+                )
+            total_pages = max(
+                1, (len(listing_items) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE
+            )
+            base_filename = f"{page_type}-{suffix}.html"
+            _remove_stale_pagination_files(
+                os.path.join(args.output_dir, "misc"), base_filename
+            )
+            for page_number in range(1, total_pages + 1):
+                start = (page_number - 1) * RELAY_PAGE_SIZE
+                filename = paginated_filename(base_filename, page_number)
+                write_misc(
+                    relay_set,
+                    template=f"misc-{page_type}.html",
+                    path=f"misc/{filename}",
+                    sorted_by=sorted_by,
+                    page_ctx=page_ctx,
+                    listing_items=listing_items[start:start + RELAY_PAGE_SIZE],
+                    pagination=pagination_context(
+                        base_filename, page_number, total_pages
+                    ),
+                    page_number=page_number,
+                )
     progress_logger.log(f"Generated {len(MISC_SORTED_PAGE_TYPES)} miscellaneous sorted pages")
 
     # --- Detail pages by key (family, contact, as, country, flag, platform, first_seen) ---
@@ -207,16 +319,42 @@ def generate_site(relay_set, args, progress_logger):
     # --- Search-engine discovery files ---
     progress_logger.log("Generating search-engine discovery files...")
     from .search_discovery import generate_search_discovery
-    discovery_stats = generate_search_discovery(args.output_dir, args.base_url)
+    from .seo import (
+        oversized_html_files,
+        rewrite_internal_html_links,
+    )
+    link_stats = rewrite_internal_html_links(args.output_dir)
+    progress_logger.log_without_increment(
+        f"Rewrote {link_stats['changed_links']} internal .html link(s) "
+        f"across {link_stats['changed_files']} file(s) to clean routes"
+    )
+    discovery_stats = generate_search_discovery(
+        args.output_dir, args.base_url
+    )
     if discovery_stats["generated"]:
         progress_logger.log(
-            f"Generated robots.txt and {discovery_stats['sitemap_count']} sitemap "
-            f"file(s) for {discovery_stats['url_count']} public routes"
+            f"Generated {discovery_stats['sitemap_count']} sitemap file(s) "
+            f"with {discovery_stats['url_count']} canonical URLs; "
+            f"excluded {discovery_stats['noindex_count']} noindex page(s)"
         )
     else:
         progress_logger.log(
             "Skipped search-engine discovery files for non-production base URL"
         )
+
+    # Protect crawlers from silently regressing to multi-megabyte HTML pages.
+    oversized = oversized_html_files(args.output_dir)
+    if oversized:
+        preview = ", ".join(
+            f"{path} ({size:,} bytes)" for path, size in oversized[:10]
+        )
+        raise RuntimeError(
+            f"{len(oversized)} generated HTML file(s) exceed the "
+            f"1,900,000-byte crawl-size guard: {preview}"
+        )
+    progress_logger.log_without_increment(
+        "HTML crawl-size guard passed (all pages <= 1,900,000 bytes)"
+    )
 
     # End page generation section
     progress_logger.end_section("Page Generation")

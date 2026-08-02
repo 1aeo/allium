@@ -6,16 +6,38 @@
 ## Quick Deploy
 
 ```bash
-# Generate site
-cd allium && python3 allium.py --out /var/www/tor-metrics --progress
+# Generate into staging, then publish only after a successful exit.
+cd allium
+(
+  set -eu
+  staging_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$staging_dir"' EXIT
+  python3 allium.py --out "$staging_dir" \
+    --base-url https://metrics.example.com --progress
+  rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
+)
 
 # Serve (development)
 cd /var/www/tor-metrics && python3 -m http.server 8000
 ```
 
+The generator exits non-zero when generation fails, including when the final
+crawl-size guard finds an oversized page. Keep generation and publication as
+separate steps: only synchronize the staging directory after the generator
+returns zero. This leaves the currently published site untouched on failure.
+
 ## Subdirectory Hosting
 
-Use `--base-url` when hosting under a subdirectory:
+Use an absolute `--base-url` in production. It is the origin for canonical and
+Open Graph URLs and enables `sitemap.xml` generation:
+
+```bash
+python3 allium.py --out /var/www/tor-metrics \
+  --base-url "https://example.com/tor-metrics"
+```
+
+A root-relative value still supports local or subdirectory previews, but only
+root-relative canonicals are emitted and the public sitemap is skipped:
 
 ```bash
 # Hosting at https://example.com/tor-metrics/
@@ -34,7 +56,7 @@ server {
     index index.html;
 
     location / {
-        try_files $uri $uri/ =404;
+        try_files $uri $uri/ $uri.html =404;
     }
 
     # Optional: Enable gzip
@@ -77,10 +99,10 @@ server {
 
 ```bash
 # Generate for GitHub Pages
-python3 allium.py --out ./docs --base-url "/repository-name"
-git add docs/
-git commit -m "Update metrics"
-git push
+python3 allium.py --out ./docs --base-url "/repository-name" && \
+  git add docs/ && \
+  git commit -m "Update metrics" && \
+  git push
 ```
 
 ## Cloudflare Pages
@@ -105,7 +127,10 @@ export async function onRequest(context) {
     if (!query) {
         return new Response(JSON.stringify({error: 'Missing query'}), {
             status: 400,
-            headers: {'Content-Type': 'application/json'}
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Robots-Tag': 'noindex, follow'
+            }
         });
     }
     
@@ -130,12 +155,16 @@ export async function onRequest(context) {
 
 ## Automated Updates (Cron)
 
+Put the staged generation and `rsync` sequence from Quick Deploy in an
+executable `/path/to/deploy-allium.sh`. The script must use `set -e` (or an
+explicit exit-status check) so a generator failure prevents `rsync`.
+
 ```bash
 # Update every 6 hours
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+0 */6 * * * /path/to/deploy-allium.sh >> /var/log/allium.log 2>&1
 
 # Update daily at 3 AM
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * /path/to/deploy-allium.sh
 ```
 
 ### Memory Considerations
@@ -143,13 +172,15 @@ export async function onRequest(context) {
 For cron jobs on memory-constrained systems:
 
 ```bash
-# Low memory mode (~400MB)
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+# Low memory mode (~400MB): add --apis details to the generator command in
+# deploy-allium.sh, then keep the same failure-gated cron entry.
+0 */6 * * * /path/to/deploy-allium.sh
 ```
 
 ## Disk Space
 
-Typical output size: ~500MB
+Full-API output can require several gigabytes. Pagination keeps every generated
+HTML page below Allium's 1,900,000-byte crawler guard.
 
 Ensure sufficient disk space before generation. Old files are overwritten, not accumulated.
 
@@ -163,4 +194,13 @@ python3 -m http.server 8000 --directory /var/www/tor-metrics
 curl -I http://localhost:8000/
 curl -I http://localhost:8000/top500.html
 curl -I http://localhost:8000/network-health.html
+
+# After production deployment, purge stale crawler-discovery cache keys and verify
+curl -fsS https://metrics.example.com/robots.txt
+curl -fsS https://metrics.example.com/sitemap.xml | head
+curl -fsS https://metrics.example.com/ | grep -E 'canonical|site-verification'
 ```
+
+Production automation should explicitly purge `/robots.txt` and `/sitemap.xml`
+after publishing. Search result/disambiguation HTML should return
+`X-Robots-Tag: noindex, follow`; direct search matches may remain redirects.

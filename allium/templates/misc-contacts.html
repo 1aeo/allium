@@ -6,10 +6,11 @@
     Relay Radar :: Contacts By {{ sorted_by_label|replace('_',
     ' ')|replace('bandwidth', 'observed bandwidth')|title }}
 {% endblock -%}
+{% block meta_description %}Compare Tor relay operators and contacts by bandwidth, consensus weight, relay roles, network diversity, validation, and reliability.{% endblock %}
 {% block body -%}
-    <h2>
+    <h1 class="page-title">
         Browse by Contact
-    </h2>
+    </h1>
     
     {{ navigation('contacts', page_ctx) }}
     
@@ -28,6 +29,8 @@
     </ul>
     
 {{ misc.last_updated(relays) }}
+    <div id="relay-table"></div>
+    {% include "pagination.html" %}
     
     <table class="table table-condensed">
         <tr>
@@ -43,7 +46,7 @@
             <th title="Exit DNS Health: healthy / unhealthy exit relay counts. Source: exitdnshealth.1aeo.com">DNS Health</th>
         </tr>
         <tbody>
-            {% for k, v in relays.json['sorted'].get('contact', {}).items()|sort(attribute=sorted_by,
+            {% for k, v in (listing_items if listing_items is not none else relays.json['sorted'].get('contact', {}).items())|sort(attribute=sorted_by,
                 reverse=True) -%}
                 <tr>
                     {# PERF: Use pre-computed display values instead of expensive Jinja2 filters #}
@@ -104,4 +107,5 @@
             {% endfor -%}
         </tbody>
     </table>
+    {% include "pagination.html" %}
 {% endblock -%} 

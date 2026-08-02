@@ -1,0 +1,17 @@
+{% if pagination %}
+<nav class="al-pagination" aria-label="Relay table pages">
+    <span>Page {{ pagination.current }} of {{ pagination.total }}</span>
+    {% if pagination.previous %}
+    <a rel="prev" href="{{ pagination.previous }}#relay-table">Previous</a>
+    {% endif %}
+    {% if pagination.current > 2 %}
+    <a href="{{ pagination.first }}#relay-table">First</a>
+    {% endif %}
+    {% if pagination.current < pagination.total - 1 %}
+    <a href="{{ pagination.last }}#relay-table">Last</a>
+    {% endif %}
+    {% if pagination.next %}
+    <a rel="next" href="{{ pagination.next }}#relay-table">Next</a>
+    {% endif %}
+</nav>
+{% endif %}

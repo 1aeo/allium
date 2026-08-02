@@ -1,10 +1,11 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
 {% set first_seen_date = relay_subset[0]['first_seen'].split(' ', 1)[0]|escape %}
-{% block title %}Tor Relays :: First Seen {{ first_seen_date }}{% endblock %}
+{% block title %}Tor Relays First Seen {{ first_seen_date }}{% endblock %}
+{% block meta_description %}Live metrics for {{ group_relay_count }} Tor relays first seen on {{ first_seen_date }}: bandwidth, consensus weight, operators, locations, and roles.{% endblock %}
 {% block header %}View First Seen {{ first_seen_date }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('', page_ctx) }}
 {% endblock -%}
 {% block description %}Relays started on {{ value }} summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position, total_data_formatted=total_data_formatted, total_data_pct=total_data_pct, exit_dns_health_summary=exit_dns_health_summary) }}{% endblock %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, group_relay_count, network_position, total_data_formatted=total_data_formatted, total_data_pct=total_data_pct, exit_dns_health_summary=exit_dns_health_summary) }}{% endblock %}

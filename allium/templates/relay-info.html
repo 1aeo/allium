@@ -30,12 +30,13 @@
 {%- endif -%}
 {%- endmacro -%}
 {% block title -%}
-	Tor Relays :: {{ relay['nickname']|escape }}
+	{{ relay['nickname']|escape }} — Tor Relay{% if relay['country_name'] %} in {{ relay['country_name']|escape }}{% endif %}{% if relay['as'] %} ({{ relay['as']|escape }}){% endif %}
 {% endblock -%}
+{% block meta_description %}Live Tor relay details for {{ relay['nickname']|escape }}: fingerprint, bandwidth, uptime, flags, operator, {% if relay['country_name'] %}{{ relay['country_name']|escape }}, {% endif %}and network data.{% endblock %}
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/relay-info.css">{% endblock -%}
 {% block body -%}
 <div id="content">
-<h2 id="nickname">View Relay "{{ relay['nickname'] }}"</h2>
+<h1 id="nickname" class="page-title">View Relay "{{ relay['nickname'] }}"</h1>
 {{ navigation('', page_ctx) }}
 {# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
 {% set has_aroi = relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
@@ -1518,4 +1519,3 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 
 </div>
 {% endblock -%}
-

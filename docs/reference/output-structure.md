@@ -11,9 +11,12 @@ www/
 ├── top500.html                     # Top 500 relays by consensus weight
 ├── network-health.html             # Network health dashboard
 ├── search-index.json               # Search data for Cloudflare Pages function
+├── robots.txt                      # Crawler policy and sitemap pointer
+├── sitemap.xml                     # Canonical-only public URL inventory
 │
 ├── misc/
 │   ├── all.html                    # All relays listing
+│   ├── all-page-2.html             # Additional clean-route pagination pages
 │   ├── aroi-leaderboards.html      # AROI leaderboards (duplicate of index)
 │   ├── authorities.html            # Directory authorities monitoring
 │   ├── families-by-bandwidth.html  # Families sorted by bandwidth
@@ -60,6 +63,7 @@ www/
 │       └── index.html              # Relays first seen on date
 │
 └── static/
+    ├── favicon.ico                  # Multi-resolution 1AEO favicon
     ├── *.css                       # Stylesheets
     ├── *.png                       # Country and relay flag images
     └── ...                         # Other static assets
@@ -94,6 +98,13 @@ Top 500 relays sorted by consensus weight fraction. Quick overview of the most i
 ### `search-index.json`
 JSON file containing relay search data for use with Cloudflare Pages serverless function. Includes nicknames, fingerprints, and family groupings.
 
+### `robots.txt` and `sitemap.xml`
+
+`robots.txt` is always generated. With an absolute HTTP(S) `--base-url`, it
+points to a sitemap built from the canonical links in the completed HTML tree.
+Duplicate sort/vanity files collapse to one URL, and noindex pages are omitted.
+Large inventories automatically use `sitemap-N.xml` shards.
+
 ### `misc/authorities.html`
 Directory authority monitoring page with uptime statistics, Z-score analysis, and consensus participation metrics.
 
@@ -108,6 +119,10 @@ Directory authority monitoring page with uptime statistics, Z-score analysis, an
 | Family | `/family/e5f6g7h8/` |
 | Platform | `/platform/Linux/` |
 | Flag | `/flag/Exit/` |
+
+Standalone `.html` files are published as clean routes: `top500.html` is linked
+as `/top500`, and `misc/all.html` as `/misc/all`. Generated HTML files remain on
+disk for static-host compatibility.
 
 ## How to Verify
 
@@ -124,4 +139,5 @@ ls /tmp/test/contact/*/index.html | head -5    # Contact pages
 test -f /tmp/test/index.html && echo "index.html exists"
 test -f /tmp/test/top500.html && echo "top500.html exists"
 test -f /tmp/test/search-index.json && echo "search-index.json exists"
+test -f /tmp/test/robots.txt && echo "robots.txt exists"
 ```

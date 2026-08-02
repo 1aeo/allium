@@ -602,33 +602,6 @@ def templates_dir():
 
 
 @pytest.fixture
-def jinja_env(templates_dir):
-    """Fixture that provides a configured Jinja2 environment for template testing."""
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    
-    env = Environment(
-        loader=FileSystemLoader(str(templates_dir)),
-        autoescape=select_autoescape(['html', 'xml'])
-    )
-    
-    # Add custom filters for template compatibility.
-    # NOTE: these moved out of allium.lib.relays in the simplification refactor;
-    # import from their canonical homes so the filters are actually registered.
-    from allium.lib.bandwidth_formatter import (
-        determine_unit_filter,
-        format_bandwidth_with_unit,
-        format_bandwidth_filter,
-    )
-    from allium.lib.time_utils import format_time_ago
-    env.filters['determine_unit'] = determine_unit_filter
-    env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
-    env.filters['format_bandwidth'] = format_bandwidth_filter
-    env.filters['format_time_ago'] = format_time_ago
-    
-    return env
-
-
-@pytest.fixture
 def process_relays(tmp_path):
     """Factory fixture: run the full (unpatched) Relays init pipeline on raw
     onionoo-shaped relay dicts and return the Relays instance.

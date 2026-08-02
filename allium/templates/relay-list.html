@@ -4,10 +4,10 @@
     Tor Relays
 {% endblock -%}
 {% block body -%}
-<h2>
+<h1 class="page-title">
 {% block header -%}
 {% endblock -%}
-</h2>
+</h1>
 
 {% block navigation -%}
 {% endblock -%}
@@ -20,6 +20,9 @@
 <p class="text-muted" style="margin-bottom: 15px;">
 <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
 </p>
+
+<div id="relay-table"></div>
+{% include "pagination.html" %}
 
 <table class="table table-condensed">
 <tr>
@@ -195,4 +198,5 @@
 	{% endfor -%}
     </tbody>
 </table>
+{% include "pagination.html" %}
 {% endblock -%}
