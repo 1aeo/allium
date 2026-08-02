@@ -190,7 +190,7 @@
     <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span>
 {%- endif %}
 {%- if path_prefix is not none and summary.relays %}
-    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
+    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
         <li style="font-size: 13px;">
             {%- for r in summary.relays %}<a href="{{ path_prefix }}relay/{{ r['fingerprint']|escape }}/#overload" class="al-status-danger" title="{{ r['stability_tooltip']|escape }}">{{ r['nickname']|escape }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
         </li>
@@ -614,4 +614,4 @@
 {% macro aroi_validation_issues_section(contact_validation_status, aroi_validation_timestamp, page_ctx) -%}
 {# This macro is deprecated - issues are now shown in per-category sections #}
 {# Kept empty for backwards compatibility during transition #}
-{%- endmacro %} 
+{%- endmacro %}

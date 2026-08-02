@@ -186,6 +186,7 @@ def test_overload_bullet_path_prefix_renders_expanded_relay_links(jinja_env):
     # Impact order (highest bandwidth first) and reason tooltips
     assert rendered.index('BigRelay') < rendered.index('SmallRelay')
     assert 'Rate limits hit W:2 R:0 (limit: 10 MB/s)' in rendered
+    assert 'margin-top: 0' in rendered
     # Fully expanded per user requirement — no collapse mechanism
     assert '<details' not in rendered
 
@@ -264,6 +265,65 @@ def test_contact_html_bullet_count_links_variant_when_available(jinja_env):
     assert '20.0% (2 of 10 relays)' in rendered
 
 
+def test_contact_overload_sort_mode_is_clearly_labeled(jinja_env):
+    """The special sort page should make its overloaded-first order explicit."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    context['contact_sort_mode'] = 'overload'
+    rendered = jinja_env.get_template('contact.html').render(**context)
+
+    label = '⚡︎ Overloaded relays are shown first (2 currently overloaded).'
+    assert label in rendered
+    assert rendered.count('id="relay-table"') == 1
+    assert rendered.index('id="relay-table"') < rendered.index(label) < rendered.index('<table')
+
+
+def test_contact_overload_anchor_follows_v3_upgrade_nudge(jinja_env):
+    """The overload anchor should skip the upgrade card and land on the table label."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    context['contact_sort_mode'] = 'overload'
+    relay = context['relay_subset'][0]
+    context['contact_validation_status'] = {
+        'has_aroi': True,
+        'validation_status': 'validated',
+        'validation_summary': {
+            'total_relays': 1,
+            'validated_count': 1,
+            'unauthorized_count': 0,
+            'misconfigured_count': 0,
+            'incomplete_count': 0,
+            'not_configured_count': 0,
+            'security_incident_count': 0,
+            'v2_relay_count': 1,
+            'v2_validated_count': 1,
+            'v3_relay_count': 0,
+            'v3_validated_count': 0,
+            'is_mixed_migration': False,
+        },
+        'validated_fingerprints': {relay['fingerprint']},
+        'unauthorized_fingerprints': set(),
+        'misconfigured_fingerprints': set(),
+        'security_incident_fingerprints': set(),
+        'pending_onionoo_fingerprints': set(),
+        'validated_relays': [{'relay': relay, 'aroi_domain': 'example.org'}],
+        'unauthorized_relays': [],
+        'misconfigured_relays': [],
+        'security_incident_relays': [],
+        'pending_onionoo_relays': [],
+        'incomplete_relays': [],
+        'not_configured_relays': [],
+    }
+
+    rendered = jinja_env.get_template('contact.html').render(**context)
+    upgrade = 'Want to upgrade to ciissversion:3?'
+    anchor = 'id="relay-table"'
+    label = '⚡︎ Overloaded relays are shown first (2 currently overloaded).'
+    validated = 'VALIDATED RELAYS'
+
+    assert rendered.count(anchor) == 1
+    assert rendered.index(upgrade) < rendered.index(anchor) < rendered.index(label)
+    assert rendered.index(label) < rendered.index(validated)
+
+
 def test_contact_relay_row_overload_badge(jinja_env):
     """Option 1: overloaded relays get a ⚡ in the Status column linking to
     their #overload section; healthy relays get no badge."""
@@ -273,7 +333,10 @@ def test_contact_relay_row_overload_badge(jinja_env):
     relay['stability_tooltip'] = 'General overload at 2026-07-31 06:12 UTC'
     rendered = jinja_env.get_template('contact.html').render(**context)
     assert '⚡' in rendered
+    # Text presentation keeps the glyph CSS-colorable by the red danger class.
+    assert '<span class="al-status-danger-bold" style="margin-left: 3px;">⚡︎</span>' in rendered
     assert f'href="../relay/{relay["fingerprint"]}/#overload"' in rendered
+    assert '<td style="white-space: nowrap;">' in rendered
     assert 'aria-label="TestRelay is overloaded; view overload details"' in rendered
     assert 'General overload at 2026-07-31 06:12 UTC. Click for overload details.' in rendered
 
@@ -282,3 +345,4 @@ def test_contact_relay_row_no_badge_when_not_overloaded(jinja_env):
     """Do not render an overload badge for a healthy relay."""
     rendered = jinja_env.get_template('contact.html').render(**_contact_context(None))
     assert '⚡' not in rendered
+    assert '<td style="white-space: nowrap;">' not in rendered
