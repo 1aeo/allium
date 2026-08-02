@@ -267,10 +267,10 @@ if __name__ == "__main__":
     # Page generation: details-loaded + section start, generating+generated
     # per standalone page, misc sorted pages x2, one completion per detail
     # page key, then relay pages / static files / search index / prometheus
-    # metrics x2 each, section end + completion message.
+    # metrics and search-discovery files x2 each, section end + completion message.
     page_generation_steps = (2 + 2 * len(STANDALONE_PAGES)
                              + 2 + len(SORTED_PAGE_KEYS)
-                             + 2 + 2 + 2 + 2 + 2)
+                             + 2 + 2 + 2 + 2 + 2 + 2)
 
     total_steps = setup_steps + coordinator_steps + page_generation_steps
 
