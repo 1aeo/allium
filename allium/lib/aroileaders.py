@@ -26,6 +26,7 @@ from .diversity_index import annotate_operators, count_diverse_relays, RARE_AS_T
 # Import HTML escaping utility
 from .html_escape_utils import safe_html_escape
 from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
+from .time_utils import ONIONOO_HISTORY_PERIODS, parse_onionoo_timestamp
 
 
 # Shared url-token regex (string_utils is the single source of truth) for the
@@ -590,7 +591,19 @@ def _collect_operator_metrics(relays_instance):
         validated_v3_relay_count = 0
         v2_relay_count = 0  # ANY ciissversion:2 declaration (valid or not)
         v3_relay_count = 0  # ANY ciissversion:3 declaration
-        td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+        td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
+
+        # Country breakdowns, running count, veteran first_seen, and rare-AS
+        # tracking (merged into the same loop - previously 7 extra passes)
+        operator_countries = []          # per-relay country list (non-EU VOLUME metric)
+        all_country_breakdown = {}       # country -> relay count
+        non_eu_country_breakdown = {}    # country -> relay count (non-EU only)
+        country_bandwidth = {}           # country -> observed bandwidth sum
+        non_eu_bandwidth = 0
+        running_relays = 0
+        earliest_first_seen = None       # earliest parsed first_seen (veteran score)
+        rare_as_count = 0                # unique ASes in rare/epic/legendary tiers
+        _seen_as_for_rarity = set()
         
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
@@ -610,6 +623,15 @@ def _collect_operator_metrics(relays_instance):
             relay_country = relay.get('country', '')
             if relay_country:
                 countries.add(relay_country)
+                # Country breakdowns + per-country bandwidth (rare-country
+                # metrics are derived from these after the loop, once the
+                # operator's rare-country set is known)
+                operator_countries.append(relay_country)
+                all_country_breakdown[relay_country] = all_country_breakdown.get(relay_country, 0) + 1
+                country_bandwidth[relay_country] = country_bandwidth.get(relay_country, 0) + relay_bandwidth
+                if relay_country not in EU_POLITICAL_REGION:
+                    non_eu_country_breakdown[relay_country] = non_eu_country_breakdown.get(relay_country, 0) + 1
+                    non_eu_bandwidth += relay_bandwidth
             relay_platform = relay.get('platform', '')
             if relay_platform:
                 platforms.add(relay_platform)
@@ -700,55 +722,57 @@ def _collect_operator_metrics(relays_instance):
                 else:
                     # This relay has AROI but failed validation
                     invalid_relay_count += 1
-            
-            relay_td = relay.get('total_data', {})
-            for _p in ('1_month', '6_months', '1_year', '5_years'):
+
+            relay_td = relay.get('total_data') or {}
+            for _p in ONIONOO_HISTORY_PERIODS:
                 td_sums[_p] += relay_td.get(_p, 0)
+
+            # Uptime approximation input (running status)
+            if relay.get('running', False):
+                running_relays += 1
+
+            # Veteran score input: earliest first_seen across the operator's relays
+            relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
+            if relay_first_seen is not None and (
+                    earliest_first_seen is None or relay_first_seen < earliest_first_seen):
+                earliest_first_seen = relay_first_seen
+
+            # Diversity Index input: count unique ASes in rare/epic/legendary tiers
+            _as_num = relay.get('as', '')
+            if _as_num and _as_num not in _seen_as_for_rarity:
+                _seen_as_for_rarity.add(_as_num)
+                _as_entry = as_sorted_data.get(_as_num)
+                if _as_entry and _as_entry.get('as_rarity_tier', 'common') in RARE_AS_TIERS:
+                    rare_as_count += 1
         
         unique_ipv4_count = len(unique_ipv4_addresses)
         unique_ipv6_count = len(unique_ipv6_addresses)
         validated_country_count = len(validated_countries)
         
-        # Non-EU country detection (using centralized utilities)
-        operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
+        # Non-EU country detection (per-relay country list collected in main loop)
         non_eu_count = count_non_eu_countries(operator_countries, use_political=True)
         
-        # Rare/frontier countries (using pre-calculated rare countries from above)
-        # Use unique countries for rare country calculation (not per-relay count)
-        unique_operator_countries = list(set(operator_countries))
-        
-        # Find which of the operator's countries are rare
-        # operator_countries comes from relay.get('country') which is already UPPERCASE
-        operator_rare_countries = set()
-        for country in unique_operator_countries:
-            if country and country in valid_rare_countries:
-                operator_rare_countries.add(country)
+        # Rare/frontier countries (using pre-calculated rare countries from above).
+        # Countries are already UPPERCASE from _preprocess_template_data();
+        # rare-country metrics derive from the main-loop breakdowns - no
+        # further passes over operator_relays needed.
+        operator_rare_countries = {
+            country for country in all_country_breakdown
+            if country in valid_rare_countries
+        }
         
         # Calculate rare country count by counting how many rare countries operator actually operates in
         rare_country_count = len(operator_rare_countries)
         
-        # relay["country"] is already UPPERCASE from _preprocess_template_data()
-        relays_in_rare_countries = sum(1 for relay in operator_relays 
-                                     if relay.get('country', '') in operator_rare_countries)
+        # Per-country relay counts / bandwidth for rare countries only
+        rare_country_breakdown = {country: count
+                                  for country, count in all_country_breakdown.items()
+                                  if country in operator_rare_countries}
+        relays_in_rare_countries = sum(rare_country_breakdown.values())
         
         # Bandwidth capacity for relays in rare countries only (matches diverse relay count)
-        rare_country_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in operator_relays
-                                     if relay.get('country', '') in operator_rare_countries)
-        
-        # Calculate all country breakdowns in a single pass over operator_relays
-        rare_country_breakdown = {}
-        all_country_breakdown = {}
-        non_eu_country_breakdown = {}
-        non_eu_bandwidth = 0
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country:
-                all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
-                if country in operator_rare_countries:
-                    rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
-                if country not in EU_POLITICAL_REGION:
-                    non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
-                    non_eu_bandwidth += relay.get('observed_bandwidth', 0)
+        rare_country_bandwidth = sum(bw for country, bw in country_bandwidth.items()
+                                     if country in operator_rare_countries)
         
         # Sort all breakdowns by relay count (descending) then by country name
         _sort_key = lambda x: (-x[1], x[0])
@@ -777,25 +801,15 @@ def _collect_operator_metrics(relays_instance):
         )
         
         # === DIVERSITY INDEX INPUTS (Diversity All-Rounders board) ===
-        # rare_as_count: how many of the operator's unique ASes are rare/epic/
-        # legendary hosting choices (AS breadth facet, shown in Network cell).
-        # as_diversity_score above already IS the AS rarity sum (volume facet).
-        rare_as_count = 0
-        _seen_as_for_rarity = set()
-        for relay in operator_relays:
-            _as_num = relay.get('as', '')
-            if not _as_num or _as_num in _seen_as_for_rarity:
-                continue
-            _seen_as_for_rarity.add(_as_num)
-            _as_entry = as_sorted_data.get(_as_num)
-            if _as_entry and _as_entry.get('as_rarity_tier', 'common') in RARE_AS_TIERS:
-                rare_as_count += 1
+        # rare_as_count (computed in main loop): how many of the operator's
+        # unique ASes are rare/epic/legendary hosting choices (AS breadth
+        # facet, shown in Network cell). as_diversity_score above already IS
+        # the AS rarity sum (volume facet).
         # diverse_relay_count: relays differing from the operator's dominant
         # OS/country/AS profile (Scale component, reviewer-approved Version A).
         diverse_relay_count = count_diverse_relays(operator_relays)
         
-        # Uptime approximation (new calculation - from running status)
-        running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
+        # Uptime approximation (running_relays counted in main loop)
         uptime_percentage = (running_relays / total_relays * 100) if total_relays > 0 else 0.0
         
 
@@ -813,20 +827,12 @@ def _collect_operator_metrics(relays_instance):
         
         if operator_relays:
             from datetime import datetime, timezone
-            from .time_utils import parse_onionoo_timestamp
             # UTC-aware, matching every other timestamp consumer; naive
             # local time made veteran_days drift by up to a day on
             # non-UTC hosts, breaking cross-machine reproducibility.
             current_date = datetime.now(timezone.utc)
             
-            # Find earliest first_seen date among all relays
-            earliest_first_seen = None
-            for relay in operator_relays:
-                relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
-                if relay_first_seen is not None and (
-                        earliest_first_seen is None or relay_first_seen < earliest_first_seen):
-                    earliest_first_seen = relay_first_seen
-            
+            # earliest_first_seen was found during the main merged loop
             if earliest_first_seen:
                 # Calculate days since earliest relay
                 veteran_days = (current_date - earliest_first_seen).days
@@ -1510,5 +1516,3 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
         'summary': summary_stats,
         'raw_operators': aroi_operators  # For potential future use
     }
-
- 

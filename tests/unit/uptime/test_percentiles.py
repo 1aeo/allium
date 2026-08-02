@@ -12,7 +12,7 @@ from allium.lib.uptime_utils import (
     calculate_network_uptime_percentiles,
     find_operator_percentile_position,
     format_network_percentiles_display,
-    calculate_relay_uptime_average
+    _compute_uptime_percentage_and_datapoints
 )
 
 
@@ -157,23 +157,23 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         display_low = format_network_percentiles_display(percentiles, 70.0)
         self.assertIn('al-rating-poor', display_low)
         
-    def test_calculate_relay_uptime_average(self):
+    def test__compute_uptime_percentage_and_datapoints(self):
         """Test individual relay uptime average calculation."""
         # Test normal case
         values = [900, 950, 920, 940] * 10  # 40 values around 92-95%
-        average = calculate_relay_uptime_average(values)
-        self.assertGreater(average, 90)
-        self.assertLess(average, 100)
+        average, _ = _compute_uptime_percentage_and_datapoints(values)
+        assert average > 90
+        assert average < 100
         
         # Test insufficient data
         values_short = [900, 950]  # Only 2 values
-        average_short = calculate_relay_uptime_average(values_short)
-        self.assertEqual(average_short, 0.0)
+        average_short, _ = _compute_uptime_percentage_and_datapoints(values_short)
+        assert average_short == 0.0
         
         # Test low uptime (should be excluded)
         values_low = [10, 5, 8] * 15  # 45 values but very low uptime
-        average_low = calculate_relay_uptime_average(values_low)
-        self.assertEqual(average_low, 0.0)
+        average_low, _ = _compute_uptime_percentage_and_datapoints(values_low)
+        assert average_low == 0.0
         
     def test_data_filtering_logic(self):
         """Test that data filtering works correctly."""
@@ -256,4 +256,4 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

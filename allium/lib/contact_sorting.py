@@ -12,6 +12,7 @@ circular references.
 import ipaddress as _ipaddress
 from datetime import datetime as _dt
 
+from .bandwidth_formatter import BEST_PERIOD_ORDER as TOTAL_DATA_PERIOD_ORDER
 from .flag_analysis import FLAG_PRIORITY as _FLAG_PRIORITY
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 
@@ -52,7 +53,8 @@ CONTACT_SECTION_KEYS = (
     'not_configured_relays',
 )
 
-TOTAL_DATA_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+# TOTAL_DATA_PERIOD_ORDER (longest-first period lookup order) is imported
+# above from bandwidth_formatter — single source of truth.
 DNS_SORT_RANK = {'success': 0, 'fail': 1, 'untested': 2}
 FAMILY_SORT_RANK = {'both': 0, 'happy_families': 1, 'my_family': 2, 'none': 3}
 

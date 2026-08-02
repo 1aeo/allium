@@ -34,6 +34,12 @@ PERIOD_DISPLAY_NAMES = {
     '5_years': '5y',
 }
 
+# The four standard Onionoo history periods processed throughout the codebase
+# (uptime percentages, bandwidth averages, total-data sums). Single source of
+# truth for the canonical short-to-long ordering; reverse it for
+# best-available-period (longest-first) lookups.
+ONIONOO_HISTORY_PERIODS = ('1_month', '6_months', '1_year', '5_years')
+
 
 def parse_onionoo_timestamp(timestamp_str):
     """Parse Onionoo timestamp string into datetime object"""

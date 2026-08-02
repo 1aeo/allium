@@ -13,35 +13,18 @@ from typing import Dict, List, Optional, Any
 from collections import Counter
 
 # Import flag thresholds from centralized module (DRY - single source of truth)
-try:
-    from .flag_thresholds import (
-        SECONDS_PER_DAY,
-        GUARD_TK_DEFAULT,
-        GUARD_WFU_DEFAULT,
-        GUARD_BW_GUARANTEE,
-        HSDIR_TK_DEFAULT,
-        HSDIR_WFU_DEFAULT,
-        FAST_BW_GUARANTEE,
-        parse_wfu_threshold as _parse_wfu_threshold_impl,
-        format_time_as_days,
-        format_wfu_as_percent,
-        sort_flags as _sort_flags_impl,
-        FLAG_ORDER_MAP,
-    )
-except ImportError:
-    # Fallback values if import fails
-    SECONDS_PER_DAY = 86400
-    GUARD_TK_DEFAULT = 691200
-    GUARD_WFU_DEFAULT = 0.98
-    GUARD_BW_GUARANTEE = 2_000_000
-    HSDIR_TK_DEFAULT = 864000
-    HSDIR_WFU_DEFAULT = 0.98
-    FAST_BW_GUARANTEE = 100_000
-    _parse_wfu_threshold_impl = None
-    format_time_as_days = None
-    format_wfu_as_percent = None
-    _sort_flags_impl = None
-    FLAG_ORDER_MAP = {}
+# NOTE: this module keeps its own FLAG_ORDER/_sort_flags (display order:
+# Simple/Common → Complex/Rare) which intentionally differs from
+# flag_thresholds.sort_flags (canonical alphabetical-ish order).
+from .flag_thresholds import (
+    SECONDS_PER_DAY,
+    GUARD_TK_DEFAULT,
+    GUARD_WFU_DEFAULT,
+    GUARD_BW_GUARANTEE,
+    HSDIR_TK_DEFAULT,
+    FAST_BW_GUARANTEE,
+    parse_wfu_threshold as _parse_wfu_threshold,
+)
 
 # Import authority data from collector_fetcher
 try:
@@ -160,17 +143,6 @@ def _port_in_rules(rules: list, port: int) -> bool:
             except ValueError:
                 continue
     return False
-
-
-def _format_valid_version_display(version: str, recommended_version: bool) -> str:
-    """Format Valid flag version display string."""
-    if not version:
-        return 'Unknown'
-    if recommended_version is True:
-        return f'{version} (Recommended)'
-    elif recommended_version is False:
-        return f'{version} (Not Recommended)'
-    return version
 
 
 def _format_v2dir_display(dir_address: str, has_v2dir_flag: bool) -> str:
@@ -357,19 +329,6 @@ def _sort_flags(flags: list) -> list:
     # Use pre-computed map for O(1) lookup instead of FLAG_ORDER.index() which is O(n)
     max_order = len(FLAG_ORDER)
     return sorted(flags, key=lambda f: FLAG_ORDER_MAP.get(f, max_order + ord(f[0].lower()) if f else 999))
-
-
-def _parse_wfu_threshold(value) -> Optional[float]:
-    """Parse WFU threshold value (can be string like '98%' or float like 0.98)."""
-    # Use centralized implementation from flag_thresholds if available
-    if _parse_wfu_threshold_impl is not None:
-        return _parse_wfu_threshold_impl(value)
-    # Fallback implementation
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return float(value.replace('%', '')) / 100
-    return float(value)
 
 
 def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None, exit_policy_summary: dict = None, dir_address: str = None) -> dict:
@@ -1627,20 +1586,6 @@ def format_authority_consensus_evaluation(
     return formatted
 
 
-def _format_consensus_status(consensus_data: dict) -> dict:
-    """Format consensus status display. Retained for test compatibility."""
-    in_consensus = consensus_data.get('in_consensus', False)
-    vote_count = consensus_data.get('vote_count', 0)
-    total = consensus_data.get('total_authorities', get_voting_authority_count())
-    majority = consensus_data.get('majority_required', 5)
-    tpl = ('IN CONSENSUS', 'success', 'is') if in_consensus else ('NOT IN CONSENSUS', 'danger', 'is NOT')
-    return {
-        'status': tpl[0], 'status_class': tpl[1],
-        'display': f"{tpl[0]} ({vote_count}/{total} authorities)",
-        'tooltip': f"Relay {tpl[2]} in consensus. {vote_count} out of {total} authorities voted for this relay (requires {majority}).",
-    }
-
-
 def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> dict:
     """
     Format flag eligibility summary.
@@ -1827,103 +1772,6 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
     )
 
 
-def _generate_advice(consensus_data: dict, current_flags: list = None, observed_bandwidth: int = 0) -> List[dict]:
-    """
-    Generate detailed actionable advice based on consensus evaluation.
-    
-    Returns list of advice dicts with 'category', 'priority', 'title', 'advice', and optional 'doc_ref'.
-    Based on Tor Project official guidance and common operator issues.
-    
-    Args:
-        consensus_data: Raw consensus evaluation data
-        current_flags: Relay's current flags
-        observed_bandwidth: Relay's observed bandwidth
-    """
-    advice_list = []
-    current_flags = current_flags or []
-    
-    # Get all issues first
-    issues = _identify_issues(consensus_data, current_flags, observed_bandwidth)
-    
-    # Convert issues to advice with priorities
-    priority_map = {'error': 1, 'warning': 2, 'info': 3}
-    
-    for issue in issues:
-        advice_list.append({
-            'category': issue.get('category', 'general'),
-            'priority': priority_map.get(issue.get('severity', 'info'), 3),
-            'title': issue.get('title', ''),
-            'advice': issue.get('suggestion', ''),
-            'doc_ref': issue.get('doc_ref'),
-        })
-    
-    # =========================================================================
-    # ADDITIONAL PROACTIVE ADVICE (not tied to specific issues)
-    # =========================================================================
-    
-    # Extract metrics
-    authority_votes = consensus_data.get('authority_votes', [])
-    relay_wfu = relay_tk = None
-    for vote in authority_votes:
-        if relay_wfu is None and vote.get('wfu') is not None:
-            relay_wfu = vote['wfu']
-        if relay_tk is None and vote.get('tk') is not None:
-            relay_tk = vote['tk']
-        if relay_wfu is not None and relay_tk is not None:
-            break
-    
-    has_guard = 'Guard' in current_flags
-    has_stable = 'Stable' in current_flags
-    has_exit = 'Exit' in current_flags
-    
-    # Advice for relays close to Guard eligibility
-    if not has_guard and has_stable and relay_wfu and relay_wfu >= 0.95:
-        if relay_wfu < 0.98:
-            advice_list.append({
-                'category': 'guard',
-                'priority': 2,
-                'title': 'Almost Guard eligible (WFU)',
-                'advice': f"Your WFU is {relay_wfu*100:.1f}%, close to the 98% threshold. Minimize restarts and downtime to reach Guard eligibility.",
-            })
-    
-    # Advice for new relays
-    if relay_tk and relay_tk < GUARD_TK_DEFAULT:
-        days_remaining = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
-        if days_remaining > 0 and days_remaining < 3:
-            advice_list.append({
-                'category': 'guard',
-                'priority': 3,
-                'title': 'Guard eligibility approaching',
-                'advice': f"Your relay will reach 8 days Time Known in {days_remaining:.1f} days. Keep running stably to get Guard flag.",
-            })
-    
-    # General best practices for all relays
-    if consensus_data.get('in_consensus'):
-        # Relay is in consensus, provide optimization advice
-        if not has_exit and observed_bandwidth and observed_bandwidth > 10_000_000:
-            advice_list.append({
-                'category': 'general',
-                'priority': 3,
-                'title': 'Consider becoming an exit relay',
-                'advice': 'Your relay has good bandwidth. Consider configuring an exit policy to help the network. Exits are in high demand. See: https://community.torproject.org/relay/setup/exit/',
-                'doc_ref': 'https://community.torproject.org/relay/setup/exit/',
-            })
-    
-    # Sort by priority (lower = higher priority)
-    advice_list.sort(key=lambda x: x.get('priority', 3))
-    
-    return advice_list
-
-
-def _generate_advice_simple(consensus_data: dict) -> List[str]:
-    """
-    Generate simple string advice for backward compatibility.
-    Returns list of advice strings.
-    """
-    detailed_advice = _generate_advice(consensus_data)
-    return [item.get('advice', '') for item in detailed_advice if item.get('advice')]
-
-
 def _format_thresholds_table(flag_thresholds: Dict[str, dict]) -> dict:
     """Format flag thresholds into comparison table."""
     if not flag_thresholds:
@@ -2046,51 +1894,6 @@ def _format_bandwidth_value(value: Any, use_bits: bool = False) -> str:
             return f"{value / 1000000:.1f} MB/s"
         else:
             return f"{value / 1000:.1f} KB/s"
-
-
-def _format_ipv6_status(reachable: Optional[bool], address: Optional[str]) -> str:
-    """Format IPv6 reachability status."""
-    if reachable is True:
-        return f"Yes ({address})" if address else "Yes"
-    elif reachable is False:
-        return "No"
-    else:
-        return "Not tested"
-
-
-def _get_wfu_class(wfu: Optional[float]) -> str:
-    """Get CSS class for WFU value."""
-    if wfu is None:
-        return 'muted'
-    if wfu >= 0.98:
-        return 'success'
-    elif wfu >= 0.95:
-        return 'warning'
-    else:
-        return 'danger'
-
-
-def _get_tk_class(tk: Optional[int]) -> str:
-    """Get CSS class for Time Known value."""
-    if tk is None:
-        return 'muted'
-    days = tk / SECONDS_PER_DAY
-    if days >= 8:  # 8 days = Guard TK requirement
-        return 'success'
-    elif days >= 4:
-        return 'warning'
-    else:
-        return 'danger'
-
-
-def _get_ipv6_class(reachable: Optional[bool]) -> str:
-    """Get CSS class for IPv6 status."""
-    if reachable is True:
-        return 'success'
-    elif reachable is False:
-        return 'danger'
-    else:
-        return 'muted'
 
 
 def _get_latency_class(latency_ms: Optional[float]) -> str:

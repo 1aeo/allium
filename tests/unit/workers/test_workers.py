@@ -23,7 +23,7 @@ from allium.lib.workers import (
     get_worker_status, get_all_worker_status, 
     _write_timestamp as write_timestamp, _read_timestamp as read_timestamp, 
     fetch_onionoo_details, fetch_onionoo_uptime,
-    fetch_collector_data, fetch_consensus_health
+    fetch_consensus_health
 )
 
 
@@ -734,20 +734,8 @@ class TestAROIValidationCaching:
 
 
 class TestKeptWrapperWorkers:
-    """The legacy collector wrapper and the dormant consensus-health path
-    are intentionally kept (LOC plan Batch 3 / simplification Phase 3).
-    These are no longer placeholders; test their contracts hermetically
-    (no network, no production cache)."""
-
-    def test_fetch_collector_data_delegates(self):
-        """fetch_collector_data is a thin legacy wrapper over the
-        consensus fetcher."""
-        sentinel = {"relay_index": {}, "votes": {}}
-        with patch('allium.lib.workers.fetch_collector_consensus_data',
-                   return_value=sentinel) as mock_fetch:
-            result = fetch_collector_data(progress_logger=lambda m: None)
-        assert result == sentinel
-        mock_fetch.assert_called_once()
+    """The dormant consensus-health path is intentionally kept.
+    Test its contract hermetically (no network, no production cache)."""
 
     def test_fetch_consensus_health_disabled_feature_returns_none(self):
         """With the consensus-evaluation feature off, the dormant
@@ -787,9 +775,6 @@ class TestWorkerErrorHandling:
                 status = get_worker_status("onionoo_uptime")
                 assert status["status"] == "stale"
                 assert "backend down" in status["error"]
-        with patch('allium.lib.workers.fetch_collector_consensus_data',
-                   return_value=None):
-            assert fetch_collector_data(progress_logger=lambda m: None) is None
         with patch('allium.lib.consensus.is_consensus_evaluation_enabled',
                    return_value=False):
             assert fetch_consensus_health(progress_logger=lambda m: None) is None

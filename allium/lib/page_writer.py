@@ -439,12 +439,6 @@ def _precompute_family_worker(args):
 
 
 
-def create_output_dir(relay_set):
-    """
-    Ensure relay_set.output_dir exists (required for write functions)
-    """
-    os.makedirs(relay_set.output_dir, exist_ok=True)
-
 def write_misc(
     relay_set,
     template,

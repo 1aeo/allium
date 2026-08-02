@@ -7,7 +7,7 @@ Extracted from relays.py for better modularity.
 """
 
 from .operator_analysis import calculate_uptime_display
-from .time_utils import format_time_ago, PERIOD_SHORT_NAMES
+from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, ONIONOO_HISTORY_PERIODS
 
 # Shared flag constants (DRY: used by both process_flag_bandwidth_display and process_flag_uptime_display)
 FLAG_PRIORITY = {'Exit': 1, 'Guard': 2, 'Fast': 3, 'Running': 4}
@@ -88,7 +88,7 @@ def apply_statistical_coloring(relays, network_statistics):
         display_parts = []
         
         # Format as "96.7%/98.2%/93.2%/86.1%" with coloring
-        for period in ['1_month', '6_months', '1_year', '5_years']:
+        for period in ONIONOO_HISTORY_PERIODS:
             percentage = percentages.get(period, 0.0)
             percentage_str = f"{percentage:.1f}%"
             
@@ -300,7 +300,7 @@ def process_flag_uptime_display(relays, network_flag_statistics):
 
     _process_flag_metric_display(
         relays, 'uptime', "No prioritized flag data available",
-        ['1_month', '6_months', '1_year', '5_years'], build_period_parts,
+        ONIONOO_HISTORY_PERIODS, build_period_parts,
         all_dash_display="Match"
     )
 
@@ -314,7 +314,7 @@ def basic_uptime_processing(relays):
         relay["uptime_display"] = calculate_uptime_display(relay, format_time_ago)
         
         # Basic uptime percentages without statistical analysis
-        uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+        uptime_percentages = {p: 0.0 for p in ONIONOO_HISTORY_PERIODS}
         relay["uptime_percentages"] = uptime_percentages
         relay["_uptime_datapoints"] = {}
         relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
