@@ -303,7 +303,7 @@ class IntelligenceEngine:
         
         # Use pre-computed underutilized relays
         template_values['underutilized_count'] = len(self.underutilized_fingerprints)
-        template_values['underutilized_fingerprints'] = list(self.underutilized_fingerprints)
+        template_values['underutilized_fingerprints'] = sorted(self.underutilized_fingerprints)
         
         # Use pre-computed network ratio
         template_values['efficiency_ratio'] = f"{self.overall_network_ratio:.2f}"
