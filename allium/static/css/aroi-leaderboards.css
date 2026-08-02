@@ -60,6 +60,22 @@
 .aroi-platform-table thead th:nth-child(4) { width: 8%; }
 .aroi-platform-table thead th:nth-child(5) { width: 22%; }
 
+/* AROI Validation Champions */
+.aroi-validation-table thead th:nth-child(3) { width: 12%; }
+.aroi-validation-table thead th:nth-child(4) { width: 18%; }
+.aroi-validation-table thead th:nth-child(5) { width: 15%; }
+.aroi-validation-table thead th:nth-child(6) { width: 12%; }
+.aroi-validation-table thead th:nth-child(7) { width: 8%; }
+
+/* IPv4/IPv6 Address Leaders */
+.aroi-ip-address-table thead th:nth-child(3) { width: 10%; }
+.aroi-ip-address-table thead th:nth-child(4) { width: 8%; }
+.aroi-ip-address-table thead th:nth-child(5) { width: 13%; }
+.aroi-ip-address-table thead th:nth-child(6) { width: 12%; }
+.aroi-ip-address-table thead th:nth-child(7) { width: 7%; }
+.aroi-ip-address-table thead th:nth-child(8) { width: 7%; }
+.aroi-ip-address-table thead th:nth-child(9) { width: 7%; }
+
 /* AROI Champion Badge Styles - Harmonized Color Tier System */
 
 /* Authority/Network Control (Gold/Orange spectrum) */
@@ -173,13 +189,15 @@
     box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
 }
 
-/* Enhanced hover effects for all badges */
+/* Enhanced hover effects for all badges.
+   No !important needed: .aroi-champion-badge .panel-body:hover (0,3,0)
+   outranks the tier class selectors like .aroi-champion-platinum (0,1,0). */
 .aroi-champion-badge .panel-body {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .aroi-champion-badge .panel-body:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* AROI Ranking Badge Styles */
@@ -189,42 +207,9 @@
 
 /* AROI Link Styles */
 .aroi-underline-link { text-decoration: underline; color: inherit; }
-.aroi-contact-link { text-decoration: underline; }
-
-/* AROI Layout Styles */
-.aroi-flex-nav { display: flex; flex-wrap: wrap; gap: 10px; }
-.aroi-nav-spacing { margin-bottom: 20px; }
-.aroi-nav-spacing h4 { margin-top: 5px; }
-
-.aroi-primary-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 15px;
-    justify-content: center;
-}
-
-.aroi-category-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding-top: 15px;
-    border-top: 1px solid var(--color-border-light);
-    justify-content: center;
-}
 
 /* Compact Navigation Styles */
 .aroi-compact-nav { margin-bottom: 15px; padding: 10px 15px; }
-
-.aroi-compact-nav-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 15px;
-    font-size: 14px;
-}
-
-.aroi-nav-label { font-weight: bold; color: var(--color-nav-active-text); white-space: nowrap; }
 
 .aroi-primary-nav-centered {
     display: flex;
@@ -263,8 +248,6 @@
     .aroi-nav-link { font-size: 12px; }
 }
 
-.aroi-nav-separator { border-top: 1px solid var(--color-border-light); margin: 15px 0; }
-.aroi-top-margin { margin-top: 10px; }
 .aroi-compact-summary { margin-bottom: 8px; padding: 8px 12px; }
 .aroi-compact-summary h5 { margin-top: 0; margin-bottom: 4px; font-size: 15px; line-height: 1.2; }
 .aroi-compact-summary .row { margin-bottom: 2px; }
@@ -303,8 +286,9 @@
 /* Hide ALL non-targeted sections when any section is :target.
    Works because default page (1-10) is LAST in DOM order — the ~ combinator
    reaches it from any :target preceding sibling. Non-default pages that precede
-   the :target in DOM are already display:none and unaffected. */
-.pagination-section:target ~ .pagination-section:not(:target) { display: none !important; }
+   the :target in DOM are already display:none and unaffected.
+   No !important needed: this selector (0,4,0) outranks [id$="-1-10"].pagination-section (0,2,0). */
+.pagination-section:target ~ .pagination-section:not(:target) { display: none; }
 
 /* Compact table styling */
 .aroi-rankings-table.aroi-standard-table td,
