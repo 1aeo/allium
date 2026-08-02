@@ -89,6 +89,65 @@ def temp_dir():
 
 
 @pytest.fixture
+def isolated_worker_registry(monkeypatch):
+    """Give a test a fresh worker-status registry."""
+    from allium.lib import workers
+
+    registry = {}
+    monkeypatch.setattr(workers, '_worker_status', registry)
+    return registry
+
+
+@pytest.fixture
+def consensus_evaluation_enabled(monkeypatch):
+    """Enable consensus workers independently of the process environment."""
+    from allium.lib import consensus
+
+    monkeypatch.setattr(consensus, 'is_consensus_evaluation_enabled', lambda: True)
+
+
+@pytest.fixture
+def successful_worker_backends(monkeypatch):
+    """Replace worker network boundaries with deterministic successful data."""
+    from allium.lib import consensus, workers
+
+    uptime_data = json.dumps({'relays': []}).encode('utf-8')
+    monkeypatch.setattr(
+        workers,
+        '_fetch_url_with_total_timeout',
+        lambda *_args, **_kwargs: uptime_data,
+    )
+
+    collector = MagicMock()
+    collector.fetch_all.return_value = {
+        'votes': {'moria1': {}},
+        'relay_index': {'TEST': {}},
+        'fetched_at': '2026-01-01T00:00:00+00:00',
+        'consensus_method_info': {'total_voters': 1},
+    }
+    collector_factory = MagicMock(return_value=collector)
+    monkeypatch.setattr(consensus, 'CollectorFetcher', collector_factory)
+
+    monitor = MagicMock()
+    monitor.check_all_authorities.return_value = {
+        'moria1': {'online': True, 'latency_ms': 1},
+    }
+    monitor.get_summary.return_value = {
+        'online_count': 1,
+        'total_authorities': 1,
+        'checked_at': '2026-01-01T00:00:00+00:00',
+    }
+    monitor.get_alerts.return_value = []
+    monitor_factory = MagicMock(return_value=monitor)
+    monkeypatch.setattr(consensus, 'AuthorityMonitor', monitor_factory)
+
+    return {
+        'collector': collector_factory,
+        'consensus_health': monitor_factory,
+    }
+
+
+@pytest.fixture
 def voting_registry_8_voters():
     """Set the shared authority registry to the 8 active voters (gabelmoo removed).
 

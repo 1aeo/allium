@@ -246,7 +246,10 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
         'display': display
     }
 
-def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None):
+def calculate_bandwidth_reliability_metrics(
+    operator_relays, bandwidth_data, period, mean_bandwidth, std_dev,
+    network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None
+):
     """Calculate comprehensive bandwidth reliability metrics for an operator.
     
     OPTIMIZATION: Accepts a pre-built bandwidth_map for batch processing so
