@@ -941,8 +941,10 @@ def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidt
     )
 
 
-def _validate_aroi_response(data: dict) -> bool:
+def _validate_aroi_response(data) -> bool:
     """Validator for AROI API response structure."""
+    if not isinstance(data, dict):
+        return False
     required_keys = ['metadata', 'statistics', 'results']
     return all(key in data for key in required_keys)
 

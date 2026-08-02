@@ -611,7 +611,10 @@ class Relays:
         try:
             # Use consolidated bandwidth processing with flag analysis
             from .bandwidth_utils import process_all_bandwidth_data_consolidated
-            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol, _BEST_PERIOD_ORDER
+            from .bandwidth_formatter import (
+                BEST_PERIOD_ORDER,
+                format_data_volume_with_unit as _fmt_data_vol,
+            )
             
             # SINGLE PASS PROCESSING: Process all bandwidth data in one optimized loop
             # This includes flag bandwidth analysis similar to uptime processing
@@ -661,7 +664,7 @@ class Relays:
                 
                 # Pre-format total data transferred display strings
                 td = relay.get("total_data", {})
-                best = next((p for p in _BEST_PERIOD_ORDER if td.get(p, 0) > 0), None)
+                best = next((p for p in BEST_PERIOD_ORDER if td.get(p, 0) > 0), None)
                 relay["total_data_display"] = _fmt_data_vol(td[best]) if best else "N/A"
                 relay["total_data_period"] = best.replace('_', ' ') if best else ""
                 for _p in ONIONOO_HISTORY_PERIODS:
@@ -699,16 +702,21 @@ class Relays:
         1_year -> 6_months -> 1_month so relays with shorter history aren't N/A.
         Stores both the total and which period was used for period-matched % calc.
         """
-        from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period, _BEST_PERIOD_ORDER
+        from .bandwidth_formatter import (
+            BEST_PERIOD_ORDER,
+            compute_total_data_pct,
+            format_data_volume_with_unit,
+            pick_best_period,
+        )
         relays = self.json["relays"]
         net_by_period = self.json.get('network_health', {}).get('network_total_data_by_period', {})
         
         for category in self.json.get("sorted", {}):
             for key, group_data in self.json["sorted"][category].items():
-                sums = {p: 0 for p in _BEST_PERIOD_ORDER}
+                sums = {p: 0 for p in BEST_PERIOD_ORDER}
                 for idx in group_data.get("relays", []):
                     td = relays[idx].get("total_data", {})
-                    for p in _BEST_PERIOD_ORDER:
+                    for p in BEST_PERIOD_ORDER:
                         sums[p] += td.get(p, 0)
                 total, used_period = pick_best_period(sums)
                 group_data["total_data"] = total
@@ -1262,4 +1270,3 @@ class Relays:
         metadata = validation_data.get('metadata', {})
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
-

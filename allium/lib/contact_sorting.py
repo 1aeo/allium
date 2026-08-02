@@ -12,7 +12,7 @@ circular references.
 import ipaddress as _ipaddress
 from datetime import datetime as _dt
 
-from .bandwidth_formatter import _BEST_PERIOD_ORDER as TOTAL_DATA_PERIOD_ORDER
+from .bandwidth_formatter import BEST_PERIOD_ORDER as TOTAL_DATA_PERIOD_ORDER
 from .flag_analysis import FLAG_PRIORITY as _FLAG_PRIORITY
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 

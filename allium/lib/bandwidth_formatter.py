@@ -243,7 +243,7 @@ def format_data_volume_with_unit(total_bytes, *, _use_bits=False):
 
 
 # Longest-first lookup order, derived from the canonical period tuple
-_BEST_PERIOD_ORDER = tuple(reversed(ONIONOO_HISTORY_PERIODS))
+BEST_PERIOD_ORDER = tuple(reversed(ONIONOO_HISTORY_PERIODS))
 
 def pick_best_period(sums):
     """Return (total, period) for the longest period with non-zero data.
@@ -253,7 +253,7 @@ def pick_best_period(sums):
     Returns:
         tuple: (total_bytes, period_key) or (0, None) if all zero
     """
-    for p in _BEST_PERIOD_ORDER:
+    for p in BEST_PERIOD_ORDER:
         val = sums.get(p, 0)
         if val > 0:
             return val, p
