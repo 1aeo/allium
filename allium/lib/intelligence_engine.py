@@ -75,11 +75,11 @@ class IntelligenceEngine:
         percentile calculations - previously two separate full passes."""
         underutilized = set()
         all_ratios, guard_ratios, exit_ratios = [], [], []
-        
+
         for relay in self.relays:
             bandwidth = relay.get('observed_bandwidth', 0)
             consensus_weight = relay.get('consensus_weight', 0)
-            
+
             # Underutilized: high bandwidth but disproportionately low weight
             if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:
                 underutilized.add(relay.get('fingerprint', ''))
@@ -752,5 +752,5 @@ class IntelligenceEngine:
                     'infrastructure_risk': infra_risk,
                     'maturity': maturity
                 }
-        
-        return {'template_optimized': contact_intelligence} 
+
+        return {'template_optimized': contact_intelligence}

@@ -251,7 +251,7 @@ def calculate_bandwidth_reliability_metrics(
     network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None
 ):
     """Calculate comprehensive bandwidth reliability metrics for an operator.
-    
+
     OPTIMIZATION: Accepts a pre-built bandwidth_map for batch processing so
     per-contact callers don't rebuild the ~10k-entry map on every call.
     """

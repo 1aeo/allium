@@ -592,7 +592,7 @@ def _collect_operator_metrics(relays_instance):
         v2_relay_count = 0  # ANY ciissversion:2 declaration (valid or not)
         v3_relay_count = 0  # ANY ciissversion:3 declaration
         td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
-        
+
         # Country breakdowns, running count, veteran first_seen, and rare-AS
         # tracking (merged into the same loop - previously 7 extra passes)
         operator_countries = []          # per-relay country list (non-EU VOLUME metric)
@@ -722,21 +722,21 @@ def _collect_operator_metrics(relays_instance):
                 else:
                     # This relay has AROI but failed validation
                     invalid_relay_count += 1
-            
+
             relay_td = relay.get('total_data', {})
             for _p in ONIONOO_HISTORY_PERIODS:
                 td_sums[_p] += relay_td.get(_p, 0)
-            
+
             # Uptime approximation input (running status)
             if relay.get('running', False):
                 running_relays += 1
-            
+
             # Veteran score input: earliest first_seen across the operator's relays
             relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
             if relay_first_seen is not None and (
                     earliest_first_seen is None or relay_first_seen < earliest_first_seen):
                 earliest_first_seen = relay_first_seen
-            
+
             # Diversity Index input: count unique ASes in rare/epic/legendary tiers
             _as_num = relay.get('as', '')
             if _as_num and _as_num not in _seen_as_for_rarity:
@@ -1516,5 +1516,3 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
         'summary': summary_stats,
         'raw_operators': aroi_operators  # For potential future use
     }
-
- 

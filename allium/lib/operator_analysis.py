@@ -238,7 +238,7 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         extract_operator_daily_bandwidth_totals,
         build_bandwidth_map,
     )
-    
+
     # PERFORMANCE: build the fingerprint->data maps ONCE per relay set and
     # cache them on it (lazy, also works per-process in forked mp workers).
     # This function runs per contact (~3,000x per site generation); without
@@ -1535,5 +1535,4 @@ def calculate_uptime_display(relay, _format_time_ago_fn=None):
                 return "DOWN (unknown)"
         else:
             return "DOWN (unknown)"
-
 
