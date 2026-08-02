@@ -7,7 +7,8 @@
 
 ```bash
 # Generate site
-cd allium && python3 allium.py --out /var/www/tor-metrics --progress
+cd allium && python3 allium.py --out /var/www/tor-metrics \
+  --base-url https://metrics.example.com --progress
 
 # Serve (development)
 cd /var/www/tor-metrics && python3 -m http.server 8000
@@ -15,7 +16,16 @@ cd /var/www/tor-metrics && python3 -m http.server 8000
 
 ## Subdirectory Hosting
 
-Use `--base-url` when hosting under a subdirectory:
+Use an absolute `--base-url` in production. It is the origin for canonical and
+Open Graph URLs and enables `sitemap.xml` generation:
+
+```bash
+python3 allium.py --out /var/www/tor-metrics \
+  --base-url "https://example.com/tor-metrics"
+```
+
+A root-relative value still supports local or subdirectory previews, but only
+root-relative canonicals are emitted and the public sitemap is skipped:
 
 ```bash
 # Hosting at https://example.com/tor-metrics/
@@ -34,7 +44,7 @@ server {
     index index.html;
 
     location / {
-        try_files $uri $uri/ =404;
+        try_files $uri $uri/ $uri.html =404;
     }
 
     # Optional: Enable gzip
@@ -105,7 +115,10 @@ export async function onRequest(context) {
     if (!query) {
         return new Response(JSON.stringify({error: 'Missing query'}), {
             status: 400,
-            headers: {'Content-Type': 'application/json'}
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Robots-Tag': 'noindex, follow'
+            }
         });
     }
     
@@ -149,7 +162,8 @@ For cron jobs on memory-constrained systems:
 
 ## Disk Space
 
-Typical output size: ~500MB
+Full-API output can require several gigabytes. Pagination keeps every generated
+HTML page below Allium's 1,900,000-byte crawler guard.
 
 Ensure sufficient disk space before generation. Old files are overwritten, not accumulated.
 
@@ -163,4 +177,13 @@ python3 -m http.server 8000 --directory /var/www/tor-metrics
 curl -I http://localhost:8000/
 curl -I http://localhost:8000/top500.html
 curl -I http://localhost:8000/network-health.html
+
+# After production deployment, purge stale crawler-discovery cache keys and verify
+curl -fsS https://metrics.example.com/robots.txt
+curl -fsS https://metrics.example.com/sitemap.xml | head
+curl -fsS https://metrics.example.com/ | grep -E 'canonical|site-verification'
 ```
+
+Production automation should explicitly purge `/robots.txt` and `/sitemap.xml`
+after publishing. Search result/disambiguation HTML should return
+`X-Robots-Tag: noindex, follow`; direct search matches may remain redirects.

@@ -3,7 +3,11 @@
 import os
 import shutil
 
-from allium.lib.site_generator import _sync_static_files
+from allium.lib.site_generator import (
+    _deduplicate_family_listing_items,
+    _remove_stale_pagination_files,
+    _sync_static_files,
+)
 
 
 def test_same_size_same_mtime_different_content_is_copied(temp_dir):
@@ -44,3 +48,45 @@ def test_identical_files_are_skipped(temp_dir):
     copied, skipped = _sync_static_files(src, dst)
     assert copied == 0
     assert skipped == 1
+
+
+def test_stale_pagination_files_are_removed_without_touching_base(temp_dir):
+    output_dir = os.path.join(temp_dir, "misc")
+    os.makedirs(output_dir)
+    for filename in (
+        "families-by-bandwidth.html",
+        "families-by-bandwidth-page-2.html",
+        "families-by-bandwidth-page-32.html",
+        "families-by-consensus-weight-page-2.html",
+    ):
+        with open(os.path.join(output_dir, filename), "w") as handle:
+            handle.write(filename)
+
+    removed = _remove_stale_pagination_files(
+        output_dir, "families-by-bandwidth.html"
+    )
+
+    assert removed == 2
+    assert os.path.exists(os.path.join(output_dir, "families-by-bandwidth.html"))
+    assert os.path.exists(
+        os.path.join(output_dir, "families-by-consensus-weight-page-2.html")
+    )
+
+
+def test_family_deduplication_is_global_before_pagination():
+    relays = [
+        {"fingerprint": "A"},
+        {"fingerprint": "B"},
+        {"fingerprint": "C"},
+        {"fingerprint": "D"},
+    ]
+    listing_items = [
+        ("family-a", {"relays": [0, 1]}),
+        ("overlap", {"relays": [1, 2]}),
+        ("family-d", {"relays": [3]}),
+    ]
+
+    assert _deduplicate_family_listing_items(listing_items, relays) == [
+        listing_items[0],
+        listing_items[2],
+    ]

@@ -73,6 +73,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
             },
             # relay_subset is now passed directly to templates (Option 3 change)
             'relay_subset': [self.sample_relay],
+            'group_relay_count': 1,
+            'canonical_url': 'https://metrics.1aeo.com/contact/abcd1234/',
             'relays': {
                 'json': {
                     'relay_subset': [self.sample_relay]  # Keep for backward compat in tests
@@ -556,8 +558,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('Nickname', rendered)
         self.assertIn('BW Cap', rendered)
 
-    def test_contact_template_non_default_variant_has_index_canonical(self):
-        """Non-default contact variants should canonicalize to index.html when no vanity canonical applies."""
+    def test_contact_template_non_default_variant_uses_clean_absolute_canonical(self):
+        """Contact variants should receive one clean absolute canonical."""
         import copy
         from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
 
@@ -566,12 +568,20 @@ class TestContactTemplateIntegration(unittest.TestCase):
         context['contact_sort_mode'] = 'nickname'
         context['contact_sort_enabled'] = True
         context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
-        context['base_url'] = None
+        context['base_url'] = 'https://metrics.1aeo.com'
         context['is_validated_aroi'] = False
+        context['canonical_url'] = (
+            'https://metrics.1aeo.com/contact/abcd1234/'
+        )
 
         template = self.jinja_env.get_template('contact.html')
         rendered = template.render(**context)
-        self.assertIn('<link rel="canonical" href="index.html" />', rendered)
+        self.assertEqual(rendered.count('rel="canonical"'), 1)
+        self.assertIn(
+            '<link rel="canonical" '
+            'href="https://metrics.1aeo.com/contact/abcd1234/">',
+            rendered,
+        )
 
 
 class TestContactMultiprocessingRegression(unittest.TestCase):

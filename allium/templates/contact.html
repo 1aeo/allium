@@ -6,15 +6,8 @@
 {% else %}
     {% set contact = 'none' %}
 {% endif %}
-{% block title %}Tor Relays :: Contact {{ contact_hash }}{% endblock %}
-{% block canonical_link %}
-{% set aroi_domain = relay_subset[0]['aroi_domain'] if relay_subset[0]['aroi_domain'] else 'none' %}
-{% if base_url and aroi_domain and aroi_domain != 'none' and is_validated_aroi %}
-<link rel="canonical" href="{{ base_url }}/{{ aroi_domain|lower|escape }}/" />
-{% elif contact_sort_mode is defined and contact_sort_mode and contact_sort_mode != 'bandwidth' %}
-<link rel="canonical" href="index.html" />
-{% endif %}
-{% endblock %}
+{% block title %}{% if relay_subset[0]['aroi_domain'] and relay_subset[0]['aroi_domain'] != 'none' %}{{ relay_subset[0]['aroi_domain']|escape }} Tor Relay Operator{% elif contact != 'none' %}{{ contact|striptags|truncate(50) }} Tor Relays{% else %}Tor Relay Contact {{ contact_hash[:12] }}{% endif %}{% endblock %}
+{% block meta_description %}Performance, reliability, bandwidth, and validation details for {{ group_relay_count }} Tor relay{% if group_relay_count != 1 %}s{% endif %} operated by {% if relay_subset[0]['aroi_domain'] and relay_subset[0]['aroi_domain'] != 'none' %}{{ relay_subset[0]['aroi_domain']|escape }}{% elif contact != 'none' %}{{ contact|striptags|truncate(45) }}{% else %}contact {{ contact_hash[:12] }}{% endif %}.{% endblock %}
 {% block header %}
     {% if relay_subset[0]['aroi_domain'] and relay_subset[0]['aroi_domain'] != 'none' -%}
         View Contact {{ relay_subset[0]['aroi_domain']|escape }} Details

@@ -3,10 +3,11 @@
 {% block title -%}
     Relay Radar :: Directory Authorities by Network Health
 {% endblock -%}
+{% block meta_description %}Live Tor directory authority status, votes, reachability, latency, versions, uptime, consensus methods, and bandwidth thresholds.{% endblock %}
 {% block body -%}
-    <h2>
+    <h1 class="page-title">
         Directory Authorities by Network Health
-    </h2>
+    </h1>
     
     {{ navigation('authorities', page_ctx) }}
     
@@ -703,4 +704,4 @@
     <p><i>Data sources: <a href="https://onionoo.torproject.org" target="_blank" rel="noopener">Onionoo API</a>{% if relays.collector_flag_thresholds %}, <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>{% endif %}</i></p>
     <p><i>Last updated: {{ relays.timestamp }} (updates every 15-60 minutes depending on data source)</i></p>
 
-{% endblock -%} 
+{% endblock -%}
