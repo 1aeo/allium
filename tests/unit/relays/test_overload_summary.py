@@ -186,6 +186,7 @@ def test_overload_bullet_path_prefix_renders_expanded_relay_links(jinja_env):
     # Impact order (highest bandwidth first) and reason tooltips
     assert rendered.index('BigRelay') < rendered.index('SmallRelay')
     assert 'Rate limits hit W:2 R:0 (limit: 10 MB/s)' in rendered
+    assert 'margin-top: 0' in rendered
     # Fully expanded per user requirement — no collapse mechanism
     assert '<details' not in rendered
 
@@ -264,6 +265,15 @@ def test_contact_html_bullet_count_links_variant_when_available(jinja_env):
     assert '20.0% (2 of 10 relays)' in rendered
 
 
+def test_contact_overload_sort_mode_is_clearly_labeled(jinja_env):
+    """The special sort page should make its overloaded-first order explicit."""
+    context = _contact_context(SAMPLE_SUMMARY)
+    context['contact_sort_mode'] = 'overload'
+    rendered = jinja_env.get_template('contact.html').render(**context)
+
+    assert '⚡︎ Overloaded relays are shown first (2 currently overloaded).' in rendered
+
+
 def test_contact_relay_row_overload_badge(jinja_env):
     """Option 1: overloaded relays get a ⚡ in the Status column linking to
     their #overload section; healthy relays get no badge."""
@@ -273,7 +283,10 @@ def test_contact_relay_row_overload_badge(jinja_env):
     relay['stability_tooltip'] = 'General overload at 2026-07-31 06:12 UTC'
     rendered = jinja_env.get_template('contact.html').render(**context)
     assert '⚡' in rendered
+    # Text presentation keeps the glyph CSS-colorable by the red danger class.
+    assert '<span class="al-status-danger-bold" style="margin-left: 3px;">⚡︎</span>' in rendered
     assert f'href="../relay/{relay["fingerprint"]}/#overload"' in rendered
+    assert '<td style="white-space: nowrap;">' in rendered
     assert 'aria-label="TestRelay is overloaded; view overload details"' in rendered
     assert 'General overload at 2026-07-31 06:12 UTC. Click for overload details.' in rendered
 
