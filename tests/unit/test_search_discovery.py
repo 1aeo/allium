@@ -7,7 +7,10 @@ import pytest
 
 from allium.lib.search_discovery import (
     SITEMAP_NAMESPACE,
+    _pack_sitemap_urls,
     _route_for_html,
+    _serialize_xml,
+    _urlset,
     generate_search_discovery,
 )
 
@@ -62,6 +65,23 @@ def test_local_build_skips_public_discovery_files(temp_dir):
     assert not os.path.exists(os.path.join(temp_dir, "robots.txt"))
     assert not os.path.exists(os.path.join(temp_dir, "sitemap.xml"))
     assert not os.path.exists(os.path.join(temp_dir, "sitemap-1.xml"))
+
+
+def test_long_nested_routes_are_sharded_before_byte_limit():
+    urls = [
+        "https://metrics.1aeo.com/" + "nested-route/" * 20 + str(index)
+        for index in range(6)
+    ]
+    two_url_size = len(_serialize_xml(_urlset(urls[:2])))
+
+    groups = _pack_sitemap_urls(urls, max_urls=50_000, max_bytes=two_url_size)
+
+    assert len(groups) == 3
+    assert [len(group) for group in groups] == [2, 2, 2]
+    assert all(
+        len(_serialize_xml(_urlset(group))) <= two_url_size
+        for group in groups
+    )
 
 
 @pytest.mark.parametrize(
