@@ -509,20 +509,10 @@ class TestContactTemplateIntegration(unittest.TestCase):
         context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
         context['contact_sort_enabled'] = True
         context['contact_has_ipv6'] = True
-        # Overloaded bullet: count links to the by-overload.html variant (no column header)
-        context['overload_summary'] = {
-            'overloaded': 1, 'total': 3, 'pct_formatted': '33.3%',
-            'relays': [{'nickname': 'TestRelay', 'fingerprint': 'ABC123DEF456',
-                        'stability_tooltip': 'FD exhaustion reported'}],
-        }
-
         template = self.jinja_env.get_template('contact.html')
         rendered = template.render(**context)
 
         # Non-default sort links should point to by-*.html pages with #relay-table anchor
-        self.assertIn('href="by-overload.html#relay-table"', rendered)
-        # Each overloaded relay links straight to its #overload detail section
-        self.assertIn('href="../relay/ABC123DEF456/#overload"', rendered)
         self.assertIn('href="by-nickname.html#relay-table"', rendered)
         self.assertIn('href="by-total-data.html#relay-table"', rendered)
         self.assertIn('href="by-uptime-percentage.html#relay-table"', rendered)
@@ -1448,6 +1438,21 @@ class TestContactTemplateIPv6Column:
         assert '2001:db8::1' not in v4_row
         last_cell = v4_row.rsplit('<td>', 1)[-1]
         assert 'N/A' in last_cell
+
+
+def test_contact_template_overload_links(jinja_env, overload_relay_set):
+    """Render overload listing and relay-detail links with shared pytest fixtures."""
+    contact, group = next(iter(overload_relay_set.json['sorted']['contact'].items()))
+    context = build_template_args(
+        overload_relay_set, 'contact', contact, group, [], set())
+
+    template = jinja_env.get_template('contact.html')
+    rendered = template.render(relays=overload_relay_set, **context)
+
+    assert 'href="by-overload.html#relay-table"' in rendered
+    path_prefix = context['page_ctx']['path_prefix']
+    for relay in context['overload_summary']['relays']:
+        assert f'href="{path_prefix}relay/{relay["fingerprint"]}/#overload"' in rendered
 
 
 if __name__ == '__main__':

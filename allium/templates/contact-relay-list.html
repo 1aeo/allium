@@ -140,7 +140,7 @@
         {% endif -%}
         {# Overload badge: links to the relay's #overload detail section (tooltip = reason) #}
         {% if relay.get('stability_is_overloaded') -%}
-            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details."><span class="al-status-danger-bold" style="margin-left: 3px;">⚡</span></a>
+            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details." aria-label="{{ relay['nickname']|escape }} is overloaded; view overload details"><span class="al-status-danger-bold" style="margin-left: 3px;">⚡</span></a>
         {% endif -%}
     </td>
     {% if relay['effective_family']|length > 1 -%}
