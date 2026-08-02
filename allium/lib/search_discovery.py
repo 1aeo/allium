@@ -69,17 +69,27 @@ def _remove_old_shards(output_path):
             candidate.unlink()
 
 
+def _remove_search_discovery(output_path):
+    """Remove generated crawler files that are invalid for a local build."""
+    for filename in ("robots.txt", "sitemap.xml"):
+        candidate = output_path / filename
+        if candidate.is_file():
+            candidate.unlink()
+    _remove_old_shards(output_path)
+
+
 def generate_search_discovery(output_dir, base_url):
     """Write production robots and sitemap files.
 
     Local builds without an absolute HTTPS base URL are intentionally skipped,
     since sitemap ``loc`` values must be absolute public URLs.
     """
+    output_path = Path(output_dir)
     public_base_url = _public_base_url(base_url)
     if public_base_url is None:
+        _remove_search_discovery(output_path)
         return {"generated": False, "url_count": 0, "sitemap_count": 0}
 
-    output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     urls = _generated_urls(output_path, public_base_url)
     if not urls:
