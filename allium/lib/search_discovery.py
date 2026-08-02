@@ -106,7 +106,7 @@ def _remove_old_shards(output_path):
             candidate.unlink()
 
 
-def _remove_search_discovery(output_path):
+def _remove_search_discovery(output_path) -> None:
     """Remove generated crawler files that are invalid for a local build."""
     for filename in ("robots.txt", "sitemap.xml"):
         candidate = output_path / filename
