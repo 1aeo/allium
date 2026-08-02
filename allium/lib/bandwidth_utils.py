@@ -8,6 +8,8 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 import statistics
 
 from .statistical_utils import StatisticalUtils
+from .time_utils import ONIONOO_HISTORY_PERIODS
+from .uptime_utils import index_relays_by_fingerprint
 
 def calculate_total_data_from_history(history_data):
     """Calculate total bytes transferred from an Onionoo bandwidth history object.
@@ -23,7 +25,7 @@ def calculate_total_data_from_history(history_data):
         dict: {'1_month': bytes, '6_months': bytes, '1_year': bytes, '5_years': bytes}
     """
     result = {}
-    for period in ('1_month', '6_months', '1_year', '5_years'):
+    for period in ONIONOO_HISTORY_PERIODS:
         pd = history_data.get(period, {})
         factor = pd.get('factor', 0)
         interval = pd.get('interval', 0)
@@ -62,17 +64,7 @@ def build_bandwidth_map(bandwidth_data):
     Returns:
         dict: Mapping of fingerprint -> bandwidth relay data
     """
-    bandwidth_map = {}
-    if bandwidth_data and bandwidth_data.get('relays'):
-        for relay in bandwidth_data['relays']:
-            fingerprint = relay.get('fingerprint')
-            if fingerprint:
-                bandwidth_map[fingerprint] = relay
-    return bandwidth_map
-
-
-# Alias for backwards compatibility with internal code
-_build_bandwidth_map = build_bandwidth_map
+    return index_relays_by_fingerprint(bandwidth_data.get('relays') if bandwidth_data else None)
 
 def _get_stability_category(cv, network_cv_stats):
     """Determine stability category from CV value and network thresholds."""
@@ -254,8 +246,15 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
         'display': display
     }
 
-def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, network_cv_stats=None, bandwidth_formatter=None):
-    """Calculate comprehensive bandwidth reliability metrics for an operator."""
+def calculate_bandwidth_reliability_metrics(
+    operator_relays, bandwidth_data, period, mean_bandwidth, std_dev,
+    network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None
+):
+    """Calculate comprehensive bandwidth reliability metrics for an operator.
+
+    OPTIMIZATION: Accepts a pre-built bandwidth_map for batch processing so
+    per-contact callers don't rebuild the ~10k-entry map on every call.
+    """
     metrics = {
         'bandwidth_stability': None,
         'peak_performance': None,
@@ -266,8 +265,9 @@ def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, per
     if not operator_relays or not bandwidth_data or mean_bandwidth <= 0:
         return metrics
     
-    # Build shared bandwidth mapping once
-    bandwidth_map = _build_bandwidth_map(bandwidth_data)
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if bandwidth_map is None:
+        bandwidth_map = build_bandwidth_map(bandwidth_data)
     
     # Calculate individual metrics
     metrics['bandwidth_stability'] = _calculate_bandwidth_stability(
@@ -408,11 +408,7 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         return {'relay_bandwidth_data': {}, 'network_flag_statistics': {} if include_flag_analysis else None}
     
     # Create fingerprint mapping
-    relay_fingerprint_map = {}
-    for relay in all_relays:
-        fingerprint = relay.get('fingerprint')
-        if fingerprint:
-            relay_fingerprint_map[fingerprint] = relay
+    relay_fingerprint_map = index_relays_by_fingerprint(all_relays)
     
     # Initialize data structures
     relay_bandwidth_data = {}
@@ -456,7 +452,7 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         write_total = calculate_total_data_from_history(bandwidth_relay.get('write_history', {}))
         read_total = calculate_total_data_from_history(read_history)
         total_data = {p: write_total.get(p, 0) + read_total.get(p, 0)
-                      for p in ('1_month', '6_months', '1_year', '5_years')}
+                      for p in ONIONOO_HISTORY_PERIODS}
         
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,

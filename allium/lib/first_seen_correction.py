@@ -368,17 +368,6 @@ def _earliest_in_period(period_data):
         return None
 
 
-# Backwards-compatible wrapper for tests / external callers that only need
-# the midpoint timestamp.
-def _earliest_uptime_timestamp(uptime_relay):
-    # type: (Dict[str, Any]) -> Optional[datetime]
-    """Return only the midpoint of the earliest uptime observation interval."""
-    bounds = _earliest_uptime_interval(uptime_relay)
-    if bounds is None:
-        return None
-    return bounds[0]
-
-
 def _build_uptime_index(uptime_data):
     # type: (Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]
     """Index uptime_data['relays'] by fingerprint for O(1) lookup.

@@ -158,39 +158,6 @@ def parse_wfu_threshold(value: Any) -> Optional[float]:
     return None
 
 
-def format_time_as_days(seconds: Optional[float], decimals: int = 1) -> str:
-    """
-    Format seconds as days for display.
-    
-    Args:
-        seconds: Time in seconds
-        decimals: Number of decimal places
-        
-    Returns:
-        Formatted string like "8.0d" or "N/A"
-    """
-    if seconds is None:
-        return 'N/A'
-    days = seconds / SECONDS_PER_DAY
-    return f"{days:.{decimals}f}d"
-
-
-def format_wfu_as_percent(wfu: Optional[float], decimals: int = 1) -> str:
-    """
-    Format WFU fraction as percentage for display.
-    
-    Args:
-        wfu: WFU value between 0 and 1
-        decimals: Number of decimal places
-        
-    Returns:
-        Formatted string like "98.0%" or "N/A"
-    """
-    if wfu is None:
-        return 'N/A'
-    return f"{wfu * 100:.{decimals}f}%"
-
-
 def check_guard_eligibility(
     wfu: Optional[float],
     tk: Optional[float],

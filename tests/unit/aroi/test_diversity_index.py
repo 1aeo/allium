@@ -9,8 +9,6 @@ Covers the reviewer-approved Part 2 design:
 - 0-100 sub-scores + composite index ordering
 - Option-2 tooltips carrying today's yardsticks
 """
-import pytest
-
 from allium.lib.diversity_index import (
     OS_CAP_FLOOR,
     VOLUME_CAP_FLOOR,
@@ -219,6 +217,27 @@ class TestAnnotateOperators:
         ops = {f'op{i}': _operator(non_eu_count=i + 1) for i in range(6)}
         annotate_operators(ops, n_countries=10, n_ases=100)
         assert "5th-largest" in ops['op0']['geo_cell_tooltip']
+
+
+class TestPerformanceCorrelation:
+    def test_underutilized_fingerprints_are_valid_and_sorted(self):
+        from allium.lib.intelligence_engine import IntelligenceEngine
+
+        relays = [
+            {'observed_bandwidth': 20_000_000, 'consensus_weight': 0,
+             'fingerprint': fingerprint, 'flags': []}
+            for fingerprint in ('B', None, '', 123, 'A')
+        ]
+        engine = IntelligenceEngine({
+            'relays': relays,
+            'sorted': {},
+            'network_totals': {},
+            'family_statistics': {},
+        })
+
+        values = engine._layer7_performance_correlation()['template_optimized']
+        assert values['underutilized_count'] == 2
+        assert values['underutilized_fingerprints'] == ['A', 'B']
 
 
 class TestCapacitySpreadRename:

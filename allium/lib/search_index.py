@@ -419,7 +419,11 @@ def generate_search_index(
     # ==========================================================================
     
     family_entries: List[Dict[str, Any]] = []
-    for family_id in valid_family_ids:
+    # sorted() for byte-deterministic output: valid_family_ids is a set, and
+    # per-process hash randomization made the families array order (and thus
+    # the serialized JSON) differ run-to-run, breaking byte-level regression
+    # diffs of generated site trees (same fix as the lookups maps below)
+    for family_id in sorted(valid_family_ids):
         fdata = family_data[family_id]
         relay_indices = fdata.get('relays', [])
         

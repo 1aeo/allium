@@ -13,7 +13,7 @@ import pytest
 
 from allium.lib.first_seen_correction import (
     FIRST_SEEN_FLOOR,
-    _earliest_uptime_timestamp,
+    _earliest_uptime_interval,
     correct_first_seen,
 )
 
@@ -628,17 +628,17 @@ def test_correction_metadata_fields_set_only_on_corrected_relays():
 
 
 # ---------------------------------------------------------------------------
-# Direct tests of _earliest_uptime_timestamp helper
+# Direct tests of _earliest_uptime_interval helper
 # ---------------------------------------------------------------------------
 
-def test_earliest_uptime_timestamp_returns_none_for_non_dict():
-    assert _earliest_uptime_timestamp(None) is None
-    assert _earliest_uptime_timestamp('garbage') is None
-    assert _earliest_uptime_timestamp([]) is None
-    assert _earliest_uptime_timestamp({'uptime': 'not-a-dict'}) is None
+def test_earliest_uptime_interval_returns_none_for_non_dict():
+    assert _earliest_uptime_interval(None) is None
+    assert _earliest_uptime_interval('garbage') is None
+    assert _earliest_uptime_interval([]) is None
+    assert _earliest_uptime_interval({'uptime': 'not-a-dict'}) is None
 
 
-def test_earliest_uptime_timestamp_skips_negative_interval():
+def test_earliest_uptime_interval_skips_negative_interval():
     """Defensive: a negative or zero interval must not be used."""
     uptime_relay = {
         'fingerprint': FP,
@@ -650,7 +650,7 @@ def test_earliest_uptime_timestamp_skips_negative_interval():
             },
         },
     }
-    assert _earliest_uptime_timestamp(uptime_relay) is None
+    assert _earliest_uptime_interval(uptime_relay) is None
 
 
 # ---------------------------------------------------------------------------

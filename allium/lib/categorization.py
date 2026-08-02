@@ -591,10 +591,10 @@ def finalize_unique_as_counts(relay_set):
                     else:
                         data["unique_family_count"] = 0
                         
-                    # APPROACH 1 SIMPLIFIED: Use already-built sets and mappings from _sort()
+                    # APPROACH 1 SIMPLIFIED: Use already-built sets and mappings from sort_relay()
                     unique_aroi_domains = data.get("unique_aroi_set", set())
                     unique_contact_hashes = data.get("unique_contact_set", set())
-                    # aroi_to_contact_map already built during _sort(), no need to rebuild
+                    # aroi_to_contact_map already built during sort_relay(), no need to rebuild
                     
                     # APPROACH 1: Simplified HTML generation from existing data
                     aroi_contact_html_items = []

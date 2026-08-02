@@ -23,6 +23,7 @@ from .time_utils import (
     parse_onionoo_timestamp,
     format_timestamp_gmt,
     format_time_ago,
+    ONIONOO_HISTORY_PERIODS,
 )
 from datetime import datetime, timedelta, timezone
 
@@ -559,7 +560,7 @@ class Relays:
                     # Store flag data for flag reliability analysis
                     relay["_flag_uptime_data"] = relay_uptime_data[fingerprint]['flag_data']
                 else:
-                    relay["uptime_percentages"] = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["uptime_percentages"] = {p: 0.0 for p in ONIONOO_HISTORY_PERIODS}
                     relay["_uptime_datapoints"] = {}
                     relay["_flag_uptime_data"] = {}
             
@@ -576,7 +577,7 @@ class Relays:
             
         # PERFORMANCE OPTIMIZATION: Calculate network-wide uptime percentiles ONCE for all contacts
         # This avoids recalculating the same percentiles for every contact page (major performance optimization)
-        uptime_data = getattr(self, 'uptime_data', None)
+        # (uptime_data local already fetched at the top of this method)
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
             self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")
@@ -610,7 +611,10 @@ class Relays:
         try:
             # Use consolidated bandwidth processing with flag analysis
             from .bandwidth_utils import process_all_bandwidth_data_consolidated
-            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol
+            from .bandwidth_formatter import (
+                BEST_PERIOD_ORDER,
+                format_data_volume_with_unit as _fmt_data_vol,
+            )
             
             # SINGLE PASS PROCESSING: Process all bandwidth data in one optimized loop
             # This includes flag bandwidth analysis similar to uptime processing
@@ -660,10 +664,10 @@ class Relays:
                 
                 # Pre-format total data transferred display strings
                 td = relay.get("total_data", {})
-                best = next((p for p in ('5_years', '1_year', '6_months', '1_month') if td.get(p, 0) > 0), None)
+                best = next((p for p in BEST_PERIOD_ORDER if td.get(p, 0) > 0), None)
                 relay["total_data_display"] = _fmt_data_vol(td[best]) if best else "N/A"
                 relay["total_data_period"] = best.replace('_', ' ') if best else ""
-                for _p in ('1_month', '6_months', '1_year', '5_years'):
+                for _p in ONIONOO_HISTORY_PERIODS:
                     relay[f"total_data_{_p}_display"] = _fmt_data_vol(td.get(_p, 0))
             
             # Process flag bandwidth display data
@@ -698,16 +702,21 @@ class Relays:
         1_year -> 6_months -> 1_month so relays with shorter history aren't N/A.
         Stores both the total and which period was used for period-matched % calc.
         """
-        from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period, _BEST_PERIOD_ORDER
+        from .bandwidth_formatter import (
+            BEST_PERIOD_ORDER,
+            compute_total_data_pct,
+            format_data_volume_with_unit,
+            pick_best_period,
+        )
         relays = self.json["relays"]
         net_by_period = self.json.get('network_health', {}).get('network_total_data_by_period', {})
         
         for category in self.json.get("sorted", {}):
-            for key, group_data in self.json["sorted"][category].items():
-                sums = {p: 0 for p in _BEST_PERIOD_ORDER}
+            for group_data in self.json["sorted"][category].values():
+                sums = {p: 0 for p in BEST_PERIOD_ORDER}
                 for idx in group_data.get("relays", []):
                     td = relays[idx].get("total_data", {})
-                    for p in _BEST_PERIOD_ORDER:
+                    for p in BEST_PERIOD_ORDER:
                         sums[p] += td.get(p, 0)
                 total, used_period = pick_best_period(sums)
                 group_data["total_data"] = total
@@ -920,45 +929,15 @@ class Relays:
         from .categorization import calculate_network_totals
         return calculate_network_totals(self)
 
-    def _sort(self, relay, idx, k, v, cw, cw_fraction):
-        """Populate self.sorted dictionary with values from relay."""
-        from .categorization import sort_relay
-        sort_relay(self, relay, idx, k, v, cw, cw_fraction)
-
     def _categorize(self):
         """Iterate over relays and sort into categories."""
         from .categorization import categorize
         categorize(self)
 
-    def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
-        """Calculate consensus weight fractions for guard, middle, and exit relays."""
-        from .categorization import calculate_consensus_weight_fractions
-        calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw)
-
-    def _calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw):
-        """Calculate family network totals and centralization risk statistics."""
-        from .categorization import calculate_and_cache_family_statistics
-        calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw)
-
-    def _finalize_unique_as_counts(self):
-        """Convert unique AS sets to counts and clean up memory."""
-        from .categorization import finalize_unique_as_counts
-        finalize_unique_as_counts(self)
-
     def _propagate_as_rarity(self):
         """Propagate AS rarity data from sorted AS data to each relay."""
         from .categorization import propagate_as_rarity
         propagate_as_rarity(self)
-
-    def _calculate_contact_derived_data(self):
-        """Calculate derived contact data: primary countries and bandwidth means."""
-        from .categorization import calculate_contact_derived_data
-        calculate_contact_derived_data(self)
-
-    def _precompute_display_values(self):
-        """Pre-compute display strings for misc listing pages."""
-        from .categorization import precompute_display_values
-        precompute_display_values(self)
 
     def _set_family_support_types(self):
         """Set per-relay family_support_type and cache descriptor sets for downstream consumers.
@@ -1291,4 +1270,3 @@ class Relays:
         metadata = validation_data.get('metadata', {})
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
-

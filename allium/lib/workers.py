@@ -681,6 +681,20 @@ def _fetch_with_cache_fallback(
     def log_progress(message):
         if progress_logger:
             progress_logger(message)
+
+    def _cache_fallback(reason, stale_msg, no_cache_log=None):
+        """Shared fallback path: return cached data (marking the worker
+        ready) or mark it stale and return None. `reason` feeds the
+        "using cached ... due to <reason>" log; `no_cache_log` (when set)
+        is logged before marking stale."""
+        if cached_data:
+            log_progress(f"using cached {display_name} data due to {reason}")
+            _mark_ready(api_name)
+            return cached_data
+        if no_cache_log:
+            log_progress(no_cache_log)
+        _mark_stale(api_name, stale_msg)
+        return None
     
     try:
         # Check cache age AND validate cache can be loaded
@@ -753,14 +767,9 @@ def _fetch_with_cache_fallback(
         except TotalTimeoutError:
             elapsed = time.time() - fetch_start
             log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
-            if cached_data:
-                log_progress(f"using cached {display_name} data due to timeout")
-                _mark_ready(api_name)
-                return cached_data
-            else:
-                log_progress("no cached data available after timeout")
-                _mark_stale(api_name, f"Total timeout after {timeout_seconds}s with no cache")
-                return None
+            return _cache_fallback(
+                "timeout", f"Total timeout after {timeout_seconds}s with no cache",
+                no_cache_log="no cached data available after timeout")
         except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
             elapsed = time.time() - fetch_start
             is_timeout = (
@@ -768,30 +777,19 @@ def _fetch_with_cache_fallback(
                 (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
             )
         
-            if is_timeout:
-                log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
-                if cached_data:
-                    log_progress(f"using cached {display_name} data due to timeout")
-                    _mark_ready(api_name)
-                    return cached_data
-                else:
-                    log_progress("no cached data available after timeout")
-                    _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
-                    return None
-            else:
+            if not is_timeout:
                 raise
+            log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
+            return _cache_fallback(
+                "timeout", f"Timeout after {timeout_seconds}s with no cache",
+                no_cache_log="no cached data available after timeout")
         except Exception as e:
             # Non-retryable error after exhausting retries
             elapsed = time.time() - fetch_start
             log_progress(f"request failed after {elapsed:.1f}s: {type(e).__name__}: {e}")
-            if cached_data:
-                log_progress(f"using cached {display_name} data due to error")
-                _mark_ready(api_name)
-                return cached_data
-            else:
-                log_progress("no cached data available after error")
-                _mark_stale(api_name, f"Error: {type(e).__name__}: {e}")
-                return None
+            return _cache_fallback(
+                "error", f"Error: {type(e).__name__}: {e}",
+                no_cache_log="no cached data available after error")
     
         fetch_elapsed = time.time() - fetch_start
     
@@ -801,12 +799,7 @@ def _fetch_with_cache_fallback(
             data = json.loads(api_response.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
             log_progress(f"failed to parse JSON response: {e}")
-            if cached_data:
-                log_progress(f"using cached {display_name} data due to parse error")
-                _mark_ready(api_name)
-                return cached_data
-            _mark_stale(api_name, f"JSON parse error: {e}")
-            return None
+            return _cache_fallback("parse error", f"JSON parse error: {e}")
     
         # Validate response if validator provided
         if validator and not validator(data):
@@ -948,8 +941,10 @@ def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidt
     )
 
 
-def _validate_aroi_response(data: dict) -> bool:
+def _validate_aroi_response(data) -> bool:
     """Validator for AROI API response structure."""
+    if not isinstance(data, dict):
+        return False
     required_keys = ['metadata', 'statistics', 'results']
     return all(key in data for key in required_keys)
 
@@ -1173,14 +1168,6 @@ def _validate_collector_cache(data):
             return False
     
     return True
-
-
-def fetch_collector_data(progress_logger=None):
-    """
-    Legacy wrapper for fetch_collector_consensus_data.
-    Maintained for backward compatibility.
-    """
-    return fetch_collector_consensus_data(progress_logger=progress_logger)
 
 
 def _parse_descriptor_listing_timestamp(filename):

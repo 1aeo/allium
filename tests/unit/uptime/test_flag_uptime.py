@@ -16,15 +16,17 @@ import statistics
 import unittest
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from allium.lib.relays import Relays
 from allium.lib.uptime_utils import (
-    calculate_relay_uptime_average,
+    _compute_uptime_percentage_and_datapoints,
     extract_relay_uptime_for_period,
     calculate_statistical_outliers
 )
 
 
-class TestFlagUptimeCalculation(unittest.TestCase):
+class TestFlagUptimeCalculation:
     """Test core flag uptime calculation logic"""
     
     def test_relay_uptime_average_calculation(self):
@@ -32,13 +34,13 @@ class TestFlagUptimeCalculation(unittest.TestCase):
         # Test normal case with sufficient valid values (30+ required)
         uptime_values = [950 + i for i in range(35)]  # 35 values around 950
         expected_avg = sum(uptime_values) / len(uptime_values) / 999 * 100
-        result = calculate_relay_uptime_average(uptime_values)
-        self.assertAlmostEqual(result, expected_avg, places=2)
+        result, _ = _compute_uptime_percentage_and_datapoints(uptime_values)
+        assert result == pytest.approx(expected_avg, abs=0.01)
         
         # Test insufficient data (< 30 values) - should return 0.0
         few_values = [950, 960, 940, 970]  # Only 4 values
-        result = calculate_relay_uptime_average(few_values)
-        self.assertEqual(result, 0.0)
+        result, _ = _compute_uptime_percentage_and_datapoints(few_values)
+        assert result == 0.0
 
 
 class TestFlagPrioritySystem(unittest.TestCase):
@@ -176,4 +178,4 @@ class TestStatisticalColoring(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()
