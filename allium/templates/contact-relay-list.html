@@ -30,6 +30,11 @@
    ============================================================================= #}
 
 <div id="relay-table"></div>
+{% if contact_sort_mode == 'overload' -%}
+<p class="al-status-danger-bold" style="margin: 0 0 8px;">
+    ⚡︎ Overloaded relays are shown first{% if overload_summary %} ({{ overload_summary.overloaded }} currently overloaded){% endif %}.
+</p>
+{% endif -%}
 
 {# Pre-compute fingerprint sets for O(1) lookups #}
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
@@ -118,7 +123,7 @@
 <tr>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-    <td>
+    <td style="white-space: nowrap;">
         {% if relay['running'] -%}
             <span class="circle circle-online" title="This relay is online"></span>
         {% else -%}
@@ -140,7 +145,7 @@
         {% endif -%}
         {# Overload badge: links to the relay's #overload detail section (tooltip = reason) #}
         {% if relay.get('stability_is_overloaded') -%}
-            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details." aria-label="{{ relay['nickname']|escape }} is overloaded; view overload details"><span class="al-status-danger-bold" style="margin-left: 3px;">⚡</span></a>
+            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details." aria-label="{{ relay['nickname']|escape }} is overloaded; view overload details"><span class="al-status-danger-bold" style="margin-left: 3px;">⚡︎</span></a>
         {% endif -%}
     </td>
     {% if relay['effective_family']|length > 1 -%}
