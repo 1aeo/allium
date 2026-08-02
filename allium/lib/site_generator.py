@@ -204,6 +204,20 @@ def generate_site(relay_set, args, progress_logger):
         prom_msg += " [AROI source unavailable]"
     progress_logger.log(prom_msg)
 
+    # --- Search-engine discovery files ---
+    progress_logger.log("Generating search-engine discovery files...")
+    from .search_discovery import generate_search_discovery
+    discovery_stats = generate_search_discovery(args.output_dir, args.base_url)
+    if discovery_stats["generated"]:
+        progress_logger.log(
+            f"Generated robots.txt and {discovery_stats['sitemap_count']} sitemap "
+            f"file(s) for {discovery_stats['url_count']} public routes"
+        )
+    else:
+        progress_logger.log(
+            "Skipped search-engine discovery files for non-production base URL"
+        )
+
     # End page generation section
     progress_logger.end_section("Page Generation")
     progress_logger.log("Allium static site generation completed successfully!")
