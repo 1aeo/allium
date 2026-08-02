@@ -1,12 +1,13 @@
 {% extends "relay-list.html" %}
 {% set relay_count = relays.json['relays']|length %}
 {% block title %}Relay Radar :: All Relays{% endblock %}
+{% block meta_description %}Browse all {{ relay_count }} known Tor relays with live bandwidth, operator, country, network, flags, uptime, and consensus-weight data.{% endblock %}
 {% block header %}Browse All Relays{% endblock %}
 {% block navigation %}
     {{ navigation('all', page_ctx) }}
 {% endblock %}
 {% block description %}
-    Complete listing of all {{ relay_count }} known relays in the Tor network. For a more manageable view, see the <a href="../index.html">top 500 relays</a>.
+    Complete listing of all {{ relay_count }} known relays in the Tor network. For a more manageable view, see the <a href="../top500">top 500 relays</a>.
     <strong>Network Status:</strong> {{ relays.json.smart_context.basic_relationships.template_optimized.total_countries }} countries, 
     {{ relays.json.smart_context.basic_relationships.template_optimized.total_networks }} networks, 
     <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.gini_tooltip }}">capacity spread: {{ relays.json.smart_context.capacity_distribution.template_optimized.capacity_spread_status }} — {{ relays.json.smart_context.capacity_distribution.template_optimized.capacity_spread_phrase }}</span>, 

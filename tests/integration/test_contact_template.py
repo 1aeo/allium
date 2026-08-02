@@ -73,6 +73,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
             },
             # relay_subset is now passed directly to templates (Option 3 change)
             'relay_subset': [self.sample_relay],
+            'group_relay_count': 1,
+            'canonical_url': 'https://metrics.1aeo.com/contact/abcd1234/',
             'relays': {
                 'json': {
                     'relay_subset': [self.sample_relay]  # Keep for backward compat in tests
@@ -556,22 +558,63 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('Nickname', rendered)
         self.assertIn('BW Cap', rendered)
 
-    def test_contact_template_non_default_variant_has_index_canonical(self):
-        """Non-default contact variants should canonicalize to index.html when no vanity canonical applies."""
-        import copy
-        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
 
-        context = copy.deepcopy(self.template_context)
-        context['sortable_scope'] = 'contact'
-        context['contact_sort_mode'] = 'nickname'
-        context['contact_sort_enabled'] = True
-        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
-        context['base_url'] = None
-        context['is_validated_aroi'] = False
+def test_contact_template_non_default_variant_uses_clean_absolute_canonical(
+        jinja_env):
+    """Contact variants should receive one clean absolute canonical."""
+    from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
 
-        template = self.jinja_env.get_template('contact.html')
-        rendered = template.render(**context)
-        self.assertIn('<link rel="canonical" href="index.html" />', rendered)
+    sample_relay = {
+        'aroi_domain': 'example.org',
+        'contact': 'test@example.com',
+        'contact_md5': 'abcd1234',
+        'country': 'us',
+        'country_name': 'United States',
+        'effective_family': [],
+        'fingerprint': 'ABC123DEF456',
+        'first_seen': '2023-01-01 12:00:00',
+        'first_seen_date_escaped': '2023-01-01',
+        'flags': ['Running', 'Valid'],
+        'flags_escaped': ['Running', 'Valid'],
+        'flags_lower_escaped': ['running', 'valid'],
+        'measured': True,
+        'nickname': 'TestRelay',
+        'observed_bandwidth': 1000000,
+        'or_addresses': ['192.168.1.1:9001'],
+        'running': True,
+    }
+    context = {
+        'bandwidth': '150.0',
+        'bandwidth_unit': 'MB/s',
+        'base_url': 'https://metrics.1aeo.com',
+        'canonical_url': 'https://metrics.1aeo.com/contact/abcd1234/',
+        'consensus_weight_fraction': 0.025,
+        'contact_display_data': {},
+        'contact_rankings': [],
+        'contact_sort_enabled': True,
+        'contact_sort_links': CONTACT_SORT_FILE_MAP,
+        'contact_sort_mode': 'nickname',
+        'flag_reliability': {},
+        'group_relay_count': 1,
+        'is_validated_aroi': False,
+        'network_position': {'formatted_string': 'Mixed'},
+        'operator_reliability': None,
+        'page_ctx': {'path_prefix': '../'},
+        'relay_subset': [sample_relay],
+        'relays': {
+            'json': {'relay_subset': [sample_relay]},
+            'use_bits': False,
+        },
+        'sortable_scope': 'contact',
+    }
+
+    rendered = jinja_env.get_template('contact.html').render(**context)
+
+    assert rendered.count('rel="canonical"') == 1
+    assert (
+        '<link rel="canonical" '
+        'href="https://metrics.1aeo.com/contact/abcd1234/">'
+    ) in rendered
 
 
 class TestContactMultiprocessingRegression(unittest.TestCase):

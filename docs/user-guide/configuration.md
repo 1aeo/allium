@@ -15,7 +15,7 @@ python3 allium.py [options]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--out` | `./www` | Output directory |
-| `--base-url` | `""` | Base URL for subdirectory hosting (e.g., `/tor-metrics`) |
+| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`); root-relative values are for previews/subdirectory hosting |
 | `--display-bandwidth-units` | `bits` | `bits` (Kbit/s) or `bytes` (KB/s) |
 | `-p, --progress` | false | Show progress with memory usage |
 | `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Details API endpoint |
@@ -62,10 +62,12 @@ Disables multiprocessing for easier debugging.
 ### Production (Silent)
 
 ```bash
-python3 allium.py --out /var/www/tor-metrics
+python3 allium.py --out /var/www/tor-metrics \
+  --base-url https://metrics.example.com
 ```
 
-No progress output, suitable for cron.
+No progress output, suitable for cron. An absolute HTTP(S) base URL enables an
+absolute canonical on every page plus canonical-only `sitemap.xml` output.
 
 ## Automated Updates (Cron)
 
