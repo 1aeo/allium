@@ -723,7 +723,7 @@ def _collect_operator_metrics(relays_instance):
                     # This relay has AROI but failed validation
                     invalid_relay_count += 1
 
-            relay_td = relay.get('total_data', {})
+            relay_td = relay.get('total_data') or {}
             for _p in ONIONOO_HISTORY_PERIODS:
                 td_sums[_p] += relay_td.get(_p, 0)
 
