@@ -24,15 +24,31 @@ def test_route_for_html_uses_public_canonical_forms():
 
 def test_generates_exact_robots_and_valid_sitemap(temp_dir):
     os.makedirs(os.path.join(temp_dir, "relay", "ABC"))
-    for relative in ("index.html", "top500.html", "relay/ABC/index.html", "404.html"):
+    canonicals = {
+        "index.html": "https://metrics.1aeo.com/",
+        "top500.html": "https://metrics.1aeo.com/top500",
+        "relay/ABC/index.html": "https://metrics.1aeo.com/relay/ABC/",
+    }
+    for relative in (*canonicals, "404.html"):
         destination = os.path.join(temp_dir, relative)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         with open(destination, "w", encoding="utf-8") as handle:
-            handle.write("<!doctype html><title>public</title>")
+            canonical = canonicals.get(relative, "")
+            handle.write(
+                "<!doctype html><html><head><title>public</title>"
+                f'<link rel="canonical" href="{canonical}">'
+                "</head><body></body></html>"
+            )
 
     stats = generate_search_discovery(temp_dir, "https://metrics.1aeo.com/")
 
-    assert stats == {"generated": True, "url_count": 3, "sitemap_count": 1}
+    assert stats == {
+        "generated": True,
+        "url_count": 3,
+        "sitemap_count": 1,
+        "html_count": 3,
+        "noindex_count": 0,
+    }
     with open(os.path.join(temp_dir, "robots.txt"), encoding="utf-8") as handle:
         assert handle.read() == (
             "User-agent: *\n"
@@ -61,6 +77,8 @@ def test_local_build_skips_public_discovery_files(temp_dir):
         "generated": False,
         "url_count": 0,
         "sitemap_count": 0,
+        "html_count": 0,
+        "noindex_count": 0,
     }
     assert not os.path.exists(os.path.join(temp_dir, "robots.txt"))
     assert not os.path.exists(os.path.join(temp_dir, "sitemap.xml"))

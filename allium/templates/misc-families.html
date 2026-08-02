@@ -6,10 +6,11 @@
     Relay Radar :: Families By {{ sorted_by_label|replace('_',
     ' ')|replace('bandwidth', 'observed bandwidth')|title }}
 {% endblock -%}
+{% block meta_description %}Compare Tor relay families by bandwidth, consensus weight, relay count, operators, networks, configuration, and DNS health.{% endblock %}
 {% block body -%}
-    <h2>
+    <h1 class="page-title">
         Browse by Family
-    </h2>
+    </h1>
     
     {{ navigation('families', page_ctx) }}
     
@@ -47,6 +48,8 @@
     </ul>
     
 {{ misc.last_updated(relays) }}
+    <div id="relay-table"></div>
+    {% include "pagination.html" %}
     
     <table class="table table-condensed">
         <tr>
@@ -63,7 +66,7 @@
         </tr>
         <tbody>
             {% set processed = dict() -%}
-            {% for k, v in relays.json['sorted'].get('family', {}).items()|sort(attribute=sorted_by,
+            {% for k, v in (listing_items if listing_items is not none else relays.json['sorted'].get('family', {}).items())|sort(attribute=sorted_by,
                 reverse=True) -%}
                 {% if relay_subset[v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
@@ -117,4 +120,5 @@
             {% endfor -%}
         </tbody>
     </table>
+    {% include "pagination.html" %}
 {% endblock -%}

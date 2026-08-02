@@ -609,3 +609,14 @@ th[title]::after {
 .al-link-plain          { text-decoration: none; }
 .al-section-title       { margin-top: 0; margin-bottom: 12px; }
 .al-font-bold           { font-weight: bold; }
+.page-title {
+    font-size: 30px;
+}
+
+.al-pagination {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0;
+}

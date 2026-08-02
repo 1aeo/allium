@@ -4,10 +4,10 @@
     Tor Relays
 {% endblock -%}
 {% block body -%}
-<h2>
+<h1 class="page-title">
 {% block header -%}
 {% endblock -%}
-</h2>
+</h1>
 
 {% block navigation -%}
 {% endblock -%}
@@ -37,6 +37,7 @@
 </p>
 {% endif -%}
 {%- endmacro %}
+{% include "pagination.html" %}
 
 {# Pre-compute fingerprint sets for O(1) lookups #}
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
@@ -318,6 +319,7 @@
 {%- endmacro %}
 
 {% if use_sections %}
+{% set full_contact_validation_status = contact_validation_status_full|default(contact_validation_status, true) %}
 {# =============================================================================
    B5.3: v2 \u2192 v3 UPGRADE NUDGE for v2-only validated operators.
    Rendered ONLY when:
@@ -327,11 +329,11 @@
    Goal: keep the migration funnel moving without nagging operators
    with active issues.
    ============================================================================= #}
-{%- set _summary = contact_validation_status.validation_summary -%}
-{%- if contact_validation_status.validation_status == 'validated'
+{%- set _summary = full_contact_validation_status.validation_summary -%}
+{%- if full_contact_validation_status.validation_status == 'validated'
         and _summary.v3_relay_count == 0
         and _summary.v2_relay_count > 0 %}
-{%- set _all_relays = (contact_validation_status.validated_relays or []) -%}
+{%- set _all_relays = (full_contact_validation_status.validated_relays or []) -%}
 {%- set _example_domain = (_all_relays[0].aroi_domain if _all_relays else 'yourdomain.com') -%}
 <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; font-size: 13px;">
     <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #856404;">💡 Want to upgrade to ciissversion:3?</h3>
@@ -365,10 +367,10 @@
    the same relay in this rollup table and inflates the
    "N affected" header. Fix: collect unique relay objects keyed by
    fingerprint before counting. #}
-{%- set _all_error_relays = (contact_validation_status.unauthorized_relays or [])
-    + (contact_validation_status.misconfigured_relays or [])
-    + (contact_validation_status.pending_onionoo_relays or [])
-    + (contact_validation_status.security_incident_relays or []) -%}
+{%- set _all_error_relays = (full_contact_validation_status.unauthorized_relays or [])
+    + (full_contact_validation_status.misconfigured_relays or [])
+    + (full_contact_validation_status.pending_onionoo_relays or [])
+    + (full_contact_validation_status.security_incident_relays or []) -%}
 {%- set _seen_fps = namespace(s=[]) -%}
 {%- set error_relays = [] -%}
 {%- for r in _all_error_relays -%}
@@ -421,7 +423,7 @@
 
 {# PEER 1: Security incident (highest urgency) — leaked .secret_family_key. #}
 {% if contact_validation_status.security_incident_relays %}
-{% set sec_relays = contact_validation_status.security_incident_relays|map(attribute='relay')|list %}
+{% set sec_relays = full_contact_validation_status.security_incident_relays|map(attribute='relay')|list %}
 {% set sec_has_ipv6 = sec_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or sec_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('SECURITY INCIDENT — ROTATE FAMILY KEY', contact_validation_status.security_incident_relays|length, 'security_incident') }}
 <table class="table table-condensed" style="border-left: 4px solid #c82333;">
@@ -438,7 +440,7 @@
 
 {# PEER 2: Pending Onionoo refresh — transient (< 24h after torrc change). #}
 {% if contact_validation_status.pending_onionoo_relays %}
-{% set pend_relays = contact_validation_status.pending_onionoo_relays|map(attribute='relay')|list %}
+{% set pend_relays = full_contact_validation_status.pending_onionoo_relays|map(attribute='relay')|list %}
 {% set pend_has_ipv6 = pend_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or pend_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('PENDING ONIONOO REFRESH', contact_validation_status.pending_onionoo_relays|length, 'pending_onionoo') }}
 <table class="table table-condensed" style="border-left: 3px dotted #17a2b8;">
@@ -456,13 +458,13 @@
 {# PEER 3: v3 migration summary — informational. Operator has both v2
    and v3 declarations. Help text shows pasteable v3 example using the
    operator's actual url so they can finish the migration. #}
-{% if contact_validation_status.validation_summary.is_mixed_migration %}
-{%- set summary = contact_validation_status.validation_summary -%}
+{% if full_contact_validation_status.validation_summary.is_mixed_migration %}
+{%- set summary = full_contact_validation_status.validation_summary -%}
 {# Pull aroi_domain from validation_status (parent template variable name
    differs between contact.html and family.html contexts). #}
-{%- set _all_validated_or_failed = (contact_validation_status.validated_relays or [])
-    + (contact_validation_status.unauthorized_relays or [])
-    + (contact_validation_status.misconfigured_relays or []) -%}
+{%- set _all_validated_or_failed = (full_contact_validation_status.validated_relays or [])
+    + (full_contact_validation_status.unauthorized_relays or [])
+    + (full_contact_validation_status.misconfigured_relays or []) -%}
 {%- set _example_domain = (_all_validated_or_failed[0].aroi_domain if _all_validated_or_failed else 'yourdomain.com') -%}
 {{ aroi_section_header('v2 → v3 MIGRATION IN PROGRESS', summary.v3_relay_count|string + '/' + summary.total_relays|string + ' on v3', 'v3_migration') }}
 <div style="padding: 15px; background-color: #d1ecf1; border-left: 3px dotted #007bff; border-radius: 4px; font-size: 13px;">
@@ -503,7 +505,7 @@
 
 {# SECTION 1: Validated Relays (Green border) #}
 {% if contact_validation_status.validated_relays %}
-{% set section1_relays = contact_validation_status.validated_relays|map(attribute='relay')|list %}
+{% set section1_relays = full_contact_validation_status.validated_relays|map(attribute='relay')|list %}
 {% set section1_has_ipv6 = section1_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section1_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('VALIDATED RELAYS', contact_validation_status.validated_relays|length, 'validated') }}
 <table class="table table-condensed" style="border-left: 3px solid #28a745;">
@@ -519,7 +521,7 @@
 
 {# SECTION 2: Misconfigured Relays (Yellow border) #}
 {% if contact_validation_status.misconfigured_relays %}
-{% set section2_relays = contact_validation_status.misconfigured_relays|map(attribute='relay')|list %}
+{% set section2_relays = full_contact_validation_status.misconfigured_relays|map(attribute='relay')|list %}
 {% set section2_has_ipv6 = section2_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section2_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('MISCONFIGURED RELAYS', contact_validation_status.misconfigured_relays|length, 'misconfigured') }}
 <table class="table table-condensed" style="border-left: 3px solid #ffc107;">
@@ -536,7 +538,7 @@
 
 {# SECTION 3: Unauthorized Relays (Red dashed border) #}
 {% if contact_validation_status.unauthorized_relays %}
-{% set section3_relays = contact_validation_status.unauthorized_relays|map(attribute='relay')|list %}
+{% set section3_relays = full_contact_validation_status.unauthorized_relays|map(attribute='relay')|list %}
 {% set section3_has_ipv6 = section3_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section3_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('UNAUTHORIZED RELAYS', contact_validation_status.unauthorized_relays|length, 'unauthorized') }}
 <table class="table table-condensed" style="border-left: 3px dashed #dc3545;">
@@ -554,7 +556,8 @@
 {# SECTION 4: Not Configured Relays (Gray border) - includes incomplete_relays + not_configured_relays #}
 {% set not_configured_combined = (contact_validation_status.incomplete_relays or []) + (contact_validation_status.not_configured_relays or []) %}
 {% if not_configured_combined %}
-{% set section4_relays = not_configured_combined|map(attribute='relay')|list %}
+{% set full_not_configured_combined = (full_contact_validation_status.incomplete_relays or []) + (full_contact_validation_status.not_configured_relays or []) %}
+{% set section4_relays = full_not_configured_combined|map(attribute='relay')|list %}
 {% set section4_has_ipv6 = section4_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section4_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('NOT CONFIGURED RELAYS', not_configured_combined|length, 'not_configured') }}
 <table class="table table-condensed" style="border-left: 3px solid #6c757d;">
@@ -576,7 +579,7 @@
    ============================================================================= #}
 {{ relay_table_start() }}
 {% set relay_list = relay_subset[:500] if is_index else relay_subset %}
-{% set single_table_has_ipv6 = relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{% set single_table_has_ipv6 = group_has_ipv6 if group_has_ipv6 is defined else (relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0) %}
 <table class="table table-condensed">
 {{ relay_table_header(single_table_has_ipv6) }}
 <tbody>
@@ -586,6 +589,8 @@
 </tbody>
 </table>
 {% endif %}
+
+{% include "pagination.html" %}
 
 {# Additional content block for child templates to add content after the table #}
 {% block after_table %}{% endblock %}

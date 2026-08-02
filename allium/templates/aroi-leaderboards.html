@@ -3,8 +3,9 @@
 {% extends "skeleton.html" -%}
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/aroi-leaderboards.css">{% endblock %}
 {% block title -%}
-    🏆 Tor Network Operator Champion Dashboard
+    Tor Network Operator Champion Dashboard
 {% endblock -%}
+{% block meta_description %}Live rankings of Tor relay operators by bandwidth, consensus weight, diversity, reliability, validation, address coverage, and longevity.{% endblock %}
 {% block body -%}
 
 <div class="aroi-center-text aroi-subsection">

@@ -129,7 +129,10 @@ if __name__ == "__main__":
         dest="base_url",
         type=str,
         default="",
-        help='base URL for vanity URLs (default: "" for root-relative paths like /domain/)',
+        help=(
+            'public base URL for vanity, canonical, Open Graph, and sitemap '
+            'URLs (default: "" for root-relative local output)'
+        ),
         required=False,
     )
     parser.add_argument(
