@@ -30,6 +30,7 @@ CONTACT_SORT_FILE_MAP = {
     'ipv4': 'by-ipv4.html',
     'flags': 'by-flags.html',
     'dns': 'by-dns.html',
+    'overload': 'by-overload.html',  # linked from the Overloaded summary bullet, not a column header
     'family': 'by-family.html',
     'country': 'by-country.html',
     'as_number': 'by-as-number.html',
@@ -254,6 +255,10 @@ def relay_sort_key(relay, sort_mode):
     if sort_mode == 'dns':
         rank = DNS_SORT_RANK.get(relay.get('exit_dns_health_status'), 3)
         return (rank, safe_lower(relay.get('nickname')), fingerprint)
+    if sort_mode == 'overload':
+        # Overloaded relays first, highest bandwidth (impact) first within each group
+        return (0 if relay.get('stability_is_overloaded') else 1,
+                -int(relay.get('observed_bandwidth', 0) or 0), fingerprint)
     if sort_mode == 'family':
         family_type = relay.get('family_support_type', 'none')
         family_len = len(relay.get('effective_family') or [])
