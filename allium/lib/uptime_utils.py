@@ -292,7 +292,7 @@ def find_operator_percentile_position(operator_uptime, network_percentiles):
                 'insert_after': insert_after,
                 'percentile_range': range_label
             }
-    
+
     # Below 5th percentile - insert at beginning (after label)
     return {
         'description': f"{operator_uptime:.1f}% (<5th Pct)",
@@ -548,7 +548,7 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
     middle_values_by_period = {p: [] for p in ONIONOO_HISTORY_PERIODS}
     other_values_by_period = {p: [] for p in ONIONOO_HISTORY_PERIODS}
     significant_flags = {'Exit', 'Guard', 'Authority', 'BadExit', 'HSDir', 'Fast', 'Stable', 'Running', 'Valid'}
-    
+
     for relay_data in relay_uptime_data.values():
         relay_obj = relay_data['relay_obj']
         if not relay_obj:  # Only process relays that are in our relay set
@@ -556,10 +556,10 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
         flags = relay_obj.get('flags', [])
         is_exit = 'Exit' in flags
         is_guard = 'Guard' in flags
-        
+
         # Middle relays are those that are neither Exit nor Guard (same logic as contact pages)
         is_middle = not is_exit and not is_guard
-        
+
         # "Other" relays: Directory Authorities (high-priority special relays),
         # bad relays (potentially different uptime patterns), and unflagged
         # relays with no significant flags at all
@@ -567,10 +567,10 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             is_other = True
         else:
             is_other = is_middle and not significant_flags.intersection(flags)
-        
+
         if not (is_middle or is_other):
             continue
-        
+
         uptime_percentages = relay_data['uptime_percentages']
         for period in ONIONOO_HISTORY_PERIODS:
             uptime_value = uptime_percentages.get(period, 0.0)
@@ -579,7 +579,7 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                     middle_values_by_period[period].append(uptime_value)
                 if is_other:
                     other_values_by_period[period].append(uptime_value)
-    
+
     # OPTIMIZATION: Use centralized statistical calculation function
     network_middle_statistics = {
         period: _calculate_period_statistics(middle_values_by_period[period])
@@ -603,4 +603,4 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             'network_relays_with_uptime': network_relays_with_uptime,
             'flags_found': list(network_flag_data.keys()) if include_flag_analysis else []
         }
-    } 
+    }
