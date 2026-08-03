@@ -104,7 +104,14 @@ def validate_url_arguments(args):
         # to http/https URLs; all other URL arguments require a full URL.
         # Reject scheme-relative URLs like "//evil.example/..." which would
         # inherit the page's protocol and redirect to an attacker-controlled host.
+        # Reject bare "/" — templates build vanity links as "{base}/{domain}/",
+        # which becomes scheme-relative "//{domain}/" and escapes the site.
         if attr == 'base_url' and url.startswith('/') and not url.startswith('//'):
+            if url.rstrip('/') == '':
+                print(f"❌ Error: {flag_name} '/' is not supported")
+                print("   Use a subdirectory prefix (e.g. '/tor-metrics') or an "
+                      "absolute http(s) URL")
+                sys.exit(1)
             continue
         scheme = urllib.parse.urlsplit(url).scheme.lower()
         if scheme not in ('http', 'https'):

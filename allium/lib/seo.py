@@ -64,13 +64,36 @@ def route_for_html(relative_path):
     return quote(route, safe="/-._~")
 
 
+def root_relative_base_prefix(base_url):
+    """Return a normalized root-relative path prefix, or ``None``.
+
+    Supports subdirectory previews such as ``/tor-metrics``. A bare ``/`` is
+    rejected because templates build vanity links as ``{base}/{domain}/``, which
+    would produce scheme-relative ``//{domain}/`` URLs.
+    """
+    if not base_url or not base_url.startswith("/") or base_url.startswith("//"):
+        return None
+    prefix = base_url.rstrip("/")
+    if not prefix:
+        raise ValueError(
+            "base_url '/' is not supported; use a subdirectory prefix "
+            "(e.g. '/tor-metrics') or an absolute http(s) URL"
+        )
+    return prefix
+
+
 def canonical_url_for_output(base_url, relative_path):
     """Return an absolute canonical when possible, otherwise root-relative."""
     route = route_for_html(canonical_output_path(relative_path))
     if route is None:
         return None
     base = public_base_url(base_url)
-    return f"{base}{route}" if base else route
+    if base:
+        return f"{base}{route}"
+    prefix = root_relative_base_prefix(base_url)
+    if prefix:
+        return f"{prefix}{route}"
+    return route
 
 
 def clean_href(path):
