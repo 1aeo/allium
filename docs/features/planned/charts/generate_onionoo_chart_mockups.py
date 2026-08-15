@@ -26,7 +26,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 BLUE = "#0072B2"
-VERM = "#D55E00"
+WRITE = "#6A3D9A"
+VERM = "#D55E00"  # reserved for problem callouts, not series
 GREEN = "#009E73"
 SKY = "#56B4E9"
 ORANGE = "#E69F00"
@@ -273,7 +274,8 @@ def chart_overload(relays, published, out_paths):
     counts = [overloaded[r] for r in roles]
 
     fig, ax = plt.subplots(figsize=(11, 6.0))
-    bars = ax.bar(roles, pcts, color=[BLUE, VERM, ORANGE, GRAY], width=0.62)
+    bar_colors = [VERM if p >= 20 else ORANGE if p >= 10 else BLUE for p in pcts]
+    bars = ax.bar(roles, pcts, color=bar_colors, width=0.62)
     for bar, pct, n, tot in zip(bars, pcts, counts, [totals[r] for r in roles]):
         ax.text(bar.get_x() + bar.get_width() / 2, pct + 0.4,
                 f"{pct:.1f}%\n{n:,}/{tot:,}",
@@ -296,7 +298,7 @@ def chart_overload(relays, published, out_paths):
 def chart_uptime(uptime_doc, published, out_paths):
     wanted = {
         "27A06581F1CE22D1BA4D160F6E7C7AABAC176242": ("th4r (high-weight Guard, DE)", BLUE),
-        "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7": ("F3Netze (overloaded Exit, DE)", VERM),
+        "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7": ("F3Netze (overloaded Exit, DE)", ORANGE),
     }
     fig, ax = plt.subplots(figsize=(11, 6.0))
     for relay in uptime_doc.get("relays", []):
@@ -332,33 +334,68 @@ def chart_uptime(uptime_doc, published, out_paths):
     save(fig, out_paths)
 
 
-def chart_bandwidth_history(bw_doc, published, out_paths):
-    fig, ax = plt.subplots(figsize=(11, 6.0))
-    # F3Netze: overloaded exit — show read vs write imbalance
-    relay = next(
-        (r for r in bw_doc.get("relays", [])
-         if r.get("fingerprint") == "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"),
-        None,
+def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    fig, (ax, axr) = plt.subplots(
+        2, 1, figsize=(11, 7.0), sharex=True,
+        gridspec_kw={"height_ratios": [3.1, 1.3], "hspace": 0.08},
     )
+    fp = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
+    relay = next((r for r in bw_doc.get("relays", []) if r.get("fingerprint") == fp), None)
+    det = next((r for r in details_relays if r.get("fingerprint") == fp), {})
     if relay:
         w_ts, w_vals = history_series((relay.get("write_history") or {}).get("1_month"))
-        r_ts, r_vals = history_series((relay.get("read_history") or {}).get("1_month"))
+        _, r_vals = history_series((relay.get("read_history") or {}).get("1_month"))
         w_mbit = [v * 8 / 1_000_000 for v in w_vals]
         r_mbit = [v * 8 / 1_000_000 for v in r_vals]
-        ax.plot(w_ts, w_mbit, color=VERM, linewidth=1.8, label="Write (to network)")
-        ax.plot(r_ts, r_mbit, color=BLUE, linewidth=1.8, label="Read (from network)")
+        advertised = (det.get("advertised_bandwidth") or 0) * 8 / 1_000_000
+        ax.plot(w_ts, w_mbit, color=WRITE, linewidth=1.8, label="Write (outbound)")
+        ax.plot(w_ts, r_mbit, color=BLUE, linewidth=1.8, label="Read (inbound)")
+        if advertised:
+            ax.axhline(advertised, color=ORANGE, linestyle="--", linewidth=1.4,
+                       label=f"Advertised  {advertised:.0f} Mbit/s")
+            ax.set_ylim(0, max(advertised, max(w_mbit + r_mbit)) * 1.08)
+        events = []
+        if det.get("last_restarted"):
+            when = parse_onionoo_ts(det["last_restarted"])
+            events.append((when, NAVY, "-.", f"Last restarted  {when.strftime('%-d %b')}"))
+        ov = det.get("overload_general_timestamp")
+        if ov:
+            when = datetime.fromtimestamp(ov / 1000.0, tz=timezone.utc)
+            events.append((when, "#C0392B", ":", f"Overload  {when.strftime('%-d %b')}"))
+        for when, color, ls, _lab in events:
+            ax.axvline(when, color=color, linestyle=ls, linewidth=1.8)
+            axr.axvline(when, color=color, linestyle=ls, linewidth=1.8)
+        handles = [
+            Line2D([0], [0], color=WRITE, lw=1.8, label="Write (outbound)"),
+            Line2D([0], [0], color=BLUE, lw=1.8, label="Read (inbound)"),
+            Line2D([0], [0], color=ORANGE, ls="--", lw=1.4,
+                   label=f"Advertised  {advertised:.0f} Mbit/s"),
+        ]
+        handles.extend(Line2D([0], [0], color=c, ls=ls, lw=1.8, label=lab)
+                       for _, c, ls, lab in events)
+        ax.legend(handles=handles, loc="upper left", fontsize=9, ncol=2)
+
+        ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
+        axr.axhspan(0.80, 1.25, color=GREEN, alpha=0.16)
+        axr.axhspan(0.50, 0.80, color=VERM, alpha=0.07)
+        axr.axhspan(1.25, 1.70, color=VERM, alpha=0.07)
+        axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
+        axr.plot(w_ts, ratio, color=NAVY, linewidth=1.6)
+        axr.set_ylim(0.50, 1.70)
+        axr.set_ylabel("Write / read")
+        axr.legend(handles=[
+            Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
+                  label="Balanced  0.80–1.25  (typical)"),
+            Line2D([0], [0], color=NAVY, lw=1.6, label="This relay  write / read"),
+            Patch(facecolor=VERM, alpha=0.16, edgecolor=VERM,
+                  label="Outside the band — unusual, usually something wrong"),
+        ], loc="upper right", fontsize=8, frameon=True, edgecolor="#dddddd")
+        axr.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
     ax.set_ylabel("Throughput (Mbit/s)")
     ax.set_title("6. Bandwidth history — F3Netze (overloaded exit)")
-    ax.legend(loc="upper left")
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-    ax.annotate(
-        "This exit stays near 1:1 read/write.\n"
-        "Forum/list reports of 5–10× imbalance\n"
-        "are the anomaly — chart it per relay.",
-        xy=(0.98, 0.08), xycoords="axes fraction", ha="right", va="bottom",
-        fontsize=9, color=NAVY,
-        bbox=dict(boxstyle="round,pad=0.35", fc="#f7f7f7", ec="#dddddd"),
-    )
     footer(fig, published)
     save(fig, out_paths)
 
@@ -414,7 +451,7 @@ def chart_as_cw(relays, published, out_paths):
         labels.append(f"{name}  {asn}")
     pcts = [100 * v / total for _, v in top]
     fig, ax = plt.subplots(figsize=(11, 6.6))
-    bars = ax.barh(range(len(top))[::-1], pcts[::-1], color=VERM, height=0.72)
+    bars = ax.barh(range(len(top))[::-1], pcts[::-1], color=BLUE, height=0.72)
     ax.set_yticks(range(len(top))[::-1], labels[::-1])
     ax.set_xlabel("Share of network consensus weight (%)")
     ax.set_title("8. Consensus-weight concentration by Autonomous System")
@@ -446,7 +483,7 @@ def chart_ipv6(relays, published, out_paths):
             have[rl] += 1
     pcts = [100 * have[r] / tot[r] for r in roles]
     fig, ax = plt.subplots(figsize=(11, 6.0))
-    bars = ax.bar(roles, pcts, color=[VERM, ORANGE, BLUE, GRAY], width=0.62)
+    bars = ax.bar(roles, pcts, color=[BLUE, SKY, ORANGE, GRAY], width=0.62)
     for bar, pct, r in zip(bars, pcts, roles):
         ax.text(bar.get_x() + bar.get_width() / 2, pct + 1.2,
                 f"{pct:.0f}%\n{have[r]:,}/{tot[r]:,}",
@@ -528,7 +565,7 @@ def main():
         ("chart_03_guard_eligibility.png", chart_guard_eligibility, (relays, published)),
         ("chart_04_overload_by_role.png", chart_overload, (relays, published)),
         ("chart_05_uptime_history.png", chart_uptime, (uptime_doc, published)),
-        ("chart_06_bandwidth_history.png", chart_bandwidth_history, (bw_doc, published)),
+        ("chart_06_bandwidth_history.png", chart_bandwidth_history, (bw_doc, relays, published)),
         ("chart_07_country_cw.png", chart_country_cw, (relays, published)),
         ("chart_08_as_cw.png", chart_as_cw, (relays, published)),
         ("chart_09_ipv6_by_role.png", chart_ipv6, (relays, published)),
