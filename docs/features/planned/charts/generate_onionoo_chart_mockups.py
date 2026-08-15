@@ -416,16 +416,16 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
         ax.legend(handles=handles, loc="upper left", fontsize=9, ncol=2)
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
-        axr.axhspan(0.80, 1.25, color=GREEN, alpha=0.16)
-        axr.axhspan(0.50, 0.80, color=VERM, alpha=0.07)
-        axr.axhspan(1.25, 1.70, color=VERM, alpha=0.07)
+        axr.axhspan(0.90, 1.15, color=GREEN, alpha=0.16)
+        axr.axhspan(0.50, 0.90, color=VERM, alpha=0.07)
+        axr.axhspan(1.15, 1.70, color=VERM, alpha=0.07)
         axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
         axr.plot(w_ts, ratio, color=NAVY, linewidth=1.6)
         axr.set_ylim(0.50, 1.70)
         axr.set_ylabel("Write / read")
         axr.legend(handles=[
             Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-                  label="Balanced  0.80–1.25  (typical)"),
+                  label="Expected  0.90–1.15  (fixed, not a percentile)"),
             Line2D([0], [0], color=NAVY, lw=1.6, label="This relay  write / read"),
             Patch(facecolor=VERM, alpha=0.16, edgecolor=VERM,
                   label="Outside the band — unusual, usually something wrong"),

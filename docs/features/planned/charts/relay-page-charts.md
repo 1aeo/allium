@@ -313,10 +313,30 @@ the last Onionoo report through +72h — the same proposal-328 window
 Allium already uses on the relay page — not a single marker and not
 incident start/stop. Onionoo only gives `overload_general_timestamp`
 (when overload was last detected). The band is named in the legend with
-both ends (F3Netze: 13 Aug 05:00 → 16 Aug 05:00 UTC). The bottom strip
-is write/read. Green band 0.80–1.25 is typical; the red zones and the
-legend say that leaving the band is unusual and usually means something
-is wrong.
+both ends (F3Netze: 13 Aug 05:00 → 16 Aug 05:00 UTC).
+
+The bottom strip is write/read. The green band is a **fixed expected
+range, not a live percentile**. A network DoS that hits every exit
+would move p10–p90 and hide the event. Keep the expected range frozen;
+add live aggregates as lines on top of it.
+
+| Layer | What | Why |
+|-------|------|-----|
+| Expected 0.90–1.15 | Frozen. Circuits are bidirectional; healthy p10–p90 in a 400-relay sample was 0.97–1.12, median 1.02. 0.90–1.15 is that shape with a little room. | Alarm that does not move when the network does |
+| This relay | Navy line | The thing the operator is debugging |
+| Role peers | Dashed. Median write/read of the same flag set (Exit+Guard for F3Netze) | Did the whole role move? |
+| This operator | Dotted. Median of the AROI / contact / effective-family group (F3: 24 relays). Omit if the group is 1. Use **median**, not mean — F3's mean is 1.17 because 4 of 24 members sit at 1.5–2.2 | Is this relay the odd one in the family? |
+
+How to read a dip:
+
+- Relay leaves the band, role and family stay → this relay (DoS on this host, rate-limit, bad peer, config).
+- Role line leaves the band too → role-wide / network event. The fixed band is what tells you it is abnormal.
+- Family leaves, role stays → operator / AS / upstream.
+
+Do not replace the green band with "this week's p25–p75." That is the
+overlay's job.
+
+![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
 ![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
@@ -491,10 +511,11 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
 3. Color: red only for problems this relay owns (local Running gap,
-   overload, ratio outside 0.80–1.25, missing flags). Shared/network
+   overload, write/read outside 0.90–1.15, missing flags). Shared/network
    gaps are orange + gray, not red. Write is purple, read is blue,
-   advertised is orange, last-restarted is navy. Overload is an
-   `axvspan` from `overload_general_timestamp` through
+   advertised is orange, last-restarted is navy. The write/read
+   expected range is a frozen constant, not a live percentile. Overload
+   is an `axvspan` from `overload_general_timestamp` through
    +`OVERLOAD_THRESHOLD_HOURS` (72). Restart is an `axvline` at
    `last_restarted`.
 4. At build time, from every relay's `uptime.1_month`, compute the
@@ -503,7 +524,10 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
    relay chart. Same idea for 6M/1Y/5Y if we show those periods.
 5. `#uptime` info box (two clocks + Onionoo bucket table) plus `title=`
    tooltips on the period pills and Overall Uptime. Do not put the
-   0/25/50/75/100 table on the SVG.
+   0/25/50/75/100 table on the SVG. At build time, keep per-relay
+   `1_month` write/read arrays and compute daily median write/read for
+   each flag-set and each AROI/contact group. Overlay those on the
+   imbalance strip. Omit the operator line when the group has one relay.
 6. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
    before merging — every relay HTML page will change.
 

@@ -37,8 +37,11 @@ NAVY = "#1B3A4B"
 BAD = "#C0392B"
 RESTART = NAVY
 OVERLOAD = BAD
-RATIO_LO = 0.80
-RATIO_HI = 1.25
+# Frozen expected write/read range — not a live percentile.
+# 400-relay 1_month sample (2026-08-15): p10–p90 was 0.97–1.12, median 1.02.
+# A DoS that hits everyone would move a percentile band and hide the event.
+RATIO_LO = 0.90
+RATIO_HI = 1.15
 # Tor spec proposal 328; same window as allium.lib.stability_utils.
 OVERLOAD_THRESHOLD_HOURS = 72
 
@@ -879,41 +882,85 @@ def expand_xlim_for_events(ax, ts, events, x_values=None):
     ax.set_xlim(-1, xmax + 0.6)
 
 
-def ratio_legend_handles():
-    return [
+def load_ratio_overlays():
+    path = Path(__file__).resolve().parent / "data" / "ratio_overlays.json"
+    if not path.exists():
+        return {}
+    raw = json.loads(path.read_text())
+
+    def as_series(rows):
+        return {parse_onionoo_ts(t): v for t, v, _n in rows}
+
+    return {
+        "role": as_series(raw.get("exitguard_daily") or []),
+        "role_label": "Exit+Guard peers  (network median)",
+        "operator": as_series(raw.get("family_daily") or []),
+        "operator_label": "This operator  (family median, n=24)",
+        "family_outliers": raw.get("family_outliers", 0),
+        "family_n": raw.get("family_n", 0),
+    }
+
+
+def overlay_values(ts, series):
+    if not series:
+        return None
+    return [series.get(t, np.nan) for t in ts]
+
+
+def ratio_legend_handles(overlays=None):
+    handles = [
         Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-              label=f"Balanced  {RATIO_LO:.2f}–{RATIO_HI:.2f}  (typical)"),
+              label=f"Expected  {RATIO_LO:.2f}–{RATIO_HI:.2f}  (fixed, not a percentile)"),
         Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
         Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
-              label="Outside the band — unusual, usually something wrong"),
+              label="Outside the expected range — unusual, usually something wrong"),
     ]
+    overlays = overlays or {}
+    if overlays.get("role"):
+        handles.append(Line2D(
+            [0], [0], color=SKY, linestyle="--", linewidth=1.4,
+            label=overlays.get("role_label", "Role peers"),
+        ))
+    if overlays.get("operator"):
+        handles.append(Line2D(
+            [0], [0], color=GRAY, linestyle=":", linewidth=1.6,
+            label=overlays.get("operator_label", "This operator"),
+        ))
+    return handles
 
 
-def _plot_ratio_strip(axr, ts, read_m, write_m, events):
+def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
+    overlays = overlays or {}
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
     axr.axhspan(RATIO_LO, RATIO_HI, color=GREEN, alpha=0.16, zorder=0)
     axr.axhspan(0.45, RATIO_LO, color=BAD, alpha=0.07, zorder=0)
     axr.axhspan(RATIO_HI, 1.85, color=BAD, alpha=0.07, zorder=0)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
+    role = overlay_values(ts, overlays.get("role"))
+    if role is not None:
+        axr.plot(ts, role, color=SKY, linestyle="--", linewidth=1.4, zorder=2)
+    op = overlay_values(ts, overlays.get("operator"))
+    if op is not None:
+        axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=1.6, zorder=2)
     in_band = (ratio >= RATIO_LO) & (ratio <= RATIO_HI)
     if in_band.any():
         y = np.ma.masked_where(~in_band, ratio)
-        axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=2)
+        axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=3)
     if (~in_band).any():
         y = np.ma.masked_where(in_band, ratio)
-        axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=3)
+        axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=4)
     draw_event_lines(axr, events)
     expand_xlim_for_events(axr, ts, events)
     axr.set_ylabel("Write / read")
     axr.set_ylim(0.50, 1.70)
-    axr.legend(handles=ratio_legend_handles(), loc="upper right", fontsize=8,
-               frameon=True, fancybox=False, edgecolor="#dddddd")
+    axr.legend(handles=ratio_legend_handles(overlays), loc="upper right",
+               fontsize=7.5, frameon=True, fancybox=False, edgecolor="#dddddd")
     date_axis(axr)
     return float(np.nanmean(ratio))
 
 
 def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
-                          out_paths):
+                          overlays, out_paths):
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(11.2, 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": 0.08},
@@ -943,22 +990,25 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     ax.legend(handles=series + event_legend_handles(events),
               loc="upper left", fontsize=9, ncol=2)
 
-    mean_ratio = _plot_ratio_strip(axr, ts, read_m, write_m, events)
+    mean_ratio = _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
     used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
+    fam_n = (overlays or {}).get("family_n") or 0
+    fam_out = (overlays or {}).get("family_outliers") or 0
     caption(
         fig, published,
-        f"Story: write and read track (mean ratio {mean_ratio:.2f}, inside the "
-        f"green 0.80–1.25 band). Delivered write is ~{np.mean(write_m):.0f} Mbit/s "
-        f"({used:.0f}% of advertised). Restart is a navy dash-dot at "
-        f"last_restarted. Overload is the red band from the last Onionoo "
-        f"report through +{OVERLOAD_THRESHOLD_HOURS}h (proposal 328) — not "
-        f"incident start/stop.",
+        f"Story: this relay mean write/read {mean_ratio:.2f}, inside the fixed "
+        f"{RATIO_LO:.2f}–{RATIO_HI:.2f} expected range (not a live percentile — "
+        f"a network DoS would move a percentile band and hide it). Exit+Guard "
+        f"peers and this operator’s family median sit on top of it. "
+        f"{fam_out} of {fam_n} family relays have a month-mean above 1.15; "
+        f"this one does not. Delivered write ~{np.mean(write_m):.0f} Mbit/s "
+        f"({used:.0f}% of advertised).",
     )
     save(fig, out_paths)
 
 
 def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
-                           out_paths):
+                           overlays, out_paths):
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(11.2, 7.0), sharex=True,
         gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.08},
@@ -986,11 +1036,12 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     ax.legend(handles=series + event_legend_handles(events),
               loc="upper left", fontsize=9, ncol=2)
-    _plot_ratio_strip(axr, ts, read_m, write_m, events)
+    _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
     caption(
         fig, published,
-        "Same restart marker, 72h overload band, and imbalance strip as A. "
-        "Area fill is the alternate encoding; A is the preferred default.",
+        "Same restart marker, 72h overload band, fixed expected range, and "
+        "role / operator overlays as A. Area fill is the alternate encoding; "
+        "A is the preferred default.",
     )
     save(fig, out_paths)
 
@@ -1508,6 +1559,7 @@ def main():
     flag_core = {k: flag_series[k] for k in ("Running", "Guard", "Stable", "HSDir")
                  if k in flag_series}
 
+    overlays = load_ratio_overlays()
     out = Path(args.out)
     art = Path(args.artifacts)
     jobs = [
@@ -1543,9 +1595,9 @@ def main():
         ("relay_uptime_periods_hero_sparks.png", uptime_periods_hero_sparks,
          (f3_periods, "F3Netze", published)),
         ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
-         (w_ts, read_m, write_m, advertised_mbit, events, published)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays)),
         ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
-         (w_ts, read_m, write_m, advertised_mbit, events, published)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays)),
         ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
          (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_core, published)),
