@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
+from matplotlib.patches import FancyBboxPatch, Patch
 
 # Palette: red (BAD) is reserved for problems. Series and events that are
 # not "wrong" use blue / purple / orange / navy / green.
@@ -44,6 +44,27 @@ OVERLOAD_THRESHOLD_HOURS = 72
 
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
+PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
+
+PERIOD_META = {
+    "1_month": {
+        "short": "1M", "title": "1 month", "bucket": "4-hour",
+        "interval_hours": 4, "nominal_days": 30,
+    },
+    "6_months": {
+        "short": "6M", "title": "6 months", "bucket": "12-hour",
+        "interval_hours": 12, "nominal_days": 180,
+    },
+    "1_year": {
+        "short": "1Y", "title": "1 year", "bucket": "2-day",
+        "interval_hours": 48, "nominal_days": 365,
+    },
+    "5_years": {
+        "short": "5Y", "title": "5 years", "bucket": "10-day",
+        "interval_hours": 240, "nominal_days": 1825,
+    },
+}
+PERIOD_ORDER = ("1_month", "6_months", "1_year", "5_years")
 
 FLAG_CMAP = LinearSegmentedColormap.from_list(
     "flag", [BAD, ORANGE, GREEN], N=256
@@ -408,6 +429,192 @@ def uptime_section_numbers(ts, pct, published, extra, out_paths):
         "Add the right-hand column under #uptime next to the existing 1M/6M/1Y/5Y "
         "scalars. Do not replace Current Status — keep process uptime, and label it "
         "as last_restarted so it is not confused with consensus Running.",
+    )
+    save(fig, out_paths)
+
+
+def load_uptime_periods(up_relay):
+    out = {}
+    block = up_relay.get("uptime") or {}
+    for key in PERIOD_ORDER:
+        ts, vals = history_series(block.get(key))
+        if ts:
+            out[key] = (ts, as_pct(vals))
+    return out
+
+
+def period_date_axis(ax, key):
+    if key == "1_month":
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    elif key == "6_months":
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+    elif key == "1_year":
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    else:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+
+
+def plot_uptime_on_ax(ax, ts, pct, key, compact=False):
+    arr = np.array(pct)
+    ax.fill_between(ts, arr, 0, color=BLUE, alpha=0.16, linewidth=0)
+    ax.plot(ts, pct, color=BLUE, linewidth=1.1 if compact else 1.6)
+    below = arr < 98
+    if below.any():
+        ax.fill_between(
+            ts, arr, 98, where=below, color=BAD, alpha=0.30, interpolate=True,
+        )
+    ax.axhline(98, color=ORANGE, linestyle="--", linewidth=0.9)
+    lo = float(min(pct)) if pct else 0.0
+    # Shared 0–100 for small multiples / long graphs. Zoom 1M/6M so 4h dips
+    # stay visible when the month is a flat 99%.
+    if compact or lo < 35 or key in ("1_year", "5_years"):
+        ax.set_ylim(0, 106)
+    else:
+        ax.set_ylim(max(0.0, min(35.0, lo - 10.0)), 106)
+    period_date_axis(ax, key)
+    avg = float(np.mean(pct)) if len(pct) else 0.0
+    if not compact:
+        ax.axhline(avg, color=NAVY, linestyle=":", linewidth=1.0)
+        ax.set_ylabel("Running (%)")
+    else:
+        ax.set_yticks([0, 50, 98, 100])
+        ax.tick_params(labelsize=7)
+    return avg
+
+
+def draw_period_pills(fig, available_shorts, selected, left=0.08, bottom=0.905):
+    """available_shorts / selected are 1M, 6M, 1Y, 5Y. Missing periods are omitted."""
+    x = left
+    for short in ("1M", "6M", "1Y", "5Y"):
+        if short not in available_shorts:
+            continue
+        on = short == selected
+        box = FancyBboxPatch(
+            (x, bottom), 0.062, 0.036,
+            boxstyle="round,pad=0.004,rounding_size=0.006",
+            transform=fig.transFigure, clip_on=False,
+            facecolor=NAVY if on else "white",
+            edgecolor=NAVY, linewidth=1.1,
+        )
+        fig.add_artist(box)
+        fig.text(
+            x + 0.031, bottom + 0.018, short,
+            transform=fig.transFigure, ha="center", va="center",
+            fontsize=9, fontweight="bold",
+            color="white" if on else NAVY,
+        )
+        x += 0.074
+    missing = [s for s in ("1M", "6M", "1Y", "5Y") if s not in available_shorts]
+    if missing:
+        fig.text(
+            x + 0.008, bottom + 0.018,
+            "not published: " + ", ".join(missing),
+            transform=fig.transFigure, ha="left", va="center",
+            fontsize=8, color=GRAY,
+        )
+
+
+def _span_note(ts, key):
+    days = (ts[-1] - ts[0]).days
+    meta = PERIOD_META[key]
+    if days + 20 < meta["nominal_days"]:
+        return (
+            f"series starts {ts[0].strftime('%-d %b %Y')} "
+            f"(not a full {meta['title']})"
+        )
+    return ""
+
+
+def uptime_periods_pills(periods, selected_key, nickname, published, question,
+                         out_paths):
+    meta = PERIOD_META[selected_key]
+    ts, pct = periods[selected_key]
+    fig = plt.figure(figsize=(11.2, 5.8))
+    fig.subplots_adjust(bottom=0.18, top=0.80)
+    available = [PERIOD_META[k]["short"] for k in PERIOD_ORDER if k in periods]
+    draw_period_pills(fig, available, meta["short"])
+    ax = fig.add_axes([0.08, 0.20, 0.90, 0.56])
+    avg = plot_uptime_on_ax(ax, ts, pct, selected_key)
+    extra = _span_note(ts, selected_key)
+    title = (
+        f"Uptime B  ·  {nickname}  ·  {meta['title']}  ·  "
+        f"{meta['bucket']} buckets  ·  average {avg:.1f}%"
+    )
+    if extra:
+        title += f"\n{extra}"
+    ax.set_title(title)
+    caption(fig, published, question)
+    save(fig, out_paths)
+
+
+def uptime_periods_multiples(periods, nickname, published, out_paths):
+    keys = [k for k in PERIOD_ORDER if k in periods]
+    fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.0))
+    fig.subplots_adjust(bottom=0.12, top=0.90, hspace=0.38, wspace=0.22)
+    fig.suptitle(f"Uptime periods — all published graphs   ·   {nickname}",
+                 fontsize=13, fontweight="bold")
+    for i, key in enumerate(PERIOD_ORDER):
+        ax = axes[i // 2][i % 2]
+        meta = PERIOD_META[key]
+        if key not in periods:
+            ax.set_axis_off()
+            ax.text(
+                0.5, 0.5,
+                f"{meta['short']}  ·  not published\nOnionoo omitted this graph",
+                ha="center", va="center", color=GRAY, fontsize=11,
+                transform=ax.transAxes,
+            )
+            continue
+        ts, pct = periods[key]
+        avg = plot_uptime_on_ax(ax, ts, pct, key, compact=True)
+        extra = _span_note(ts, key)
+        ax.set_title(
+            f"{meta['short']}  ·  {meta['bucket']} buckets  ·  {avg:.1f}%"
+            + (f"\n{extra}" if extra else ""),
+            fontsize=10,
+        )
+    caption(
+        fig, published,
+        "Question: how do 1M / 6M / 1Y / 5Y sit on one page when a relay has "
+        "all four? Shared y-axis 0–100 so a 99% month and an 89% five-year "
+        "are comparable. Empty cell = Onionoo omitted the graph, not 0%.",
+    )
+    save(fig, out_paths)
+
+
+def uptime_periods_hero_sparks(periods, nickname, published, out_paths):
+    hero_key = "1_month" if "1_month" in periods else next(iter(periods))
+    others = [k for k in PERIOD_ORDER if k in periods and k != hero_key]
+    fig = plt.figure(figsize=(11.2, 7.2))
+    fig.subplots_adjust(bottom=0.10, top=0.90)
+    fig.suptitle(f"Uptime periods — 1M hero + longer-period strip   ·   {nickname}",
+                 fontsize=13, fontweight="bold")
+    ax = fig.add_axes([0.08, 0.42, 0.90, 0.44])
+    ts, pct = periods[hero_key]
+    avg = plot_uptime_on_ax(ax, ts, pct, hero_key)
+    meta = PERIOD_META[hero_key]
+    ax.set_title(
+        f"{meta['short']}  ·  {meta['bucket']} buckets  ·  average {avg:.1f}%"
+    )
+    if others:
+        n = len(others)
+        width = 0.90 / n
+        for i, key in enumerate(others):
+            a = fig.add_axes([0.08 + i * width, 0.14, width - 0.03, 0.20])
+            ts, pct = periods[key]
+            avg = plot_uptime_on_ax(a, ts, pct, key, compact=True)
+            m = PERIOD_META[key]
+            a.set_title(f"{m['short']}  ·  {m['bucket']}  ·  {avg:.1f}%", fontsize=9)
+    caption(
+        fig, published,
+        "Question: can we see every published period without a click, without "
+        "four full-height charts? 1M stays the large view (finest buckets, "
+        "matches the health-row number). 6M / 1Y / 5Y are context. Omit a "
+        "spark if Onionoo omitted the graph.",
     )
     save(fig, out_paths)
 
@@ -1067,6 +1274,9 @@ def main():
         "hsdir_1m": flag_avg("HSDir"),
         "guard_1m": flag_avg("Guard"),
     }
+    th4r_periods = load_uptime_periods(th4r_up)
+    f3_periods = load_uptime_periods(up_doc[F3NETZE])
+    pirate_periods = load_uptime_periods(up_doc[PIRATE]) if PIRATE in up_doc else {}
 
     f3 = det[F3NETZE]
     f3_bw = bw_doc[F3NETZE]
@@ -1116,6 +1326,28 @@ def main():
         ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published, extra)),
         ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
         ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
+        ("relay_uptime_periods_pills_th4r.png", uptime_periods_pills,
+         (th4r_periods, "1_month", "th4r", published,
+          "Question: how do we switch 1M / 6M / 1Y / 5Y on a static page? "
+          "CSS pills, one SVG visible. th4r has 1M/6M/1Y. Onionoo omitted "
+          "5_years (first seen Oct 2025) — no 0% tab. Default 1M. "
+          "C heatmap stays 1-month-only.")),
+        ("relay_uptime_periods_pills_f3_5y.png", uptime_periods_pills,
+         (f3_periods, "5_years", "F3Netze", published,
+          "Question: why include 5Y at all? F3Netze 1M is 99.2% (looks fine). "
+          "5Y average is 89% with real zeros. The long graph is the one that "
+          "changes the story. Same B encoding; only the series and bucket "
+          "size change.")),
+        ("relay_uptime_periods_pills_young.png", uptime_periods_pills,
+         (pirate_periods, "1_month", "PirateyMatey", published,
+          "Question: what if Onionoo only published 1_month? Show that pill "
+          "alone. 16 four-hour points (first seen 12 Aug) — say “not enough "
+          "history for 6M/1Y/5Y”, do not invent 0% periods. "
+          "Allium's count<30 → 0.0 trap must not become a chart.")),
+        ("relay_uptime_periods_multiples.png", uptime_periods_multiples,
+         (f3_periods, "F3Netze", published)),
+        ("relay_uptime_periods_hero_sparks.png", uptime_periods_hero_sparks,
+         (f3_periods, "F3Netze", published)),
         ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
          (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
