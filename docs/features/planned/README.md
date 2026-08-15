@@ -98,6 +98,7 @@ These features represent the **roadmap** for future development. They are:
 ### Advanced Features
 - [visualization-dashboard-proposal.md](visualization-dashboard-proposal.md) - Interactive visualization system
 - [charts/top-10-operator-charts.md](charts/top-10-operator-charts.md) - Top 10 operator charts from live Onionoo (mockups)
+- [charts/relay-page-charts.md](charts/relay-page-charts.md) - Relay-page chart encodings (uptime, bandwidth, flag flapping)
 - [actionable-improvement-guidance.md](actionable-improvement-guidance.md) - Operator recommendations
 - [multi-api-implementation-plan.md](multi-api-implementation-plan.md) - Additional API integrations
 
