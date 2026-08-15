@@ -209,39 +209,37 @@ it as a 1-month-only diagnostic, not a replacement toggle. Drop A.
 
 ---
 
-### R2. Bandwidth (read / write) — three encodings
+### R2. Bandwidth (read / write)
 
 Same data: F3Netze `read_history.1_month` / `write_history.1_month` (daily
-buckets). Vertical marks are `last_restarted` and `overload_general_timestamp`.
+buckets). Red is reserved for problems (overload; ratio outside the band).
+Write is purple, read is blue, advertised is orange dashed.
 
-#### A — Dual line
+#### A — Dual line + advertised + imbalance (recommended)
 
-Classic. Best at showing whether the two series track. Auto-scaled y-axis
-makes the wiggle readable; it hides "how full is the pipe."
+Y-axis starts at 0 so the advertised line is on the plot. Restart is navy
+dash-dot, overload is red dotted — both named in the legend with dates,
+not as sideways text on the line. The bottom strip is write/read. Green
+band 0.80–1.25 is typical; the red zones and the legend say that leaving
+the band is unusual and usually means something is wrong.
 
-![Bandwidth A — dual line](mockups/relay_bandwidth_a_dual_line.png)
+![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
-#### B — Overlapping area + ratio strip (recommended default)
+#### B — Overlapping area (same extras)
 
-Top panel is volume. Bottom strip is the operator question from the lists:
-is outbound 5–10× inbound? Green band is 0.8–1.25. F3Netze stays inside
-it (mean write/read = 1.03). A real imbalance would leave the band and
-stay there.
+Same advertised line, events, and imbalance strip. Area fill instead of
+two lines. Keep as an alternate encoding; A is the default.
 
-![Bandwidth B — area + ratio](mockups/relay_bandwidth_b_area_ratio.png)
+![Bandwidth B — area + advertised + imbalance](mockups/relay_bandwidth_b_area_ratio.png)
 
 #### C — Daily bars vs advertised
 
-Answers a different question: "I have a 1 Gbps VPS, why is metrics so
-low?" F3Netze advertises 804 Mbit/s and delivers ~435 Mbit/s write (54%).
-The complaint case is a bar chart that never approaches the dashed line.
+Same event legend. Useful if we ever want day-by-day bars; not the default.
 
-![Bandwidth C — bars vs advertised](mockups/relay_bandwidth_c_bars_advertised.png)
+![Bandwidth C — daily bars vs advertised](mockups/relay_bandwidth_c_bars_advertised.png)
 
-**Recommendation:** ship **B**, and steal C's advertised dashed line onto
-B's top panel. A is the fallback if we want the smallest possible SVG.
-Daily Onionoo buckets hide intra-day spikes; a persistent 5× split still
-shows on the ratio strip.
+**Recommendation:** ship **A**. Daily Onionoo buckets hide intra-day
+spikes; a persistent 5× split still leaves the green band.
 
 Empty state: a two-day relay such as PirateyMatey (CW 1) should say
 "not enough history" rather than draw two dots.
@@ -306,7 +304,7 @@ are not. th4r's gaps are **not** restarts.
 #status          health grid          — no new chart
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 swimlane
-#bandwidth       capacity + bwauths   — then R2 area + ratio
+#bandwidth       capacity + bwauths   — then R2 A (line + advertised + imbalance)
 #uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B (1M/6M/1Y)
                  1-month time-of-day heatmap C     — under B, not a toggle
                  overload subsection               — markers on R1/R2
@@ -324,8 +322,9 @@ period control (1M / 6M / 1Y). C stays 1-month-only.
    Drop 1-year / 5-year arrays after the scalars are computed.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
-3. Reuse the colorblind palette already in the mockups (blue / vermillion
-   / green / orange).
+3. Color: red only for problems (overload, ratio outside 0.80–1.25,
+   missing flags, uptime dips). Write is purple, read is blue, advertised
+   is orange, last-restarted is navy. Do not use red for a normal series.
 4. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
    before merging — every relay HTML page will change.
 

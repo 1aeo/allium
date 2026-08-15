@@ -22,21 +22,29 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
+# Palette: red (BAD) is reserved for problems. Series and events that are
+# not "wrong" use blue / purple / orange / navy / green.
 BLUE = "#0072B2"
-VERM = "#D55E00"
+WRITE = "#6A3D9A"
 GREEN = "#009E73"
 SKY = "#56B4E9"
 ORANGE = "#E69F00"
 GRAY = "#666666"
 NAVY = "#1B3A4B"
-RED = "#C0392B"
+BAD = "#C0392B"
+RESTART = NAVY
+OVERLOAD = BAD
+RATIO_LO = 0.80
+RATIO_HI = 1.25
 
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 
 FLAG_CMAP = LinearSegmentedColormap.from_list(
-    "flag", ["#F4D6C9", ORANGE, GREEN], N=256
+    "flag", [BAD, ORANGE, GREEN], N=256
 )
 
 
@@ -178,7 +186,7 @@ def fmt_window(ts, interval_hours=4):
 
 # Discrete Onionoo 4-hour / hourly-consensus steps
 UPTIME_LEVELS = [0, 25, 50, 75, 100]
-UPTIME_LEVEL_COLORS = ["#8B1A1A", VERM, ORANGE, "#E8E07A", GREEN]
+UPTIME_LEVEL_COLORS = [BAD, "#E07A5F", ORANGE, "#E8E07A", GREEN]
 UPTIME_LEVEL_LABELS = [
     "0/4 hours",
     "1/4 hours",
@@ -201,14 +209,14 @@ def uptime_a_annotated_line(ts, pct, published, out_paths):
     for i, (a, b) in enumerate(spans):
         lo = min(pct[a:b + 1])
         mid_t = ts[a] + (ts[b] - ts[a]) / 2
-        ax.plot(ts[a:b + 1], pct[a:b + 1], color=VERM, linewidth=2.4, zorder=4)
+        ax.plot(ts[a:b + 1], pct[a:b + 1], color=BAD, linewidth=2.4, zorder=4)
         ax.annotate(
             f"{ts[a].strftime('%b %d %H:%M')}\n{lo:.0f}% of 4h window",
             xy=(mid_t, lo),
             xytext=(0, -28 if i % 2 == 0 else -48),
             textcoords="offset points",
-            ha="center", va="top", fontsize=7.5, color=VERM,
-            arrowprops=dict(arrowstyle="-", color=VERM, lw=0.7),
+            ha="center", va="top", fontsize=7.5, color=BAD,
+            arrowprops=dict(arrowstyle="-", color=BAD, lw=0.7),
         )
     ax.set_ylim(35, 104)
     ax.set_ylabel("Share of 4-hour window with Running (%)")
@@ -235,7 +243,7 @@ def uptime_b_area_threshold(ts, pct, published, extra, out_paths):
     below = arr < 98
     if below.any():
         ax.fill_between(
-            ts, arr, 98, where=below, color=VERM, alpha=0.40,
+            ts, arr, 98, where=below, color=BAD, alpha=0.35,
             interpolate=True, label="Bucket below 98% (missed ≥1 hourly consensus)",
         )
     ax.axhline(
@@ -248,13 +256,13 @@ def uptime_b_area_threshold(ts, pct, published, extra, out_paths):
     )
     if stats["worst"]:
         wt, wv = stats["worst"]
-        ax.scatter([wt], [wv], s=42, color=VERM, zorder=5)
+        ax.scatter([wt], [wv], s=42, color=BAD, zorder=5)
         ax.annotate(
             f"Worst bucket  {wv:.0f}%  once\n{fmt_window(wt)}\n"
             f"(2 of 4 hourly consensuses)",
             xy=(wt, wv), xytext=(18, -8), textcoords="offset points",
-            fontsize=8, color=VERM,
-            arrowprops=dict(arrowstyle="->", color=VERM, lw=0.8),
+            fontsize=8, color=BAD,
+            arrowprops=dict(arrowstyle="->", color=BAD, lw=0.8),
         )
     ax.set_ylim(35, 106)
     ax.set_ylabel("Hourly consensuses with Running, packed into Onionoo's 4-hour bucket")
@@ -403,56 +411,134 @@ def uptime_section_numbers(ts, pct, published, extra, out_paths):
 
 
 # ---------------------------------------------------------------------------
-# Chart 6 — bandwidth variations (F3Netze, 1 month)
+# Chart 6 — bandwidth (F3Netze, 1 month)
 # ---------------------------------------------------------------------------
 
-def bandwidth_a_dual_line(ts, read_m, write_m, events, published, out_paths):
-    fig, ax = plt.subplots(figsize=(11.2, 5.6))
-    fig.subplots_adjust(bottom=0.20)
-    ax.plot(ts, write_m, color=VERM, linewidth=1.8, label="Write (outbound)")
+def draw_event_lines(ax, events, x_values=None):
+    """Vertical event marks only. Labels live in the legend, not on the line."""
+    for ev in events:
+        x = ev["when"]
+        if x_values is not None:
+            x = min(range(len(x_values)), key=lambda i: abs(x_values[i] - ev["when"]))
+        ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+                   alpha=0.95, zorder=3)
+
+
+def event_legend_handles(events):
+    return [
+        Line2D([0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+               label=ev["legend"])
+        for ev in events
+    ]
+
+
+def ratio_legend_handles():
+    return [
+        Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
+              label=f"Balanced  {RATIO_LO:.2f}–{RATIO_HI:.2f}  (typical)"),
+        Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
+        Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
+              label="Outside the band — unusual, usually something wrong"),
+    ]
+
+
+def _plot_ratio_strip(axr, ts, read_m, write_m, events):
+    ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
+    axr.axhspan(RATIO_LO, RATIO_HI, color=GREEN, alpha=0.16, zorder=0)
+    axr.axhspan(0.45, RATIO_LO, color=BAD, alpha=0.07, zorder=0)
+    axr.axhspan(RATIO_HI, 1.85, color=BAD, alpha=0.07, zorder=0)
+    axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
+    in_band = (ratio >= RATIO_LO) & (ratio <= RATIO_HI)
+    if in_band.any():
+        y = np.ma.masked_where(~in_band, ratio)
+        axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=2)
+    if (~in_band).any():
+        y = np.ma.masked_where(in_band, ratio)
+        axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=3)
+    draw_event_lines(axr, events)
+    axr.set_ylabel("Write / read")
+    axr.set_ylim(0.50, 1.70)
+    axr.legend(handles=ratio_legend_handles(), loc="upper right", fontsize=8,
+               frameon=True, fancybox=False, edgecolor="#dddddd")
+    date_axis(axr)
+    return float(np.nanmean(ratio))
+
+
+def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
+                          out_paths):
+    fig, (ax, axr) = plt.subplots(
+        2, 1, figsize=(11.2, 7.2), sharex=True,
+        gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": 0.08},
+    )
+    fig.subplots_adjust(bottom=0.14)
+    ax.plot(ts, write_m, color=WRITE, linewidth=1.8, label="Write (outbound)")
     ax.plot(ts, read_m, color=BLUE, linewidth=1.8, label="Read (inbound)")
-    _mark_events(ax, events, ymax=max(write_m + read_m) * 1.02)
+    if advertised_mbit:
+        ax.axhline(
+            advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
+            label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
+        )
+    draw_event_lines(ax, events)
+    top = max([advertised_mbit or 0] + write_m + read_m)
+    ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("Bandwidth A — dual line   ·   F3Netze (Exit+Guard, DE)")
+    ax.set_title("Bandwidth A — dual line + advertised + imbalance   ·   F3Netze")
     date_axis(ax)
-    ax.legend(loc="upper left")
-    ratio = np.mean(write_m) / np.mean(read_m)
+    series = [
+        Line2D([0], [0], color=WRITE, linewidth=1.8, label="Write (outbound)"),
+        Line2D([0], [0], color=BLUE, linewidth=1.8, label="Read (inbound)"),
+    ]
+    if advertised_mbit:
+        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
+    ax.legend(handles=series + event_legend_handles(events),
+              loc="upper left", fontsize=9, ncol=2)
+
+    mean_ratio = _plot_ratio_strip(axr, ts, read_m, write_m, events)
+    used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
     caption(
         fig, published,
-        f"Story: read and write track each other (mean write/read = {ratio:.2f}). "
-        f"Forum 5–10× imbalance would show as two lines that refuse to overlap. "
-        f"Vertical marks: last restart and current overload.",
+        f"Story: write and read track (mean ratio {mean_ratio:.2f}, inside the "
+        f"green 0.80–1.25 band). Delivered write is ~{np.mean(write_m):.0f} Mbit/s "
+        f"({used:.0f}% of advertised). Restart is navy dash-dot; overload is red "
+        f"dotted — both in the legend, not as sideways text.",
     )
     save(fig, out_paths)
 
 
-def bandwidth_b_area_ratio(ts, read_m, write_m, events, published, out_paths):
+def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
+                           out_paths):
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(11.2, 6.4), sharex=True,
-        gridspec_kw={"height_ratios": [3.1, 1.15], "hspace": 0.08},
+        2, 1, figsize=(11.2, 7.0), sharex=True,
+        gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.08},
     )
-    fig.subplots_adjust(bottom=0.16)
-    ax.fill_between(ts, write_m, color=VERM, alpha=0.28, label="Write")
-    ax.fill_between(ts, read_m, color=BLUE, alpha=0.28, label="Read")
-    ax.plot(ts, write_m, color=VERM, linewidth=1.2)
+    fig.subplots_adjust(bottom=0.14)
+    ax.fill_between(ts, write_m, color=WRITE, alpha=0.22, label="Write")
+    ax.fill_between(ts, read_m, color=BLUE, alpha=0.22, label="Read")
+    ax.plot(ts, write_m, color=WRITE, linewidth=1.2)
     ax.plot(ts, read_m, color=BLUE, linewidth=1.2)
-    _mark_events(ax, events, ymax=max(write_m + read_m) * 1.02)
+    if advertised_mbit:
+        ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
+                   label=f"Advertised  {advertised_mbit:.0f} Mbit/s")
+    draw_event_lines(ax, events)
+    top = max([advertised_mbit or 0] + write_m + read_m)
+    ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("Bandwidth B — overlapping area + ratio strip   ·   F3Netze")
-    ax.legend(loc="upper left", ncol=2)
-
-    ratio = [w / r if r else np.nan for w, r in zip(write_m, read_m)]
-    axr.plot(ts, ratio, color=NAVY, linewidth=1.5)
-    axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
-    axr.axhspan(0.8, 1.25, color=GREEN, alpha=0.10)
-    axr.set_ylabel("Write / read")
-    axr.set_ylim(0.6, 1.5)
-    date_axis(axr)
+    ax.set_title("Bandwidth B — overlapping area + advertised + imbalance   ·   F3Netze")
+    series = [
+        Patch(facecolor=WRITE, alpha=0.35, label="Write"),
+        Patch(facecolor=BLUE, alpha=0.35, label="Read"),
+    ]
+    if advertised_mbit:
+        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
+    ax.legend(handles=series + event_legend_handles(events),
+              loc="upper left", fontsize=9, ncol=2)
+    _plot_ratio_strip(axr, ts, read_m, write_m, events)
     caption(
         fig, published,
-        "Story: the ratio strip is the operator question. Stay inside the green "
-        "band (0.8–1.25) and traffic is balanced. A 5× outbound spike would "
-        "leave the band and stay there.",
+        "Same events and imbalance band as A. Area fill is the alternate encoding; "
+        "A is the preferred default.",
     )
     save(fig, out_paths)
 
@@ -460,47 +546,39 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, events, published, out_paths):
 def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
                                 published, out_paths):
     fig, ax = plt.subplots(figsize=(11.2, 5.8))
-    fig.subplots_adjust(bottom=0.20)
+    fig.subplots_adjust(bottom=0.18)
     x = np.arange(len(ts))
     w = 0.38
-    ax.bar(x - w / 2, write_m, w, color=VERM, label="Write")
+    ax.bar(x - w / 2, write_m, w, color=WRITE, label="Write")
     ax.bar(x + w / 2, read_m, w, color=BLUE, label="Read")
     if advertised_mbit:
         ax.axhline(
-            advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.3,
+            advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
             label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
         )
-    for label, when, color in events:
-        if ts[0] <= when <= ts[-1]:
-            # daily buckets: snap to nearest day
-            idx = min(range(len(ts)), key=lambda i: abs(ts[i] - when))
-            ax.axvline(idx, color=color, linestyle=":", linewidth=1.2, alpha=0.85)
-            ax.text(idx + 0.3, advertised_mbit * 0.97 if advertised_mbit else max(write_m),
-                    label, color=color, fontsize=8, rotation=90, va="top")
+    draw_event_lines(ax, events, x_values=ts)
     ax.set_ylabel("Throughput (Mbit/s)")
     ax.set_title("Bandwidth C — daily bars vs advertised   ·   F3Netze")
     tick = list(range(0, len(ts), 4))
     ax.set_xticks(tick, [ts[i].strftime("%b %d") for i in tick])
     ax.set_xlim(-1, len(ts))
-    ax.legend(loc="upper left", ncol=3)
+    series = [
+        Patch(facecolor=WRITE, label="Write"),
+        Patch(facecolor=BLUE, label="Read"),
+    ]
+    if advertised_mbit:
+        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
+    ax.legend(handles=series + event_legend_handles(events),
+              loc="upper left", fontsize=9, ncol=2)
     used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
     caption(
         fig, published,
         f"Story: this exit advertises {advertised_mbit:.0f} Mbit/s and delivers "
         f"~{np.mean(write_m):.0f} Mbit/s write ({used:.0f}% of advertised). "
-        f"The '1 Gbps VPS, few MiB/s observed' complaint is a bar chart that "
-        f"never approaches the dashed line.",
+        "Restart / overload are in the legend.",
     )
     save(fig, out_paths)
-
-
-def _mark_events(ax, events, ymax):
-    for label, when, color in events:
-        ax.axvline(when, color=color, linestyle=":", linewidth=1.2, alpha=0.9)
-        ax.text(
-            when, ymax, f"  {label}", color=color, fontsize=8,
-            rotation=90, va="top", ha="left",
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +615,7 @@ def flags_a_swimlane(flag_series, published, out_paths):
         i = names.index("HSDir")
         ax.add_patch(plt.Rectangle(
             (-0.5, i - 0.5), len(ts0), 1,
-            fill=False, edgecolor=VERM, linewidth=1.4,
+            fill=False, edgecolor=BAD, linewidth=1.4,
         ))
     caption(
         fig, published,
@@ -553,7 +631,7 @@ def flags_b_overlay(flag_series, published, out_paths):
         "Running": BLUE,
         "Guard": GREEN,
         "Stable": ORANGE,
-        "HSDir": VERM,
+        "HSDir": BAD,
         "Exit": SKY,
     }
     fig, ax = plt.subplots(figsize=(11.2, 5.6))
@@ -617,10 +695,23 @@ def main():
     advertised_mbit = (f3.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0
     events = []
     if f3.get("last_restarted"):
-        events.append(("last restarted", parse_onionoo_ts(f3["last_restarted"]), NAVY))
+        when = parse_onionoo_ts(f3["last_restarted"])
+        events.append({
+            "kind": "restart",
+            "when": when,
+            "color": RESTART,
+            "ls": "-.",
+            "legend": f"Last restarted  {when.strftime('%-d %b')}",
+        })
     ov = parse_ms(f3.get("overload_general_timestamp"))
     if ov:
-        events.append(("overload", ov, VERM))
+        events.append({
+            "kind": "overload",
+            "when": ov,
+            "color": OVERLOAD,
+            "ls": ":",
+            "legend": f"Overload  {ov.strftime('%-d %b')}",
+        })
 
     flag_names = ["Running", "Guard", "Stable", "HSDir"]
     flag_series = {}
@@ -638,9 +729,9 @@ def main():
         ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
         ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
         ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
-         (w_ts, read_m, write_m, events, published)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
-         (w_ts, read_m, write_m, events, published)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
          (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_series, published)),
