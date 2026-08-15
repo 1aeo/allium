@@ -14,9 +14,15 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from allium.lib.stability_utils import current_overload_status  # noqa: E402
 
 import matplotlib
 
@@ -367,35 +373,18 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
                 "ls": "-.",
                 "legend": f"Last restarted  {when.strftime('%-d %b')}",
             })
-        ov = det.get("overload_general_timestamp")
-        if ov:
-            when = datetime.fromtimestamp(ov / 1000.0, tz=timezone.utc)
-            ov_end = when + timedelta(hours=72)
-            events.append({
-                "kind": "overload",
-                "when": when,
-                "end": ov_end,
-                "color": "#C0392B",
-                "legend": (
-                    f"Overload flag (72h)  {when.strftime('%-d %b %H:%M')} → "
-                    f"{ov_end.strftime('%-d %b %H:%M')} UTC"
-                ),
-            })
-        xmax = w_ts[-1] if w_ts else None
+        # Onionoo has no overload history — current-status badge only.
+        pub_ts = None
+        if published and published != "unknown":
+            pub_ts = parse_onionoo_ts(published).timestamp()
+        ov = current_overload_status(det, pub_ts)
+        ov_status = ov["label"] if ov else None
         for ev in events:
-            if ev["kind"] == "overload":
-                ax.axvspan(ev["when"], ev["end"], color=ev["color"], alpha=0.14, zorder=0)
-                axr.axvspan(ev["when"], ev["end"], color=ev["color"], alpha=0.14, zorder=0)
-                ax.axvline(ev["when"], color=ev["color"], linestyle=":", linewidth=1.2)
-                axr.axvline(ev["when"], color=ev["color"], linestyle=":", linewidth=1.2)
-                if xmax is None or ev["end"] > xmax:
-                    xmax = ev["end"]
-            else:
-                ax.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
-                axr.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
-        if w_ts and xmax:
-            pad = (xmax - w_ts[0]) * 0.03
-            ax.set_xlim(w_ts[0], xmax + pad)
+            ax.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
+            axr.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
+        if w_ts:
+            pad = (w_ts[-1] - w_ts[0]) * 0.03
+            ax.set_xlim(w_ts[0], w_ts[-1] + pad)
         handles = [
             Line2D([0], [0], color=WRITE, lw=1.8, label="Write (outbound)"),
             Line2D([0], [0], color=BLUE, lw=1.8, label="Read (inbound)"),
@@ -403,17 +392,18 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
                    label=f"Advertised  {advertised:.0f} Mbit/s"),
         ]
         for ev in events:
-            if ev["kind"] == "overload":
-                handles.append(Patch(
-                    facecolor=ev["color"], alpha=0.22, edgecolor=ev["color"],
-                    label=ev["legend"],
-                ))
-            else:
-                handles.append(Line2D(
-                    [0], [0], color=ev["color"], linestyle=ev["ls"], lw=1.8,
-                    label=ev["legend"],
-                ))
+            handles.append(Line2D(
+                [0], [0], color=ev["color"], linestyle=ev["ls"], lw=1.8,
+                label=ev["legend"],
+            ))
         ax.legend(handles=handles, loc="upper left", fontsize=9, ncol=2)
+        if ov_status:
+            fig.text(
+                0.99, 1.0, ov_status,
+                ha="right", va="bottom",
+                fontsize=8.5, color="white", fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.4", fc="#C0392B", ec="#C0392B"),
+            )
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
         axr.axhspan(0.90, 1.15, color=GREEN, alpha=0.16)
