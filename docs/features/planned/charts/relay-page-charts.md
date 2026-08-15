@@ -119,25 +119,58 @@ was "exactly 75% up," but because it missed **one** or **two** hourly
 consensuses in that window. 6-month / 12-hour buckets have more steps
 (832 ≈ 10/12, 915 ≈ 11/12).
 
-#### "Consensus gaps, not restarts"
+#### Two clocks, plus network-wide events
 
-Two different clocks:
+The operator controls both clocks — one directly, one indirectly.
 
-| Clock | Source | th4r |
-|-------|--------|------|
-| Process | Descriptor `last_restarted` | 2025-10-01 09:37:56 — **10 months**, no restart in this window |
-| Consensus | Onionoo `/uptime` Running | Five 4-hour buckets below 100% in July–August 2026 |
+| Clock | Source | Who controls it | th4r this month |
+|-------|--------|-----------------|-----------------|
+| **Tor process** | Descriptor `last_restarted` | Directly: restarts, crashes, host reboots | 2025-10-01 — **10 months**, no restart |
+| **Network-visible Running** | Onionoo `/uptime` Running | Indirectly: ORPort, IPv6, firewall, hibernation, descriptor | Five 4-hour buckets below 100% |
 
-The chart is the consensus clock. A dip means directory authorities did
-not list the relay as Running for one or two of the four hourly
+The chart is the network-visible clock. A dip means directory authorities
+did not list the relay as Running for one or two of the four hourly
 consensuses in that bucket. The tor process can keep running the whole
-time (IPv6 reachability, missed descriptor, ORPort blip, authority
-couldn't connect). Those gaps still count against WFU, MTBF, Stable,
-Guard, and HSDir.
+time. Those gaps still count against WFU, MTBF, Stable, Guard, and HSDir.
 
 `#uptime` **Current Status** ("UP 10 months") is the process clock. It
-will not match the chart. Label it as last_restarted so operators do not
-think the chart is wrong.
+will not match the chart. That is expected. The process rail under the
+chart makes the two clocks visible at once.
+
+A network-visible gap is **not always the operator**. A consensus or
+authority event can drop Running for many relays at once. Allium already
+fetches `/uptime` for every relay (`--apis all`). At build time, for each
+4-hour bucket, compute the share of relays that were not 100%. Median in
+a 400-relay sample (2026-08-15) is **~3%** (normal churn). Buckets at
+**≥8%** are drawn as a gray band:
+
+| Bucket (midpoint) | Sample imperfect | On th4r |
+|-------------------|------------------|---------|
+| 19 Jul 18:00 | **10.1%** | th4r also dipped (75%) — **shared** |
+| 28 Jul 10:00–14:00 | **10–15.5%** | th4r stayed 100% — **network event, not you** |
+| th4r's other four dips | ~2–4% (median) | **this relay / this path** |
+
+Orange = this relay dipped inside a gray band. Red = this relay dipped
+and the network did not. Gray alone = the network stumbled and this
+relay did not.
+
+![Uptime B — two clocks + network events, th4r](mockups/relay_uptime_b_two_clocks_th4r.png)
+
+![Uptime B — two clocks, F3Netze (restart in-window)](mockups/relay_uptime_b_two_clocks_f3.png)
+
+#### Onionoo bucket logic lives on the page
+
+The 4 / 12 / 48 / 240 hourly-consensus packing is not common knowledge.
+Do not leave it only in this doc. Put it on `#uptime` in the same
+left-border info box used under the flags table ("Bandwidth Values
+Explained"), plus short `title=` tooltips on the period pills and on
+Overall Uptime.
+
+![#uptime info box and tooltip copy](mockups/relay_uptime_onionoo_info.png)
+
+Pills stay short (`1M`). Tooltip: `1 month · 4-hour buckets · 4 hourly
+consensuses each`. Overall Uptime tooltip: `Network-visible Running, not
+process uptime.` The 0/25/50/75/100 table does not go on the chart.
 
 #### Does `#uptime` match the chart?
 
@@ -205,8 +238,9 @@ we want "is this a cron?"
 ![Uptime C — time-of-day heatmap](mockups/relay_uptime_c_heatmap.png)
 
 **Recommendation:** ship **B** as the `#uptime` history chart, with the
-numbers in the table above next to the existing scalars. Add **C** under
-it as a 1-month-only diagnostic, not a replacement toggle. Drop A.
+two-clock rail, shared-vs-local gap colors, and the `#uptime` info box
+above. Add the numbers table next to the existing scalars. Add **C**
+under B as a 1-month-only diagnostic, not a replacement toggle. Drop A.
 Period display is a separate choice — see below.
 
 #### How the four periods sit on the page
@@ -434,7 +468,9 @@ gaps are **not** restarts.
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 (encoding unset; C–F)
 #bandwidth       capacity + bwauths   — then R2 A (line + advertised + imbalance)
-#uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B
+#uptime          1M/6M/1Y/5Y scalars + gap counts
+                 info box: two clocks + Onionoo bucket table + pill tooltips
+                 then R1 B (network-visible Running + process rail + shared gaps)
                  period pills 1M/6M/1Y/5Y (omit unpublished; default 1M)
                  1-month time-of-day heatmap C     — under B, not a toggle
                  overload subsection               — markers on R1/R2
@@ -454,13 +490,21 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
    Do not treat Allium's `count < 30 → 0.0` scalar as a chartable 0%.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
-3. Color: red only for problems (overload, ratio outside 0.80–1.25,
-   missing flags, uptime dips). Write is purple, read is blue, advertised
-   is orange, last-restarted is navy. Do not use red for a normal series.
-   Overload is an `axvspan` from `overload_general_timestamp` through
+3. Color: red only for problems this relay owns (local Running gap,
+   overload, ratio outside 0.80–1.25, missing flags). Shared/network
+   gaps are orange + gray, not red. Write is purple, read is blue,
+   advertised is orange, last-restarted is navy. Overload is an
+   `axvspan` from `overload_general_timestamp` through
    +`OVERLOAD_THRESHOLD_HOURS` (72). Restart is an `axvline` at
    `last_restarted`.
-4. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
+4. At build time, from every relay's `uptime.1_month`, compute the
+   imperfect-Running share per 4-hour bucket. Median is ~3%. Mark
+   buckets ≥8% as network-wide gaps and reuse that series on every
+   relay chart. Same idea for 6M/1Y/5Y if we show those periods.
+5. `#uptime` info box (two clocks + Onionoo bucket table) plus `title=`
+   tooltips on the period pills and Overall Uptime. Do not put the
+   0/25/50/75/100 table on the SVG.
+6. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
    before merging — every relay HTML page will change.
 
 ---

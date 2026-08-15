@@ -66,6 +66,14 @@ PERIOD_META = {
 }
 PERIOD_ORDER = ("1_month", "6_months", "1_year", "5_years")
 
+# 400-relay Onionoo 1_month sample, relays_published 2026-08-15 17:00 UTC.
+# Median imperfect rate ~3.1%. These interval midpoints were ≥8%.
+NETWORK_GAP_MIDPOINTS = (
+    "2026-07-19 18:00:00",
+    "2026-07-28 10:00:00",
+    "2026-07-28 14:00:00",
+)
+
 FLAG_CMAP = LinearSegmentedColormap.from_list(
     "flag", [BAD, ORANGE, GREEN], N=256
 )
@@ -429,6 +437,187 @@ def uptime_section_numbers(ts, pct, published, extra, out_paths):
         "Add the right-hand column under #uptime next to the existing 1M/6M/1Y/5Y "
         "scalars. Do not replace Current Status — keep process uptime, and label it "
         "as last_restarted so it is not confused with consensus Running.",
+    )
+    save(fig, out_paths)
+
+
+def network_gap_spans(interval_hours=4):
+    half = timedelta(hours=interval_hours / 2)
+    windows = []
+    for raw in NETWORK_GAP_MIDPOINTS:
+        mid = parse_onionoo_ts(raw)
+        windows.append((mid - half, mid + half))
+    windows.sort()
+    merged = []
+    for start, end in windows:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def in_network_gap(ts, interval_hours=4):
+    for start, end in network_gap_spans(interval_hours):
+        if start <= ts <= end:
+            return True
+    return False
+
+
+def uptime_b_two_clocks(ts, pct, published, last_restarted, nickname, out_paths):
+    """Network-visible Running vs Tor process, plus shared network gaps."""
+    stats = summarize_uptime(ts, pct)
+    fig, (ax, axp) = plt.subplots(
+        2, 1, figsize=(11.2, 6.6), sharex=True,
+        gridspec_kw={"height_ratios": [4.0, 0.62], "hspace": 0.08},
+    )
+    fig.subplots_adjust(bottom=0.18, top=0.88)
+    arr = np.array(pct)
+    local = np.array([
+        (v < 99) and not in_network_gap(t) for t, v in zip(ts, pct)
+    ])
+    shared = np.array([
+        (v < 99) and in_network_gap(t) for t, v in zip(ts, pct)
+    ])
+
+    for start, end in network_gap_spans():
+        ax.axvspan(start, end, color=GRAY, alpha=0.22, zorder=0)
+        axp.axvspan(start, end, color=GRAY, alpha=0.22, zorder=0)
+
+    ax.fill_between(ts, arr, 0, color=BLUE, alpha=0.14, linewidth=0)
+    ax.plot(ts, pct, color=BLUE, linewidth=1.7, zorder=3,
+            label="Network-visible Running (authorities)")
+    if local.any():
+        ax.fill_between(
+            ts, arr, 98, where=local, color=BAD, alpha=0.40,
+            interpolate=True, zorder=2,
+        )
+    if shared.any():
+        ax.fill_between(
+            ts, arr, 98, where=shared, color=ORANGE, alpha=0.45,
+            interpolate=True, zorder=2,
+        )
+    ax.axhline(98, color=ORANGE, linestyle="--", linewidth=1.1)
+    ax.set_ylim(35, 106)
+    ax.set_ylabel("Network-visible Running (%)")
+    ax.set_title(
+        f"Network-visible Running   ·   {nickname}\n"
+        "Not Tor process uptime — authorities listing this relay as Running"
+    )
+    date_axis(ax)
+    ax.legend(
+        handles=[
+            Line2D([0], [0], color=BLUE, linewidth=1.7,
+                   label="Network-visible Running (this relay)"),
+            Patch(facecolor=BAD, alpha=0.45,
+                  label="This relay missed a consensus · network was fine"),
+            Patch(facecolor=ORANGE, alpha=0.50,
+                  label="This relay missed a consensus many relays also missed"),
+            Patch(facecolor=GRAY, alpha=0.35,
+                  label="Network-wide gap (sample ≥8% imperfect)"),
+        ],
+        loc="lower left", fontsize=8,
+    )
+
+    restarted = parse_onionoo_ts(last_restarted) if last_restarted else None
+    axp.set_ylim(0, 1)
+    axp.set_yticks([0.5], ["Tor process"])
+    axp.fill_between(ts, 0, 1, color=GREEN, alpha=0.35, linewidth=0)
+    if restarted and ts[0] <= restarted <= ts[-1]:
+        axp.axvline(restarted, color=NAVY, linestyle="-.", linewidth=1.8)
+        ax.axvline(restarted, color=NAVY, linestyle="-.", linewidth=1.2, alpha=0.7)
+        axp.text(
+            restarted, 0.5,
+            f"  restarted {restarted.strftime('%-d %b %H:%M')}",
+            va="center", fontsize=8, color=NAVY,
+        )
+    else:
+        when = restarted.strftime("%-d %b %Y") if restarted else "unknown"
+        axp.text(
+            ts[0], 0.5,
+            f"  Up since {when}  ·  no restart in this window",
+            va="center", fontsize=8, color=NAVY,
+        )
+    axp.set_xlabel("")
+    date_axis(axp)
+
+    n_local = int(local.sum())
+    n_shared = int(shared.sum())
+    caption(
+        fig, published,
+        f"Two clocks the operator controls: process (bottom rail, last_restarted) "
+        f"and network-visible Running (top, month average {stats['avg']:.1f}%). "
+        f"{n_local} local gap(s), {n_shared} shared with a network-wide event. "
+        f"Gray bands are buckets where ≥8% of a 400-relay sample also dipped — "
+        f"including 28 Jul, which {nickname} survived. Onionoo bucket math "
+        f"lives in the #uptime info box, not here.",
+    )
+    save(fig, out_paths)
+
+
+def uptime_onionoo_info(published, out_paths):
+    """On-page info box + tooltip copy for Onionoo buckets and the two clocks."""
+    fig, ax = plt.subplots(figsize=(11.2, 7.4))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    ax.set_title(
+        "#uptime information  ·  on the relay page, under the chart",
+        loc="left", pad=10,
+    )
+
+    def box(y, h, color, title, body):
+        ax.add_patch(FancyBboxPatch(
+            (0.02, y), 0.96, h,
+            boxstyle="square,pad=0",
+            facecolor="#f8f9fa", edgecolor="#dddddd", linewidth=0.8,
+        ))
+        ax.add_patch(plt.Rectangle((0.02, y), 0.008, h, facecolor=color,
+                                   edgecolor="none"))
+        ax.text(0.05, y + h - 0.025, title, fontsize=10, fontweight="bold",
+                color=NAVY, va="top")
+        ax.text(0.05, y + h - 0.055, body, fontsize=8.2, color="#333333",
+                va="top", linespacing=1.45, family="DejaVu Sans")
+
+    box(
+        0.62, 0.34, "#17a2b8",
+        "Two uptime clocks",
+        "Tor process uptime  —  descriptor last_restarted. How long this tor process\n"
+        "has been running. You control this directly: restarts, crashes, host reboots,\n"
+        "package upgrades. The page’s Current Status is this clock.\n"
+        "\n"
+        "Network-visible uptime  —  Onionoo /uptime Running. Whether directory\n"
+        "authorities listed this relay as Running in each hourly consensus. You control\n"
+        "this indirectly: ORPort, IPv6, firewall, hibernation, descriptor freshness.\n"
+        "A consensus or authority event can also create a gap that is not your fault.\n"
+        "The chart is this clock. The two will not match, and that is expected.",
+    )
+    box(
+        0.22, 0.36, "#007bff",
+        "How Onionoo packs the chart  (period-pill tooltip uses the first line)",
+        "1M   each point is 4 hourly consensuses in a 4-hour window. Only 0 / 25 / 50 / 75 / 100%.\n"
+        "6M   12-hour buckets (12 consensuses). More steps (e.g. 10/12 ≈ 83%).\n"
+        "1Y   2-day buckets.   5Y   10-day buckets.   No 1-week graph — Onionoo removed it in 2020.\n"
+        "\n"
+        "Timestamps are interval midpoints: a point stamped 19 Jul 14:00 is 12:00–16:00 UTC.\n"
+        "75% means the relay missed 1 of 4 hourly consensuses in that window — not “the\n"
+        "process was 75% up.” A 5Y dip is a 10-day mix; it is coarser, not “more reliable.”\n"
+        "\n"
+        "Tooltip on 1M pill:  “1 month · 4-hour buckets · 4 hourly consensuses each”\n"
+        "Tooltip on Overall Uptime:  “Network-visible Running, not process uptime.”",
+    )
+    box(
+        0.04, 0.14, GRAY,
+        "Network-wide gaps on the chart",
+        "At build time, scan every relay’s 1_month Running series. For each 4-hour bucket,\n"
+        "record the share of relays that were not 100%. If that share is ≥8% (about 2.5×\n"
+        "the ~3% median), draw a gray band. This relay’s own dip inside that band is orange.",
+    )
+    caption(
+        fig, published,
+        "Same pattern as the flags-table “Bandwidth Values Explained” box. "
+        "Keep the long Onionoo logic here (and in title= tooltips). Do not "
+        "put the 0/25/50/75/100 table on the chart itself.",
     )
     save(fig, out_paths)
 
@@ -1326,6 +1515,11 @@ def main():
         ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published, extra)),
         ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
         ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
+        ("relay_uptime_b_two_clocks_th4r.png", uptime_b_two_clocks,
+         (ts, pct, published, extra["last_restarted"], "th4r")),
+        ("relay_uptime_b_two_clocks_f3.png", uptime_b_two_clocks,
+         (*f3_periods["1_month"], published, f3.get("last_restarted"), "F3Netze")),
+        ("relay_uptime_onionoo_info.png", uptime_onionoo_info, (published,)),
         ("relay_uptime_periods_pills_th4r.png", uptime_periods_pills,
          (th4r_periods, "1_month", "th4r", published,
           "Question: how do we switch 1M / 6M / 1Y / 5Y on a static page? "
