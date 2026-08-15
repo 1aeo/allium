@@ -251,34 +251,100 @@ Empty state: a two-day relay such as PirateyMatey (CW 1) should say
 
 ---
 
-### R3. Flag flapping — the chart the scalars cannot replace
+### R3. Flag flapping — encodings vs questions
 
 Onionoo `/uptime` already has per-flag histories: `flags.Running`,
 `flags.Guard`, `flags.Stable`, `flags.HSDir`, `flags.Exit`, `flags.Fast`.
 Allium averages them into "Flag Uptime 1M/6M/1Y/5Y". That is why th4r
 can look like "99% uptime" while HSDir is gone.
 
-#### A — Presence swimlane (recommended)
+The `#flags` eligibility table already answers the snapshot: *do I meet
+WFU / time-known / Fast / Stable right now?* A chart should not redo
+that. The time-series only earns its place if it answers a **when /
+how often / what triggered it** question.
 
-One row per flag. Green = present for the whole 4-hour window, cream =
-absent. th4r: Running / Guard / Stable stay green except four hairline
-gaps. HSDir drops for **days** after each gap (Jul 19, Jul 30, Aug 11)
-and is still missing. That is the mailing-list "I lost HSDir / Guard
-after a blip" thread, drawn.
+th4r's month is a handful of events, not a continuous quantity:
+
+- 4 Running gaps (one or two 4-hour buckets each)
+- 3 multi-day HSDir losses, each starting at a Running gap
+- 1 flapping stretch (24–26 Jul) after a weak recovery
+- Guard / Stable / Fast / V2Dir are **identical** to Running
+- No process restart (`last_restarted` 2025-10-01)
+
+A and B treat every flag as equally interesting and plot 186 buckets.
+The cause (a 4-hour Running miss) is one pixel. That is why they feel
+weak even when A is "better" than B.
+
+#### A — Presence swimlane
+
+**Question:** which flags were present, when?
+
+One row per flag, 0–100% color. HSDir's long red stretches are visible.
+The 4-hour Running gaps that cause them are hairline slivers, and three
+of the four rows are copies of each other.
 
 ![Flags A — swimlane](mockups/relay_flags_a_swimlane.png)
 
 #### B — Overlay lines
 
-Same data. HSDir divergence is obvious, but Running / Guard / Stable sit
-on top of each other at 99% and hide the gaps that triggered the loss.
+**Question:** how did each flag's presence % move?
+
+HSDir divergence is obvious. Running / Guard / Stable sit on top of
+each other at 99% and hide the trigger gaps. Worse than A.
 
 ![Flags B — overlay](mockups/relay_flags_b_overlay.png)
 
-**Recommendation:** ship **A** under `#flags`, below the eligibility
-table. Show Running plus the role flags this relay has ever held in the
-window (Guard / Exit / Stable / HSDir). Skip Valid / V2Dir / Fast unless
-they diverge from Running.
+#### C — Cause → effect
+
+**Question:** did a brief Running gap cost me a role flag, and for how
+long?
+
+Plot only the flag that moved (HSDir). Mark Running gaps as triangles.
+Each red band is a loss; the label is the duration. Flags that tracked
+Running become a one-line "held all month" note, not extra rows.
+
+![Flags C — cause → effect](mockups/relay_flags_c_cause_effect.png)
+
+#### D — Loss episodes
+
+**Question:** how many times did I lose HSDir this month, and how long
+each time?
+
+One row per episode, newest at the top. You can count the losses.
+Dotted lines are the Running gaps. The orange row is the weak recovery
+(not a fourth independent outage).
+
+![Flags D — loss episodes](mockups/relay_flags_d_episodes.png)
+
+#### E — Only flags that moved
+
+**Question:** which of my flags actually moved, and did they move
+together?
+
+A swimlane with the boring rows removed. Running gaps are widened so a
+4-hour miss is visible. Two rows: Running vs HSDir. They do not move
+together — that is the story.
+
+![Flags E — only flags that moved](mockups/relay_flags_e_diverged_only.png)
+
+#### F — Status + month story
+
+**Question:** do I have the flag right now, and what is the last-month
+story in one glance?
+
+A headline ("HSDir is missing since …") plus the counts, the trigger,
+and a small presence strip. Closest to how an operator reads the page:
+the table above says whether the snapshot passes; this says since when
+and how often. Not a countdown — WFU ≥ 98% weights recent downtime.
+
+![Flags F — status + month story](mockups/relay_flags_f_status_story.png)
+
+**Empty state:** if no role flag diverged from Running, skip the chart
+and say "No role-flag losses this month." Do not draw four green rows.
+
+**Recommendation:** unset. A is better than B but not the thing to
+ship. C / D / E / F are the real choices — they each answer one
+question instead of plotting every flag equally.
 
 ---
 
@@ -310,7 +376,7 @@ gaps are **not** restarts.
 ```
 #status          health grid          — no new chart
 #connectivity    addresses / IPv6     — no new chart
-#flags           eligibility table    — then R3 swimlane
+#flags           eligibility table    — then R3 (encoding unset; C–F)
 #bandwidth       capacity + bwauths   — then R2 A (line + advertised + imbalance)
 #uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B (1M/6M/1Y)
                  1-month time-of-day heatmap C     — under B, not a toggle
