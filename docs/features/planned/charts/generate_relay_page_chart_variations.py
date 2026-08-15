@@ -641,6 +641,96 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
 # Extra relay-page chart — flag flapping (th4r)
 # ---------------------------------------------------------------------------
 
+def series_interval(ts):
+    if len(ts) < 2:
+        return timedelta(hours=4)
+    return ts[1] - ts[0]
+
+
+def episodes_from_pct(ts, pct, thresh=99.0):
+    """Contiguous runs below thresh, with interval-midpoint windows."""
+    half = series_interval(ts) / 2
+    out = []
+    for i0, i1 in dip_spans(ts, pct, thresh):
+        start = ts[i0] - half
+        end = ts[i1] + half
+        vals = pct[i0:i1 + 1]
+        out.append({
+            "i0": i0,
+            "i1": i1,
+            "start": start,
+            "end": end,
+            "hours": (end - start).total_seconds() / 3600.0,
+            "min": min(vals),
+            "n": i1 - i0 + 1,
+        })
+    return out
+
+
+def fmt_dur(hours):
+    if hours < 24:
+        return f"{hours:.0f}h"
+    days = hours / 24.0
+    text = f"{days:.1f}d"
+    return text.replace(".0d", "d")
+
+
+def flags_held_vs_moved(flag_series):
+    run = dict(zip(*flag_series["Running"]))
+    held, moved = [], []
+    for name, (ts, pct) in flag_series.items():
+        if name == "Running":
+            continue
+        same = all(abs(p - run.get(t, p)) < 1.0 for t, p in zip(ts, pct))
+        (held if same else moved).append(name)
+    return held, moved
+
+
+def hsdir_story(flag_series):
+    """Major HSDir losses, a flapping stretch, and Running-gap triggers."""
+    hs_ts, hs_pct = flag_series["HSDir"]
+    run_ts, run_pct = flag_series["Running"]
+    raw = episodes_from_pct(hs_ts, hs_pct, 99.0)
+    gaps = episodes_from_pct(run_ts, run_pct, 99.0)
+    major, short = [], []
+    for e in raw:
+        (major if e["hours"] >= 36 else short).append(e)
+    flap = None
+    if short:
+        flap = {
+            "start": min(e["start"] for e in short),
+            "end": max(e["end"] for e in short),
+            "hours": None,
+            "kind": "flap",
+        }
+        flap["hours"] = (flap["end"] - flap["start"]).total_seconds() / 3600.0
+    still = bool(hs_pct) and hs_pct[-1] < 50
+    held, moved = flags_held_vs_moved(flag_series)
+    return {
+        "hs_ts": hs_ts,
+        "hs_pct": hs_pct,
+        "run_ts": run_ts,
+        "run_pct": run_pct,
+        "raw": raw,
+        "major": major,
+        "flap": flap,
+        "gaps": gaps,
+        "still": still,
+        "held": held,
+        "moved": moved,
+    }
+
+
+def _draw_running_gap_marks(ax, gaps, y=1.22, label=True):
+    for g in gaps:
+        x = g["start"] + (g["end"] - g["start"]) / 2
+        ax.axvline(x, color=BAD, alpha=0.22, linewidth=1.1, zorder=2)
+        ax.plot(x, y, marker="v", color=BAD, markersize=8, zorder=5)
+        if label:
+            ax.text(x, y + 0.14, g["start"].strftime("%-d %b"),
+                    ha="center", va="bottom", fontsize=7, color=BAD)
+
+
 def flags_a_swimlane(flag_series, published, out_paths):
     names = list(flag_series.keys())
     # align on union of timestamps via first series
@@ -675,9 +765,9 @@ def flags_a_swimlane(flag_series, published, out_paths):
         ))
     caption(
         fig, published,
-        "Story: Running / Guard / Stable stay green. HSDir drops for days after "
-        "each brief Running gap (Jul 19, Jul 30, Aug 11) and is still gone. "
-        "Uptime scalars would say '99%'. This chart says why HSDir is missing.",
+        "Question: which flags were present, when? Running / Guard / Stable stay "
+        "green; HSDir drops for days after each gap. Weakness: the 4h Running "
+        "gaps that cause the loss are hairline slivers, and three rows are copies.",
     )
     save(fig, out_paths)
 
@@ -701,9 +791,245 @@ def flags_b_overlay(flag_series, published, out_paths):
     ax.legend(loc="lower left", ncol=4)
     caption(
         fig, published,
-        "Story: same data as the swimlane. Overlay makes the HSDir divergence "
-        "obvious, but overlapping 99% lines (Running/Guard/Stable) hide the "
-        "small gaps that triggered the HSDir loss.",
+        "Question: how did each flag's presence % move? HSDir divergence is "
+        "obvious, but Running / Guard / Stable sit on top of each other at 99% "
+        "and hide the gaps that triggered the loss.",
+    )
+    save(fig, out_paths)
+
+
+def flags_c_cause_effect(flag_series, published, extra, out_paths):
+    s = hsdir_story(flag_series)
+    ts, pct = s["hs_ts"], s["hs_pct"]
+    present = np.array([p >= 50 for p in pct])
+    fig, ax = plt.subplots(figsize=(11.2, 5.0))
+    fig.subplots_adjust(bottom=0.22, top=0.82)
+    ax.fill_between(ts, 0, 1, where=present, color=GREEN, step="mid",
+                    linewidth=0, alpha=0.9, zorder=1)
+    ax.fill_between(ts, 0, 1, where=~present, color=BAD, step="mid",
+                    linewidth=0, alpha=0.9, zorder=1)
+    _draw_running_gap_marks(ax, s["gaps"], y=1.18)
+    for e in s["major"]:
+        mid = e["start"] + (e["end"] - e["start"]) / 2
+        label = fmt_dur(e["hours"])
+        if s["still"] and e is s["major"][-1]:
+            label += "\nstill missing"
+        ax.text(mid, 0.50, label, ha="center", va="center", color="white",
+                fontsize=8, fontweight="bold", zorder=4)
+    if s["flap"]:
+        mid = s["flap"]["start"] + (s["flap"]["end"] - s["flap"]["start"]) / 2
+        ax.text(mid, 0.50, "flapping", ha="center", va="center", color="white",
+                fontsize=7, zorder=4)
+    ax.set_ylim(-0.08, 1.55)
+    ax.set_yticks([0.5], ["HSDir"])
+    ax.set_title("Flags C — cause → effect   ·   th4r")
+    date_axis(ax)
+    ax.legend(
+        handles=[
+            Patch(facecolor=GREEN, label="HSDir present"),
+            Patch(facecolor=BAD, label="HSDir absent"),
+            Line2D([0], [0], marker="v", color=BAD, linestyle="None",
+                   markersize=8, label="Running gap (4h bucket)"),
+        ],
+        loc="upper left", fontsize=8, ncol=3,
+    )
+    held = " · ".join(s["held"]) if s["held"] else "none"
+    caption(
+        fig, published,
+        f"Question: did a brief Running gap cost me a role flag, and for how "
+        f"long? Triangles are Running gaps. Each multi-day red band starts at "
+        f"one. Held all month (not plotted): {held}. "
+        f"No process restart (last_restarted {extra['last_restarted']}).",
+    )
+    save(fig, out_paths)
+
+
+def flags_d_episodes(flag_series, published, extra, out_paths):
+    s = hsdir_story(flag_series)
+    chrono = []
+    for i, e in enumerate(s["major"]):
+        is_open = s["still"] and i == len(s["major"]) - 1
+        suffix = "+" if is_open else ""
+        label = (
+            f"{fmt_dur(e['hours'])}{suffix}  still missing"
+            if is_open else f"{fmt_dur(e['hours'])} lost"
+        )
+        chrono.append({
+            "label": label,
+            "sub": f"after Running gap {e['start'].strftime('%-d %b %H:%M')}",
+            "start": e["start"],
+            "end": e["end"],
+            "color": BAD,
+        })
+        if i == 0 and s["flap"]:
+            chrono.append({
+                "label": "Flapping",
+                "sub": "weak recovery, not a new gap",
+                "start": s["flap"]["start"],
+                "end": s["flap"]["end"],
+                "color": ORANGE,
+            })
+    rows = list(reversed(chrono))
+    fig, ax = plt.subplots(figsize=(11.2, 5.4))
+    fig.subplots_adjust(bottom=0.20, left=0.28)
+    xmin = s["hs_ts"][0]
+    xmax = s["hs_ts"][-1] + series_interval(s["hs_ts"])
+    for i, row in enumerate(rows):
+        ax.barh(
+            i,
+            mdates.date2num(row["end"]) - mdates.date2num(row["start"]),
+            left=mdates.date2num(row["start"]),
+            height=0.62,
+            color=row["color"],
+            alpha=0.88,
+        )
+    for g in s["gaps"]:
+        x = g["start"] + (g["end"] - g["start"]) / 2
+        ax.axvline(x, color=NAVY, linestyle=":", linewidth=1.2, alpha=0.7, zorder=0)
+    ax.set_yticks(
+        range(len(rows)),
+        [f"{r['label']}\n{r['sub']}" for r in rows],
+    )
+    ax.set_xlim(mdates.date2num(xmin), mdates.date2num(xmax))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    ax.invert_yaxis()
+    ax.set_title("Flags D — loss episodes   ·   th4r")
+    ax.legend(
+        handles=[
+            Patch(facecolor=BAD, label="HSDir absent"),
+            Patch(facecolor=ORANGE, label="Flapping / weak recovery"),
+            Line2D([0], [0], color=NAVY, linestyle=":", linewidth=1.2,
+                   label="Running gap"),
+        ],
+        loc="lower right", fontsize=8, ncol=3,
+    )
+    n_major = len(s["major"])
+    caption(
+        fig, published,
+        f"Question: how many times did I lose HSDir this month, and how long "
+        f"each time? {n_major} multi-day losses"
+        f"{' · last one still open' if s['still'] else ''}. "
+        f"Dotted lines are Running gaps. "
+        f"No process restart (last_restarted {extra['last_restarted']}).",
+    )
+    save(fig, out_paths)
+
+
+def flags_e_diverged_only(flag_series, published, extra, out_paths):
+    s = hsdir_story(flag_series)
+    fig, axes = plt.subplots(
+        2, 1, figsize=(11.2, 4.8), sharex=True,
+        gridspec_kw={"height_ratios": [1, 1], "hspace": 0.12},
+    )
+    fig.subplots_adjust(bottom=0.22, top=0.84)
+
+    def strip(ax, ts, pct, name, mark_gaps=False):
+        present = np.array([p >= 50 for p in pct])
+        ax.fill_between(ts, 0, 1, where=present, color=GREEN, step="mid",
+                        linewidth=0, alpha=0.9)
+        ax.fill_between(ts, 0, 1, where=~present, color=BAD, step="mid",
+                        linewidth=0, alpha=0.9)
+        if mark_gaps:
+            for g in s["gaps"]:
+                ax.axvspan(g["start"], g["end"], color=BAD, alpha=0.55, zorder=3)
+        ax.set_ylim(-0.15, 1.15)
+        ax.set_yticks([0.5], [name])
+        ax.set_ylabel("")
+
+    strip(axes[0], s["run_ts"], s["run_pct"], "Running", mark_gaps=True)
+    strip(axes[1], s["hs_ts"], s["hs_pct"], "HSDir")
+    date_axis(axes[1])
+    axes[0].set_title("Flags E — only flags that moved   ·   th4r")
+    axes[0].legend(
+        handles=[
+            Patch(facecolor=GREEN, label="Present"),
+            Patch(facecolor=BAD, label="Absent / gap"),
+        ],
+        loc="upper left", fontsize=8, ncol=2,
+    )
+    held = " · ".join(s["held"]) if s["held"] else "none"
+    caption(
+        fig, published,
+        f"Question: which of my flags actually moved, and did they move "
+        f"together? Running gaps are widened so a 4h miss is visible. HSDir "
+        f"does not track Running — it stays down for days. Held (identical "
+        f"to Running, omitted): {held}.",
+    )
+    save(fig, out_paths)
+
+
+def flags_f_status_story(flag_series, published, extra, out_paths):
+    s = hsdir_story(flag_series)
+    fig = plt.figure(figsize=(11.2, 5.4))
+    fig.subplots_adjust(bottom=0.16, top=0.93, left=0.07, right=0.97)
+    gs = fig.add_gridspec(2, 1, height_ratios=[2.1, 1.0], hspace=0.28)
+    ax_t = fig.add_subplot(gs[0])
+    ax_s = fig.add_subplot(gs[1])
+    ax_t.axis("off")
+    ax_t.set_xlim(0, 1)
+    ax_t.set_ylim(0, 1)
+
+    last = s["major"][-1] if s["major"] else None
+    if s["still"] and last:
+        headline = "HSDir is missing"
+        since = (
+            f"since {last['start'].strftime('%-d %b %H:%M')} UTC  ·  "
+            f"{fmt_dur(last['hours'])} and counting"
+        )
+        head_color = BAD
+    elif last:
+        headline = "HSDir is present now"
+        since = (
+            f"last loss ended {last['end'].strftime('%-d %b %H:%M')} UTC  ·  "
+            f"lasted {fmt_dur(last['hours'])}"
+        )
+        head_color = GREEN
+    else:
+        headline = "HSDir held all month"
+        since = "No absence in this window"
+        head_color = GREEN
+
+    ax_t.text(0.0, 0.92, "Flags F — status + month story   ·   th4r",
+              fontsize=13, fontweight="bold", va="top")
+    ax_t.text(0.0, 0.72, headline, fontsize=20, fontweight="bold",
+              color=head_color, va="top")
+    ax_t.text(0.0, 0.54, since, fontsize=12, color=NAVY, va="top")
+
+    n_major = len(s["major"])
+    longest = max((e["hours"] for e in s["major"]), default=0)
+    lines = [
+        f"This month: {n_major} multi-day losses"
+        + (" · last one still open" if s["still"] else ""),
+        f"Longest gap {fmt_dur(longest)}"
+        + (" · plus a flapping stretch after a weak recovery (24–26 Jul)"
+           if s["flap"] else ""),
+        "Each multi-day loss starts at a Running gap — not a process restart.",
+        f"last_restarted {extra['last_restarted']}  ·  "
+        "HSDir needs WFU ≥ 98% (recent downtime weighted more); "
+        "this is not a countdown.",
+        "Held all month: " + (" · ".join(s["held"]) if s["held"] else "none"),
+    ]
+    ax_t.text(0.0, 0.38, "\n".join(lines), fontsize=9, color=GRAY, va="top",
+              linespacing=1.45)
+
+    ts, pct = s["hs_ts"], s["hs_pct"]
+    present = np.array([p >= 50 for p in pct])
+    ax_s.fill_between(ts, 0, 1, where=present, color=GREEN, step="mid",
+                      linewidth=0, alpha=0.9)
+    ax_s.fill_between(ts, 0, 1, where=~present, color=BAD, step="mid",
+                      linewidth=0, alpha=0.9)
+    _draw_running_gap_marks(ax_s, s["gaps"], y=1.18, label=False)
+    ax_s.set_ylim(-0.1, 1.35)
+    ax_s.set_yticks([0.5], ["HSDir"])
+    date_axis(ax_s)
+    caption(
+        fig, published,
+        "Question: do I have the flag right now, and what is the last-month "
+        "story in one glance? The eligibility table already answers snapshot "
+        "prereqs (WFU / TK / Fast / Stable). This answers since when, how "
+        "often, and whether a Running gap was the trigger.",
+        y=0.01,
     )
     save(fig, out_paths)
 
@@ -773,13 +1099,15 @@ def main():
             ),
         })
 
-    flag_names = ["Running", "Guard", "Stable", "HSDir"]
+    flag_names = ["Running", "Guard", "Stable", "Fast", "V2Dir", "HSDir"]
     flag_series = {}
     flags_block = th4r_up.get("flags") or {}
     for name in flag_names:
         fts, fvals = history_series((flags_block.get(name) or {}).get("1_month"))
         if fts:
             flag_series[name] = (fts, as_pct(fvals))
+    flag_core = {k: flag_series[k] for k in ("Running", "Guard", "Stable", "HSDir")
+                 if k in flag_series}
 
     out = Path(args.out)
     art = Path(args.artifacts)
@@ -794,8 +1122,16 @@ def main():
          (w_ts, read_m, write_m, advertised_mbit, events, published)),
         ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
          (w_ts, read_m, write_m, advertised_mbit, events, published)),
-        ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_series, published)),
-        ("relay_flags_b_overlay.png", flags_b_overlay, (flag_series, published)),
+        ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_core, published)),
+        ("relay_flags_b_overlay.png", flags_b_overlay, (flag_core, published)),
+        ("relay_flags_c_cause_effect.png", flags_c_cause_effect,
+         (flag_series, published, extra)),
+        ("relay_flags_d_episodes.png", flags_d_episodes,
+         (flag_series, published, extra)),
+        ("relay_flags_e_diverged_only.png", flags_e_diverged_only,
+         (flag_series, published, extra)),
+        ("relay_flags_f_status_story.png", flags_f_status_story,
+         (flag_series, published, extra)),
     ]
     for name, fn, fn_args in jobs:
         fn(*fn_args, [out / name, art / name])
