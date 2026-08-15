@@ -98,7 +98,7 @@ Live snapshot: 1,918 relays report general overload. Guards are worst (24.4%, 1,
 
 **Issue:** Lost Stable/Guard after a restart or crash.
 **Page:** Relay `#uptime`, then contact (overlay the operator's relays).
-**Data:** `/uptime` `uptime.1_month.values` (already fetched for `--apis all`).
+**Data:** `/uptime` `uptime.1_month` / `6_months` / `1_year` / `5_years` (already fetched for `--apis all`). A relay page should offer every graph Onionoo published and omit the rest — not every relay has all four.
 
 Live example: `th4r` (high-weight Guard) and `F3Netze` (overloaded exit) — both mostly 100% Running, with short dips that are exactly what knocks WFU/Stable.
 

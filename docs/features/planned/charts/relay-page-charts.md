@@ -197,15 +197,71 @@ this resolution. Newest day on top. A nightly cron lights up one column.
 th4r's five dips sit at 08–12 / 12–16 / 16–20 UTC, not 04:00.
 
 C is **only meaningful for `1_month`**. 6-month buckets are 12 hours;
-1-year buckets are 2 days. Do not toggle B↔C. Give B a period control
-(1M / 6M / 1Y). Keep C as a second view of the 1-month series when we
-want "is this a cron?"
+1-year buckets are 2 days; 5-year buckets are 10 days. Do not toggle
+B↔C. Give B a period control for every graph Onionoo actually published
+(1M / 6M / 1Y / 5Y). Keep C as a second view of the 1-month series when
+we want "is this a cron?"
 
 ![Uptime C — time-of-day heatmap](mockups/relay_uptime_c_heatmap.png)
 
 **Recommendation:** ship **B** as the `#uptime` history chart, with the
 numbers in the table above next to the existing scalars. Add **C** under
 it as a 1-month-only diagnostic, not a replacement toggle. Drop A.
+Period display is a separate choice — see below.
+
+#### How the four periods sit on the page
+
+Onionoo publishes up to four `uptime` graphs. It **omits** a graph
+until the relay has been around long enough — it does not send an empty
+array. Live snapshot:
+
+| Relay | First seen | 1M | 6M | 1Y | 5Y |
+|-------|------------|----|----|----|----|
+| PirateyMatey | 2026-08-12 (3 days) | 16 pts | — | — | — |
+| th4r | 2025-10-01 (10 months) | 186 | 362 | 159 (from first seen, not 365d) | — |
+| F3Netze | 2020-01-29 (6 years) | 186 | 362 | 183 | 183 |
+
+`#uptime` already prints 1M/6M/1Y/5Y **scalars**. Allium turns a missing
+or short series into `0.0` when `count < 30`. A chart must not do that.
+If Onionoo omitted `5_years`, omit the period. Do not draw a 0% five-year
+line.
+
+F3Netze is why all four matter: **1M is 99.2%** (looks fine). **5Y is
+89%** with real zeros. A 1-month-only chart would hide the long outages.
+
+The site is static. A period switch cannot fetch. Whatever we ship is
+N inline SVGs (one per published graph) plus CSS. No Chart.js, no query
+string, no four HTML files per relay.
+
+Three layouts:
+
+**Pills (one visible).** CSS radio / `:checked` tabs. Default **1M**.
+Only render pills Onionoo published. Label the bucket size on the chart
+so a 10-day 5Y dip is not read as “smoother because more reliable.”
+th4r has no 5Y pill. PirateyMatey has only 1M.
+
+![Uptime period pills — th4r, 5Y omitted](mockups/relay_uptime_periods_pills_th4r.png)
+
+![Uptime period pills — F3Netze 5Y selected](mockups/relay_uptime_periods_pills_f3_5y.png)
+
+![Uptime period pills — young relay, 1M only](mockups/relay_uptime_periods_pills_young.png)
+
+**Small multiples (all visible).** 2×2, shared y-axis 0–100. Empty cell
+= not published. No click. Tall. Best when you want 1M and 5Y in the
+same glance (F3Netze).
+
+![Uptime periods — 2×2 small multiples](mockups/relay_uptime_periods_multiples.png)
+
+**1M hero + sparkline strip.** 1M stays large (finest buckets, matches
+the health-row number). 6M / 1Y / 5Y are context underneath. Omit a
+spark if the graph is missing. No click, less height than 2×2.
+
+![Uptime periods — 1M hero + longer-period strip](mockups/relay_uptime_periods_hero_sparks.png)
+
+**Lean:** pills, default 1M, omit unpublished. Hero+sparks if we want
+every period visible without a click. Do not stack four full B charts.
+Do not run C on 6M/1Y/5Y. If a 1Y series starts at `first_seen` (th4r:
+316 days), say so — it is not a full year.
 
 ---
 
@@ -378,21 +434,24 @@ gaps are **not** restarts.
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 (encoding unset; C–F)
 #bandwidth       capacity + bwauths   — then R2 A (line + advertised + imbalance)
-#uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B (1M/6M/1Y)
+#uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B
+                 period pills 1M/6M/1Y/5Y (omit unpublished; default 1M)
                  1-month time-of-day heatmap C     — under B, not a toggle
                  overload subsection               — markers on R1/R2
 ```
 
 Progressive enhancement: the tables stay if the SVG is missing. B gets a
-period control (1M / 6M / 1Y). C stays 1-month-only.
+period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 
 ---
 
 ## Implementation notes (after encoding pick)
 
-1. Keep `1_month` (optionally `6_months`) `values` + `first` + `interval`
-   + `factor` on the relay for uptime, per-flag uptime, and read/write.
-   Drop 1-year / 5-year arrays after the scalars are computed.
+1. Keep every Onionoo-published uptime graph (`1_month` / `6_months` /
+   `1_year` / `5_years`) as `values` + `first` + `interval` + `factor`
+   on the relay. Same for per-flag uptime and read/write if those
+   periods exist. Do not invent a series when Onionoo omitted the key.
+   Do not treat Allium's `count < 30 → 0.0` scalar as a chartable 0%.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
 3. Color: red only for problems (overload, ratio outside 0.80–1.25,
