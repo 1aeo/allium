@@ -110,7 +110,7 @@ Live example: `th4r` (high-weight Guard) and `F3Netze` (overloaded exit) — bot
 **Page:** Relay `#bandwidth`.
 **Data:** `/bandwidth` `read_history` / `write_history`.
 
-Live example: `F3Netze` stays near 1:1 read/write around 300–530 Mbit/s. A 5–10× split is the anomaly. New relay `PirateyMatey` (NL, consensus weight 1, two days of history) is the "stuck at weight 1" case.
+Live example: `F3Netze` stays near 1:1 read/write around 300–530 Mbit/s. A 5–10× split is the anomaly. New relay `PirateyMatey` (NL, consensus weight 1, two days of history) is the "stuck at weight 1" case. Restart is a point at `last_restarted`; overload is the 72-hour flag window after the last Onionoo report, not a single marker.
 
 ![Bandwidth history](mockups/chart_06_bandwidth_history.png)
 

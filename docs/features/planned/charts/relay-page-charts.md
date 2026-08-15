@@ -217,11 +217,16 @@ Write is purple, read is blue, advertised is orange dashed.
 
 #### A — Dual line + advertised + imbalance (recommended)
 
-Y-axis starts at 0 so the advertised line is on the plot. Restart is navy
-dash-dot, overload is red dotted — both named in the legend with dates,
-not as sideways text on the line. The bottom strip is write/read. Green
-band 0.80–1.25 is typical; the red zones and the legend say that leaving
-the band is unusual and usually means something is wrong.
+Y-axis starts at 0 so the advertised line is on the plot. Restart is a
+navy dash-dot at `last_restarted` (a point). Overload is a red band from
+the last Onionoo report through +72h — the same proposal-328 window
+Allium already uses on the relay page — not a single marker and not
+incident start/stop. Onionoo only gives `overload_general_timestamp`
+(when overload was last detected). The band is named in the legend with
+both ends (F3Netze: 13 Aug 05:00 → 16 Aug 05:00 UTC). The bottom strip
+is write/read. Green band 0.80–1.25 is typical; the red zones and the
+legend say that leaving the band is unusual and usually means something
+is wrong.
 
 ![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
@@ -282,7 +287,7 @@ they diverge from Running.
 | Idea | Verdict | Why |
 |------|---------|-----|
 | Flag flapping | **Yes — R3** | Onionoo already has it; scalars hide it |
-| Overload / restart markers | **Yes — on R1/R2** | Point timestamps, not their own chart |
+| Overload / restart markers | **Yes — on R1/R2** | Restart is a point; overload is the 72h flag window |
 | Advertised vs delivered | **Yes — line on R2** | Same bandwidth series |
 | This relay vs network CW/BW | Later, one percentile | Full scatter is a network-health chart |
 | Guard eligibility histogram | No | Table already answers "why no Guard" |
@@ -292,9 +297,11 @@ they diverge from Running.
 | Per-authority vote history | Later | CollecTor votes; current table is enough |
 | Family / version / ORPort | No chart | Already diagnostics in `#status` |
 
-Do not restart to clear overload (list advice). The markers exist so the
-operator can see that a restart and a flag loss are the same event — or
-are not. th4r's gaps are **not** restarts.
+Do not restart to clear overload (list advice). Restart is a point so
+the operator can see whether a gap and `last_restarted` are the same
+event. Overload is a range because the flag stays active for 72 hours
+after the last report; we do not know when the incident started. th4r's
+gaps are **not** restarts.
 
 ---
 
@@ -325,6 +332,9 @@ period control (1M / 6M / 1Y). C stays 1-month-only.
 3. Color: red only for problems (overload, ratio outside 0.80–1.25,
    missing flags, uptime dips). Write is purple, read is blue, advertised
    is orange, last-restarted is navy. Do not use red for a normal series.
+   Overload is an `axvspan` from `overload_general_timestamp` through
+   +`OVERLOAD_THRESHOLD_HOURS` (72). Restart is an `axvline` at
+   `last_restarted`.
 4. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
    before merging — every relay HTML page will change.
 

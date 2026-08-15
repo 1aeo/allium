@@ -360,22 +360,59 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
         events = []
         if det.get("last_restarted"):
             when = parse_onionoo_ts(det["last_restarted"])
-            events.append((when, NAVY, "-.", f"Last restarted  {when.strftime('%-d %b')}"))
+            events.append({
+                "kind": "restart",
+                "when": when,
+                "color": NAVY,
+                "ls": "-.",
+                "legend": f"Last restarted  {when.strftime('%-d %b')}",
+            })
         ov = det.get("overload_general_timestamp")
         if ov:
             when = datetime.fromtimestamp(ov / 1000.0, tz=timezone.utc)
-            events.append((when, "#C0392B", ":", f"Overload  {when.strftime('%-d %b')}"))
-        for when, color, ls, _lab in events:
-            ax.axvline(when, color=color, linestyle=ls, linewidth=1.8)
-            axr.axvline(when, color=color, linestyle=ls, linewidth=1.8)
+            ov_end = when + timedelta(hours=72)
+            events.append({
+                "kind": "overload",
+                "when": when,
+                "end": ov_end,
+                "color": "#C0392B",
+                "legend": (
+                    f"Overload flag (72h)  {when.strftime('%-d %b %H:%M')} → "
+                    f"{ov_end.strftime('%-d %b %H:%M')} UTC"
+                ),
+            })
+        xmax = w_ts[-1] if w_ts else None
+        for ev in events:
+            if ev["kind"] == "overload":
+                ax.axvspan(ev["when"], ev["end"], color=ev["color"], alpha=0.14, zorder=0)
+                axr.axvspan(ev["when"], ev["end"], color=ev["color"], alpha=0.14, zorder=0)
+                ax.axvline(ev["when"], color=ev["color"], linestyle=":", linewidth=1.2)
+                axr.axvline(ev["when"], color=ev["color"], linestyle=":", linewidth=1.2)
+                if xmax is None or ev["end"] > xmax:
+                    xmax = ev["end"]
+            else:
+                ax.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
+                axr.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
+        if w_ts and xmax:
+            pad = (xmax - w_ts[0]) * 0.03
+            ax.set_xlim(w_ts[0], xmax + pad)
         handles = [
             Line2D([0], [0], color=WRITE, lw=1.8, label="Write (outbound)"),
             Line2D([0], [0], color=BLUE, lw=1.8, label="Read (inbound)"),
             Line2D([0], [0], color=ORANGE, ls="--", lw=1.4,
                    label=f"Advertised  {advertised:.0f} Mbit/s"),
         ]
-        handles.extend(Line2D([0], [0], color=c, ls=ls, lw=1.8, label=lab)
-                       for _, c, ls, lab in events)
+        for ev in events:
+            if ev["kind"] == "overload":
+                handles.append(Patch(
+                    facecolor=ev["color"], alpha=0.22, edgecolor=ev["color"],
+                    label=ev["legend"],
+                ))
+            else:
+                handles.append(Line2D(
+                    [0], [0], color=ev["color"], linestyle=ev["ls"], lw=1.8,
+                    label=ev["legend"],
+                ))
         ax.legend(handles=handles, loc="upper left", fontsize=9, ncol=2)
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
