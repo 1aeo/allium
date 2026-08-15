@@ -302,18 +302,50 @@ Do not run C on 6M/1Y/5Y. If a 1Y series starts at `first_seen` (th4r:
 ### R2. Bandwidth (read / write)
 
 Same data: F3Netze `read_history.1_month` / `write_history.1_month` (daily
-buckets). Red is reserved for problems (overload; ratio outside the band).
-Write is purple, read is blue, advertised is orange dashed.
+buckets). Red is reserved for problems (current overload badge; ratio
+outside the band). Write is purple, read is blue, advertised is orange
+dashed.
+
+#### Overload is a now-indicator, not a time series
+
+Onionoo has **no overload history graph** on any endpoint. `/uptime` and
+`/bandwidth` publish `1_month` / `6_months` / `1_year` / `5_years`
+arrays. Overload is three **point** fields:
+
+| Field | Endpoint | What it is |
+|-------|----------|------------|
+| `overload_general_timestamp` | `/details` | Last time any general metric (OOM, onionskins, TCP ports) was detected. Milliseconds. |
+| `overload_ratelimits` | `/bandwidth` | Snapshot: `timestamp`, rate/burst, read/write counts |
+| `overload_fd_exhausted` | `/bandwidth` | Snapshot: `timestamp` |
+
+There is no `overload_history.1_month`. The 72-hour window Allium already
+uses (`OVERLOAD_THRESHOLD_HOURS` in `stability_utils.py`) is **inferred**
+from proposal 328 — the flag stays 72h after the last report — not a
+start/stop Onionoo recorded.
+
+Overload is **not a consensus flag**. Consensus files have Running /
+Guard / Stable / … — that history is already in Onionoo `/uptime`.
+Overload lives on the **server descriptor** (`overload-general`) and
+extra-info (`overload-ratelimits`, `overload-fd-exhausted`). A real
+incident history would mean ingesting CollecTor server-descriptors /
+extra-info over months, not scraping consensuses. Allium already fetches
+~18h of recent descriptors for family-cert analysis; that is not a
+multi-month overload archive.
+
+Until that exists: keep overload **off the x-axis**. If `relays_published`
+is still inside last-report + 72h (or a rate-limit / FD field is set),
+show a current badge (`OVERLOADED NOW · last report …`). If not, no
+badge — `#uptime` already has the overload subsection. Restart stays a
+point at `last_restarted`.
+
+F3Netze at this snapshot: last report 13 Aug 05:00 UTC, published
+15 Aug 06:00 UTC (49h old) → badge on. Flag would drop at 16 Aug 05:00.
 
 #### A — Dual line + advertised + imbalance (recommended)
 
 Y-axis starts at 0 so the advertised line is on the plot. Restart is a
-navy dash-dot at `last_restarted` (a point). Overload is a red band from
-the last Onionoo report through +72h — the same proposal-328 window
-Allium already uses on the relay page — not a single marker and not
-incident start/stop. Onionoo only gives `overload_general_timestamp`
-(when overload was last detected). The band is named in the legend with
-both ends (F3Netze: 13 Aug 05:00 → 16 Aug 05:00 UTC).
+navy dash-dot at `last_restarted` (a point). Overload is the current
+badge, not a band on the time axis.
 
 The bottom strip is write/read. The green band is a **fixed expected
 range, not a live percentile**. A network DoS that hits every exit
@@ -338,18 +370,18 @@ overlay's job.
 
 ![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
-![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
-
 #### B — Overlapping area (same extras)
 
-Same advertised line, events, and imbalance strip. Area fill instead of
-two lines. Keep as an alternate encoding; A is the default.
+Same advertised line, restart marker, current-overload badge, and
+imbalance strip. Area fill instead of two lines. Keep as an alternate
+encoding; A is the default.
 
 ![Bandwidth B — area + advertised + imbalance](mockups/relay_bandwidth_b_area_ratio.png)
 
 #### C — Daily bars vs advertised
 
-Same event legend. Useful if we ever want day-by-day bars; not the default.
+Same restart marker and current-overload badge. Useful if we ever want
+day-by-day bars; not the default.
 
 ![Bandwidth C — daily bars vs advertised](mockups/relay_bandwidth_c_bars_advertised.png)
 
@@ -463,7 +495,7 @@ question instead of plotting every flag equally.
 | Idea | Verdict | Why |
 |------|---------|-----|
 | Flag flapping | **Yes — R3** | Onionoo already has it; scalars hide it |
-| Overload / restart markers | **Yes — on R1/R2** | Restart is a point; overload is the 72h flag window |
+| Overload / restart markers | **Restart on R1/R2; overload is a now-badge** | Onionoo has no overload history; do not invent a 72h range on the x-axis |
 | Advertised vs delivered | **Yes — line on R2** | Same bandwidth series |
 | This relay vs network CW/BW | Later, one percentile | Full scatter is a network-health chart |
 | Guard eligibility histogram | No | Table already answers "why no Guard" |
@@ -475,8 +507,8 @@ question instead of plotting every flag equally.
 
 Do not restart to clear overload (list advice). Restart is a point so
 the operator can see whether a gap and `last_restarted` are the same
-event. Overload is a range because the flag stays active for 72 hours
-after the last report; we do not know when the incident started. th4r's
+event. Overload is a current badge, not a range: Onionoo does not give
+incident start/stop, and consensus files do not carry overload. th4r's
 gaps are **not** restarts.
 
 ---
@@ -493,7 +525,7 @@ gaps are **not** restarts.
                  then R1 B (network-visible Running + process rail + shared gaps)
                  period pills 1M/6M/1Y/5Y (omit unpublished; default 1M)
                  1-month time-of-day heatmap C     — under B, not a toggle
-                 overload subsection               — markers on R1/R2
+                 overload subsection               — current badge on R2; details here
 ```
 
 Progressive enhancement: the tables stay if the SVG is missing. B gets a
@@ -511,13 +543,15 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
 3. Color: red only for problems this relay owns (local Running gap,
-   overload, write/read outside 0.90–1.15, missing flags). Shared/network
-   gaps are orange + gray, not red. Write is purple, read is blue,
-   advertised is orange, last-restarted is navy. The write/read
-   expected range is a frozen constant, not a live percentile. Overload
-   is an `axvspan` from `overload_general_timestamp` through
-   +`OVERLOAD_THRESHOLD_HOURS` (72). Restart is an `axvline` at
-   `last_restarted`.
+   current overload badge, write/read outside 0.90–1.15, missing flags).
+   Shared/network gaps are orange + gray, not red. Write is purple, read
+   is blue, advertised is orange, last-restarted is navy. The write/read
+   expected range is a frozen constant, not a live percentile. Restart is
+   an `axvline` at `last_restarted`. Overload is **not** on the time
+   axis: if `current_overload_status` (from `evaluate_overload`) says
+   the relay is currently overloaded, draw a now-badge; otherwise omit
+   it. Do not infer a 72h `axvspan`. History would need CollecTor
+   server-descriptors / extra-info, not consensus files.
 4. At build time, from every relay's `uptime.1_month`, compute the
    imperfect-Running share per 4-hour bucket. Median is ~3%. Mark
    buckets ≥8% as network-wide gaps and reuse that series on every

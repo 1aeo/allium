@@ -12,8 +12,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from allium.lib.stability_utils import current_overload_status  # noqa: E402
 
 import matplotlib
 
@@ -42,9 +48,6 @@ OVERLOAD = BAD
 # A DoS that hits everyone would move a percentile band and hide the event.
 RATIO_LO = 0.90
 RATIO_HI = 1.15
-# Tor spec proposal 328; same window as allium.lib.stability_utils.
-OVERLOAD_THRESHOLD_HOURS = 72
-
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
@@ -828,58 +831,67 @@ def event_x(when, x_values=None):
 
 
 def draw_event_lines(ax, events, x_values=None):
-    """Restart is a point. Overload is the 72h flag window, not a single mark.
+    """Restart is a point on the time axis. Overload is not drawn here.
 
-    Onionoo only gives the last-detected timestamp. The band is last report
-    through +72h (proposal 328) — not when the incident started or stopped.
-    Labels live in the legend, not on the line.
+    Onionoo has no overload history graph — only a last-detected timestamp —
+    so overload is a current-status badge, not an x-axis range.
     """
     for ev in events:
         if ev["kind"] == "overload":
-            x0 = event_x(ev["when"], x_values)
-            x1 = event_x(ev["end"], x_values)
-            ax.axvspan(x0, x1, color=ev["color"], alpha=0.14, zorder=0)
-            ax.axvline(x0, color=ev["color"], linestyle=":", linewidth=1.2,
-                       alpha=0.9, zorder=3)
-        else:
-            x = event_x(ev["when"], x_values)
-            ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
-                       alpha=0.95, zorder=3)
+            continue
+        x = event_x(ev["when"], x_values)
+        ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+                   alpha=0.95, zorder=3)
 
 
 def event_legend_handles(events):
     handles = []
     for ev in events:
         if ev["kind"] == "overload":
-            handles.append(Patch(
-                facecolor=ev["color"], alpha=0.22, edgecolor=ev["color"],
-                label=ev["legend"],
-            ))
-        else:
-            handles.append(Line2D(
-                [0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
-                label=ev["legend"],
-            ))
+            continue
+        handles.append(Line2D(
+            [0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+            label=ev["legend"],
+        ))
     return handles
 
 
-def expand_xlim_for_events(ax, ts, events, x_values=None):
-    """Keep the overload stop visible even when it is past the last bucket."""
+def pad_xlim(ax, ts, x_values=None):
+    """Pad the series; do not extend the axis for inferred overload."""
     if not ts:
         return
     if x_values is None:
         xmin, xmax = ts[0], ts[-1]
-        for ev in events:
-            if ev["kind"] == "overload":
-                xmax = max(xmax, ev["end"])
         pad = (xmax - xmin) * 0.03
         ax.set_xlim(xmin, xmax + pad)
         return
-    xmax = float(len(ts) - 1)
-    for ev in events:
-        if ev["kind"] == "overload":
-            xmax = max(xmax, event_x(ev["end"], x_values))
-    ax.set_xlim(-1, xmax + 0.6)
+    ax.set_xlim(-1, float(len(ts) - 1) + 0.6)
+
+
+def overload_now_status(relay, published):
+    """Thin wrapper: parse Onionoo published time, then current_overload_status."""
+    if isinstance(published, str):
+        try:
+            now_ts = parse_onionoo_ts(published).timestamp()
+        except (TypeError, ValueError):
+            now_ts = None
+    elif published is not None:
+        now_ts = published.timestamp()
+    else:
+        now_ts = None
+    return current_overload_status(relay, now_ts)
+
+
+def draw_overload_badge(fig, status):
+    """Current-status chip above the plot. Not a time-axis range."""
+    if not status:
+        return
+    fig.text(
+        0.99, 1.0, status["label"],
+        ha="right", va="bottom",
+        fontsize=8.5, color="white", fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.4", fc=OVERLOAD, ec=OVERLOAD),
+    )
 
 
 def load_ratio_overlays():
@@ -950,7 +962,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
         y = np.ma.masked_where(in_band, ratio)
         axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=4)
     draw_event_lines(axr, events)
-    expand_xlim_for_events(axr, ts, events)
+    pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
     axr.set_ylim(0.50, 1.70)
     axr.legend(handles=ratio_legend_handles(overlays), loc="upper right",
@@ -960,7 +972,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
 
 
 def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
-                          overlays, out_paths):
+                          overlays, overload_status, out_paths):
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(11.2, 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": 0.08},
@@ -974,7 +986,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
             label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
         )
     draw_event_lines(ax, events)
-    expand_xlim_for_events(ax, ts, events)
+    pad_xlim(ax, ts)
     top = max([advertised_mbit or 0] + write_m + read_m)
     ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
@@ -989,6 +1001,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     ax.legend(handles=series + event_legend_handles(events),
               loc="upper left", fontsize=9, ncol=2)
+    draw_overload_badge(fig, overload_status)
 
     mean_ratio = _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
     used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -1002,13 +1015,14 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         f"peers and this operator’s family median sit on top of it. "
         f"{fam_out} of {fam_n} family relays have a month-mean above 1.15; "
         f"this one does not. Delivered write ~{np.mean(write_m):.0f} Mbit/s "
-        f"({used:.0f}% of advertised).",
+        f"({used:.0f}% of advertised). Overload is a now-badge, not a time "
+        f"range — Onionoo has no incident history.",
     )
     save(fig, out_paths)
 
 
 def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
-                           overlays, out_paths):
+                           overlays, overload_status, out_paths):
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(11.2, 7.0), sharex=True,
         gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.08},
@@ -1022,7 +1036,7 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
         ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
                    label=f"Advertised  {advertised_mbit:.0f} Mbit/s")
     draw_event_lines(ax, events)
-    expand_xlim_for_events(ax, ts, events)
+    pad_xlim(ax, ts)
     top = max([advertised_mbit or 0] + write_m + read_m)
     ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
@@ -1036,18 +1050,19 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     ax.legend(handles=series + event_legend_handles(events),
               loc="upper left", fontsize=9, ncol=2)
+    draw_overload_badge(fig, overload_status)
     _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
     caption(
         fig, published,
-        "Same restart marker, 72h overload band, fixed expected range, and "
-        "role / operator overlays as A. Area fill is the alternate encoding; "
-        "A is the preferred default.",
+        "Same restart marker, current-overload badge, fixed expected range, "
+        "and role / operator overlays as A. Area fill is the alternate "
+        "encoding; A is the preferred default.",
     )
     save(fig, out_paths)
 
 
 def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
-                                published, out_paths):
+                                published, overload_status, out_paths):
     fig, ax = plt.subplots(figsize=(11.2, 5.8))
     fig.subplots_adjust(bottom=0.18)
     x = np.arange(len(ts))
@@ -1060,7 +1075,7 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
             label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
         )
     draw_event_lines(ax, events, x_values=ts)
-    expand_xlim_for_events(ax, ts, events, x_values=ts)
+    pad_xlim(ax, ts, x_values=ts)
     ax.set_ylabel("Throughput (Mbit/s)")
     ax.set_title("Bandwidth C — daily bars vs advertised   ·   F3Netze")
     tick = list(range(0, len(ts), 4))
@@ -1074,12 +1089,14 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     ax.legend(handles=series + event_legend_handles(events),
               loc="upper left", fontsize=9, ncol=2)
+    draw_overload_badge(fig, overload_status)
     used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
     caption(
         fig, published,
         f"Story: this exit advertises {advertised_mbit:.0f} Mbit/s and delivers "
         f"~{np.mean(write_m):.0f} Mbit/s write ({used:.0f}% of advertised). "
-        "Restart is a point; overload is the 72h flag window in the legend.",
+        "Restart is a point. Overload is a current-status badge, not a time "
+        "range — Onionoo has no incident history.",
     )
     save(fig, out_paths)
 
@@ -1535,19 +1552,13 @@ def main():
             "ls": "-.",
             "legend": f"Last restarted  {when.strftime('%-d %b')}",
         })
-    ov = parse_ms(f3.get("overload_general_timestamp"))
-    if ov:
-        ov_end = ov + timedelta(hours=OVERLOAD_THRESHOLD_HOURS)
-        events.append({
-            "kind": "overload",
-            "when": ov,
-            "end": ov_end,
-            "color": OVERLOAD,
-            "legend": (
-                f"Overload flag (72h)  {ov.strftime('%-d %b %H:%M')} → "
-                f"{ov_end.strftime('%-d %b %H:%M')} UTC"
-            ),
-        })
+    # Merge /bandwidth overload fields when present (F3Netze snapshot has none).
+    f3_ov = dict(f3)
+    if f3_bw.get("overload_ratelimits"):
+        f3_ov["overload_ratelimits"] = f3_bw["overload_ratelimits"]
+    if f3_bw.get("overload_fd_exhausted"):
+        f3_ov["overload_fd_exhausted"] = f3_bw["overload_fd_exhausted"]
+    ov_status = overload_now_status(f3_ov, published)
 
     flag_names = ["Running", "Guard", "Stable", "Fast", "V2Dir", "HSDir"]
     flag_series = {}
@@ -1595,11 +1606,13 @@ def main():
         ("relay_uptime_periods_hero_sparks.png", uptime_periods_hero_sparks,
          (f3_periods, "F3Netze", published)),
         ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
-         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
+          ov_status)),
         ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
-         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
+          ov_status)),
         ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
-         (w_ts, read_m, write_m, advertised_mbit, events, published)),
+         (w_ts, read_m, write_m, advertised_mbit, events, published, ov_status)),
         ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_core, published)),
         ("relay_flags_b_overlay.png", flags_b_overlay, (flag_core, published)),
         ("relay_flags_c_cause_effect.png", flags_c_cause_effect,
