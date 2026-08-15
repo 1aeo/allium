@@ -83,34 +83,129 @@ Live examples use two relays:
 
 Same data: th4r `uptime.1_month`, 186 four-hour buckets.
 
+#### Where the 4-hour window comes from
+
+Onionoo, not Allium. The `/uptime` protocol publishes four graph history
+objects. Live values for this snapshot:
+
+| Onionoo key | `interval` | Resolution | Why |
+|-------------|------------|------------|-----|
+| `1_month` | 14,400 s | **4 hours** | Finest published uptime graph |
+| `6_months` | 43,200 s | 12 hours | |
+| `1_year` | 172,800 s | 2 days | |
+| `5_years` | 864,000 s | 10 days | |
+
+Onionoo removed the `1_week` uptime graph on 20 Feb 2020 (protocol 8.0).
+There is no finer public series.
+
+Each `1_month` point is the **fraction of hourly network statuses
+(consensuses) in that 4-hour window** in which the relay had the Running
+flag. `first` / `last` are interval **midpoints**, so a point stamped
+`2026-07-19 14:00:00` is the window 12:00–16:00 UTC.
+
+Values are stored as integers 0–999 with `factor = 1/999`. Hourly
+consensuses × a 4-hour bucket ⇒ only five possible results:
+
+| Hourly consensuses with Running | Onionoo raw | Chart % |
+|---------------------------------|-------------|---------|
+| 4 of 4 | 999 | 100% |
+| 3 of 4 | 749 | 75% |
+| 2 of 4 | 499 | 50% |
+| 1 of 4 | 249 | 25% |
+| 0 of 4 | 0 | 0% |
+
+That is why th4r's dips are only 75, 50, or 100 — not because the relay
+was "exactly 75% up," but because it missed **one** or **two** hourly
+consensuses in that window. 6-month / 12-hour buckets have more steps
+(832 ≈ 10/12, 915 ≈ 11/12).
+
+#### "Consensus gaps, not restarts"
+
+Two different clocks:
+
+| Clock | Source | th4r |
+|-------|--------|------|
+| Process | Descriptor `last_restarted` | 2025-10-01 09:37:56 — **10 months**, no restart in this window |
+| Consensus | Onionoo `/uptime` Running | Five 4-hour buckets below 100% in July–August 2026 |
+
+The chart is the consensus clock. A dip means directory authorities did
+not list the relay as Running for one or two of the four hourly
+consensuses in that bucket. The tor process can keep running the whole
+time (IPv6 reachability, missed descriptor, ORPort blip, authority
+couldn't connect). Those gaps still count against WFU, MTBF, Stable,
+Guard, and HSDir.
+
+`#uptime` **Current Status** ("UP 10 months") is the process clock. It
+will not match the chart. Label it as last_restarted so operators do not
+think the chart is wrong.
+
+#### Does `#uptime` match the chart?
+
+The 1-month **average** matches. The gaps do not appear as numbers today.
+
+![Proposed #uptime numbers vs the chart series](mockups/relay_uptime_section_numbers.png)
+
+| Page field | th4r today | Same series as the chart |
+|------------|------------|--------------------------|
+| Overall Uptime 1M | **99.2%** | **99.2%** (181/186 buckets at 100%) |
+| Health "UP N% (1M)" | **99%** (`\|int` truncates) | Should be 99.2% |
+| Current Status | UP since 2025-10-01 | Process clock — not the chart |
+| Imperfect buckets | not shown | **5 of 186** |
+| Worst bucket | not shown | **50% × once**, 19 Jul 12:00–16:00 UTC (2 of 4 hours) |
+| 75% buckets | not shown | **× 4** (19 Jul 16:00–20:00; 22 Jul 12:00–16:00; 30 Jul 16:00–20:00; 11 Aug 08:00–12:00) |
+| Flag Uptime | "Matches Overall" (follows Guard) | Guard 99.2%; **HSDir 59.1% and currently missing** — hidden |
+
+Add the right-hand column under `#uptime`. Keep Current Status; name it
+as last_restarted. Stop truncating the health-row 1M percentage.
+
+#### How long below 95% until a named flag is lost?
+
+**There is no such duration.** The 95% line in the first B mockup was a
+visual heuristic, not a dir-spec rule. Authorities do not read this
+chart.
+
+| Flag | Actual rule | Time to lose |
+|------|-------------|--------------|
+| Running | Authority could not connect in the last ~45 minutes | One missed hourly consensus. Shows as a 75% (3/4) bucket. |
+| Guard | WFU ≥ **98%** (weighted; recent downtime counts more), plus Stable, TK ≥ 8 days, Fast, ≥2 MB/s | No fixed hours. A *recent* dip can drop WFU below 98% even when the monthly average is 99.2%. |
+| HSDir | Same 98% WFU, plus Stable, TK ≥ 25 h (moria1 ~10 days) | Same. th4r's HSDir was present only 59.1% of this month. |
+| Stable | Uptime or weighted MTBF ≥ network median (authority-specific, typically weeks) | One consensus-visible outage can reset MTBF. Not "% of the month." |
+
+B now uses the real **98%** WFU floor and says on the chart that it is
+not a countdown.
+
 #### A — Annotated line
 
-Each gap labeled with time and depth. Good when there are three or four
-events. Does not scale if the relay is flapping daily (labels collide).
-Does not teach the 95% WFU threshold.
+Dropped as a default. Labels do not scale, and they hid the 99.2% /
+worst-bucket / once facts in a caption.
 
 ![Uptime A — annotated line](mockups/relay_uptime_a_annotated_line.png)
 
-#### B — Area + 95% threshold (recommended default)
+#### B — Area + 98% WFU floor (recommended history chart)
 
-Fill the line, dash 95%, shade only the buckets that fall through. The
-operator question is "did I spend time in the zone that costs Stable /
-Guard / HSDir?" This answers it at a glance, and still looks calm when
-the relay is at 100%.
+Month-average line at 99.2% (the `#uptime` number). 98% dashed line
+labeled as the Guard / HSDir WFU floor, not a timer. Worst bucket
+annotated on the plot: 50% once, 19 Jul 12:00–16:00 UTC. Flag rules and
+the `#uptime` numbers sit under the axes.
 
-![Uptime B — area + 95% threshold](mockups/relay_uptime_b_area_threshold.png)
+![Uptime B — area + 98% WFU floor](mockups/relay_uptime_b_area_threshold.png)
 
-#### C — Time-of-day heatmap
+#### C — Time-of-day heatmap (1-month diagnostic, not a toggle of B)
 
-Rows are days (newest on top), columns are Onionoo's 4-hour UTC windows.
-A nightly cron lights up one column. th4r's five dips sit at 10:00 / 14:00
-/ 18:00 UTC — not a 04:00 restart job.
+Discrete 0/4 … 4/4 color scale — the only values Onionoo can emit at
+this resolution. Newest day on top. A nightly cron lights up one column.
+th4r's five dips sit at 08–12 / 12–16 / 16–20 UTC, not 04:00.
+
+C is **only meaningful for `1_month`**. 6-month buckets are 12 hours;
+1-year buckets are 2 days. Do not toggle B↔C. Give B a period control
+(1M / 6M / 1Y). Keep C as a second view of the 1-month series when we
+want "is this a cron?"
 
 ![Uptime C — time-of-day heatmap](mockups/relay_uptime_c_heatmap.png)
 
-**Recommendation:** ship **B** in `#uptime`. Offer **C** as a "time of day"
-toggle for operators who suspect a scheduled restart. Do not ship A as the
-default.
+**Recommendation:** ship **B** as the `#uptime` history chart, with the
+numbers in the table above next to the existing scalars. Add **C** under
+it as a 1-month-only diagnostic, not a replacement toggle. Drop A.
 
 ---
 
@@ -212,12 +307,13 @@ are not. th4r's gaps are **not** restarts.
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 swimlane
 #bandwidth       capacity + bwauths   — then R2 area + ratio
-#uptime          1M/6M/1Y/5Y scalars  — then R1 area + 95%
-                 overload subsection  — markers on R1/R2, not a third plot
+#uptime          1M/6M/1Y/5Y scalars + gap counts  — then R1 B (1M/6M/1Y)
+                 1-month time-of-day heatmap C     — under B, not a toggle
+                 overload subsection               — markers on R1/R2
 ```
 
-Progressive enhancement: the tables stay if the SVG is missing. Period
-toggle (1 month / 6 months) can wait until the encodings are chosen.
+Progressive enhancement: the tables stay if the SVG is missing. B gets a
+period control (1M / 6M / 1Y). C stays 1-month-only.
 
 ---
 
