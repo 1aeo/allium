@@ -8,6 +8,9 @@ Allium already fetches Onionoo `/details`, `/uptime`, and `/bandwidth` and colla
 
 Mockups: [`mockups/`](mockups/). Regenerator: [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py).
 
+Relay-page encodings (three variations each of charts 5 and 6, plus flag
+flapping): [`relay-page-charts.md`](relay-page-charts.md).
+
 ---
 
 ## What operators actually ask
@@ -162,12 +165,18 @@ Live snapshot: Guards are 41% of relays and 55% of weight. Middles are 28% of re
 
 ---
 
-## Implementation order
+## Implementation order (page type by page type)
 
-1. **Relay page:** charts 5 and 6 (uptime + bandwidth). Data is already in memory on `--apis all`. Build-time SVG or one static Chart.js include.
-2. **Same page:** chart 1 inset for that relay (dot on the network scatter) and chart 3 eligibility bar.
-3. **Network health:** charts 4, 7, 8, 9, 10 as CSS/SVG bars from existing `network_health` aggregates.
-4. **Country page:** chart 2 (this country vs DE/US/AU medians).
+1. **Relay page** — encodings and placement are in
+   [`relay-page-charts.md`](relay-page-charts.md). Uptime (chart 5),
+   bandwidth (chart 6), and a new flag-flapping swimlane. Chart 1 (network
+   scatter) and chart 3 (Guard histogram) do **not** go on every relay
+   page; this page already has a CW percentile and an eligibility table.
+2. **Network health:** charts 4, 7, 8, 9, 10 as CSS/SVG bars from existing
+   `network_health` aggregates. Chart 1 scatter lives here.
+3. **Country page:** chart 2 (this country vs DE/US/AU medians).
+4. **Contact / AS pages:** overlay the operator's relays on the same
+   encodings after the single-relay versions ship.
 
 Keep each chart progressive: a table or number remains if JS is off.
 
