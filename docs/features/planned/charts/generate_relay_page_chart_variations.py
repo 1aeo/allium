@@ -39,6 +39,8 @@ RESTART = NAVY
 OVERLOAD = BAD
 RATIO_LO = 0.80
 RATIO_HI = 1.25
+# Tor spec proposal 328; same window as allium.lib.stability_utils.
+OVERLOAD_THRESHOLD_HOURS = 72
 
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
@@ -414,22 +416,71 @@ def uptime_section_numbers(ts, pct, published, extra, out_paths):
 # Chart 6 — bandwidth (F3Netze, 1 month)
 # ---------------------------------------------------------------------------
 
+def event_x(when, x_values=None):
+    """Map a datetime onto the axis. x_values None keeps a datetime axis."""
+    if x_values is None:
+        return when
+    if len(x_values) < 2:
+        return 0
+    step = (x_values[1] - x_values[0]).total_seconds()
+    if step <= 0:
+        return 0
+    return (when - x_values[0]).total_seconds() / step
+
+
 def draw_event_lines(ax, events, x_values=None):
-    """Vertical event marks only. Labels live in the legend, not on the line."""
+    """Restart is a point. Overload is the 72h flag window, not a single mark.
+
+    Onionoo only gives the last-detected timestamp. The band is last report
+    through +72h (proposal 328) — not when the incident started or stopped.
+    Labels live in the legend, not on the line.
+    """
     for ev in events:
-        x = ev["when"]
-        if x_values is not None:
-            x = min(range(len(x_values)), key=lambda i: abs(x_values[i] - ev["when"]))
-        ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
-                   alpha=0.95, zorder=3)
+        if ev["kind"] == "overload":
+            x0 = event_x(ev["when"], x_values)
+            x1 = event_x(ev["end"], x_values)
+            ax.axvspan(x0, x1, color=ev["color"], alpha=0.14, zorder=0)
+            ax.axvline(x0, color=ev["color"], linestyle=":", linewidth=1.2,
+                       alpha=0.9, zorder=3)
+        else:
+            x = event_x(ev["when"], x_values)
+            ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+                       alpha=0.95, zorder=3)
 
 
 def event_legend_handles(events):
-    return [
-        Line2D([0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
-               label=ev["legend"])
-        for ev in events
-    ]
+    handles = []
+    for ev in events:
+        if ev["kind"] == "overload":
+            handles.append(Patch(
+                facecolor=ev["color"], alpha=0.22, edgecolor=ev["color"],
+                label=ev["legend"],
+            ))
+        else:
+            handles.append(Line2D(
+                [0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+                label=ev["legend"],
+            ))
+    return handles
+
+
+def expand_xlim_for_events(ax, ts, events, x_values=None):
+    """Keep the overload stop visible even when it is past the last bucket."""
+    if not ts:
+        return
+    if x_values is None:
+        xmin, xmax = ts[0], ts[-1]
+        for ev in events:
+            if ev["kind"] == "overload":
+                xmax = max(xmax, ev["end"])
+        pad = (xmax - xmin) * 0.03
+        ax.set_xlim(xmin, xmax + pad)
+        return
+    xmax = float(len(ts) - 1)
+    for ev in events:
+        if ev["kind"] == "overload":
+            xmax = max(xmax, event_x(ev["end"], x_values))
+    ax.set_xlim(-1, xmax + 0.6)
 
 
 def ratio_legend_handles():
@@ -456,6 +507,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events):
         y = np.ma.masked_where(in_band, ratio)
         axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=3)
     draw_event_lines(axr, events)
+    expand_xlim_for_events(axr, ts, events)
     axr.set_ylabel("Write / read")
     axr.set_ylim(0.50, 1.70)
     axr.legend(handles=ratio_legend_handles(), loc="upper right", fontsize=8,
@@ -479,6 +531,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
             label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
         )
     draw_event_lines(ax, events)
+    expand_xlim_for_events(ax, ts, events)
     top = max([advertised_mbit or 0] + write_m + read_m)
     ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
@@ -500,8 +553,10 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         fig, published,
         f"Story: write and read track (mean ratio {mean_ratio:.2f}, inside the "
         f"green 0.80–1.25 band). Delivered write is ~{np.mean(write_m):.0f} Mbit/s "
-        f"({used:.0f}% of advertised). Restart is navy dash-dot; overload is red "
-        f"dotted — both in the legend, not as sideways text.",
+        f"({used:.0f}% of advertised). Restart is a navy dash-dot at "
+        f"last_restarted. Overload is the red band from the last Onionoo "
+        f"report through +{OVERLOAD_THRESHOLD_HOURS}h (proposal 328) — not "
+        f"incident start/stop.",
     )
     save(fig, out_paths)
 
@@ -521,6 +576,7 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
         ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
                    label=f"Advertised  {advertised_mbit:.0f} Mbit/s")
     draw_event_lines(ax, events)
+    expand_xlim_for_events(ax, ts, events)
     top = max([advertised_mbit or 0] + write_m + read_m)
     ax.set_ylim(0, top * 1.08)
     ax.set_ylabel("Throughput (Mbit/s)")
@@ -537,8 +593,8 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
     _plot_ratio_strip(axr, ts, read_m, write_m, events)
     caption(
         fig, published,
-        "Same events and imbalance band as A. Area fill is the alternate encoding; "
-        "A is the preferred default.",
+        "Same restart marker, 72h overload band, and imbalance strip as A. "
+        "Area fill is the alternate encoding; A is the preferred default.",
     )
     save(fig, out_paths)
 
@@ -557,11 +613,11 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
             label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
         )
     draw_event_lines(ax, events, x_values=ts)
+    expand_xlim_for_events(ax, ts, events, x_values=ts)
     ax.set_ylabel("Throughput (Mbit/s)")
     ax.set_title("Bandwidth C — daily bars vs advertised   ·   F3Netze")
     tick = list(range(0, len(ts), 4))
     ax.set_xticks(tick, [ts[i].strftime("%b %d") for i in tick])
-    ax.set_xlim(-1, len(ts))
     series = [
         Patch(facecolor=WRITE, label="Write"),
         Patch(facecolor=BLUE, label="Read"),
@@ -576,7 +632,7 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
         fig, published,
         f"Story: this exit advertises {advertised_mbit:.0f} Mbit/s and delivers "
         f"~{np.mean(write_m):.0f} Mbit/s write ({used:.0f}% of advertised). "
-        "Restart / overload are in the legend.",
+        "Restart is a point; overload is the 72h flag window in the legend.",
     )
     save(fig, out_paths)
 
@@ -705,12 +761,16 @@ def main():
         })
     ov = parse_ms(f3.get("overload_general_timestamp"))
     if ov:
+        ov_end = ov + timedelta(hours=OVERLOAD_THRESHOLD_HOURS)
         events.append({
             "kind": "overload",
             "when": ov,
+            "end": ov_end,
             "color": OVERLOAD,
-            "ls": ":",
-            "legend": f"Overload  {ov.strftime('%-d %b')}",
+            "legend": (
+                f"Overload flag (72h)  {ov.strftime('%-d %b %H:%M')} → "
+                f"{ov_end.strftime('%-d %b %H:%M')} UTC"
+            ),
         })
 
     flag_names = ["Running", "Guard", "Stable", "HSDir"]
