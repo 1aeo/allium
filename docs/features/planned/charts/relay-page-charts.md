@@ -10,6 +10,7 @@ the encodings here are chosen.
 
 Mockups: [`mockups/`](mockups/). Regenerator:
 [`generate_relay_page_chart_variations.py`](generate_relay_page_chart_variations.py).
+Write/read band census: [`write-read-band.md`](write-read-band.md).
 
 ---
 
@@ -354,7 +355,7 @@ add live aggregates as lines on top of it.
 
 | Layer | What | Why |
 |-------|------|-----|
-| Expected 0.90–1.15 | Frozen. Circuits are bidirectional; healthy p10–p90 in a 400-relay sample was 0.97–1.12, median 1.02. 0.90–1.15 is that shape with a little room. | Alarm that does not move when the network does |
+| Expected 0.90–1.15 | Frozen. Full-network Onionoo census (2026-08-15 19:00, 10,312 relays ≥50 KB/s): 1M p10–p90 is 0.965–1.130, median 1.021. 6M/1Y/5Y are tighter (p90 1.07 / 1.06 / 1.04). 0.90–1.15 is that 1M shape with a little room. See [write-read-band.md](write-read-band.md). | Alarm that does not move when the network does |
 | This relay | Navy line | The thing the operator is debugging |
 | Role peers | Dashed. Median write/read of the same flag set (Exit+Guard for F3Netze) | Did the whole role move? |
 | This operator | Dotted. Median of the AROI / contact / effective-family group (F3: 24 relays). Omit if the group is 1. Use **median**, not mean — F3's mean is 1.17 because 4 of 24 members sit at 1.5–2.2 | Is this relay the odd one in the family? |
@@ -571,9 +572,12 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 
 ```bash
 python3 docs/features/planned/charts/generate_relay_page_chart_variations.py
+python3 docs/features/planned/charts/analyze_write_read_ratios.py \
+  --details /tmp/onionoo/details_flags.json
 ```
 
-Requires the Onionoo snapshots already used by
+Chart mockups need the Onionoo snapshots already used by
 [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
 (`/tmp/onionoo/details.json`, `uptime_examples.json`,
-`bandwidth_examples.json`).
+`bandwidth_examples.json`). The write/read band survey needs a full
+`/bandwidth` dump — see [`write-read-band.md`](write-read-band.md).
