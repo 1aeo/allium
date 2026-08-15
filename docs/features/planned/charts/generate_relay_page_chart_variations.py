@@ -44,7 +44,8 @@ BAD = "#C0392B"
 RESTART = NAVY
 OVERLOAD = BAD
 # Frozen expected write/read range — not a live percentile.
-# 400-relay 1_month sample (2026-08-15): p10–p90 was 0.97–1.12, median 1.02.
+# Full-network Onionoo census (2026-08-15 19:00, ≥50 KB/s):
+# 1M p10–p90 0.965–1.130, median 1.021. 6M/1Y/5Y tighter.
 # A DoS that hits everyone would move a percentile band and hide the event.
 RATIO_LO = 0.90
 RATIO_HI = 1.15
