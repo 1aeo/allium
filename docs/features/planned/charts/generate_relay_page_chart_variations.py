@@ -21,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 
 BLUE = "#0072B2"
 VERM = "#D55E00"
@@ -35,9 +35,6 @@ RED = "#C0392B"
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 
-UPTIME_CMAP = LinearSegmentedColormap.from_list(
-    "uptime", ["#8B1A1A", VERM, ORANGE, "#E8E07A", GREEN], N=256
-)
 FLAG_CMAP = LinearSegmentedColormap.from_list(
     "flag", ["#F4D6C9", ORANGE, GREEN], N=256
 )
@@ -143,6 +140,54 @@ def mean_min(pct):
     return float(np.mean(pct)), float(np.min(pct))
 
 
+def bucket_window(ts, interval_hours=4):
+    """Onionoo first/last are interval midpoints. Return (start, end) UTC."""
+    half = timedelta(hours=interval_hours / 2)
+    return ts - half, ts + half
+
+
+def summarize_uptime(ts, pct, interval_hours=4):
+    avg = float(np.mean(pct)) if pct else 0.0
+    imperfect = [(t, v) for t, v in zip(ts, pct) if v < 99.5]
+    worst = min(imperfect, key=lambda x: x[1]) if imperfect else None
+    by_level = {50: [], 75: [], 25: [], 0: []}
+    for t, v in imperfect:
+        if v < 12.5:
+            by_level[0].append(t)
+        elif v < 37.5:
+            by_level[25].append(t)
+        elif v < 62.5:
+            by_level[50].append(t)
+        else:
+            by_level[75].append(t)
+    return {
+        "avg": avg,
+        "n": len(pct),
+        "perfect": len(pct) - len(imperfect),
+        "imperfect": imperfect,
+        "worst": worst,
+        "by_level": by_level,
+        "interval_hours": interval_hours,
+    }
+
+
+def fmt_window(ts, interval_hours=4):
+    start, end = bucket_window(ts, interval_hours)
+    return f"{start.strftime('%-d %b %H:%M')}–{end.strftime('%H:%M')} UTC"
+
+
+# Discrete Onionoo 4-hour / hourly-consensus steps
+UPTIME_LEVELS = [0, 25, 50, 75, 100]
+UPTIME_LEVEL_COLORS = ["#8B1A1A", VERM, ORANGE, "#E8E07A", GREEN]
+UPTIME_LEVEL_LABELS = [
+    "0/4 hours",
+    "1/4 hours",
+    "2/4 hours",
+    "3/4 hours",
+    "4/4 hours",
+]
+
+
 # ---------------------------------------------------------------------------
 # Chart 5 — uptime variations (th4r, 1 month)
 # ---------------------------------------------------------------------------
@@ -180,65 +225,179 @@ def uptime_a_annotated_line(ts, pct, published, out_paths):
     save(fig, out_paths)
 
 
-def uptime_b_area_threshold(ts, pct, published, out_paths):
-    fig, ax = plt.subplots(figsize=(11.2, 5.6))
-    fig.subplots_adjust(bottom=0.20)
+def uptime_b_area_threshold(ts, pct, published, extra, out_paths):
+    stats = summarize_uptime(ts, pct)
+    fig = plt.figure(figsize=(11.2, 7.4))
+    ax = fig.add_axes([0.08, 0.38, 0.90, 0.52])
     arr = np.array(pct)
-    ax.fill_between(ts, arr, 0, color=BLUE, alpha=0.18, linewidth=0)
-    ax.plot(ts, pct, color=BLUE, linewidth=1.7, label="Running flag")
-    below = arr < 95
+    ax.fill_between(ts, arr, 0, color=BLUE, alpha=0.16, linewidth=0)
+    ax.plot(ts, pct, color=BLUE, linewidth=1.7, label="Running in each 4-hour bucket")
+    below = arr < 98
     if below.any():
         ax.fill_between(
-            ts, arr, 95, where=below, color=VERM, alpha=0.45,
-            interpolate=True, label="Time below 95%",
+            ts, arr, 98, where=below, color=VERM, alpha=0.40,
+            interpolate=True, label="Bucket below 98% (missed ≥1 hourly consensus)",
         )
-    ax.axhline(95, color=ORANGE, linestyle="--", linewidth=1.1,
-               label="95% — WFU / Stable risk")
-    ax.axhline(100, color=GREEN, linestyle=":", linewidth=1.0, alpha=0.8)
-    ax.set_ylim(35, 104)
-    ax.set_ylabel("Share of 4-hour window with Running (%)")
-    ax.set_title("Uptime B — area + 95% threshold   ·   th4r (Guard, DE)")
-    date_axis(ax)
-    hours_below = int(below.sum()) * 4
-    ax.legend(loc="lower left")
-    caption(
-        fig, published,
-        f"Story: shade only the dangerous part. {int(below.sum())} four-hour "
-        f"windows ({hours_below}h) sat below 95% — the region that eats Weighted "
-        f"Fractional Uptime and can cost Stable / Guard / HSDir.",
+    ax.axhline(
+        98, color=ORANGE, linestyle="--", linewidth=1.2,
+        label="98% — Guard and HSDir WFU floor (not a countdown)",
     )
+    ax.axhline(
+        stats["avg"], color=NAVY, linestyle=":", linewidth=1.2,
+        label=f"1-month average {stats['avg']:.1f}%  (same number as #uptime)",
+    )
+    if stats["worst"]:
+        wt, wv = stats["worst"]
+        ax.scatter([wt], [wv], s=42, color=VERM, zorder=5)
+        ax.annotate(
+            f"Worst bucket  {wv:.0f}%  once\n{fmt_window(wt)}\n"
+            f"(2 of 4 hourly consensuses)",
+            xy=(wt, wv), xytext=(18, -8), textcoords="offset points",
+            fontsize=8, color=VERM,
+            arrowprops=dict(arrowstyle="->", color=VERM, lw=0.8),
+        )
+    ax.set_ylim(35, 106)
+    ax.set_ylabel("Hourly consensuses with Running, packed into Onionoo's 4-hour bucket")
+    ax.set_title("Uptime B — area + real 98% WFU floor   ·   th4r (Guard, DE)")
+    date_axis(ax)
+    ax.legend(loc="lower left", fontsize=8)
+
+    # Self-explaining flag rules — 95% was a mockup heuristic, not a Tor timer.
+    rules = (
+        "There is no “N hours below 95% → lose flag X.” Authorities do not use this chart.\n"
+        "  Running   lost in ~45 minutes if directory authorities cannot connect. "
+        "One missed hourly consensus → a 75% (3/4) bucket.\n"
+        "  Guard     requires Weighted Fractional Uptime ≥98%. WFU weights recent downtime "
+        "more than this monthly average — a fresh dip hurts more than an old one.\n"
+        "  HSDir     same 98% WFU, plus Stable. This relay's HSDir was present only "
+        f"{extra['hsdir_1m']:.1f}% of the month (currently missing). "
+        "Flag Uptime on the page follows Guard and hides that.\n"
+        "  Stable    uptime or weighted MTBF vs the network median (typically weeks). "
+        "One consensus-visible outage can reset the clock. Not a percentage of the month."
+    )
+    fig.text(0.08, 0.245, rules, fontsize=8, color=NAVY, va="top", family="DejaVu Sans",
+             linespacing=1.35)
+
+    n50 = len(stats["by_level"][50])
+    n75 = len(stats["by_level"][75])
+    seventy_five = "; ".join(fmt_window(t) for t in stats["by_level"][75])
+    box = (
+        f"Numbers that belong on #uptime  (computed from the same Onionoo 1_month series)\n"
+        f"  1-month average     {stats['avg']:.1f}%     "
+        f"{stats['perfect']}/{stats['n']} buckets at 100%     "
+        f"health row today truncates this to {int(stats['avg'])}%\n"
+        f"  Imperfect buckets   {len(stats['imperfect'])} of {stats['n']}\n"
+        f"  Worst               50%  × {n50}     {fmt_window(stats['worst'][0]) if stats['worst'] else '—'}\n"
+        f"  75% (1 of 4 missed) × {n75}     {seventy_five}\n"
+        f"  Process restart     none in this window     last_restarted {extra['last_restarted']}  "
+        f"(Current Status on the page is this, not the chart)"
+    )
+    fig.text(0.08, 0.012, box + f"\nSource: Onionoo  ·  relays_published {published} UTC",
+             fontsize=8, color=GRAY, va="bottom", family="DejaVu Sans",
+             linespacing=1.35)
     save(fig, out_paths)
 
 
-def uptime_c_heatmap(ts, pct, published, out_paths):
+def uptime_c_heatmap(ts, pct, published, extra, out_paths):
+    stats = summarize_uptime(ts, pct)
     hours = sorted({t.hour for t in ts})
-    dates = sorted({t.date() for t in ts}, reverse=True)  # newest row on top
+    dates = sorted({t.date() for t in ts}, reverse=True)
     mat = np.full((len(dates), len(hours)), np.nan)
     for t, v in zip(ts, pct):
         mat[dates.index(t.date()), hours.index(t.hour)] = v
 
-    fig, ax = plt.subplots(figsize=(11.2, 6.4))
-    fig.subplots_adjust(bottom=0.16)
-    mesh = ax.imshow(
-        mat, aspect="auto", cmap=UPTIME_CMAP, vmin=40, vmax=100,
-        interpolation="nearest",
-    )
-    ax.set_xticks(range(len(hours)), [f"{h:02d}–{(h + 4) % 24:02d}" for h in hours])
+    cmap = ListedColormap(UPTIME_LEVEL_COLORS)
+    norm = BoundaryNorm([-0.1, 12.5, 37.5, 62.5, 87.5, 100.1], cmap.N)
+
+    fig, ax = plt.subplots(figsize=(11.2, 7.0))
+    fig.subplots_adjust(bottom=0.22)
+    mesh = ax.imshow(mat, aspect="auto", cmap=cmap, norm=norm, interpolation="nearest")
+    # Column labels are the actual 4-hour windows (midpoint ± 2h)
+    col_labels = []
+    for h in hours:
+        start = (h - 2) % 24
+        end = (h + 2) % 24
+        col_labels.append(f"{start:02d}–{end:02d}")
+    ax.set_xticks(range(len(hours)), col_labels)
     tick_idx = list(range(0, len(dates), 2))
     ax.set_yticks(tick_idx, [dates[i].strftime("%b %d") for i in tick_idx])
-    ax.set_xlabel("UTC window (Onionoo 4-hour buckets)")
+    ax.set_xlabel(
+        "UTC window  ·  Onionoo 1_month only (4-hour buckets). "
+        "6_months uses 12-hour buckets; 1_year uses 2-day buckets — no time-of-day there."
+    )
     ax.set_title("Uptime C — time-of-day heatmap   ·   th4r (Guard, DE)")
     ax.grid(False)
-    for y, x in zip(*np.where(mat < 95)):
-        ax.text(x, y, f"{mat[y, x]:.0f}", ha="center", va="center",
-                fontsize=7, color="white", fontweight="bold")
-    cbar = fig.colorbar(mesh, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label("Running %")
+    for y, x in zip(*np.where(~np.isnan(mat) & (mat < 99.5))):
+        hours_up = int(round(mat[y, x] / 25.0))
+        ax.text(x, y, f"{hours_up}/4", ha="center", va="center",
+                fontsize=7.5, color="white", fontweight="bold")
+    cbar = fig.colorbar(mesh, ax=ax, fraction=0.03, pad=0.02, ticks=UPTIME_LEVELS)
+    cbar.ax.set_yticklabels(UPTIME_LEVEL_LABELS)
+    cbar.set_label("Hourly consensuses with Running")
     caption(
         fig, published,
-        "Story: are the gaps a nightly cron, or random? th4r's five dips sit at "
-        "10:00 / 14:00 / 18:00 UTC — not a 04:00 restart job. A periodic pattern "
-        "would light up one column.",
+        "Why only 0 / 25 / 50 / 75 / 100? Consensuses are hourly. A 4-hour bucket "
+        "holds 4 samples, so Onionoo stores 0, 249, 499, 749, or 999 "
+        f"(× 1/999). th4r: 181×4/4, 4×3/4, 1×2/4 (worst {fmt_window(stats['worst'][0]) if stats['worst'] else '—'}). "
+        "Why 30 days? Onionoo's finest published uptime graph is 1_month. "
+        "1_week was removed in 2020.",
+    )
+    save(fig, out_paths)
+
+
+def uptime_section_numbers(ts, pct, published, extra, out_paths):
+    """Mock of the numbers to add beside the existing #uptime scalars."""
+    stats = summarize_uptime(ts, pct)
+    fig, ax = plt.subplots(figsize=(11.2, 5.8))
+    ax.axis("off")
+    ax.set_title("Proposed #uptime numbers  ·  same Onionoo series as charts B/C  ·  th4r",
+                 loc="left", pad=8)
+
+    rows = [
+        ["Field", "On the relay page today", "From this 1-month series"],
+        ["1-month Running average",
+         f"{stats['avg']:.1f}% in Overall Uptime 1M/6M/1Y/5Y\n"
+         f"Health row shows UP {int(stats['avg'])}% (truncated)",
+         f"{stats['avg']:.1f}%   ({stats['perfect']}/{stats['n']} buckets at 100%)"],
+        ["Current Status",
+         f"UP since last_restarted\n{extra['last_restarted']}  (process clock)",
+         "Not the chart. Process did not restart.\nThese dips are missed hourly consensuses."],
+        ["Imperfect 4-hour buckets",
+         "Not shown",
+         f"{len(stats['imperfect'])} of {stats['n']}"],
+        ["Worst bucket",
+         "Not shown",
+         f"50%  × once   {fmt_window(stats['worst'][0])}\n2 of 4 hourly consensuses missing"],
+        ["75% buckets (1 of 4 missed)",
+         "Not shown",
+         f"× {len(stats['by_level'][75])}\n" +
+         ";  ".join(fmt_window(t) for t in stats["by_level"][75][:2]) + "\n" +
+         ";  ".join(fmt_window(t) for t in stats["by_level"][75][2:])],
+        ["Flag Uptime (page)",
+         "Follows Guard → “Matches Overall”\nHSDir 59.1% is not displayed",
+         f"Guard {extra['guard_1m']:.1f}%   HSDir {extra['hsdir_1m']:.1f}%\n"
+         "HSDir currently missing — needs the swimlane"],
+    ]
+
+    table = ax.table(
+        cellText=rows[1:], colLabels=rows[0], loc="center", cellLoc="left",
+        colWidths=[0.22, 0.40, 0.38],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.scale(1, 2.4)
+    for (r, c), cell in table.get_celld().items():
+        cell.set_edgecolor("#dddddd")
+        if r == 0:
+            cell.set_facecolor("#1B3A4B")
+            cell.set_text_props(color="white", fontweight="bold")
+        elif r % 2 == 0:
+            cell.set_facecolor("#f7f7f7")
+    caption(
+        fig, published,
+        "Add the right-hand column under #uptime next to the existing 1M/6M/1Y/5Y "
+        "scalars. Do not replace Current Status — keep process uptime, and label it "
+        "as last_restarted so it is not confused with consensus Running.",
     )
     save(fig, out_paths)
 
@@ -432,8 +591,22 @@ def main():
     bw_doc = by_fp(json.loads(Path(args.bandwidth).read_text()))
 
     th4r_up = up_doc[TH4R]
+    th4r_det = det[TH4R]
     ts, vals = history_series((th4r_up.get("uptime") or {}).get("1_month"))
     pct = as_pct(vals)
+
+    def flag_avg(name):
+        block = ((th4r_up.get("flags") or {}).get(name) or {}).get("1_month") or {}
+        raw = [v for v in block.get("values") or [] if v is not None]
+        if not raw:
+            return 0.0
+        return (sum(raw) / len(raw)) * (100.0 / 999.0)
+
+    extra = {
+        "last_restarted": th4r_det.get("last_restarted", "unknown"),
+        "hsdir_1m": flag_avg("HSDir"),
+        "guard_1m": flag_avg("Guard"),
+    }
 
     f3 = det[F3NETZE]
     f3_bw = bw_doc[F3NETZE]
@@ -461,8 +634,9 @@ def main():
     art = Path(args.artifacts)
     jobs = [
         ("relay_uptime_a_annotated_line.png", uptime_a_annotated_line, (ts, pct, published)),
-        ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published)),
-        ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published)),
+        ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published, extra)),
+        ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
+        ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
         ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
          (w_ts, read_m, write_m, events, published)),
         ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
