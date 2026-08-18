@@ -1841,14 +1841,16 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
 """
 
 
-def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None):
+def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
+                             heading_overload=None):
     """Write a static HTML mock of relay-info.html #bandwidth with one placement."""
     nick = ctx["nickname"]
     fp = ctx["fingerprint"]
     aroi = ctx["aroi"] or "unknown"
     family = ctx["family_n"] or 1
-    ov_html = (f'<span class="overload-cue">{overload_text}</span>'
-               if overload_text else "")
+    heading_cue = heading_overload if heading_overload is not None else overload_text
+    ov_html = (f'<span class="overload-cue">{heading_cue}</span>'
+               if heading_cue else "")
     stability = ('<span class="al-status-danger">Overloaded</span>'
                  if overload_text else
                  '<span class="al-status-success">Not Overloaded</span>')
@@ -2242,6 +2244,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             "chart": "relay_bandwidth_page_opt1_hero_f3.png",
             "ctx": f3_ctx,
             "overload": ov_text,
+            "heading_overload": ov_text,
         },
         {
             "id": 2,
@@ -2254,6 +2257,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             "chart": "relay_bandwidth_page_opt2_jeangrae.png",
             "ctx": jg_ctx or f3_ctx,
             "overload": None if jg_ctx else ov_text,
+            "heading_overload": None,
         },
         {
             "id": 3,
@@ -2264,7 +2268,8 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             "file": "relay_page_bw_opt3_history_f3.html",
             "chart": "relay_bandwidth_page_opt3_history_f3.png",
             "ctx": f3_ctx,
-            "overload": None,
+            "overload": ov_text,
+            "heading_overload": None,
         },
     ]
     for opt in options:
@@ -2272,7 +2277,8 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             continue
         for dest in (out, art):
             write_bandwidth_page_html(
-                dest / opt["file"], opt, opt["ctx"], opt["chart"], opt["overload"],
+                dest / opt["file"], opt, opt["ctx"], opt["chart"],
+                opt["overload"], heading_overload=opt.get("heading_overload"),
             )
         print("wrote", opt["file"])
 
