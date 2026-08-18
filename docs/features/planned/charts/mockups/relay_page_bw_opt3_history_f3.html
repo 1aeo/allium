@@ -81,7 +81,7 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   <p class="breadcrumb">Home &gt; Browse by Network &gt; AS205100 &gt; F3Netze</p>
   <div class="option-banner">
     <strong>Option 3 of 3 — History subsection after Network Participation</strong>
-    Chosen. Snapshot numbers stay together. History is a named subsection before “Bandwidth Values Explained”. Three period layouts below — pick one. Overload wraps onto a second legend line; the progressive-enhancement footnote is gone.
+    Chosen. Snapshot numbers stay together. History is 1M hero + sparks; click a spark to swap it with the hero. Overload sits on a second legend line, tight against Write/Read.
     Relay: <strong>F3Netze</strong> (f3netze.de)
     · overloaded.
   </div>
@@ -159,15 +159,13 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
     </div>
         <h5 class="subsection-header" style="margin-top:16px;">History
           <span class="al-text-small-muted">(Onionoo write / read)</span></h5>
-        <div class="layout-label"><strong>Period layout 1 — pills (toggle 1M / 6M / 1Y / 5Y)</strong></div><div class="chart-wrap">
-      <img src="relay_bandwidth_periods_pills_f3.png" alt="Throughput history for F3Netze">
-      <p class="chart-note">Default 1M. Omit a pill if Onionoo omitted the graph. A static site pre-renders each selected period.</p>
-    </div><div class="layout-label"><strong>Period layout 2 — equal 2×2 of every published graph</strong></div><div class="chart-wrap">
-      <img src="relay_bandwidth_periods_equal_f3.png" alt="Throughput history for F3Netze">
-      <p class="chart-note">Same size, no click. Empty cell = not published, not 0.</p>
-    </div><div class="layout-label"><strong>Period layout 3 — 1M hero + 6M / 1Y / 5Y sparks</strong></div><div class="chart-wrap">
+        <div class="layout-label"><strong>Click a spark to swap it with the hero</strong></div><iframe src="relay_bandwidth_hero_sparks_swap_f3.html" title="Hero plus sparks click to swap" style="width:100%;height:780px;border:1px solid #dee2e6;border-radius:6px;background:#fff;"></iframe>
+        <div class="layout-label"><strong>Default — 1M hero, 6M / 1Y / 5Y sparks</strong></div><div class="chart-wrap">
       <img src="relay_bandwidth_periods_hero_sparks_f3.png" alt="Throughput history for F3Netze">
-      <p class="chart-note">1M stays large (finest buckets). Longer graphs are context underneath. Omit a spark if unpublished.</p>
+      <p class="chart-note">Click a spark (interactive frame above) to promote it. 1M stays the default because it has the finest buckets.</p>
+    </div><div class="layout-label"><strong>After clicking the 6M spark</strong></div><div class="chart-wrap">
+      <img src="relay_bandwidth_periods_hero_sparks_f3_6m.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">6M is now the hero; 1M moved into the spark row. Onionoo only publishes last_restarted (27 Jul). 18 Mar and 9 Oct on longer graphs are a mock of a multi-restart archive — one legend, comma-delimited dates, one vline each.</p>
     </div>
         <div class="explain">
           <strong>Bandwidth Values Explained:</strong><br>
