@@ -861,28 +861,55 @@ def event_x(when, x_values=None):
     return (when - x_values[0]).total_seconds() / step
 
 
+def event_whens(ev):
+    if ev.get("whens"):
+        return list(ev["whens"])
+    if ev.get("when") is not None:
+        return [ev["when"]]
+    return []
+
+
+def restart_legend_label(whens):
+    dates = ", ".join(w.strftime("%-d %b") for w in sorted(set(whens), reverse=True))
+    return f"Last restarted  {dates}" if dates else "Last restarted"
+
+
 def draw_event_lines(ax, events, x_values=None):
     """Restart is a point on the time axis. Overload is not drawn here.
 
     Onionoo has no overload history graph — only a last-detected timestamp —
-    so overload is a title / legend cue, not an x-axis range.
+    so overload is a title / legend cue, not an x-axis range. Multiple
+    restarts share one legend entry and get one vline each.
     """
     for ev in events:
         if ev["kind"] == "overload":
             continue
-        x = event_x(ev["when"], x_values)
-        ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
-                   alpha=0.95, zorder=3)
+        for when in event_whens(ev):
+            x = event_x(when, x_values)
+            ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+                       alpha=0.95, zorder=3)
 
 
 def event_legend_handles(events):
     handles = []
+    restart_whens = []
+    restart_style = None
     for ev in events:
         if ev["kind"] == "overload":
+            continue
+        if ev["kind"] == "restart":
+            restart_whens.extend(event_whens(ev))
+            restart_style = ev
             continue
         handles.append(Line2D(
             [0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
             label=ev["legend"],
+        ))
+    if restart_whens and restart_style:
+        handles.append(Line2D(
+            [0], [0], color=restart_style["color"],
+            linestyle=restart_style["ls"], linewidth=1.8,
+            label=restart_legend_label(restart_whens),
         ))
     return handles
 
@@ -978,7 +1005,7 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
         ax.add_artist(first)
         ax.legend(
             handles=handles[-1:], loc="upper left",
-            bbox_to_anchor=(0.0, 0.84), bbox_transform=ax.transAxes,
+            bbox_to_anchor=(0.0, 0.92), bbox_transform=ax.transAxes,
             **style,
         )
         return
@@ -1075,9 +1102,9 @@ def load_ratio_overlays():
 
     return {
         "role": as_series(raw.get("exitguard_daily") or []),
-        "role_label": "Exit+Guard peers  (network median)",
+        "role_label": "Peers Exit+Guard (network median)",
         "operator": as_series(raw.get("family_daily") or []),
-        "operator_label": "This operator  (family median, n=24)",
+        "operator_label": "Operator Family (median, n=24)",
         "family_outliers": raw.get("family_outliers", 0),
         "family_n": raw.get("family_n", 0),
     }
@@ -1101,26 +1128,31 @@ def ratio_legend_handles(overlays=None, bands=None):
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     n_bit = f", n={n}" if n else ""
+    overlays = overlays or {}
+    op_n = overlays.get("family_n") or 0
     handles = [
+        Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay"),
+    ]
+    if overlays.get("operator"):
+        handles.append(Line2D(
+            [0], [0], color=GRAY, linestyle=":", linewidth=1.6,
+            label=overlays.get("operator_label")
+            or f"Operator Family (median, n={op_n})",
+        ))
+    if overlays.get("role"):
+        handles.append(Line2D(
+            [0], [0], color=SKY, linestyle="--", linewidth=1.4,
+            label=overlays.get("role_label")
+            or f"Peers {role} (network median)",
+        ))
+    handles.extend([
         Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
               label=f"Typical  {tlo:.2f}–{thi:.2f}  ·  {role} p10–p90{n_bit}"),
         Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER,
               label=f"Uncommon  {ilo:.2f}–{tlo:.2f} / {thi:.2f}–{ihi:.2f}"),
         Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
               label=f"Investigate  <{ilo:.2f} or >{ihi:.2f}  ·  {role} beyond p98"),
-        Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
-    ]
-    overlays = overlays or {}
-    if overlays.get("role"):
-        handles.append(Line2D(
-            [0], [0], color=SKY, linestyle="--", linewidth=1.4,
-            label=overlays.get("role_label", "Role peers"),
-        ))
-    if overlays.get("operator"):
-        handles.append(Line2D(
-            [0], [0], color=GRAY, linestyle=":", linewidth=1.6,
-            label=overlays.get("operator_label", "This operator"),
-        ))
+    ])
     return handles
 
 
@@ -1136,6 +1168,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
+    ylo, yhi = 0.50, 1.70
     axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
     axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
@@ -1148,44 +1181,73 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     op = overlay_values(ts, overlays.get("operator"))
     if op is not None:
         axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=1.6, zorder=2)
+    # Clip to ylim. A Guard write spike (jeangrae 22–23 Jul, ratio 4.45 / 3.15)
+    # is investigate and used to vanish — the navy line was masked and the
+    # red line sat above 1.70.
+    y_plot = np.clip(ratio, ylo, yhi)
     investigate = (ratio < ilo) | (ratio > ihi)
-    if (~investigate).any():
-        y = np.ma.masked_where(investigate, ratio)
-        axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=3)
+    axr.plot(ts, y_plot, color=NAVY, linewidth=1.7, zorder=3)
     if investigate.any():
-        y = np.ma.masked_where(~investigate, ratio)
-        axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=4)
+        axr.plot(ts, np.ma.masked_where(~investigate, y_plot),
+                 color=BAD, linewidth=2.0, zorder=4)
+    off_hi = np.isfinite(ratio) & (ratio > yhi)
+    off_lo = np.isfinite(ratio) & (ratio < ylo)
+    ts_arr = np.array(ts)
+    if off_hi.any():
+        axr.scatter(ts_arr[off_hi], np.full(int(off_hi.sum()), yhi),
+                    marker="^", color=BAD, s=32, zorder=5, clip_on=False)
+    if off_lo.any():
+        axr.scatter(ts_arr[off_lo], np.full(int(off_lo.sum()), ylo),
+                    marker="v", color=BAD, s=32, zorder=5, clip_on=False)
     draw_event_lines(axr, events)
     pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
-    axr.set_ylim(0.50, 1.70)
-    # Percentile labels on the bands — short, right side, so the legend
-    # does not have to say "check role overlay".
-    axr.text(
-        0.995, (tlo + thi) / 2, "p10–p90",
-        transform=axr.get_yaxis_transform(), ha="right", va="center",
-        fontsize=7, color=GREEN, fontweight="bold",
-    )
-    axr.text(
-        0.995, min(1.66, (ihi + 1.70) / 2), ">p98",
-        transform=axr.get_yaxis_transform(), ha="right", va="center",
-        fontsize=7, color=BAD, fontweight="bold",
-    )
+    axr.set_ylim(ylo, yhi)
+    apply_ratio_yticks(axr, bands, ylo, yhi)
     if show_legend:
         handles = ratio_legend_handles(overlays, bands)
-        if legend_above:
-            axr.legend(
-                handles=handles, loc="lower left", bbox_to_anchor=(0.0, 1.02),
-                ncol=3, fontsize=7.0, frameon=False, borderaxespad=0.0,
-            )
-        else:
-            axr.legend(handles=handles, loc="upper right", fontsize=7.5,
-                       frameon=True, fancybox=False, edgecolor="#dddddd")
+        axr.legend(
+            handles=handles, loc="upper right", fontsize=6.8,
+            frameon=True, fancybox=False, edgecolor="#dddddd",
+            borderaxespad=0.25, labelspacing=0.28,
+        )
     if period_key:
         period_date_axis(axr, period_key)
     else:
         date_axis(axr)
     return float(np.nanmean(ratio))
+
+
+def apply_ratio_yticks(axr, bands, ylo=0.50, yhi=1.70):
+    """Percentile labels live on the left axis with 0.5 / 1.0 / 1.5."""
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ihi = bands["invest_hi"]
+    typical_mid = (tlo + thi) / 2.0
+    ticks = [ylo, 1.0, 1.5]
+    labels = [f"{ylo:.1f}", "1.0", "1.5"]
+    colors = [GRAY, GRAY, GRAY]
+    if abs(typical_mid - 1.0) < 0.10:
+        labels[1] = "1.0   p10–p90"
+        colors[1] = GREEN
+    else:
+        ticks.insert(2 if typical_mid > 1.0 else 1, typical_mid)
+        labels.insert(2 if typical_mid > 1.0 else 1, "p10–p90")
+        colors.insert(2 if typical_mid > 1.0 else 1, GREEN)
+    p98_y = min(yhi - 0.06, max(ihi + 0.05, (ihi + yhi) / 2.0))
+    if 1.5 >= ihi or abs(p98_y - 1.5) <= 0.12:
+        labels[ticks.index(1.5)] = "1.5   >p98"
+        colors[ticks.index(1.5)] = BAD
+    elif p98_y > 1.5:
+        ticks.append(p98_y)
+        labels.append(">p98")
+        colors.append(BAD)
+    axr.set_yticks(ticks)
+    axr.set_yticklabels(labels)
+    for tick, color in zip(axr.get_yticklabels(), colors):
+        tick.set_color(color)
+        if color != GRAY:
+            tick.set_fontweight("bold")
+            tick.set_fontsize(7.5)
 
 
 def events_in_span(events, ts):
@@ -1196,9 +1258,15 @@ def events_in_span(events, ts):
     for ev in events or []:
         if ev.get("kind") == "overload":
             continue
-        when = ev.get("when")
-        if when is None or lo <= when <= hi:
-            out.append(ev)
+        whens = [w for w in event_whens(ev) if lo <= w <= hi]
+        if not whens:
+            continue
+        clipped = dict(ev)
+        clipped["whens"] = whens
+        clipped["when"] = whens[0]
+        if ev.get("kind") == "restart":
+            clipped["legend"] = restart_legend_label(whens)
+        out.append(clipped)
     return out
 
 
@@ -1246,7 +1314,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           period_key="1_month"):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    hspace = 0.32 if page_ready else 0.18
+    hspace = 0.14 if page_ready else 0.16
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
@@ -1278,6 +1346,12 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         fam_n = (overlays or {}).get("family_n") or 0
         fam_out = (overlays or {}).get("family_outliers") or 0
         thi = (bands or {}).get("typical_hi", RATIO_HI)
+        off = sum(1 for w, r in zip(write_m, read_m) if r and (w / r) > 1.70)
+        off_bit = (
+            f" {off} day(s) sit above the 1.70 scale (red triangles) — "
+            "the line was not missing."
+            if off else ""
+        )
         caption(
             fig, published,
             story or (
@@ -1288,6 +1362,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                 f"moved. {fam_out} of {fam_n} group relays sit above this "
                 f"role's typical ({thi:.2f}). Delivered write "
                 f"~{np.mean(write_m):.0f} Mbit/s ({used:.0f}% of advertised)."
+                f"{off_bit}"
             ),
         )
     save(fig, out_paths)
@@ -1511,9 +1586,14 @@ def bandwidth_periods_equal(periods, advertised_mbit, events, overload_status,
 
 def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
                                   overload_status, published, nickname,
-                                  out_paths, page_ready=True):
-    """1M hero (throughput + ratio) and smaller sparks for longer graphs."""
-    hero_key = "1_month" if "1_month" in periods else next(iter(periods))
+                                  out_paths, page_ready=True, hero_key=None):
+    """Hero (throughput + ratio) and smaller sparks for the other graphs.
+
+    Clicking a spark swaps it with the hero (static site: pre-render each
+    hero_key and swap the images).
+    """
+    if hero_key is None or hero_key not in periods:
+        hero_key = "1_month" if "1_month" in periods else next(iter(periods))
     others = [k for k in PERIOD_ORDER if k in periods and k != hero_key]
     wrap_last = bool(overload_status)
     fig = plt.figure(figsize=(10.8, 8.4 if others else 6.6))
@@ -1541,7 +1621,7 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
     _plot_ratio_strip(
         axr, block["ts"], block["read_m"], block["write_m"], events,
         _period_overlays(overlays, hero_key), legend_above=False,
-        bands=(overlays or {}).get("bands"), show_legend=False,
+        bands=(overlays or {}).get("bands"), show_legend=True,
         period_key=hero_key,
     )
     if others:
@@ -1555,15 +1635,96 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
                 events, period_key=key, compact=True,
             )
             m = BW_PERIOD_META[key]
-            a.set_title(f"{m['short']}  ·  {m['bucket']}", fontsize=9)
+            a.set_title(f"{m['short']}  ·  {m['bucket']}  ·  click to swap",
+                        fontsize=9)
             a.set_ylabel("")
     if not page_ready:
         caption(
             fig, published,
-            f"1M hero + longer-period sparks on {nickname}. Omit a spark if "
-            "Onionoo omitted the graph. Advertised is the current snapshot.",
+            f"Hero is {BW_PERIOD_META[hero_key]['short']} on {nickname}. "
+            "Click a spark to move it to the hero slot; the previous hero "
+            "drops into the spark row. Omit a spark if Onionoo omitted the graph.",
         )
     save(fig, out_paths)
+
+
+def save_period_spark(block, advertised_mbit, events, key, out_paths):
+    """Compact throughput tile used as a clickable spark."""
+    fig, ax = plt.subplots(figsize=(3.9, 2.15))
+    fig.subplots_adjust(left=0.16, right=0.97, top=0.80, bottom=0.22)
+    _draw_throughput_series(
+        ax, block["ts"], block["read_m"], block["write_m"],
+        advertised_mbit, events, period_key=key, compact=True,
+    )
+    m = BW_PERIOD_META[key]
+    ax.set_title(f"{m['short']}  ·  {m['bucket']}", fontsize=9)
+    save(fig, out_paths)
+
+
+def write_hero_sparks_swap_html(path, nickname, periods, hero_name, spark_name):
+    """Click a spark: it becomes the hero, previous hero joins the spark row."""
+    keys = [k for k in PERIOD_ORDER if k in periods]
+    shorts = {k: BW_PERIOD_META[k]["short"] for k in keys}
+    heroes = {k: hero_name(k) for k in keys}
+    sparks = {k: spark_name(k) for k in keys}
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{nickname} — hero + sparks swap</title>
+  <style>
+    .hs-wrap {{ font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }}
+    .hs-note {{ font-size:12px; color:#555; margin:0 0 8px; }}
+    .hs-hero img {{ width:100%; height:auto; display:block; }}
+    .hs-sparks {{ display:flex; gap:10px; margin-top:8px; }}
+    .hs-sparks button {{
+      flex:1; padding:4px; border:1px solid #dee2e6; background:#fff;
+      cursor:pointer; border-radius:6px;
+    }}
+    .hs-sparks button:hover {{ border-color:#337ab7; }}
+    .hs-sparks button img {{ width:100%; height:auto; display:block; }}
+    .hs-sparks button span {{
+      display:block; font-size:11px; color:#1b3a4b; margin-top:4px;
+    }}
+  </style>
+</head>
+<body>
+<div class="hs-wrap">
+  <p class="hs-note">Click a spark to swap it with the hero. The previous
+  hero moves into the spark row. Unpublished Onionoo graphs are omitted.</p>
+  <div class="hs-hero"><img id="hs-hero-img" alt="Hero throughput"></div>
+  <div class="hs-sparks" id="hs-sparks"></div>
+</div>
+<script>
+const KEYS = {json.dumps(keys)};
+const SHORT = {json.dumps(shorts)};
+const HERO = {json.dumps(heroes)};
+const SPARK = {json.dumps(sparks)};
+let hero = KEYS.includes("1_month") ? "1_month" : KEYS[0];
+function render() {{
+  document.getElementById("hs-hero-img").src = HERO[hero];
+  const row = document.getElementById("hs-sparks");
+  row.innerHTML = KEYS.filter(k => k !== hero).map(k =>
+    '<button type="button" data-key="'+k+'">' +
+    '<img src="'+SPARK[k]+'" alt="'+SHORT[k]+' spark">' +
+    '<span>'+SHORT[k]+' · click to swap</span></button>'
+  ).join("");
+}}
+document.getElementById("hs-sparks").addEventListener("click", (e) => {{
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  hero = btn.getAttribute("data-key");
+  render();
+}});
+render();
+</script>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -2020,26 +2181,46 @@ def build_ratio_overlays(details_relays, bw_by_fp, role, contact_substr=None,
     outliers = sum(1 for m in op_means if m > RATIO_HI)
     return {
         "role": role_daily,
-        "role_label": f"{role} peers  (network median, n={role_n})",
+        "role_label": f"Peers {role} (network median, n={role_n})",
         "operator": op_daily if op_n > 1 else {},
-        "operator_label": operator_label or f"This operator  (median, n={op_n})",
+        "operator_label": operator_label or f"Operator Family (median, n={op_n})",
         "family_outliers": outliers,
         "family_n": op_n,
     }
 
 
-def restart_events(relay):
-    events = []
+def restart_events(relay, extra=None):
+    """One legend entry, one vline per restart in range.
+
+    Onionoo only publishes last_restarted. extra= is a mock / future
+    archive of older restarts (CollecTor), newest first in the label.
+    """
+    whens = []
     if relay.get("last_restarted"):
-        when = parse_onionoo_ts(relay["last_restarted"])
-        events.append({
-            "kind": "restart",
-            "when": when,
-            "color": RESTART,
-            "ls": "-.",
-            "legend": f"Last restarted  {when.strftime('%-d %b')}",
-        })
-    return events
+        whens.append(parse_onionoo_ts(relay["last_restarted"]))
+    for item in extra or []:
+        if isinstance(item, str):
+            item = parse_onionoo_ts(item)
+        whens.append(item)
+    # unique, newest first
+    uniq = []
+    seen = set()
+    for w in sorted(whens, reverse=True):
+        key = w.isoformat()
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(w)
+    if not uniq:
+        return []
+    return [{
+        "kind": "restart",
+        "when": uniq[0],
+        "whens": uniq,
+        "color": RESTART,
+        "ls": "-.",
+        "legend": restart_legend_label(uniq),
+    }]
 
 
 def load_bandwidth_for_fp(bw_doc, extra_paths, fp):
@@ -2205,7 +2386,7 @@ def chart_block_html(nick, chart_file, note, label=None):
 
 
 def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
-                             heading_overload=None, charts=None):
+                             heading_overload=None, charts=None, extra_html=""):
     """Write a static HTML mock of relay-info.html #bandwidth with one placement."""
     nick = ctx["nickname"]
     fp = ctx["fingerprint"]
@@ -2262,6 +2443,7 @@ def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
         {participation_box(ctx)}
         <h5 class="subsection-header" style="margin-top:16px;">History
           <span class="al-text-small-muted">(Onionoo write / read)</span></h5>
+        {extra_html}
         {chart}
         <div class="explain">
           <strong>Bandwidth Values Explained:</strong><br>
@@ -2442,16 +2624,12 @@ def main():
     write_m = bytes_to_mbit(w_vals)
     read_m = bytes_to_mbit(r_vals)
     advertised_mbit = (f3.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0
-    events = []
-    if f3.get("last_restarted"):
-        when = parse_onionoo_ts(f3["last_restarted"])
-        events.append({
-            "kind": "restart",
-            "when": when,
-            "color": RESTART,
-            "ls": "-.",
-            "legend": f"Last restarted  {when.strftime('%-d %b')}",
-        })
+    # Onionoo only ships last_restarted (27 Jul). Extra dates mock a
+    # restart archive so 6M/1Y/5Y can show a comma-delimited legend.
+    events = restart_events(f3, extra=[
+        "2026-03-18 04:00:00",
+        "2025-10-09 12:00:00",
+    ])
     # Merge /bandwidth overload fields when present (F3Netze snapshot has none).
     f3_ov = dict(f3)
     if f3_bw.get("overload_ratelimits"):
@@ -2786,6 +2964,41 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         fn(*fn_args, [out / name, art / name], True)
         print("wrote", name)
 
+    # Click-to-swap: one combined figure + one hero panel + one spark per period.
+    for key in f3_periods:
+        short = BW_PERIOD_META[key]["short"].lower()
+        combo = f"relay_bandwidth_periods_hero_sparks_f3_{short}.png"
+        bandwidth_periods_hero_sparks(
+            f3_periods, advertised_mbit, events, f3_overlays, ov_status,
+            published, "F3Netze", [out / combo, art / combo], True, key,
+        )
+        print("wrote", combo)
+        hero_name = f"relay_bandwidth_hero_f3_{key}.png"
+        block = f3_periods[key]
+        bandwidth_a_dual_line(
+            block["ts"], block["read_m"], block["write_m"], advertised_mbit,
+            events, published, _period_overlays(f3_overlays, key), ov_status,
+            [out / hero_name, art / hero_name],
+            nickname="F3Netze",
+            title=f"Throughput · {BW_PERIOD_META[key]['title']}  ·  {BW_PERIOD_META[key]['bucket']} buckets",
+            overload_mode="legend", page_ready=True, period_key=key,
+        )
+        print("wrote", hero_name)
+        spark_name = f"relay_bandwidth_spark_f3_{key}.png"
+        save_period_spark(
+            block, advertised_mbit, events, key,
+            [out / spark_name, art / spark_name],
+        )
+        print("wrote", spark_name)
+    for dest in (out, art):
+        write_hero_sparks_swap_html(
+            dest / "relay_bandwidth_hero_sparks_swap_f3.html",
+            "F3Netze", f3_periods,
+            lambda k: f"relay_bandwidth_hero_f3_{k}.png",
+            lambda k: f"relay_bandwidth_spark_f3_{k}.png",
+        )
+    print("wrote relay_bandwidth_hero_sparks_swap_f3.html")
+
     th4r = det.get(TH4R)
     th4r_bw = bw_all.get(TH4R) or bw_doc.get(TH4R)
     if th4r and th4r_bw:
@@ -2830,7 +3043,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         overlays["bands"] = bands_for_flags(relay.get("flags"))
         if role == "Guard" and family:
             overlays["operator_label"] = (
-                f"This family  (1aeo effective-family median, n={overlays['family_n']})"
+                f"Operator Family (median, n={overlays['family_n']})"
             )
         ctx = relay_page_context(relay, published, role)
         if fp == JEANGRAE:
@@ -2900,32 +3113,38 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         {
             "id": 3,
             "name": "History subsection after Network Participation",
-            "blurb": "Chosen. Snapshot numbers stay together. History is a named "
-                     "subsection before “Bandwidth Values Explained”. Three period "
-                     "layouts below — pick one. Overload wraps onto a second "
-                     "legend line; the progressive-enhancement footnote is gone.",
+            "blurb": "Chosen. Snapshot numbers stay together. History is 1M hero "
+                     "+ sparks; click a spark to swap it with the hero. Overload "
+                     "sits on a second legend line, tight against Write/Read.",
             "file": "relay_page_bw_opt3_history_f3.html",
             "chart": "relay_bandwidth_page_opt3_history_f3.png",
             "ctx": f3_ctx,
             "overload": ov_text,
             "heading_overload": None,
+            "extra_html": (
+                '<div class="layout-label"><strong>Click a spark to swap it '
+                'with the hero</strong></div>'
+                '<iframe src="relay_bandwidth_hero_sparks_swap_f3.html" '
+                'title="Hero plus sparks click to swap" '
+                'style="width:100%;height:780px;border:1px solid #dee2e6;'
+                'border-radius:6px;background:#fff;"></iframe>'
+            ),
             "charts": [
                 {
-                    "label": "Period layout 1 — pills (toggle 1M / 6M / 1Y / 5Y)",
-                    "file": "relay_bandwidth_periods_pills_f3.png",
-                    "note": "Default 1M. Omit a pill if Onionoo omitted the graph. "
-                            "A static site pre-renders each selected period.",
-                },
-                {
-                    "label": "Period layout 2 — equal 2×2 of every published graph",
-                    "file": "relay_bandwidth_periods_equal_f3.png",
-                    "note": "Same size, no click. Empty cell = not published, not 0.",
-                },
-                {
-                    "label": "Period layout 3 — 1M hero + 6M / 1Y / 5Y sparks",
+                    "label": "Default — 1M hero, 6M / 1Y / 5Y sparks",
                     "file": "relay_bandwidth_periods_hero_sparks_f3.png",
-                    "note": "1M stays large (finest buckets). Longer graphs are "
-                            "context underneath. Omit a spark if unpublished.",
+                    "note": "Click a spark (interactive frame above) to promote "
+                            "it. 1M stays the default because it has the finest "
+                            "buckets.",
+                },
+                {
+                    "label": "After clicking the 6M spark",
+                    "file": "relay_bandwidth_periods_hero_sparks_f3_6m.png",
+                    "note": "6M is now the hero; 1M moved into the spark row. "
+                            "Onionoo only publishes last_restarted (27 Jul). "
+                            "18 Mar and 9 Oct on longer graphs are a mock of a "
+                            "multi-restart archive — one legend, comma-delimited "
+                            "dates, one vline each.",
                 },
             ],
         },
@@ -2937,7 +3156,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             write_bandwidth_page_html(
                 dest / opt["file"], opt, opt["ctx"], opt["chart"],
                 opt["overload"], heading_overload=opt.get("heading_overload"),
-                charts=opt.get("charts"),
+                charts=opt.get("charts"), extra_html=opt.get("extra_html") or "",
             )
         print("wrote", opt["file"])
 
