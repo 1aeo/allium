@@ -415,22 +415,26 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
             ax.set_title("6. Bandwidth history — F3Netze", pad=28)
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
-        axr.axhspan(0.50, 0.80, color=VERM, alpha=0.10)
-        axr.axhspan(0.80, 0.90, color=ORANGE, alpha=0.10)
-        axr.axhspan(0.90, 1.15, color=GREEN, alpha=0.16)
-        axr.axhspan(1.15, 1.50, color=ORANGE, alpha=0.10)
-        axr.axhspan(1.50, 1.70, color=VERM, alpha=0.10)
+        # Frozen Exit+Guard bands (p10–p90 / beyond p98). Not a live percentile.
+        axr.axhspan(0.50, 0.93, color=VERM, alpha=0.10)
+        axr.axhspan(0.93, 0.97, color=ORANGE, alpha=0.10)
+        axr.axhspan(0.97, 1.15, color=GREEN, alpha=0.16)
+        axr.axhspan(1.15, 1.71, color=ORANGE, alpha=0.10)
+        axr.axhspan(1.71, 1.85, color=VERM, alpha=0.10)
         axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
         axr.plot(w_ts, ratio, color=NAVY, linewidth=1.6)
         axr.set_ylim(0.50, 1.70)
         axr.set_ylabel("Write / read")
+        axr.text(0.995, 1.06, "p10–p90", transform=axr.get_yaxis_transform(),
+                 ha="right", va="center", fontsize=7, color=GREEN,
+                 fontweight="bold")
         axr.legend(handles=[
             Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-                  label="Typical  0.90–1.15"),
+                  label="Typical  0.97–1.15  ·  Exit+Guard p10–p90"),
             Patch(facecolor=ORANGE, alpha=0.16, edgecolor=ORANGE,
-                  label="Uncommon  0.80–0.90 / 1.15–1.50  ·  check role overlay"),
+                  label="Uncommon  0.93–0.97 / 1.15–1.71"),
             Patch(facecolor=VERM, alpha=0.16, edgecolor=VERM,
-                  label="Investigate  <0.80 or >1.50"),
+                  label="Investigate  <0.93 or >1.71  ·  beyond Exit+Guard p98"),
             Line2D([0], [0], color=NAVY, lw=1.6, label="This relay  write / read"),
         ], loc="upper right", fontsize=7.5, frameon=True, edgecolor="#dddddd")
         axr.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))

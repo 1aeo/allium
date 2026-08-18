@@ -33,7 +33,7 @@ CANDIDATE_BANDS = (
 )
 # Bytes/s mean (write+read)/2. Tiny relays make noisy ratios.
 TRAFFIC_CUTS_BPS = (0, 10_000, 50_000, 100_000, 500_000)
-PCTILES = (1, 5, 10, 25, 50, 75, 90, 95, 99)
+PCTILES = (1, 2, 5, 10, 25, 50, 75, 90, 95, 98, 99)
 
 BLUE = "#0072B2"
 GREEN = "#009E73"

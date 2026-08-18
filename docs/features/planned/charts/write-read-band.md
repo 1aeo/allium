@@ -8,27 +8,41 @@
 
 ## Recommendation
 
-Two frozen layers. Do not treat “outside 0.90–1.15” as “investigate.”
+**Per-role frozen bands**, from this relay’s flag set (Exit / Guard /
+Exit+Guard / Middle). Typical is this role’s **p10–p90**. Investigate
+is outside this role’s **p2–p98** (the 2% tails — “beyond 98% of this
+role”). Uncommon is the shoulder between those.
 
-| Layer | Range | What it means | 1M share (≥50 KB/s) |
-|-------|-------|---------------|---------------------|
-| **Typical** | 0.90–1.15 | Where healthy relays live. 1M p10–p90 plus room. | 89.8% |
-| **Uncommon** | 0.80–0.90 and 1.15–1.50 | Shoulder. Look at the role overlay. **1.20 is here.** | 8.0% |
-| **Investigate** | <0.80 or >1.50 | Rare. Something unusual, or a directory authority. | 2.2% |
+Constants: [`data/role_ratio_bands.json`](data/role_ratio_bands.json),
+census `relays_published` 2026-08-15 19:00 UTC, ≥50 KB/s, 1-month
+ratio of means.
 
-0.90–1.15 is a **typicality** band, not an outlier alarm. The histogram
-makes that obvious: 1.20 is past the peak but still a real pile of
-relays (647, 6.3%), and 302 of the 492 relays between 1.15 and 1.30 are
-Guards. Guard p90 is 1.17. Painting 1.20 red would cry wolf.
+| Role | n | Typical (p10–p90) | Investigate (beyond p98) | Where 1.20 sits |
+|------|--:|-------------------|--------------------------|-----------------|
+| Exit | 1,678 | 0.96–1.02 | <0.92 or >**1.13** | p98.7 → investigate |
+| Exit+Guard | 1,625 | 0.97–1.15 | <0.93 or >1.71 | p93.6 → uncommon |
+| Guard | 4,444 | 1.01–1.17 | <0.99 or >1.58 | p91.6 → uncommon |
+| Middle | 2,565 | 0.93–1.09 | <0.87 or >1.60 | p94.3 → uncommon |
 
-Investigate is **<0.80 or >1.50**. That is 231 relays on 1M (2.2%): 15
-read-heavy, 216 write-heavy. The worst write-heavy cases are directory
-authorities (moria1 41×, gabelmoo 28×). An Exit at 1.20 is uncommon for
-an Exit (role overlay at 1.01) but not rare-for-anyone; red is reserved
-for rare-for-anyone.
+p98, not p99: an Exit at 1.20 is p98.7. p99 (1.26) would leave that
+Exit amber. Guard p99 is 2.04 (dirauth territory) and would hide a
+1.6 Guard. Label the bands with those percentiles so “suspicious”
+means “rarer than 98% of this flag set,” not “off a global 0.90–1.15.”
 
-Do not replace either layer with a live percentile. A network DoS that
-hits every exit would move p10–p90 and hide the event.
+The role-median overlay stays on the chart as confirmation. Do not
+write “check role overlay” on the uncommon swatch — the line is
+already there. If this relay and the overlay both leave the green
+band, the role moved. If only this relay left, it is this relay.
+
+**DoS:** freeze the bands. A live p10–p90 computed at build time from
+this week’s Exits would walk with a network-wide Exit DoS and paint
+the event green. The frozen Exit typical (0.96–1.02) still fires.
+The overlay moving is how you *see* the DoS; the band moving is how
+you *hide* it.
+
+![Role-specific bands](mockups/ratio_bands_by_role.png)
+
+![DoS: frozen bands fire, live percentiles hide](mockups/ratio_bands_dos_frozen_vs_live.png)
 
 ## How the survey was done
 
@@ -155,16 +169,18 @@ period.
 
 - **Live p10–p90 as the green band.** A network DoS that hits every exit
   would move the percentile and hide the event. Role / operator medians
-  are overlays on a frozen band, not a replacement for it.
+  are overlays on a **frozen** role band, not a replacement for it.
+- **One global 0.90–1.15 / 1.50 for every relay.** An Exit at 1.20 is
+  rare-for-Exits (p98.7) but common-for-Guards (p91.6). The page already
+  knows the flags. Use that flag set’s p10–p90 and p98.
 - **Treat 0.90–1.15 as the investigate line.** That paints 10% of 1M
-  relays red, including hundreds of ordinary Guards at 1.16–1.30. Two
-  layers: typical vs rare.
+  relays red, including hundreds of ordinary Guards at 1.16–1.30.
 - **0.90–1.20 as a single wider typical band.** Swallows Guard p90 and
-  hides Exit+Guard p90. Keep typical at 0.90–1.15; put 1.20 in amber.
-- **Per-role investigate lines.** The question on a relay page is “are
-  circuits bidirectional?”, not “am I normal for a Guard?” One typical
-  band, role overlay for the shoulder, one rare-event line.
-- **Live p95 as investigate.** Same DoS problem as a live typical band.
+  hides Exit p90 (1.02).
+- **Live p95 / p98 / p99 as investigate.** Same DoS problem as a live
+  typical band. Freeze p98 from a quiet census.
+- **“Check role overlay” in the uncommon label.** The overlay is already
+  drawn. The label is the percentile, not a homework assignment.
 
 ## Regenerating
 

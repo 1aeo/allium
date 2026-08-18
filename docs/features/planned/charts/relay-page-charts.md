@@ -357,30 +357,36 @@ navy dash-dot at `last_restarted` (a point). Overload is a title-line
 cue, not a band on the time axis and not a floating red badge. The
 legend is above the plot so it cannot cover write, read, or advertised.
 
-The bottom strip is write/read. The green band is a **fixed expected
-range, not a live percentile**. A network DoS that hits every exit
-would move p10–p90 and hide the event. Keep the expected range frozen;
-add live aggregates as lines on top of it.
+The bottom strip is write/read. The bands are **this relay’s flag set**,
+frozen from a quiet census — Exit, Guard, Exit+Guard, or Middle. Typical
+is that role’s **p10–p90**. Investigate is outside that role’s **p2–p98**.
+Label the bands with those percentiles. Do not say “check role overlay”
+on the uncommon swatch; the overlay is already on the chart.
+
+A live percentile computed at build time would hide a DoS. Freeze the
+numbers in [`data/role_ratio_bands.json`](data/role_ratio_bands.json).
+The role-median overlay is allowed to move — that is the confirmation.
 
 | Layer | What | Why |
 |-------|------|-----|
-| Typical 0.90–1.15 | Frozen typicality band. Full-network census: 1M p10–p90 is 0.965–1.130. **1.20 is uncommon, not investigate** (6.3% of 1M, mostly Guards). | Where healthy relays live |
-| Uncommon 0.80–0.90 / 1.15–1.50 | Amber. Check the role overlay — a Guard at 1.20 is normal-for-Guards; an Exit at 1.20 is not. | Shoulder. Do not paint it red |
-| Investigate <0.80 or >1.50 | Frozen rare-event line. 2.2% of 1M. Dirauths and genuinely lopsided relays. | The actual “look at this” alarm |
+| Typical (green) | This flag set’s p10–p90. Exit 0.96–1.02; Guard 1.01–1.17; Exit+Guard 0.97–1.15. | Where this role lives |
+| Uncommon (amber) | Between typical and p98. A Guard at 1.20 is p91.6. | Shoulder. Not red. |
+| Investigate (red) | Beyond this role’s p98. An Exit at 1.20 is p98.7 → red. A Guard at 1.20 is not. | “Rarer than 98% of this flag set” |
 | This relay | Navy line | The thing the operator is debugging |
-| Role peers | Dashed. Median write/read of the same flag set (Exit+Guard for F3Netze) | Did the whole role move? |
-| This operator | Dotted. Median of the AROI / contact / effective-family group (F3: 24 relays). Omit if the group is 1. Use **median**, not mean — F3's mean is 1.17 because 4 of 24 members sit at 1.5–2.2 | Is this relay the odd one in the family? |
+| Role peers | Dashed median of the same flag set | Did the whole role move? (DoS confirmation) |
+| This operator | Dotted family / AROI median. Omit if n=1. | Is this relay the odd one in the family? |
 
 How to read the strip:
 
-- Line stays green (0.90–1.15) → typical. Done.
-- Line in amber (1.15–1.50 or 0.80–0.90), role overlay still near 1.0 → uncommon for this role; worth a glance, not a fire drill. 1.20 lives here.
-- Line in amber, role overlay moved too → role-wide / network. The frozen typical band is what tells you the role moved.
-- Line in red (<0.80 or >1.50) → rare. Investigate (or it is a directory authority).
+- Line stays in this role’s green → typical for these flags. Done.
+- Line in amber, role overlay still in green → this relay, not the role.
+- Line in amber or red, role overlay moved too → role-wide / network. Frozen bands are what tell you the role left home.
+- Line beyond this role’s p98 → investigate (or a directory authority).
 - Family leaves, role stays → operator / AS / upstream.
 
-Do not replace the green band with "this week's p25–p75." That is the
-overlay's job.
+Do not replace the green band with “this week’s p25–p75.” That is the
+overlay’s job. See [`write-read-band.md`](write-read-band.md) for the
+DoS frozen-vs-live figure.
 
 ![Bandwidth A — dual line + advertised + imbalance](mockups/relay_bandwidth_a_dual_line.png)
 
@@ -593,12 +599,13 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
 3. Color: red only for problems this relay owns (local Running gap,
-   current overload title/legend cue, write/read **investigate** <0.80
-   or >1.50, missing flags). 1.20 is amber uncommon, not red.
-   Shared/network gaps are orange + gray, not red. Write is purple, read
-   is blue, advertised is orange, last-restarted is navy. Typical
-   0.90–1.15 and investigate <0.80 / >1.50 are frozen constants, not
-   live percentiles. Restart is an `axvline` at `last_restarted`.
+   current overload title/legend cue, write/read beyond **this role’s
+   p98**, missing flags). A Guard at 1.20 is amber; an Exit at 1.20 is
+   red. Shared/network gaps are orange + gray, not red. Write is
+   purple, read is blue, advertised is orange, last-restarted is navy.
+   Typical / investigate are frozen **per flag set**
+   (`role_ratio_bands.json`), not live percentiles. Restart is an
+   `axvline` at `last_restarted`.
    Overload is **not** on the time axis: if `current_overload_status`
    (from `evaluate_overload`) says the relay is currently overloaded,
    put a quiet cue in the title or legend; otherwise omit it. Do not
