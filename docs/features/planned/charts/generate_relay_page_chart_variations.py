@@ -56,6 +56,8 @@ AMBER = ORANGE
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
+# 1aeo.com Guard+HSDir, effective family 241, not currently overloaded.
+JEANGRAE = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
 
 PERIOD_META = {
     "1_month": {
@@ -839,7 +841,7 @@ def draw_event_lines(ax, events, x_values=None):
     """Restart is a point on the time axis. Overload is not drawn here.
 
     Onionoo has no overload history graph — only a last-detected timestamp —
-    so overload is a current-status badge, not an x-axis range.
+    so overload is a title / legend cue, not an x-axis range.
     """
     for ev in events:
         if ev["kind"] == "overload":
@@ -887,16 +889,88 @@ def overload_now_status(relay, published):
     return current_overload_status(relay, now_ts)
 
 
-def draw_overload_badge(fig, status):
-    """Current-status chip above the plot. Not a time-axis range."""
+def overload_quiet_text(status):
+    """Quieter than the old OVERLOADED NOW pill. None if not current."""
     if not status:
+        return None
+    if status.get("last_report"):
+        when = status["last_report"].strftime("%-d %b %H:%M") + " UTC"
+        return f"currently overloaded · last report {when}"
+    return "currently overloaded"
+
+
+def throughput_legend_handles(advertised_mbit, events, overload_status=None,
+                              overload_in_legend=False):
+    handles = [
+        Line2D([0], [0], color=WRITE, linewidth=1.8, label="Write (outbound)"),
+        Line2D([0], [0], color=BLUE, linewidth=1.8, label="Read (inbound)"),
+    ]
+    if advertised_mbit:
+        handles.append(Line2D(
+            [0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+            label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
+        ))
+    handles.extend(event_legend_handles(events))
+    if overload_in_legend and overload_status:
+        handles.append(Line2D(
+            [0], [0], color=OVERLOAD, marker="D", linestyle="None",
+            markersize=6, label=overload_quiet_text(overload_status),
+        ))
+    return handles
+
+
+def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None):
+    """One-row legend in the empty band above advertised / data_max.
+
+    ylim reserves that band (see throughput_ylim). Do not use loc=upper
+    left on a tight ylim — that is what sat the legend on the series.
+    """
+    if not handles:
         return
-    fig.text(
-        0.99, 1.0, status["label"],
-        ha="right", va="bottom",
-        fontsize=8.5, color="white", fontweight="bold",
-        bbox=dict(boxstyle="round,pad=0.4", fc=OVERLOAD, ec=OVERLOAD),
+    ax.legend(
+        handles=handles,
+        loc="upper left",
+        ncol=ncol or min(len(handles), 5),
+        fontsize=fontsize,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#eeeeee",
+        facecolor="white",
+        framealpha=0.96,
+        borderaxespad=0.35,
+        columnspacing=1.1,
+        handlelength=1.7,
     )
+
+
+def apply_throughput_title(ax, title, overload_status, overload_mode):
+    """overload_mode: title | legend | none."""
+    if not title:
+        return
+    if overload_mode == "title" and overload_status:
+        ax.set_title(title, loc="left", pad=10)
+        ax.set_title(
+            overload_quiet_text(overload_status),
+            loc="right", pad=10, color=OVERLOAD,
+            fontsize=9, fontweight="normal",
+        )
+        return
+    ax.set_title(title, pad=10)
+
+
+def throughput_ylim(ax, read_m, write_m, advertised_mbit):
+    """Leave a legend shelf above advertised (or data, if higher)."""
+    data_max = max(list(write_m) + list(read_m) + [0.0])
+    ceiling = max(advertised_mbit or 0.0, data_max) or 1.0
+    ax.set_ylim(0, ceiling * 1.26)
+
+
+def ratio_zone_phrase(mean_ratio):
+    if RATIO_LO <= mean_ratio <= RATIO_HI:
+        return f"inside typical {RATIO_LO:.2f}–{RATIO_HI:.2f}"
+    if RATIO_INVESTIGATE_LO <= mean_ratio <= RATIO_INVESTIGATE_HI:
+        return f"uncommon (amber) at {mean_ratio:.2f} — not investigate"
+    return f"investigate (red) at {mean_ratio:.2f}"
 
 
 def load_ratio_overlays():
@@ -950,7 +1024,8 @@ def ratio_legend_handles(overlays=None):
     return handles
 
 
-def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
+def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
+                      legend_above=False):
     overlays = overlays or {}
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
     axr.axhspan(0.45, RATIO_INVESTIGATE_LO, color=BAD, alpha=0.10, zorder=0)
@@ -976,96 +1051,112 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
     pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
     axr.set_ylim(0.50, 1.70)
-    axr.legend(handles=ratio_legend_handles(overlays), loc="upper right",
-               fontsize=7.5, frameon=True, fancybox=False, edgecolor="#dddddd")
+    handles = ratio_legend_handles(overlays)
+    if legend_above:
+        axr.legend(
+            handles=handles, loc="lower left", bbox_to_anchor=(0.0, 1.02),
+            ncol=3, fontsize=7.0, frameon=False, borderaxespad=0.0,
+        )
+    else:
+        axr.legend(handles=handles, loc="upper right", fontsize=7.5,
+                   frameon=True, fancybox=False, edgecolor="#dddddd")
     date_axis(axr)
     return float(np.nanmean(ratio))
 
 
-def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
-                          overlays, overload_status, out_paths):
-    fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(11.2, 7.2), sharex=True,
-        gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": 0.08},
-    )
-    fig.subplots_adjust(bottom=0.14)
-    ax.plot(ts, write_m, color=WRITE, linewidth=1.8, label="Write (outbound)")
-    ax.plot(ts, read_m, color=BLUE, linewidth=1.8, label="Read (inbound)")
+def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
+                            fill=False):
+    if fill:
+        ax.fill_between(ts, write_m, color=WRITE, alpha=0.22)
+        ax.fill_between(ts, read_m, color=BLUE, alpha=0.22)
+        ax.plot(ts, write_m, color=WRITE, linewidth=1.2)
+        ax.plot(ts, read_m, color=BLUE, linewidth=1.2)
+    else:
+        ax.plot(ts, write_m, color=WRITE, linewidth=1.8)
+        ax.plot(ts, read_m, color=BLUE, linewidth=1.8)
     if advertised_mbit:
-        ax.axhline(
-            advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
-            label=f"Advertised  {advertised_mbit:.0f} Mbit/s",
-        )
+        ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4)
     draw_event_lines(ax, events)
     pad_xlim(ax, ts)
-    top = max([advertised_mbit or 0] + write_m + read_m)
-    ax.set_ylim(0, top * 1.08)
+    throughput_ylim(ax, read_m, write_m, advertised_mbit)
     ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("Bandwidth A — dual line + advertised + imbalance   ·   F3Netze")
     date_axis(ax)
-    series = [
-        Line2D([0], [0], color=WRITE, linewidth=1.8, label="Write (outbound)"),
-        Line2D([0], [0], color=BLUE, linewidth=1.8, label="Read (inbound)"),
-    ]
-    if advertised_mbit:
-        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
-                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
-    ax.legend(handles=series + event_legend_handles(events),
-              loc="upper left", fontsize=9, ncol=2)
-    draw_overload_badge(fig, overload_status)
 
-    mean_ratio = _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
-    used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
-    fam_n = (overlays or {}).get("family_n") or 0
-    fam_out = (overlays or {}).get("family_outliers") or 0
-    caption(
-        fig, published,
-        f"Story: this relay mean write/read {mean_ratio:.2f}, inside typical "
-        f"{RATIO_LO:.2f}–{RATIO_HI:.2f}. Uncommon is amber (1.20 is not an "
-        f"outlier — 6% of 1M relays, mostly Guards). Investigate is red, only "
-        f"below {RATIO_INVESTIGATE_LO:.2f} or above {RATIO_INVESTIGATE_HI:.2f} "
-        f"(2% of 1M). Exit+Guard peers and this operator’s family median sit "
-        f"on top. {fam_out} of {fam_n} family relays have a month-mean above "
-        f"1.15; this one does not. Delivered write ~{np.mean(write_m):.0f} "
-        f"Mbit/s ({used:.0f}% of advertised). Overload is a now-badge.",
+
+def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
+                          overlays, overload_status, out_paths,
+                          nickname="F3Netze",
+                          title=None,
+                          overload_mode="title",
+                          page_ready=False,
+                          story=None):
+    hspace = 0.32 if page_ready else 0.18
+    fig, (ax, axr) = plt.subplots(
+        2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
+        gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
+    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.14)
+    _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events)
+    if title is None:
+        title = ("Throughput · last 30 days" if page_ready
+                 else f"Throughput · last 30 days   ·   {nickname}")
+    apply_throughput_title(ax, title, overload_status, overload_mode)
+    place_legend_above_axes(
+        ax,
+        throughput_legend_handles(
+            advertised_mbit, events, overload_status,
+            overload_in_legend=(overload_mode == "legend"),
+        ),
+    )
+
+    mean_ratio = _plot_ratio_strip(
+        axr, ts, read_m, write_m, events, overlays, legend_above=page_ready,
+    )
+    if not page_ready:
+        used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
+        fam_n = (overlays or {}).get("family_n") or 0
+        fam_out = (overlays or {}).get("family_outliers") or 0
+        caption(
+            fig, published,
+            story or (
+                f"Story: {nickname} mean write/read {mean_ratio:.2f}, "
+                f"{ratio_zone_phrase(mean_ratio)}. Legend sits in the empty "
+                f"band above advertised so it never covers write / read. "
+                f"Overload is a title cue, not a red pill. {fam_out} of "
+                f"{fam_n} group relays have a month-mean above 1.15. "
+                f"Delivered write ~{np.mean(write_m):.0f} Mbit/s "
+                f"({used:.0f}% of advertised)."
+            ),
+        )
     save(fig, out_paths)
 
 
 def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
                            overlays, overload_status, out_paths):
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(11.2, 7.0), sharex=True,
-        gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.08},
+        2, 1, figsize=(10.8, 7.1), sharex=True,
+        gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.18},
     )
-    fig.subplots_adjust(bottom=0.14)
-    ax.fill_between(ts, write_m, color=WRITE, alpha=0.22, label="Write")
-    ax.fill_between(ts, read_m, color=BLUE, alpha=0.22, label="Read")
-    ax.plot(ts, write_m, color=WRITE, linewidth=1.2)
-    ax.plot(ts, read_m, color=BLUE, linewidth=1.2)
-    if advertised_mbit:
-        ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4,
-                   label=f"Advertised  {advertised_mbit:.0f} Mbit/s")
-    draw_event_lines(ax, events)
-    pad_xlim(ax, ts)
-    top = max([advertised_mbit or 0] + write_m + read_m)
-    ax.set_ylim(0, top * 1.08)
-    ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("Bandwidth B — overlapping area + advertised + imbalance   ·   F3Netze")
-    series = [
+    fig.subplots_adjust(top=0.90, bottom=0.14)
+    _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
+                            fill=True)
+    apply_throughput_title(
+        ax, "Bandwidth B — overlapping area   ·   F3Netze",
+        overload_status, "title",
+    )
+    handles = [
         Patch(facecolor=WRITE, alpha=0.35, label="Write"),
         Patch(facecolor=BLUE, alpha=0.35, label="Read"),
     ]
     if advertised_mbit:
-        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
-                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
-    ax.legend(handles=series + event_legend_handles(events),
-              loc="upper left", fontsize=9, ncol=2)
-    draw_overload_badge(fig, overload_status)
+        handles.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
+    handles.extend(event_legend_handles(events))
+    place_legend_above_axes(ax, handles)
     _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
     caption(
         fig, published,
-        "Same restart marker, current-overload badge, fixed expected range, "
+        "Same restart marker, title-line overload cue, fixed expected range, "
         "and role / operator overlays as A. Area fill is the alternate "
         "encoding; A is the preferred default.",
     )
@@ -1074,8 +1165,8 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
 
 def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
                                 published, overload_status, out_paths):
-    fig, ax = plt.subplots(figsize=(11.2, 5.8))
-    fig.subplots_adjust(bottom=0.18)
+    fig, ax = plt.subplots(figsize=(10.8, 5.6))
+    fig.subplots_adjust(top=0.88, bottom=0.16)
     x = np.arange(len(ts))
     w = 0.38
     ax.bar(x - w / 2, write_m, w, color=WRITE, label="Write")
@@ -1088,26 +1179,28 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
     draw_event_lines(ax, events, x_values=ts)
     pad_xlim(ax, ts, x_values=ts)
     ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("Bandwidth C — daily bars vs advertised   ·   F3Netze")
+    apply_throughput_title(
+        ax, "Bandwidth C — daily bars vs advertised   ·   F3Netze",
+        overload_status, "title",
+    )
     tick = list(range(0, len(ts), 4))
     ax.set_xticks(tick, [ts[i].strftime("%b %d") for i in tick])
-    series = [
+    handles = [
         Patch(facecolor=WRITE, label="Write"),
         Patch(facecolor=BLUE, label="Read"),
     ]
     if advertised_mbit:
-        series.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
-                             label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
-    ax.legend(handles=series + event_legend_handles(events),
-              loc="upper left", fontsize=9, ncol=2)
-    draw_overload_badge(fig, overload_status)
+        handles.append(Line2D([0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+                              label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
+    handles.extend(event_legend_handles(events))
+    place_legend_above_axes(ax, handles)
     used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
     caption(
         fig, published,
         f"Story: this exit advertises {advertised_mbit:.0f} Mbit/s and delivers "
         f"~{np.mean(write_m):.0f} Mbit/s write ({used:.0f}% of advertised). "
-        "Restart is a point. Overload is a current-status badge, not a time "
-        "range — Onionoo has no incident history.",
+        "Restart is a point. Overload is a title cue, not a time range — "
+        "Onionoo has no incident history.",
     )
     save(fig, out_paths)
 
@@ -1509,11 +1602,437 @@ def flags_f_status_story(flag_series, published, extra, out_paths):
     save(fig, out_paths)
 
 
+def history_map(block):
+    """Return {timestamp: bytes_per_sec} skipping nulls."""
+    ts, vals = history_series(block)
+    return dict(zip(ts, vals))
+
+
+def role_of(flags):
+    flags = flags or []
+    exit_f = "Exit" in flags
+    guard_f = "Guard" in flags
+    if exit_f and guard_f:
+        return "Exit+Guard"
+    if exit_f:
+        return "Exit"
+    if guard_f:
+        return "Guard"
+    return "Middle"
+
+
+def compute_group_daily_ratios(bw_by_fp, fingerprints, min_bps=50_000):
+    """Daily median write/read and per-relay month-means for a fingerprint set."""
+    from collections import defaultdict
+
+    days = defaultdict(list)
+    month_means = []
+    used = 0
+    for fp in fingerprints:
+        doc = bw_by_fp.get(fp)
+        if not doc:
+            continue
+        w = history_map((doc.get("write_history") or {}).get("1_month"))
+        r = history_map((doc.get("read_history") or {}).get("1_month"))
+        if not w or not r:
+            continue
+        wsum = rsum = 0.0
+        any_pt = False
+        for t, wv in w.items():
+            rv = r.get(t)
+            if not rv:
+                continue
+            if (wv + rv) / 2.0 < min_bps:
+                continue
+            days[t].append(wv / rv)
+            wsum += wv
+            rsum += rv
+            any_pt = True
+        if any_pt and rsum:
+            month_means.append(wsum / rsum)
+            used += 1
+    daily = {t: float(np.median(vals)) for t, vals in days.items() if vals}
+    return daily, month_means, used
+
+
+def build_ratio_overlays(details_relays, bw_by_fp, role, contact_substr=None,
+                         family_fps=None, operator_label=None):
+    role_fps = [r["fingerprint"] for r in details_relays if role_of(r.get("flags")) == role]
+    op_fps = []
+    if family_fps:
+        op_fps = list(family_fps)
+    elif contact_substr:
+        needle = contact_substr.lower()
+        op_fps = [
+            r["fingerprint"] for r in details_relays
+            if needle in (r.get("contact") or "").lower()
+        ]
+    role_daily, _, role_n = compute_group_daily_ratios(bw_by_fp, role_fps)
+    op_daily, op_means, op_n = compute_group_daily_ratios(bw_by_fp, op_fps)
+    outliers = sum(1 for m in op_means if m > RATIO_HI)
+    return {
+        "role": role_daily,
+        "role_label": f"{role} peers  (network median, n={role_n})",
+        "operator": op_daily if op_n > 1 else {},
+        "operator_label": operator_label or f"This operator  (median, n={op_n})",
+        "family_outliers": outliers,
+        "family_n": op_n,
+    }
+
+
+def restart_events(relay):
+    events = []
+    if relay.get("last_restarted"):
+        when = parse_onionoo_ts(relay["last_restarted"])
+        events.append({
+            "kind": "restart",
+            "when": when,
+            "color": RESTART,
+            "ls": "-.",
+            "legend": f"Last restarted  {when.strftime('%-d %b')}",
+        })
+    return events
+
+
+def load_bandwidth_for_fp(bw_doc, extra_paths, fp):
+    if fp in bw_doc:
+        return bw_doc[fp]
+    for path in extra_paths:
+        p = Path(path)
+        if not p.exists():
+            continue
+        extra = by_fp(json.loads(p.read_text()))
+        if fp in extra:
+            return extra[fp]
+    return None
+
+
+def format_mb_s(byte_s):
+    if not byte_s:
+        return "N/A"
+    if byte_s >= 1_000_000_000:
+        return f"{byte_s / 1_000_000_000:.2f} GB/s"
+    if byte_s >= 1_000_000:
+        return f"{byte_s / 1_000_000:.2f} MB/s"
+    return f"{byte_s / 1_000:.0f} KB/s"
+
+
+def days_ago(ts_str, published):
+    try:
+        then = parse_onionoo_ts(ts_str)
+        now = parse_onionoo_ts(published) if isinstance(published, str) else published
+        days = max(0, int((now - then).total_seconds() // 86400))
+    except (TypeError, ValueError):
+        return ts_str
+    if days == 0:
+        return "today"
+    if days == 1:
+        return "1 day ago"
+    if days < 60:
+        return f"{days} days ago"
+    months = days // 30
+    return f"{months} months ago" if months != 1 else "1 month ago"
+
+
+def relay_page_context(det, published, role_label):
+    flags = [f for f in (det.get("flags") or []) if f != "StaleDesc"]
+    cw_frac = det.get("consensus_weight_fraction") or 0
+    guard_p = det.get("guard_probability") or 0
+    mid_p = det.get("middle_probability") or 0
+    exit_p = det.get("exit_probability") or 0
+    contact = det.get("contact") or ""
+    aroi = "1aeo.com" if "1aeo.com" in contact else None
+    if not aroi and "f3netze.de" in contact:
+        aroi = "f3netze.de"
+    return {
+        "nickname": det.get("nickname") or "unknown",
+        "fingerprint": det.get("fingerprint") or "",
+        "flags": flags,
+        "flag_str": ", ".join(flags),
+        "country": (det.get("country") or "").upper(),
+        "country_name": {"de": "Germany", "us": "United States"}.get(
+            (det.get("country") or "").lower(), (det.get("country") or "").upper(),
+        ),
+        "as": det.get("as") or "",
+        "as_name": det.get("as_name") or "",
+        "platform": det.get("platform") or "",
+        "observed": format_mb_s(det.get("observed_bandwidth") or 0),
+        "advertised": format_mb_s(det.get("advertised_bandwidth") or 0),
+        "rate": format_mb_s(det.get("bandwidth_rate") or 0),
+        "burst": format_mb_s(det.get("bandwidth_burst") or det.get("bandwidth_rate") or 0),
+        "cw": det.get("consensus_weight") or 0,
+        "cw_pct": f"{cw_frac * 100:.4f}%" if cw_frac else "N/A",
+        "guard_pct": f"{guard_p * 100:.4f}%" if guard_p else "N/A",
+        "middle_pct": f"{mid_p * 100:.4f}%" if mid_p else "N/A",
+        "exit_pct": f"{exit_p * 100:.4f}%" if exit_p else "N/A",
+        "family_n": len(det.get("effective_family") or []),
+        "first_seen": det.get("first_seen") or "",
+        "first_seen_ago": days_ago(det.get("first_seen"), published),
+        "last_restarted": det.get("last_restarted") or "",
+        "last_restarted_ago": days_ago(det.get("last_restarted"), published),
+        "contact_short": (contact[:40] + "…") if len(contact) > 40 else contact,
+        "aroi": aroi,
+        "role_label": role_label,
+        "running": bool(det.get("running")),
+        "measured": det.get("measured"),
+    }
+
+
+PAGE_CSS = """
+:root { --aeo-green:#00ff7f; --aeo-dark-surface:#1e1e1e; --aeo-text-muted:#ccc;
+  --color-success:#28a745; --color-danger:#dc3545; --color-warning-text:#856404;
+  --color-muted:#6c757d; --color-info:#17a2b8; --color-link:#337ab7;
+  --color-bg-light:#f8f9fa; --color-text-dark:#495057; --color-text-heading:#2c3e50;
+  --color-border-light:#dee2e6; --color-border-subtle:#e9ecef; --overload:#c0392b; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size:14px; color:#333; background:#fff; }
+a { color: var(--color-link); text-decoration:none; }
+a:hover { text-decoration:underline; }
+.aeo-cross-nav { background: var(--aeo-dark-surface); padding:10px 0; }
+.aeo-nav-container { max-width:1120px; margin:0 auto; padding:0 16px;
+  display:flex; justify-content:space-between; align-items:center; }
+.aeo-nav-brand { color: var(--aeo-green); font-weight:bold; text-decoration:none; }
+.aeo-nav-links a { color: var(--aeo-text-muted); margin-left:16px; text-decoration:none; }
+.aeo-nav-links a.active { color: var(--aeo-green); }
+.container { max-width:1120px; margin:0 auto; padding:12px 16px 40px; }
+.page-title { font-size:28px; margin:12px 0 6px; color: var(--color-text-heading); }
+.relay-meta { font-size:13px; color:#555; line-height:1.6; margin:0 0 12px; }
+.breadcrumb { font-size:13px; color:#777; margin:0 0 8px; }
+.option-banner { margin:8px 0 16px; padding:10px 14px; border-radius:6px;
+  background:#eef6fb; border-left:4px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.option-banner strong { display:block; font-size:14px; margin-bottom:2px; }
+.section-box { margin:20px 0; padding:15px; background: var(--color-bg-light); border-radius:8px; }
+.section-header { display:inline-block; }
+.section-header a { color:inherit; text-decoration:none; }
+h4 { margin-top:0; margin-bottom:12px; font-size:18px; }
+.subsection-header { margin:0 0 10px; padding-bottom:6px; font-weight:600;
+  font-size:15px; color: var(--color-text-dark); border-bottom:2px solid var(--color-border-light); }
+.row { display:flex; flex-wrap:wrap; margin:0 -8px; }
+.col { flex:1 1 300px; padding:0 8px; min-width:0; }
+dl { margin:0; }
+dt { font-weight:600; color:#555; font-size:13px; margin-top:8px; }
+dd { margin:2px 0 0; }
+.al-status-success { color: var(--color-success); }
+.al-status-danger { color: var(--color-danger); }
+.al-status-warning { color: var(--color-warning-text); }
+.al-status-muted { color: var(--color-muted); }
+.al-text-small-muted { font-size:12px; color: var(--color-muted); }
+.health-status-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:8px 24px; }
+.health-row { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+.health-row dt { margin:0; min-width:88px; }
+.health-row dd { margin:0; }
+.participation { margin-top:12px; padding:10px; background:#fff; border-radius:4px;
+  border:1px solid var(--color-border-subtle); font-size:13px; }
+.chart-wrap { margin:12px 0; background:#fff; border-radius:6px; padding:8px 8px 4px;
+  border:1px solid var(--color-border-subtle); }
+.chart-wrap img { width:100%; height:auto; display:block; }
+.chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.heading-row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; }
+.overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
+.ghost { opacity:0.45; }
+.explain { font-size:12px; color:#555; margin-top:12px; padding:8px;
+  background:#fff; border-radius:4px; border-left:3px solid #17a2b8; }
+code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
+.aeo-footer { background: var(--aeo-dark-surface); color:#aaa; text-align:center;
+  padding:18px 12px; font-size:12px; margin-top:24px; }
+.aeo-footer a { color: var(--aeo-green); }
+"""
+
+
+def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None):
+    """Write a static HTML mock of relay-info.html #bandwidth with one placement."""
+    nick = ctx["nickname"]
+    fp = ctx["fingerprint"]
+    aroi = ctx["aroi"] or "unknown"
+    family = ctx["family_n"] or 1
+    ov_html = (f'<span class="overload-cue">{overload_text}</span>'
+               if overload_text else "")
+    stability = ('<span class="al-status-danger">Overloaded</span>'
+                 if overload_text else
+                 '<span class="al-status-success">Not Overloaded</span>')
+    chart = f"""<div class="chart-wrap">
+      <img src="{chart_file}" alt="Throughput last 30 days for {nick}">
+      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code>
+      · 1-month daily buckets · advertised is the descriptor snapshot, not a history.
+      Progressive enhancement: the tables stay if this SVG is missing.</p>
+    </div>"""
+
+    if option["id"] == 1:
+        heading = f"""<div class="heading-row">
+          <h4 style="margin:0;"><div class="section-header"><a href="#bandwidth">Bandwidth Metrics</a></div></h4>
+          {ov_html}
+        </div>"""
+        body = f"""
+        {chart}
+        <div class="row">
+          {capacity_col(ctx)}
+          {measurement_col(ctx)}
+        </div>
+        {participation_box(ctx)}
+        """
+    elif option["id"] == 2:
+        heading = """<h4><div class="section-header"><a href="#bandwidth">Bandwidth Metrics</a></div></h4>"""
+        body = f"""
+        <div class="row">
+          {capacity_col(ctx)}
+          {measurement_col(ctx)}
+        </div>
+        {chart}
+        {participation_box(ctx)}
+        """
+    else:
+        heading = """<h4><div class="section-header"><a href="#bandwidth">Bandwidth Metrics</a></div></h4>"""
+        body = f"""
+        <div class="row">
+          {capacity_col(ctx)}
+          {measurement_col(ctx)}
+        </div>
+        {participation_box(ctx)}
+        <h5 class="subsection-header" style="margin-top:16px;">History
+          <span class="al-text-small-muted">(Onionoo, 1 month)</span></h5>
+        {chart}
+        <div class="explain">
+          <strong>Bandwidth Values Explained:</strong><br>
+          <strong>Relay Reported</strong> = descriptor observed / advertised — flag eligibility.<br>
+          <strong>Authority Measured</strong> = sbws — consensus weight.<br>
+          <strong>This chart</strong> = bytes actually transferred (Onionoo /bandwidth),
+          not observed_bandwidth over time.
+        </div>
+        """
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{nick} — Tor Relay | bandwidth chart layout option {option["id"]}</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+    <a href="#">AROI Validator</a><a href="#">RouteFluxMap</a>
+  </div>
+</div></nav>
+<div class="container">
+  <p class="breadcrumb">Home &gt; Browse by Network &gt; {ctx["as"]} &gt; {nick}</p>
+  <div class="option-banner">
+    <strong>Option {option["id"]} of 3 — {option["name"]}</strong>
+    {option["blurb"]}
+    Relay: <strong>{nick}</strong> ({"1aeo family" if aroi=="1aeo.com" else aroi})
+    · {"overloaded" if overload_text else "not overloaded"}.
+  </div>
+  <h1 class="page-title">View Relay "{nick}"</h1>
+  <p class="relay-meta">
+    Fingerprint: <code>{fp}</code> |
+    Operator: <a href="#">{aroi}</a> |
+    Family: {family} relay{"s" if family != 1 else ""} |
+    {ctx["as"]} · {ctx["country_name"]} |
+    {ctx["platform"]}
+  </p>
+
+  <div id="status" class="section-box" style="border-left:4px solid #28a745;">
+    <h4><div class="section-header"><a href="#status">Health Status</a></div></h4>
+    <div class="health-status-grid">
+      <dl>
+        <div class="health-row"><dt><a href="#flags">Consensus</a></dt>
+          <dd><span class="al-status-success">In Consensus</span></dd></div>
+        <div class="health-row"><dt><a href="#flags">Flags</a></dt>
+          <dd>{ctx["flag_str"]}</dd></div>
+        <div class="health-row"><dt><a href="#bandwidth">BW Verified</a></dt>
+          <dd><span class="al-status-success">Measured</span></dd></div>
+        <div class="health-row"><dt><a href="#uptime">Stability</a></dt>
+          <dd>{stability} <span class="al-status-muted">|</span>
+          <span class="al-status-success">{ctx["last_restarted_ago"]}</span></dd></div>
+      </dl>
+      <dl>
+        <div class="health-row"><dt><a href="#connectivity">Reachability</a></dt>
+          <dd>IPv4 / IPv6 <span class="al-text-small-muted">(Directory Auths)</span></dd></div>
+        <div class="health-row"><dt><a href="#uptime">First Seen</a></dt>
+          <dd>{ctx["first_seen_ago"]}</dd></div>
+        <div class="health-row"><dt><a href="#bandwidth">BW Weight</a></dt>
+          <dd>{ctx["cw_pct"]} of Network | {ctx["observed"]} Observed By Relay</dd></div>
+        <div class="health-row"><dt>Version</dt>
+          <dd><span class="al-status-success">0.4.9.11 Recommended</span></dd></div>
+      </dl>
+    </div>
+  </div>
+
+  <section id="flags" class="section-box ghost">
+    <h4>Flags and Eligibility</h4>
+    <p class="al-text-small-muted">Unchanged — eligibility table stays. Flag-flapping
+    chart (R3) would sit here later. Dimmed in this mockup.</p>
+  </section>
+
+  <section id="bandwidth" class="section-box">
+    {heading}
+    {body}
+  </section>
+
+  <section id="uptime" class="section-box ghost">
+    <h4>Uptime and Stability</h4>
+    <p class="al-text-small-muted">Existing 1M/6M/1Y/5Y scalars + overload subsection
+    stay. R1 uptime chart sits here. Dimmed in this mockup.
+    Overload <em>details</em> remain in this section; the bandwidth chart only
+    repeats a current cue if the flag is on.</p>
+  </section>
+</div>
+<footer class="aeo-footer">
+  Mockup of <code>relay-info.html</code> #bandwidth · Allium · Onionoo snapshot
+  · not a live page
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
+def capacity_col(ctx):
+    return f"""<div class="col">
+      <h5 class="subsection-header">Capacity (Relay Reported)</h5>
+      <dl>
+        <dt>Observed Bandwidth</dt><dd>{ctx["observed"]}</dd>
+        <dt>Advertised Bandwidth</dt><dd>{ctx["advertised"]}</dd>
+        <dt>Rate Limit</dt><dd>{ctx["rate"]}</dd>
+        <dt>Burst Limit</dt><dd>{ctx["burst"]}</dd>
+      </dl>
+    </div>"""
+
+
+def measurement_col(ctx):
+    return f"""<div class="col">
+      <h5 class="subsection-header">Measurement (Directory Authority Verified)</h5>
+      <dl>
+        <dt>Measured By</dt>
+        <dd><span class="al-status-success">Yes</span> (≥3 authorities)</dd>
+        <dt>Consensus Weight</dt>
+        <dd>{ctx["cw"]:,} <span class="al-text-small-muted">({ctx["cw_pct"]} of network)</span></dd>
+      </dl>
+    </div>"""
+
+
+def participation_box(ctx):
+    return f"""<div class="participation">
+      <strong>Network Participation:</strong>
+      Consensus Weight: {ctx["cw_pct"]} of network |
+      Guard: {ctx["guard_pct"]} |
+      Middle: {ctx["middle_pct"]} |
+      Exit: {ctx["exit_pct"]}
+    </div>"""
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--details", default="/tmp/onionoo/details.json")
     parser.add_argument("--uptime", default="/tmp/onionoo/uptime_examples.json")
     parser.add_argument("--bandwidth", default="/tmp/onionoo/bandwidth_examples.json")
+    parser.add_argument("--bandwidth-all", default="/tmp/onionoo/bandwidth_all.json")
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "mockups"))
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
     args = parser.parse_args()
@@ -1638,6 +2157,124 @@ def main():
     for name, fn, fn_args in jobs:
         fn(*fn_args, [out / name, art / name])
         print("wrote", name)
+
+    write_page_layout_mockups(
+        det, bw_doc, Path(args.bandwidth_all), published, overlays,
+        w_ts, read_m, write_m, advertised_mbit, events, ov_status,
+        out, art,
+    )
+
+
+def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
+                              f3_overlays, w_ts, read_m, write_m,
+                              advertised_mbit, events, ov_status, out, art):
+    """Three #bandwidth placements on real relay-page chrome, plus a 1aeo relay."""
+    f3 = det[F3NETZE]
+    f3_ctx = relay_page_context(f3, published, "Exit+Guard")
+    ov_text = overload_quiet_text(ov_status)
+
+    page_charts = [
+        ("relay_bandwidth_page_opt1_hero_f3.png",
+         dict(title="", overload_mode="none", page_ready=True, nickname="F3Netze")),
+        ("relay_bandwidth_page_opt3_history_f3.png",
+         dict(title="Throughput · last 30 days", overload_mode="legend",
+              page_ready=True, nickname="F3Netze")),
+    ]
+    for name, kwargs in page_charts:
+        bandwidth_a_dual_line(
+            w_ts, read_m, write_m, advertised_mbit, events, published,
+            f3_overlays, ov_status, [out / name, art / name], **kwargs,
+        )
+        print("wrote", name)
+
+    jg = det.get(JEANGRAE)
+    bw_all = dict(bw_doc)
+    if bandwidth_all_path.exists():
+        print("loading", bandwidth_all_path)
+        bw_all.update(by_fp(json.loads(bandwidth_all_path.read_text())))
+    jg_bw = bw_all.get(JEANGRAE)
+    jg_ctx = None
+    if jg and jg_bw:
+        jw_ts, jw_vals = history_series((jg_bw.get("write_history") or {}).get("1_month"))
+        jr_ts, jr_vals = history_series((jg_bw.get("read_history") or {}).get("1_month"))
+        if jw_ts and jr_ts:
+            j_write = bytes_to_mbit(jw_vals)
+            j_read = bytes_to_mbit(jr_vals)
+            j_adv = (jg.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0
+            j_events = restart_events(jg)
+            j_ov = overload_now_status(jg, published)
+            family = set(jg.get("effective_family") or [])
+            print("computing jeangrae Guard / family overlays",
+                  f"(family n={len(family)})")
+            j_overlays = build_ratio_overlays(
+                list(det.values()), bw_all, "Guard", family_fps=family,
+            )
+            j_overlays["operator_label"] = (
+                f"This family  (1aeo effective-family median, n={j_overlays['family_n']})"
+            )
+            jg_ctx = relay_page_context(jg, published, "Guard")
+            for name, kwargs in (
+                ("relay_bandwidth_a_jeangrae.png",
+                 dict(nickname="jeangrae", overload_mode="title", page_ready=False)),
+                ("relay_bandwidth_page_opt2_jeangrae.png",
+                 dict(title="Throughput · last 30 days", overload_mode="title",
+                      page_ready=True, nickname="jeangrae")),
+            ):
+                bandwidth_a_dual_line(
+                    jw_ts, j_read, j_write, j_adv, j_events, published,
+                    j_overlays, j_ov, [out / name, art / name], **kwargs,
+                )
+                print("wrote", name)
+        else:
+            print("skip jeangrae: empty 1_month history")
+    else:
+        print("skip jeangrae: missing details or bandwidth document")
+
+    options = [
+        {
+            "id": 1,
+            "name": "Hero under the heading",
+            "blurb": "Chart is the first thing #bandwidth lands on. The section "
+                     "heading owns the title; overload is a small rust status "
+                     "next to “Bandwidth Metrics”, not a red pill. Snapshot "
+                     "numbers sit under the chart.",
+            "file": "relay_page_bw_opt1_hero_f3.html",
+            "chart": "relay_bandwidth_page_opt1_hero_f3.png",
+            "ctx": f3_ctx,
+            "overload": ov_text,
+        },
+        {
+            "id": 2,
+            "name": "After Capacity / Measurement",
+            "blurb": "Recommended. Existing scalars stay first (what operators "
+                     "already scan). Chart title is “Throughput · last 30 days”; "
+                     "overload, if any, sits in that title. 1aeo family relay "
+                     "so the empty (not-overloaded) title is visible.",
+            "file": "relay_page_bw_opt2_after_metrics_jeangrae.html",
+            "chart": "relay_bandwidth_page_opt2_jeangrae.png",
+            "ctx": jg_ctx or f3_ctx,
+            "overload": None if jg_ctx else ov_text,
+        },
+        {
+            "id": 3,
+            "name": "History subsection after Network Participation",
+            "blurb": "All snapshot numbers stay together. Chart is a named "
+                     "subsection before “Bandwidth Values Explained”. Overload "
+                     "is a diamond in the legend, not a banner or title shout.",
+            "file": "relay_page_bw_opt3_history_f3.html",
+            "chart": "relay_bandwidth_page_opt3_history_f3.png",
+            "ctx": f3_ctx,
+            "overload": None,
+        },
+    ]
+    for opt in options:
+        if opt["ctx"] is None:
+            continue
+        for dest in (out, art):
+            write_bandwidth_page_html(
+                dest / opt["file"], opt, opt["ctx"], opt["chart"], opt["overload"],
+            )
+        print("wrote", opt["file"])
 
 
 if __name__ == "__main__":
