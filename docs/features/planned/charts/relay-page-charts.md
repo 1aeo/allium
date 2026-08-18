@@ -448,29 +448,37 @@ Page mockups (open the HTML):
 
 `write_history` / `read_history` publish `1_month` (1-day), `6_months`
 (1-day), `1_year` (2-day), `5_years` (10-day). Omit a period if Onionoo
-omitted the graph. Do not draw 0 Mbit/s. Three encodings, all mocked
-under option C:
+omitted the graph. Do not draw 0 Mbit/s.
 
-| Layout | What | When to pick |
-|--------|------|--------------|
-| Pills | Button toggle 1M / 6M / 1Y / 5Y. Default 1M. Full throughput + ratio for the selected period. | One chart, operator picks the window |
-| Equal 2×2 | All published graphs, same size. Empty cell = not published. | See every window without a click |
-| 1M hero + sparks | 1M stays large (finest buckets + ratio strip). 6M / 1Y / 5Y are smaller underneath. | 1M is the number on the health row; longer graphs are context |
+**Chosen: 1M hero + sparks.** Click a spark to swap it with the hero;
+the previous hero drops into the spark row. A static site pre-renders
+one hero panel and one spark per published period, then swaps the
+images. Interactive mock:
+[`relay_bandwidth_hero_sparks_swap_f3.html`](mockups/relay_bandwidth_hero_sparks_swap_f3.html).
 
-![Period pills — F3Netze, all four published](mockups/relay_bandwidth_periods_pills_f3.png)
-
-![Period pills — th4r, 5Y omitted](mockups/relay_bandwidth_periods_pills_th4r.png)
-
-![Equal 2×2 — F3Netze](mockups/relay_bandwidth_periods_equal_f3.png)
+Pills and equal 2×2 stay as rejected alts.
 
 ![1M hero + sparks — F3Netze](mockups/relay_bandwidth_periods_hero_sparks_f3.png)
 
-A static site cannot fetch on pill click. Whatever we ship is
-pre-rendered (one SVG per selected period, or the 2×2 / hero that
-shows every published graph at once).
+![After clicking the 6M spark](mockups/relay_bandwidth_periods_hero_sparks_f3_6m.png)
 
 Advertised is the current descriptor snapshot on every panel, not a
 history.
+
+The write/read strip legend is upper-right, in this order: **This
+relay**, **Operator Family (median, n=x)**, **Peers {role} (network
+median)**, then Typical / Uncommon / Investigate. `p10–p90` and `>p98`
+sit on the left y-axis with 0.5 / 1.0 / 1.5, not as floating labels on
+the right.
+
+Multiple restarts share one legend entry (`Last restarted  31 Jul, 20
+Jul, 5 Jul`) and get one vertical line each. Onionoo only publishes
+`last_restarted`; extra marks on the 6M/1Y/5Y mocks are a stand-in
+for a future restart archive.
+
+A day whose write/read sits above the 1.70 scale (jeangrae 22–23 Jul:
+4.45 and 3.15) is not a missing series. The line is clipped and marked
+with a red triangle at the top of the strip.
 
 #### One chart per frozen flag-set band
 
@@ -623,7 +631,7 @@ overload. th4r's gaps are **not** restarts.
 #status          health grid          — no new chart
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 (encoding unset; C–F)
-#bandwidth       capacity + bwauths   — then Network Participation, then R2 A as History (option C; pills / 2×2 / hero+sparks)
+#bandwidth       capacity + bwauths   — then Network Participation, then R2 A as History (option C; 1M hero + sparks, click to swap)
 #uptime          1M/6M/1Y/5Y scalars + gap counts
                  info box: two clocks + Onionoo bucket table + pill tooltips
                  then R1 B (network-visible Running + process rail + shared gaps)
