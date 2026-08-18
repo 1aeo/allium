@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>jeangrae — Tor Relay | bandwidth chart layout option 2</title>
+  <title>Write/read bands by flag set · option C</title>
   <style>
 :root { --aeo-green:#00ff7f; --aeo-dark-surface:#1e1e1e; --aeo-text-muted:#ccc;
   --color-success:#28a745; --color-danger:#dc3545; --color-warning-text:#856404;
@@ -74,107 +74,77 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   <a class="aeo-nav-brand" href="#">1AEO</a>
   <div class="aeo-nav-links">
     <a href="#">Home</a><a class="active" href="#">Metrics</a>
-    <a href="#">AROI Validator</a><a href="#">RouteFluxMap</a>
   </div>
 </div></nav>
 <div class="container">
-  <p class="breadcrumb">Home &gt; Browse by Network &gt; AS36849 &gt; jeangrae</p>
   <div class="option-banner">
-    <strong>Option 2 of 3 — After Capacity / Measurement</strong>
-    Rejected alt. Scalars first, chart before Network Participation.
-    Relay: <strong>jeangrae</strong> (1aeo family)
-    · not overloaded.
+    <strong>Option C — one chart per frozen flag-set band</strong>
+    Same History subsection as the F3Netze page. Each relay uses its own
+    Exit / Guard / Exit+Guard / Middle p10–p90 and p98. Overlay is already
+    on the strip.
   </div>
-  <h1 class="page-title">View Relay "jeangrae"</h1>
-  <p class="relay-meta">
-    Fingerprint: <code>02B1C5DFBCBEC735435652050DE1AF0BB0B108CF</code> |
-    Operator: <a href="#">1aeo.com</a> |
-    Family: 241 relays |
-    AS36849 · United States |
-    Tor 0.4.9.11 on Linux
-  </p>
-
-  <div id="status" class="section-box" style="border-left:4px solid #28a745;">
-    <h4><div class="section-header"><a href="#status">Health Status</a></div></h4>
-    <div class="health-status-grid">
-      <dl>
-        <div class="health-row"><dt><a href="#flags">Consensus</a></dt>
-          <dd><span class="al-status-success">In Consensus</span></dd></div>
-        <div class="health-row"><dt><a href="#flags">Flags</a></dt>
-          <dd>Fast, Guard, HSDir, Running, Stable, V2Dir, Valid</dd></div>
-        <div class="health-row"><dt><a href="#bandwidth">BW Verified</a></dt>
-          <dd><span class="al-status-success">Measured</span></dd></div>
-        <div class="health-row"><dt><a href="#uptime">Stability</a></dt>
-          <dd><span class="al-status-success">Not Overloaded</span> <span class="al-status-muted">|</span>
-          <span class="al-status-success">14 days ago</span></dd></div>
-      </dl>
-      <dl>
-        <div class="health-row"><dt><a href="#connectivity">Reachability</a></dt>
-          <dd>IPv4 / IPv6 <span class="al-text-small-muted">(Directory Auths)</span></dd></div>
-        <div class="health-row"><dt><a href="#uptime">First Seen</a></dt>
-          <dd>17 months ago</dd></div>
-        <div class="health-row"><dt><a href="#bandwidth">BW Weight</a></dt>
-          <dd>0.0382% of Network | 82.03 MB/s Observed By Relay</dd></div>
-        <div class="health-row"><dt>Version</dt>
-          <dd><span class="al-status-success">0.4.9.11 Recommended</span></dd></div>
-      </dl>
+  
+  <section class="section-box">
+    <h4>Exit+Guard  ·  F3Netze</h4>
+    <p class="relay-meta">
+      <code>3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7</code> · Exit, Fast, Guard, Running, Stable, V2Dir, Valid · AS205100 ·
+      Germany · family 24<br>
+      Frozen bands: typical 0.97–1.15
+      (p10–p90) · investigate &lt;0.93 or
+      &gt;1.71 (beyond p98)
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_a_role_exitguard_f3.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">Exit+Guard frozen p10–p90 / beyond p98. inside Exit+Guard typical 0.97–1.15 (this role's p10–p90).</p>
     </div>
-  </div>
-
-  <section id="flags" class="section-box ghost">
-    <h4>Flags and Eligibility</h4>
-    <p class="al-text-small-muted">Unchanged — eligibility table stays. Flag-flapping
-    chart (R3) would sit here later. Dimmed in this mockup.</p>
   </section>
-
-  <section id="bandwidth" class="section-box">
-    <h4><div class="section-header"><a href="#bandwidth">Bandwidth Metrics</a></div></h4>
-    
-        <div class="row">
-          <div class="col">
-      <h5 class="subsection-header">Capacity (Relay Reported)</h5>
-      <dl>
-        <dt>Observed Bandwidth</dt><dd>82.03 MB/s</dd>
-        <dt>Advertised Bandwidth</dt><dd>82.03 MB/s</dd>
-        <dt>Rate Limit</dt><dd>1.07 GB/s</dd>
-        <dt>Burst Limit</dt><dd>1.07 GB/s</dd>
-      </dl>
+  <section class="section-box">
+    <h4>Guard  ·  jeangrae</h4>
+    <p class="relay-meta">
+      <code>02B1C5DFBCBEC735435652050DE1AF0BB0B108CF</code> · Fast, Guard, HSDir, Running, Stable, V2Dir, Valid · AS36849 ·
+      United States · family 241<br>
+      Frozen bands: typical 1.01–1.17
+      (p10–p90) · investigate &lt;0.99 or
+      &gt;1.58 (beyond p98)
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_a_role_guard_jeangrae.png" alt="Throughput history for jeangrae">
+      <p class="chart-note">Guard frozen p10–p90 / beyond p98. uncommon for Guard at 1.20 (outside p10–p90, inside p2–p98).</p>
     </div>
-          <div class="col">
-      <h5 class="subsection-header">Measurement (Directory Authority Verified)</h5>
-      <dl>
-        <dt>Measured By</dt>
-        <dd><span class="al-status-success">Yes</span> (≥3 authorities)</dd>
-        <dt>Consensus Weight</dt>
-        <dd>87,000 <span class="al-text-small-muted">(0.0382% of network)</span></dd>
-      </dl>
-    </div>
-        </div>
-        <div class="chart-wrap">
-      <img src="relay_bandwidth_page_opt2_jeangrae.png" alt="Throughput history for jeangrae">
-      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code> · advertised is the descriptor snapshot, not a history.</p>
-    </div>
-        <div class="participation">
-      <strong>Network Participation:</strong>
-      Consensus Weight: 0.0382% of network |
-      Guard: 0.0680% |
-      Middle: N/A |
-      Exit: N/A
-    </div>
-        
   </section>
-
-  <section id="uptime" class="section-box ghost">
-    <h4>Uptime and Stability</h4>
-    <p class="al-text-small-muted">Existing 1M/6M/1Y/5Y scalars + overload subsection
-    stay. R1 uptime chart sits here. Dimmed in this mockup.
-    Overload <em>details</em> remain in this section; the bandwidth chart only
-    repeats a current cue if the flag is on.</p>
+  <section class="section-box">
+    <h4>Exit  ·  zarathustra</h4>
+    <p class="relay-meta">
+      <code>E70906B974DF23A6858B06FED589DC3696781F00</code> · Exit, Fast, Running, Stable, Valid · AS680 ·
+      Germany · family 1<br>
+      Frozen bands: typical 0.96–1.02
+      (p10–p90) · investigate &lt;0.92 or
+      &gt;1.13 (beyond p98)
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_a_role_exit_zarathustra.png" alt="Throughput history for zarathustra">
+      <p class="chart-note">Exit frozen p10–p90 / beyond p98. inside Exit typical 0.96–1.02 (this role's p10–p90).</p>
+    </div>
   </section>
+  <section class="section-box">
+    <h4>Middle  ·  10dxx</h4>
+    <p class="relay-meta">
+      <code>F538DBEA80CA7DA733537166CA364D98CBE9E1D1</code> · BadExit, Fast, MiddleOnly, Running, Stable, Valid · AS49981 ·
+      Netherlands · family 1<br>
+      Frozen bands: typical 0.93–1.09
+      (p10–p90) · investigate &lt;0.87 or
+      &gt;1.60 (beyond p98)
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_a_role_middle_10dxx.png" alt="Throughput history for 10dxx">
+      <p class="chart-note">Middle frozen p10–p90 / beyond p98. inside Middle typical 0.93–1.09 (this role's p10–p90).</p>
+    </div>
+  </section>
+  <p class="al-text-small-muted">Onionoo relays_published 2026-08-15 06:00:00 UTC.
+  Bands frozen from the 2026-08-15 19:00 census. Not a live percentile.</p>
 </div>
 <footer class="aeo-footer">
-  Mockup of <code>relay-info.html</code> #bandwidth · Allium · Onionoo snapshot
-  · not a live page
+  Mockup of <code>relay-info.html</code> #bandwidth · Allium
 </footer>
 </body>
 </html>
