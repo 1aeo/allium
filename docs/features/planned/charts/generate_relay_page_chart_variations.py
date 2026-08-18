@@ -58,6 +58,9 @@ F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
 # 1aeo.com Guard+HSDir, effective family 241, not currently overloaded.
 JEANGRAE = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
+# Exit-only and Middle examples for the four frozen write/read band sets.
+ZARATHUSTRA = "E70906B974DF23A6858B06FED589DC3696781F00"
+TENDXX = "F538DBEA80CA7DA733537166CA364D98CBE9E1D1"
 
 PERIOD_META = {
     "1_month": {
@@ -78,6 +81,25 @@ PERIOD_META = {
     },
 }
 PERIOD_ORDER = ("1_month", "6_months", "1_year", "5_years")
+# Bandwidth graphs use coarser buckets than /uptime (1-day / 1-day / 2-day / 10-day).
+BW_PERIOD_META = {
+    "1_month": {
+        "short": "1M", "title": "1 month", "bucket": "1-day",
+        "interval_hours": 24, "nominal_days": 30,
+    },
+    "6_months": {
+        "short": "6M", "title": "6 months", "bucket": "1-day",
+        "interval_hours": 24, "nominal_days": 180,
+    },
+    "1_year": {
+        "short": "1Y", "title": "1 year", "bucket": "2-day",
+        "interval_hours": 48, "nominal_days": 365,
+    },
+    "5_years": {
+        "short": "5Y", "title": "5 years", "bucket": "10-day",
+        "interval_hours": 240, "nominal_days": 1825,
+    },
+}
 
 # 400-relay Onionoo 1_month sample, relays_published 2026-08-15 17:00 UTC.
 # Median imperfect rate ~3.1%. These interval midpoints were ≥8%.
@@ -919,18 +941,28 @@ def throughput_legend_handles(advertised_mbit, events, overload_status=None,
     return handles
 
 
-def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None):
-    """One-row legend in the empty band above advertised / data_max.
+def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
+                            wrap_last=False):
+    """Legend in the empty band above advertised / data_max.
 
     ylim reserves that band (see throughput_ylim). Do not use loc=upper
     left on a tight ylim — that is what sat the legend on the series.
+
+    When overload is in the legend, wrap that last item onto a second
+    row (ncol = n-1). A single 5-item row is wider than the axes;
+    bbox=tight then stretches the figure to the right and leaves a
+    blank shelf under the legend.
     """
     if not handles:
         return
+    if wrap_last and len(handles) > 1:
+        ncol = len(handles) - 1
+    elif ncol is None:
+        ncol = min(len(handles), 4)
     ax.legend(
         handles=handles,
         loc="upper left",
-        ncol=ncol or min(len(handles), 5),
+        ncol=ncol,
         fontsize=fontsize,
         frameon=True,
         fancybox=False,
@@ -938,8 +970,8 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None):
         facecolor="white",
         framealpha=0.96,
         borderaxespad=0.35,
-        columnspacing=1.1,
-        handlelength=1.7,
+        columnspacing=1.0,
+        handlelength=1.6,
     )
 
 
@@ -958,11 +990,12 @@ def apply_throughput_title(ax, title, overload_status, overload_mode):
     ax.set_title(title, pad=10)
 
 
-def throughput_ylim(ax, read_m, write_m, advertised_mbit):
+def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1):
     """Leave a legend shelf above advertised (or data, if higher)."""
     data_max = max(list(write_m) + list(read_m) + [0.0])
     ceiling = max(advertised_mbit or 0.0, data_max) or 1.0
-    ax.set_ylim(0, ceiling * 1.26)
+    extra = 1.42 if legend_rows >= 2 else 1.26
+    ax.set_ylim(0, ceiling * extra)
 
 
 def role_of(flags):
@@ -1080,7 +1113,8 @@ def ratio_legend_handles(overlays=None, bands=None):
 
 
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
-                      legend_above=False, bands=None):
+                      legend_above=False, bands=None, show_legend=True,
+                      period_key=None):
     overlays = overlays or {}
     bands = bands or overlays.get("bands") or {
         "role": "all relays",
@@ -1125,36 +1159,68 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
         transform=axr.get_yaxis_transform(), ha="right", va="center",
         fontsize=7, color=BAD, fontweight="bold",
     )
-    handles = ratio_legend_handles(overlays, bands)
-    if legend_above:
-        axr.legend(
-            handles=handles, loc="lower left", bbox_to_anchor=(0.0, 1.02),
-            ncol=3, fontsize=7.0, frameon=False, borderaxespad=0.0,
-        )
+    if show_legend:
+        handles = ratio_legend_handles(overlays, bands)
+        if legend_above:
+            axr.legend(
+                handles=handles, loc="lower left", bbox_to_anchor=(0.0, 1.02),
+                ncol=3, fontsize=7.0, frameon=False, borderaxespad=0.0,
+            )
+        else:
+            axr.legend(handles=handles, loc="upper right", fontsize=7.5,
+                       frameon=True, fancybox=False, edgecolor="#dddddd")
+    if period_key:
+        period_date_axis(axr, period_key)
     else:
-        axr.legend(handles=handles, loc="upper right", fontsize=7.5,
-                   frameon=True, fancybox=False, edgecolor="#dddddd")
-    date_axis(axr)
+        date_axis(axr)
     return float(np.nanmean(ratio))
 
 
+def events_in_span(events, ts):
+    if not ts:
+        return []
+    lo, hi = ts[0], ts[-1]
+    out = []
+    for ev in events or []:
+        if ev.get("kind") == "overload":
+            continue
+        when = ev.get("when")
+        if when is None or lo <= when <= hi:
+            out.append(ev)
+    return out
+
+
 def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
-                            fill=False):
+                            fill=False, period_key=None, legend_rows=1,
+                            compact=False):
+    ev = events_in_span(events, ts)
+    lw = 1.0 if compact else 1.8
     if fill:
         ax.fill_between(ts, write_m, color=WRITE, alpha=0.22)
         ax.fill_between(ts, read_m, color=BLUE, alpha=0.22)
         ax.plot(ts, write_m, color=WRITE, linewidth=1.2)
         ax.plot(ts, read_m, color=BLUE, linewidth=1.2)
     else:
-        ax.plot(ts, write_m, color=WRITE, linewidth=1.8)
-        ax.plot(ts, read_m, color=BLUE, linewidth=1.8)
+        ax.plot(ts, write_m, color=WRITE, linewidth=lw)
+        ax.plot(ts, read_m, color=BLUE, linewidth=lw)
     if advertised_mbit:
-        ax.axhline(advertised_mbit, color=ORANGE, linestyle="--", linewidth=1.4)
-    draw_event_lines(ax, events)
+        ax.axhline(advertised_mbit, color=ORANGE, linestyle="--",
+                   linewidth=1.0 if compact else 1.4)
+    draw_event_lines(ax, ev)
     pad_xlim(ax, ts)
-    throughput_ylim(ax, read_m, write_m, advertised_mbit)
-    ax.set_ylabel("Throughput (Mbit/s)")
-    date_axis(ax)
+    if compact:
+        data_max = max(list(write_m) + list(read_m) + [0.0])
+        ceiling = max(advertised_mbit or 0.0, data_max) or 1.0
+        ax.set_ylim(0, ceiling * 1.12)
+        ax.tick_params(labelsize=7)
+    else:
+        throughput_ylim(ax, read_m, write_m, advertised_mbit,
+                        legend_rows=legend_rows)
+        ax.set_ylabel("Throughput (Mbit/s)")
+    if period_key:
+        period_date_axis(ax, period_key)
+    else:
+        date_axis(ax)
 
 
 def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
@@ -1164,15 +1230,20 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           overload_mode="title",
                           page_ready=False,
                           story=None,
-                          bands=None):
+                          bands=None,
+                          period_key="1_month"):
     bands = bands or (overlays or {}).get("bands")
+    wrap_last = overload_mode == "legend" and bool(overload_status)
     hspace = 0.32 if page_ready else 0.18
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
     fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.14)
-    _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events)
+    _draw_throughput_series(
+        ax, ts, read_m, write_m, advertised_mbit, events,
+        period_key=period_key, legend_rows=2 if wrap_last else 1,
+    )
     if title is None:
         title = ("Throughput · last 30 days" if page_ready
                  else f"Throughput · last 30 days   ·   {nickname}")
@@ -1183,11 +1254,12 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
             advertised_mbit, events, overload_status,
             overload_in_legend=(overload_mode == "legend"),
         ),
+        wrap_last=wrap_last,
     )
 
     mean_ratio = _plot_ratio_strip(
         axr, ts, read_m, write_m, events, overlays, legend_above=page_ready,
-        bands=bands,
+        bands=bands, period_key=period_key,
     )
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -1281,6 +1353,194 @@ def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
         "Restart is a point. Overload is a title cue, not a time range — "
         "Onionoo has no incident history.",
     )
+    save(fig, out_paths)
+
+
+def load_bandwidth_periods(bw_relay):
+    """Align write/read for each Onionoo period Onionoo actually published."""
+    out = {}
+    wh = bw_relay.get("write_history") or {}
+    rh = bw_relay.get("read_history") or {}
+    for key in PERIOD_ORDER:
+        w_ts, w_vals = history_series(wh.get(key))
+        r_ts, r_vals = history_series(rh.get(key))
+        if not w_ts or not r_ts:
+            continue
+        wmap = dict(zip(w_ts, w_vals))
+        rmap = dict(zip(r_ts, r_vals))
+        keys = sorted(set(wmap) & set(rmap))
+        if len(keys) < 2:
+            continue
+        out[key] = {
+            "ts": keys,
+            "write_m": bytes_to_mbit([wmap[t] for t in keys]),
+            "read_m": bytes_to_mbit([rmap[t] for t in keys]),
+        }
+    return out
+
+
+def _period_overlays(overlays, key):
+    """Role / family daily overlays only line up on 1-month buckets."""
+    if key == "1_month":
+        return overlays or {}
+    slim = dict(overlays or {})
+    slim["role"] = {}
+    slim["operator"] = {}
+    return slim
+
+
+def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
+                            overlays, overload_status, published, nickname,
+                            out_paths, page_ready=True):
+    """Period-pill toggle. Missing Onionoo graphs are omitted, not drawn as 0."""
+    meta = BW_PERIOD_META[selected_key]
+    block = periods[selected_key]
+    ts, write_m, read_m = block["ts"], block["write_m"], block["read_m"]
+    wrap_last = bool(overload_status)
+    fig = plt.figure(figsize=(10.8, 7.0 if page_ready else 7.6))
+    available = [BW_PERIOD_META[k]["short"] for k in PERIOD_ORDER if k in periods]
+    draw_period_pills(fig, available, meta["short"])
+    ax = fig.add_axes([0.08, 0.40, 0.90, 0.36])
+    axr = fig.add_axes([0.08, 0.10 if page_ready else 0.16, 0.90, 0.22], sharex=ax)
+    _draw_throughput_series(
+        ax, ts, read_m, write_m, advertised_mbit, events,
+        period_key=selected_key, legend_rows=2 if wrap_last else 1,
+    )
+    apply_throughput_title(
+        ax,
+        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        overload_status, "legend",
+    )
+    place_legend_above_axes(
+        ax,
+        throughput_legend_handles(
+            advertised_mbit, events, overload_status, overload_in_legend=True,
+        ),
+        wrap_last=wrap_last,
+    )
+    _plot_ratio_strip(
+        axr, ts, read_m, write_m, events, _period_overlays(overlays, selected_key),
+        legend_above=page_ready, bands=(overlays or {}).get("bands"),
+        period_key=selected_key,
+    )
+    extra = _span_note(ts, selected_key)
+    if extra:
+        ax.text(0.99, 0.04, extra, transform=ax.transAxes, ha="right",
+                va="bottom", fontsize=8, color=GRAY)
+    if not page_ready:
+        missing = [BW_PERIOD_META[k]["short"] for k in PERIOD_ORDER
+                   if k not in periods]
+        omit = (", omitted " + ", ".join(missing)) if missing else ""
+        caption(
+            fig, published,
+            f"Period pills on {nickname}. Onionoo published "
+            f"{', '.join(available)}{omit}. A static site cannot fetch on "
+            f"click — each pill is a pre-rendered SVG.",
+        )
+    save(fig, out_paths)
+
+
+def bandwidth_periods_equal(periods, advertised_mbit, events, overload_status,
+                            published, nickname, out_paths, page_ready=True):
+    """Equal 2×2 of every published graph. Empty cell = Onionoo omitted it."""
+    fig, axes = plt.subplots(2, 2, figsize=(10.8, 6.8))
+    fig.subplots_adjust(bottom=0.08 if page_ready else 0.14, top=0.86,
+                        hspace=0.42, wspace=0.22)
+    fig.suptitle(f"Throughput · all published graphs   ·   {nickname}",
+                 fontsize=13, fontweight="bold")
+    handles = throughput_legend_handles(
+        advertised_mbit, events, overload_status, overload_in_legend=True,
+    )
+    fig.legend(
+        handles=handles, loc="upper left", bbox_to_anchor=(0.08, 0.98),
+        ncol=3, fontsize=8.0, frameon=False,
+    )
+    for i, key in enumerate(PERIOD_ORDER):
+        ax = axes[i // 2][i % 2]
+        meta = BW_PERIOD_META[key]
+        if key not in periods:
+            ax.set_axis_off()
+            ax.text(
+                0.5, 0.5,
+                f"{meta['short']}  ·  not published\nOnionoo omitted this graph",
+                ha="center", va="center", color=GRAY, fontsize=11,
+                transform=ax.transAxes,
+            )
+            continue
+        block = periods[key]
+        _draw_throughput_series(
+            ax, block["ts"], block["read_m"], block["write_m"],
+            advertised_mbit, events, period_key=key, compact=True,
+        )
+        extra = _span_note(block["ts"], key)
+        ax.set_title(
+            f"{meta['short']}  ·  {meta['bucket']} buckets"
+            + (f"\n{extra}" if extra else ""),
+            fontsize=10,
+        )
+        ax.set_ylabel("Mbit/s", fontsize=8)
+    if not page_ready:
+        caption(
+            fig, published,
+            f"Equal panels on {nickname}. Same advertised snapshot on every "
+            "panel (not a history). Empty cell = omitted graph, not 0 Mbit/s.",
+        )
+    save(fig, out_paths)
+
+
+def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
+                                  overload_status, published, nickname,
+                                  out_paths, page_ready=True):
+    """1M hero (throughput + ratio) and smaller sparks for longer graphs."""
+    hero_key = "1_month" if "1_month" in periods else next(iter(periods))
+    others = [k for k in PERIOD_ORDER if k in periods and k != hero_key]
+    wrap_last = bool(overload_status)
+    fig = plt.figure(figsize=(10.8, 8.4 if others else 6.6))
+    ax = fig.add_axes([0.08, 0.52 if others else 0.34, 0.90, 0.36 if others else 0.50])
+    axr = fig.add_axes([0.08, 0.34 if others else 0.10, 0.90, 0.14], sharex=ax)
+    block = periods[hero_key]
+    meta = BW_PERIOD_META[hero_key]
+    _draw_throughput_series(
+        ax, block["ts"], block["read_m"], block["write_m"], advertised_mbit,
+        events, period_key=hero_key, legend_rows=2 if wrap_last else 1,
+    )
+    apply_throughput_title(
+        ax,
+        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        overload_status, "legend",
+    )
+    place_legend_above_axes(
+        ax,
+        throughput_legend_handles(
+            advertised_mbit, events, overload_status, overload_in_legend=True,
+        ),
+        wrap_last=wrap_last,
+    )
+    _plot_ratio_strip(
+        axr, block["ts"], block["read_m"], block["write_m"], events,
+        _period_overlays(overlays, hero_key), legend_above=False,
+        bands=(overlays or {}).get("bands"), show_legend=False,
+        period_key=hero_key,
+    )
+    if others:
+        n = len(others)
+        width = 0.90 / n
+        for i, key in enumerate(others):
+            a = fig.add_axes([0.08 + i * width, 0.07, width - 0.03, 0.22])
+            b = periods[key]
+            _draw_throughput_series(
+                a, b["ts"], b["read_m"], b["write_m"], advertised_mbit,
+                events, period_key=key, compact=True,
+            )
+            m = BW_PERIOD_META[key]
+            a.set_title(f"{m['short']}  ·  {m['bucket']}", fontsize=9)
+            a.set_ylabel("")
+    if not page_ready:
+        caption(
+            fig, published,
+            f"1M hero + longer-period sparks on {nickname}. Omit a spark if "
+            "Onionoo omitted the graph. Advertised is the current snapshot.",
+        )
     save(fig, out_paths)
 
 
@@ -1816,7 +2076,10 @@ def relay_page_context(det, published, role_label):
         "flags": flags,
         "flag_str": ", ".join(flags),
         "country": (det.get("country") or "").upper(),
-        "country_name": {"de": "Germany", "us": "United States"}.get(
+        "country_name": {
+            "de": "Germany", "us": "United States", "nl": "Netherlands",
+            "sc": "Seychelles", "fr": "France",
+        }.get(
             (det.get("country") or "").lower(), (det.get("country") or "").upper(),
         ),
         "as": det.get("as") or "",
@@ -1894,6 +2157,9 @@ dd { margin:2px 0 0; }
   border:1px solid var(--color-border-subtle); }
 .chart-wrap img { width:100%; height:auto; display:block; }
 .chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.layout-label { margin:16px 0 8px; padding:8px 12px; background:#fff;
+  border-left:3px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.layout-label strong { display:block; font-size:14px; margin-bottom:2px; }
 .heading-row { display:flex; align-items:baseline; justify-content:space-between;
   gap:12px; flex-wrap:wrap; }
 .overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
@@ -1907,8 +2173,17 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
 """
 
 
+def chart_block_html(nick, chart_file, note, label=None):
+    label_html = (f'<div class="layout-label"><strong>{label}</strong></div>'
+                  if label else "")
+    return f"""{label_html}<div class="chart-wrap">
+      <img src="{chart_file}" alt="Throughput history for {nick}">
+      <p class="chart-note">{note}</p>
+    </div>"""
+
+
 def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
-                             heading_overload=None):
+                             heading_overload=None, charts=None):
     """Write a static HTML mock of relay-info.html #bandwidth with one placement."""
     nick = ctx["nickname"]
     fp = ctx["fingerprint"]
@@ -1920,12 +2195,17 @@ def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
     stability = ('<span class="al-status-danger">Overloaded</span>'
                  if overload_text else
                  '<span class="al-status-success">Not Overloaded</span>')
-    chart = f"""<div class="chart-wrap">
-      <img src="{chart_file}" alt="Throughput last 30 days for {nick}">
-      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code>
-      · 1-month daily buckets · advertised is the descriptor snapshot, not a history.
-      Progressive enhancement: the tables stay if this SVG is missing.</p>
-    </div>"""
+    default_note = (
+        "Onionoo <code>write_history</code> / <code>read_history</code> "
+        "· advertised is the descriptor snapshot, not a history."
+    )
+    if not charts:
+        charts = [{"file": chart_file, "note": default_note}]
+    chart = "".join(
+        chart_block_html(nick, c["file"], c.get("note") or default_note,
+                         c.get("label"))
+        for c in charts
+    )
 
     if option["id"] == 1:
         heading = f"""<div class="heading-row">
@@ -1959,7 +2239,7 @@ def write_bandwidth_page_html(path, option, ctx, chart_file, overload_text=None,
         </div>
         {participation_box(ctx)}
         <h5 class="subsection-header" style="margin-top:16px;">History
-          <span class="al-text-small-muted">(Onionoo, 1 month)</span></h5>
+          <span class="al-text-small-muted">(Onionoo write / read)</span></h5>
         {chart}
         <div class="explain">
           <strong>Bandwidth Values Explained:</strong><br>
@@ -2366,10 +2646,85 @@ def plot_dos_frozen_vs_live(det, bw_by_fp, out_paths, shift=0.25):
     save(fig, out_paths)
 
 
+def _one_month_series(relay, bw_relay):
+    w_ts, w_vals = history_series((bw_relay.get("write_history") or {}).get("1_month"))
+    r_ts, r_vals = history_series((bw_relay.get("read_history") or {}).get("1_month"))
+    if not w_ts or not r_ts:
+        return None
+    wmap = dict(zip(w_ts, w_vals))
+    rmap = dict(zip(r_ts, r_vals))
+    keys = sorted(set(wmap) & set(rmap))
+    if len(keys) < 2:
+        return None
+    return {
+        "ts": keys,
+        "write_m": bytes_to_mbit([wmap[t] for t in keys]),
+        "read_m": bytes_to_mbit([rmap[t] for t in keys]),
+        "advertised_mbit": (relay.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0,
+        "events": restart_events(relay),
+        "ov": None,  # filled by caller with published
+    }
+
+
+def write_role_band_gallery_html(path, rows, published):
+    """Option-C chrome with one History chart per frozen flag-set band."""
+    cards = []
+    for row in rows:
+        ctx = row["ctx"]
+        bands = row["bands"]
+        cards.append(f"""
+  <section class="section-box">
+    <h4>{row["role"]}  ·  {ctx["nickname"]}</h4>
+    <p class="relay-meta">
+      <code>{ctx["fingerprint"]}</code> · {ctx["flag_str"]} · {ctx["as"]} ·
+      {ctx["country_name"]} · family {ctx["family_n"]}<br>
+      Frozen bands: typical {bands["typical_lo"]:.2f}–{bands["typical_hi"]:.2f}
+      (p10–p90) · investigate &lt;{bands["invest_lo"]:.2f} or
+      &gt;{bands["invest_hi"]:.2f} (beyond p98)
+    </p>
+    {chart_block_html(ctx["nickname"], row["chart"], row["note"])}
+  </section>""")
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Write/read bands by flag set · option C</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner">
+    <strong>Option C — one chart per frozen flag-set band</strong>
+    Same History subsection as the F3Netze page. Each relay uses its own
+    Exit / Guard / Exit+Guard / Middle p10–p90 and p98. Overlay is already
+    on the strip.
+  </div>
+  {''.join(cards)}
+  <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
+  Bands frozen from the 2026-08-15 19:00 census. Not a live percentile.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of <code>relay-info.html</code> #bandwidth · Allium
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
 def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
                               f3_overlays, w_ts, read_m, write_m,
                               advertised_mbit, events, ov_status, out, art):
-    """Three #bandwidth placements on real relay-page chrome, plus a 1aeo relay."""
+    """Option C page chrome, period-layout variants, and one chart per role."""
     f3 = det[F3NETZE]
     f3_ctx = relay_page_context(f3, published, "Exit+Guard")
     ov_text = overload_quiet_text(ov_status)
@@ -2388,58 +2743,122 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         )
         print("wrote", name)
 
-    jg = det.get(JEANGRAE)
     bw_all = dict(bw_doc)
     if bandwidth_all_path.exists():
         print("loading", bandwidth_all_path)
         bw_all.update(by_fp(json.loads(bandwidth_all_path.read_text())))
-    jg_bw = bw_all.get(JEANGRAE)
+
+    f3_periods = load_bandwidth_periods(bw_all.get(F3NETZE) or bw_doc[F3NETZE])
+    period_jobs = [
+        ("relay_bandwidth_periods_pills_f3.png", bandwidth_periods_pills,
+         (f3_periods, "1_month", advertised_mbit, events, f3_overlays,
+          ov_status, published, "F3Netze")),
+        ("relay_bandwidth_periods_equal_f3.png", bandwidth_periods_equal,
+         (f3_periods, advertised_mbit, events, ov_status, published, "F3Netze")),
+        ("relay_bandwidth_periods_hero_sparks_f3.png",
+         bandwidth_periods_hero_sparks,
+         (f3_periods, advertised_mbit, events, f3_overlays, ov_status,
+          published, "F3Netze")),
+    ]
+    for name, fn, fn_args in period_jobs:
+        fn(*fn_args, [out / name, art / name], True)
+        print("wrote", name)
+
+    th4r = det.get(TH4R)
+    th4r_bw = bw_all.get(TH4R) or bw_doc.get(TH4R)
+    if th4r and th4r_bw:
+        th_periods = load_bandwidth_periods(th4r_bw)
+        th_adv = (th4r.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0
+        th_events = restart_events(th4r)
+        th_ov = overload_now_status(th4r, published)
+        th_overlays = {"bands": bands_for_flags(th4r.get("flags"))}
+        bandwidth_periods_pills(
+            th_periods, "1_month", th_adv, th_events, th_overlays, th_ov,
+            published, "th4r",
+            [out / "relay_bandwidth_periods_pills_th4r.png",
+             art / "relay_bandwidth_periods_pills_th4r.png"],
+            page_ready=False,
+        )
+        print("wrote relay_bandwidth_periods_pills_th4r.png")
+
+    role_specs = [
+        (F3NETZE, "Exit+Guard", "relay_bandwidth_a_role_exitguard_f3.png"),
+        (JEANGRAE, "Guard", "relay_bandwidth_a_role_guard_jeangrae.png"),
+        (ZARATHUSTRA, "Exit", "relay_bandwidth_a_role_exit_zarathustra.png"),
+        (TENDXX, "Middle", "relay_bandwidth_a_role_middle_10dxx.png"),
+    ]
+    gallery_rows = []
     jg_ctx = None
-    if jg and jg_bw:
-        jw_ts, jw_vals = history_series((jg_bw.get("write_history") or {}).get("1_month"))
-        jr_ts, jr_vals = history_series((jg_bw.get("read_history") or {}).get("1_month"))
-        if jw_ts and jr_ts:
-            j_write = bytes_to_mbit(jw_vals)
-            j_read = bytes_to_mbit(jr_vals)
-            j_adv = (jg.get("advertised_bandwidth") or 0) * 8.0 / 1_000_000.0
-            j_events = restart_events(jg)
-            j_ov = overload_now_status(jg, published)
-            family = set(jg.get("effective_family") or [])
-            print("computing jeangrae Guard / family overlays",
-                  f"(family n={len(family)})")
-            j_overlays = build_ratio_overlays(
-                list(det.values()), bw_all, "Guard", family_fps=family,
+    for fp, role, name in role_specs:
+        relay = det.get(fp)
+        doc = bw_all.get(fp)
+        if not relay or not doc:
+            print("skip role chart", role, fp[:8])
+            continue
+        series = _one_month_series(relay, doc)
+        if not series:
+            print("skip role chart (no 1M)", role)
+            continue
+        ov = overload_now_status(relay, published)
+        family = set(relay.get("effective_family") or [])
+        print(f"computing {role} overlays for {relay.get('nickname')}")
+        overlays = build_ratio_overlays(
+            list(det.values()), bw_all, role, family_fps=family or None,
+        )
+        overlays["bands"] = bands_for_flags(relay.get("flags"))
+        if role == "Guard" and family:
+            overlays["operator_label"] = (
+                f"This family  (1aeo effective-family median, n={overlays['family_n']})"
             )
-            j_overlays["operator_label"] = (
-                f"This family  (1aeo effective-family median, n={j_overlays['family_n']})"
+        ctx = relay_page_context(relay, published, role)
+        if fp == JEANGRAE:
+            jg_ctx = ctx
+            bandwidth_a_dual_line(
+                series["ts"], series["read_m"], series["write_m"],
+                series["advertised_mbit"], series["events"], published,
+                overlays, ov,
+                [out / "relay_bandwidth_a_jeangrae.png",
+                 art / "relay_bandwidth_a_jeangrae.png"],
+                nickname="jeangrae", overload_mode="title", page_ready=False,
             )
-            j_overlays["bands"] = bands_for_flags(jg.get("flags"))
-            jg_ctx = relay_page_context(jg, published, "Guard")
-            for name, kwargs in (
-                ("relay_bandwidth_a_jeangrae.png",
-                 dict(nickname="jeangrae", overload_mode="title", page_ready=False)),
-                ("relay_bandwidth_page_opt2_jeangrae.png",
-                 dict(title="Throughput · last 30 days", overload_mode="title",
-                      page_ready=True, nickname="jeangrae")),
-            ):
-                bandwidth_a_dual_line(
-                    jw_ts, j_read, j_write, j_adv, j_events, published,
-                    j_overlays, j_ov, [out / name, art / name], **kwargs,
-                )
-                print("wrote", name)
-        else:
-            print("skip jeangrae: empty 1_month history")
-    else:
-        print("skip jeangrae: missing details or bandwidth document")
+            bandwidth_a_dual_line(
+                series["ts"], series["read_m"], series["write_m"],
+                series["advertised_mbit"], series["events"], published,
+                overlays, ov,
+                [out / "relay_bandwidth_page_opt2_jeangrae.png",
+                 art / "relay_bandwidth_page_opt2_jeangrae.png"],
+                title="Throughput · last 30 days", overload_mode="title",
+                page_ready=True, nickname="jeangrae",
+            )
+            print("wrote jeangrae option-2 charts")
+        bandwidth_a_dual_line(
+            series["ts"], series["read_m"], series["write_m"],
+            series["advertised_mbit"], series["events"], published,
+            overlays, ov, [out / name, art / name],
+            nickname=relay.get("nickname") or role,
+            overload_mode="legend" if ov else "title",
+            page_ready=False,
+        )
+        print("wrote", name)
+        wsum = float(np.sum(series["write_m"]))
+        rsum = float(np.sum(series["read_m"]))
+        mean_ratio = wsum / rsum if rsum else float("nan")
+        gallery_rows.append({
+            "role": role,
+            "ctx": ctx,
+            "bands": overlays["bands"],
+            "chart": name,
+            "note": (
+                f"{role} frozen p10–p90 / beyond p98. "
+                f"{ratio_zone_phrase(mean_ratio, overlays['bands'])}."
+            ),
+        })
 
     options = [
         {
             "id": 1,
             "name": "Hero under the heading",
-            "blurb": "Chart is the first thing #bandwidth lands on. The section "
-                     "heading owns the title; overload is a small rust status "
-                     "next to “Bandwidth Metrics”, not a red pill. Snapshot "
-                     "numbers sit under the chart.",
+            "blurb": "Rejected alt. Chart is the first thing #bandwidth lands on.",
             "file": "relay_page_bw_opt1_hero_f3.html",
             "chart": "relay_bandwidth_page_opt1_hero_f3.png",
             "ctx": f3_ctx,
@@ -2449,10 +2868,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         {
             "id": 2,
             "name": "After Capacity / Measurement",
-            "blurb": "Recommended. Existing scalars stay first (what operators "
-                     "already scan). Chart title is “Throughput · last 30 days”; "
-                     "overload, if any, sits in that title. 1aeo family relay "
-                     "so the empty (not-overloaded) title is visible.",
+            "blurb": "Rejected alt. Scalars first, chart before Network Participation.",
             "file": "relay_page_bw_opt2_after_metrics_jeangrae.html",
             "chart": "relay_bandwidth_page_opt2_jeangrae.png",
             "ctx": jg_ctx or f3_ctx,
@@ -2462,14 +2878,34 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
         {
             "id": 3,
             "name": "History subsection after Network Participation",
-            "blurb": "All snapshot numbers stay together. Chart is a named "
-                     "subsection before “Bandwidth Values Explained”. Overload "
-                     "is a diamond in the legend, not a banner or title shout.",
+            "blurb": "Chosen. Snapshot numbers stay together. History is a named "
+                     "subsection before “Bandwidth Values Explained”. Three period "
+                     "layouts below — pick one. Overload wraps onto a second "
+                     "legend line; the progressive-enhancement footnote is gone.",
             "file": "relay_page_bw_opt3_history_f3.html",
             "chart": "relay_bandwidth_page_opt3_history_f3.png",
             "ctx": f3_ctx,
             "overload": ov_text,
             "heading_overload": None,
+            "charts": [
+                {
+                    "label": "Period layout 1 — pills (toggle 1M / 6M / 1Y / 5Y)",
+                    "file": "relay_bandwidth_periods_pills_f3.png",
+                    "note": "Default 1M. Omit a pill if Onionoo omitted the graph. "
+                            "A static site pre-renders each selected period.",
+                },
+                {
+                    "label": "Period layout 2 — equal 2×2 of every published graph",
+                    "file": "relay_bandwidth_periods_equal_f3.png",
+                    "note": "Same size, no click. Empty cell = not published, not 0.",
+                },
+                {
+                    "label": "Period layout 3 — 1M hero + 6M / 1Y / 5Y sparks",
+                    "file": "relay_bandwidth_periods_hero_sparks_f3.png",
+                    "note": "1M stays large (finest buckets). Longer graphs are "
+                            "context underneath. Omit a spark if unpublished.",
+                },
+            ],
         },
     ]
     for opt in options:
@@ -2479,8 +2915,17 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             write_bandwidth_page_html(
                 dest / opt["file"], opt, opt["ctx"], opt["chart"],
                 opt["overload"], heading_overload=opt.get("heading_overload"),
+                charts=opt.get("charts"),
             )
         print("wrote", opt["file"])
+
+    if gallery_rows:
+        for dest in (out, art):
+            write_role_band_gallery_html(
+                dest / "relay_page_bw_opt3_role_bands.html",
+                gallery_rows, published,
+            )
+        print("wrote relay_page_bw_opt3_role_bands.html")
 
     plot_role_band_geometry(
         [out / "ratio_bands_by_role.png", art / "ratio_bands_by_role.png"],

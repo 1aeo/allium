@@ -81,6 +81,10 @@ Live examples use two relays:
   300–530 Mbit/s, about 54% of advertised 804 Mbit/s.
 - **jeangrae** (`02B1…B108CF`) — Guard+HSDir in US, AROI `1aeo.com`,
   effective family 241. Not currently overloaded. Advertised ~656 Mbit/s.
+- **zarathustra** (`E709…1F00`) — Exit-only in DE. Typical Exit write/read
+  (~1.01). Used for the Exit band mockup.
+- **10dxx** (`F538…E1D1`) — Middle in NL. Typical Middle write/read
+  (~1.00). Used for the Middle band mockup.
 
 ### R1. Uptime (Running flag) — three encodings
 
@@ -412,41 +416,84 @@ spikes; a persistent 5× split still leaves the green band.
 Empty state: a two-day relay such as PirateyMatey (CW 1) should say
 "not enough history" rather than draw two dots.
 
-#### Where R2 sits on `#bandwidth` — three placements
+#### Where R2 sits on `#bandwidth`
 
-The live section is already: heading → Capacity / Measurement two-column
-→ Network Participation → (later) Bandwidth Values Explained. Three
-ways to add the chart. Page mockups use Allium chrome (nav, health
-grid, dimmed `#flags` / `#uptime`).
+**Chosen: option C** — History subsection after Network Participation,
+before Bandwidth Values Explained. Snapshot numbers stay together. The
+chart is a new `h5`, tables untouched.
 
-| Option | Placement | Overload cue | Example relay |
-|--------|-----------|--------------|---------------|
-| 1 Hero | First thing under **Bandwidth Metrics** | Rust status next to the `h4` | F3Netze (overloaded) |
-| 2 After scalars | After Capacity / Measurement, before Network Participation | Title-right `currently overloaded · last report …` | **jeangrae** (1aeo, not overloaded) |
-| 3 History subsection | After Network Participation, before Values Explained | Diamond in the legend | F3Netze |
+| Option | Placement | Overload cue | Status |
+|--------|-----------|--------------|--------|
+| 1 Hero | First thing under **Bandwidth Metrics** | Rust status next to the `h4` | Rejected |
+| 2 After scalars | After Capacity / Measurement, before Network Participation | Title-right cue | Rejected |
+| **3 History** | After Network Participation, before Values Explained | Diamond in the legend, **wrapped to a second line** | **Ship this** |
+
+When overload is in the legend, that last item wraps onto row 2. Do not
+keep a one-row legend that is wider than the axes — `bbox=tight` then
+stretches the figure to the right and leaves a blank shelf under the
+legend. Drop the “Progressive enhancement: the tables stay if this SVG
+is missing” footnote under the chart; the tables are already on the
+page.
 
 Page mockups (open the HTML):
 
-- [Option 1 — hero, F3Netze](mockups/relay_page_bw_opt1_hero_f3.html)
-- [Option 2 — after scalars, jeangrae / 1aeo](mockups/relay_page_bw_opt2_after_metrics_jeangrae.html)
-- [Option 3 — history subsection, F3Netze](mockups/relay_page_bw_opt3_history_f3.html)
+- [Option C — History, F3Netze, three period layouts](mockups/relay_page_bw_opt3_history_f3.html)
+- [Option C — one chart per flag-set band](mockups/relay_page_bw_opt3_role_bands.html)
+- [Option 1 — rejected hero](mockups/relay_page_bw_opt1_hero_f3.html)
+- [Option 2 — rejected after scalars](mockups/relay_page_bw_opt2_after_metrics_jeangrae.html)
 
-Standalone charts used in those pages:
+![Throughput · F3Netze, legend-wrapped overload](mockups/relay_bandwidth_page_opt3_history_f3.png)
 
-![Throughput · F3Netze, title-line overload](mockups/relay_bandwidth_a_dual_line.png)
+#### Four Onionoo periods on the History subsection
 
-![Throughput · jeangrae (1aeo family)](mockups/relay_bandwidth_a_jeangrae.png)
+`write_history` / `read_history` publish `1_month` (1-day), `6_months`
+(1-day), `1_year` (2-day), `5_years` (10-day). Omit a period if Onionoo
+omitted the graph. Do not draw 0 Mbit/s. Three encodings, all mocked
+under option C:
 
-**Lean:** option 2. Health-grid `#bandwidth` already jumps to the
-scalars operators scan today. The chart is the history those numbers
-collapse. Option 1 makes the jump land on ink. Option 3 is the safest
-progressive-enhancement add-on (a new `h5`, tables untouched) but the
-chart is furthest from the heading.
+| Layout | What | When to pick |
+|--------|------|--------------|
+| Pills | Button toggle 1M / 6M / 1Y / 5Y. Default 1M. Full throughput + ratio for the selected period. | One chart, operator picks the window |
+| Equal 2×2 | All published graphs, same size. Empty cell = not published. | See every window without a click |
+| 1M hero + sparks | 1M stays large (finest buckets + ratio strip). 6M / 1Y / 5Y are smaller underneath. | 1M is the number on the health row; longer graphs are context |
 
-Chart title on the page is `Throughput · last 30 days`, not
-“Bandwidth A — dual line…”. Nickname stays in the page `h1`. Overload
-details stay in `#uptime` `#overload`; the chart only repeats *that it
-is on*.
+![Period pills — F3Netze, all four published](mockups/relay_bandwidth_periods_pills_f3.png)
+
+![Period pills — th4r, 5Y omitted](mockups/relay_bandwidth_periods_pills_th4r.png)
+
+![Equal 2×2 — F3Netze](mockups/relay_bandwidth_periods_equal_f3.png)
+
+![1M hero + sparks — F3Netze](mockups/relay_bandwidth_periods_hero_sparks_f3.png)
+
+A static site cannot fetch on pill click. Whatever we ship is
+pre-rendered (one SVG per selected period, or the 2×2 / hero that
+shows every published graph at once).
+
+Advertised is the current descriptor snapshot on every panel, not a
+history.
+
+#### One chart per frozen flag-set band
+
+The History strip uses **this relay’s flags**. Mocked on four relays:
+
+| Role | Relay | Typical (p10–p90) | Month-mean |
+|------|-------|-------------------|------------|
+| Exit | zarathustra | 0.96–1.02 | ~1.01, typical |
+| Guard | jeangrae | 1.01–1.17 | ~1.21, uncommon |
+| Exit+Guard | F3Netze | 0.97–1.15 | ~1.03, typical |
+| Middle | 10dxx | 0.93–1.09 | ~1.00, typical |
+
+![Exit band — zarathustra](mockups/relay_bandwidth_a_role_exit_zarathustra.png)
+
+![Guard band — jeangrae](mockups/relay_bandwidth_a_role_guard_jeangrae.png)
+
+![Exit+Guard band — F3Netze](mockups/relay_bandwidth_a_role_exitguard_f3.png)
+
+![Middle band — 10dxx](mockups/relay_bandwidth_a_role_middle_10dxx.png)
+
+Chart title on the page is `Throughput · last 30 days` (or the selected
+period). Nickname stays in the page `h1`. Overload details stay in
+`#uptime` `#overload`; the chart only repeats *that it is on*.
 
 ---
 
@@ -576,7 +623,7 @@ overload. th4r's gaps are **not** restarts.
 #status          health grid          — no new chart
 #connectivity    addresses / IPv6     — no new chart
 #flags           eligibility table    — then R3 (encoding unset; C–F)
-#bandwidth       capacity + bwauths   — then R2 A (option 2; hero / history-h5 are the alts)
+#bandwidth       capacity + bwauths   — then Network Participation, then R2 A as History (option C; pills / 2×2 / hero+sparks)
 #uptime          1M/6M/1Y/5Y scalars + gap counts
                  info box: two clocks + Onionoo bucket table + pill tooltips
                  then R1 B (network-visible Running + process rail + shared gaps)
@@ -612,7 +659,10 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
    put a quiet cue in the title or legend; otherwise omit it. Do not
    infer a 72h `axvspan`. History would need CollecTor
    server-descriptors / extra-info, not consensus files. The throughput
-   legend is above the axes so it never covers data.
+   legend is above the axes so it never covers data. When overload is
+   in the legend, wrap that item onto a second line — do not widen the
+   figure to keep a one-row legend. Do not print “progressive
+   enhancement” under the chart.
 4. At build time, from every relay's `uptime.1_month`, compute the
    imperfect-Running share per 4-hour bucket. Median is ~3%. Mark
    buckets ≥8% as network-wide gaps and reuse that series on every
