@@ -48,11 +48,14 @@ OVERLOAD = BAD
 # Investigate <0.80 or >1.50 = rare (2.2% of 1M). 1.20 is uncommon, not an
 # outlier: 6.3% of 1M relays, mostly Guards (Guard p90 is 1.17).
 # A DoS that hits everyone would move a percentile band and hide the event.
+# Global fallback only — the strip uses frozen per-role bands from
+# data/role_ratio_bands.json. Do not recompute these from live Onionoo.
 RATIO_LO = 0.90
 RATIO_HI = 1.15
 RATIO_INVESTIGATE_LO = 0.80
 RATIO_INVESTIGATE_HI = 1.50
 AMBER = ORANGE
+ROLE_BANDS_PATH = Path(__file__).resolve().parent / "data" / "role_ratio_bands.json"
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
@@ -965,12 +968,58 @@ def throughput_ylim(ax, read_m, write_m, advertised_mbit):
     ax.set_ylim(0, ceiling * 1.26)
 
 
-def ratio_zone_phrase(mean_ratio):
-    if RATIO_LO <= mean_ratio <= RATIO_HI:
-        return f"inside typical {RATIO_LO:.2f}–{RATIO_HI:.2f}"
-    if RATIO_INVESTIGATE_LO <= mean_ratio <= RATIO_INVESTIGATE_HI:
-        return f"uncommon (amber) at {mean_ratio:.2f} — not investigate"
-    return f"investigate (red) at {mean_ratio:.2f}"
+def role_of(flags):
+    flags = flags or []
+    exit_f = "Exit" in flags
+    guard_f = "Guard" in flags
+    if exit_f and guard_f:
+        return "Exit+Guard"
+    if exit_f:
+        return "Exit"
+    if guard_f:
+        return "Guard"
+    return "Middle"
+
+
+def load_role_bands():
+    raw = json.loads(ROLE_BANDS_PATH.read_text())
+    return raw
+
+
+def bands_for_flags(flags, catalog=None):
+    """Frozen typical / uncommon / investigate for this relay's flag set."""
+    catalog = catalog or load_role_bands()
+    role = role_of(flags)
+    row = (catalog.get("roles") or {}).get(role)
+    if not row:
+        return {
+            "role": role,
+            "typical_lo": RATIO_LO,
+            "typical_hi": RATIO_HI,
+            "invest_lo": RATIO_INVESTIGATE_LO,
+            "invest_hi": RATIO_INVESTIGATE_HI,
+            "n": 0,
+        }
+    return {"role": role, **row}
+
+
+def ratio_zone_phrase(mean_ratio, bands=None):
+    bands = bands or {
+        "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
+        "invest_lo": RATIO_INVESTIGATE_LO, "invest_hi": RATIO_INVESTIGATE_HI,
+        "role": "all",
+    }
+    role = bands.get("role") or "this role"
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ilo, ihi = bands["invest_lo"], bands["invest_hi"]
+    if tlo <= mean_ratio <= thi:
+        return (f"inside {role} typical {tlo:.2f}–{thi:.2f} "
+                f"(this role's p10–p90)")
+    if ilo <= mean_ratio <= ihi:
+        return (f"uncommon for {role} at {mean_ratio:.2f} "
+                f"(outside p10–p90, inside p2–p98)")
+    return (f"investigate for {role} at {mean_ratio:.2f} "
+            f"(beyond this role's p98)")
 
 
 def load_ratio_overlays():
@@ -998,16 +1047,25 @@ def overlay_values(ts, series):
     return [series.get(t, np.nan) for t in ts]
 
 
-def ratio_legend_handles(overlays=None):
+def ratio_legend_handles(overlays=None, bands=None):
+    bands = bands or {
+        "role": "all relays",
+        "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
+        "invest_lo": RATIO_INVESTIGATE_LO, "invest_hi": RATIO_INVESTIGATE_HI,
+        "n": 0,
+    }
+    role = bands.get("role") or "this role"
+    n = bands.get("n") or 0
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ilo, ihi = bands["invest_lo"], bands["invest_hi"]
+    n_bit = f", n={n}" if n else ""
     handles = [
         Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-              label=f"Typical  {RATIO_LO:.2f}–{RATIO_HI:.2f}"),
+              label=f"Typical  {tlo:.2f}–{thi:.2f}  ·  {role} p10–p90{n_bit}"),
         Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER,
-              label=f"Uncommon  {RATIO_INVESTIGATE_LO:.2f}–{RATIO_LO:.2f} / "
-                    f"{RATIO_HI:.2f}–{RATIO_INVESTIGATE_HI:.2f}  ·  check role overlay"),
+              label=f"Uncommon  {ilo:.2f}–{tlo:.2f} / {thi:.2f}–{ihi:.2f}"),
         Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
-              label=f"Investigate  <{RATIO_INVESTIGATE_LO:.2f} or "
-                    f">{RATIO_INVESTIGATE_HI:.2f}"),
+              label=f"Investigate  <{ilo:.2f} or >{ihi:.2f}  ·  {role} beyond p98"),
         Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
     ]
     overlays = overlays or {}
@@ -1025,14 +1083,21 @@ def ratio_legend_handles(overlays=None):
 
 
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
-                      legend_above=False):
+                      legend_above=False, bands=None):
     overlays = overlays or {}
+    bands = bands or overlays.get("bands") or {
+        "role": "all relays",
+        "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
+        "invest_lo": RATIO_INVESTIGATE_LO, "invest_hi": RATIO_INVESTIGATE_HI,
+    }
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
-    axr.axhspan(0.45, RATIO_INVESTIGATE_LO, color=BAD, alpha=0.10, zorder=0)
-    axr.axhspan(RATIO_INVESTIGATE_LO, RATIO_LO, color=AMBER, alpha=0.10, zorder=0)
-    axr.axhspan(RATIO_LO, RATIO_HI, color=GREEN, alpha=0.16, zorder=0)
-    axr.axhspan(RATIO_HI, RATIO_INVESTIGATE_HI, color=AMBER, alpha=0.10, zorder=0)
-    axr.axhspan(RATIO_INVESTIGATE_HI, 1.85, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
+    axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
+    axr.axhspan(thi, ihi, color=AMBER, alpha=0.10, zorder=0)
+    axr.axhspan(ihi, 1.85, color=BAD, alpha=0.10, zorder=0)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
     role = overlay_values(ts, overlays.get("role"))
     if role is not None:
@@ -1040,7 +1105,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     op = overlay_values(ts, overlays.get("operator"))
     if op is not None:
         axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=1.6, zorder=2)
-    investigate = (ratio < RATIO_INVESTIGATE_LO) | (ratio > RATIO_INVESTIGATE_HI)
+    investigate = (ratio < ilo) | (ratio > ihi)
     if (~investigate).any():
         y = np.ma.masked_where(investigate, ratio)
         axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=3)
@@ -1051,7 +1116,19 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
     axr.set_ylim(0.50, 1.70)
-    handles = ratio_legend_handles(overlays)
+    # Percentile labels on the bands — short, right side, so the legend
+    # does not have to say "check role overlay".
+    axr.text(
+        0.995, (tlo + thi) / 2, "p10–p90",
+        transform=axr.get_yaxis_transform(), ha="right", va="center",
+        fontsize=7, color=GREEN, fontweight="bold",
+    )
+    axr.text(
+        0.995, min(1.66, (ihi + 1.70) / 2), ">p98",
+        transform=axr.get_yaxis_transform(), ha="right", va="center",
+        fontsize=7, color=BAD, fontweight="bold",
+    )
+    handles = ratio_legend_handles(overlays, bands)
     if legend_above:
         axr.legend(
             handles=handles, loc="lower left", bbox_to_anchor=(0.0, 1.02),
@@ -1089,7 +1166,9 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           title=None,
                           overload_mode="title",
                           page_ready=False,
-                          story=None):
+                          story=None,
+                          bands=None):
+    bands = bands or (overlays or {}).get("bands")
     hspace = 0.32 if page_ready else 0.18
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
@@ -1111,21 +1190,23 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
 
     mean_ratio = _plot_ratio_strip(
         axr, ts, read_m, write_m, events, overlays, legend_above=page_ready,
+        bands=bands,
     )
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
         fam_n = (overlays or {}).get("family_n") or 0
         fam_out = (overlays or {}).get("family_outliers") or 0
+        thi = (bands or {}).get("typical_hi", RATIO_HI)
         caption(
             fig, published,
             story or (
                 f"Story: {nickname} mean write/read {mean_ratio:.2f}, "
-                f"{ratio_zone_phrase(mean_ratio)}. Legend sits in the empty "
-                f"band above advertised so it never covers write / read. "
-                f"Overload is a title cue, not a red pill. {fam_out} of "
-                f"{fam_n} group relays have a month-mean above 1.15. "
-                f"Delivered write ~{np.mean(write_m):.0f} Mbit/s "
-                f"({used:.0f}% of advertised)."
+                f"{ratio_zone_phrase(mean_ratio, bands)}. Bands are this "
+                f"relay's flag set, frozen from a quiet census — not a live "
+                f"percentile. Role overlay confirms whether the whole role "
+                f"moved. {fam_out} of {fam_n} group relays sit above this "
+                f"role's typical ({thi:.2f}). Delivered write "
+                f"~{np.mean(write_m):.0f} Mbit/s ({used:.0f}% of advertised)."
             ),
         )
     save(fig, out_paths)
@@ -1153,12 +1234,13 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
                               label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     handles.extend(event_legend_handles(events))
     place_legend_above_axes(ax, handles)
-    _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays)
+    _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays,
+                      bands=bands_for_flags(["Exit", "Guard"]))
     caption(
         fig, published,
-        "Same restart marker, title-line overload cue, fixed expected range, "
-        "and role / operator overlays as A. Area fill is the alternate "
-        "encoding; A is the preferred default.",
+        "Same restart marker, title-line overload cue, Exit+Guard frozen "
+        "bands (p10–p90 / beyond p98), and role / operator overlays as A. "
+        "Area fill is the alternate encoding; A is the preferred default.",
     )
     save(fig, out_paths)
 
@@ -1606,19 +1688,6 @@ def history_map(block):
     """Return {timestamp: bytes_per_sec} skipping nulls."""
     ts, vals = history_series(block)
     return dict(zip(ts, vals))
-
-
-def role_of(flags):
-    flags = flags or []
-    exit_f = "Exit" in flags
-    guard_f = "Guard" in flags
-    if exit_f and guard_f:
-        return "Exit+Guard"
-    if exit_f:
-        return "Exit"
-    if guard_f:
-        return "Guard"
-    return "Middle"
 
 
 def compute_group_daily_ratios(bw_by_fp, fingerprints, min_bps=50_000):
@@ -2103,6 +2172,7 @@ def main():
                  if k in flag_series}
 
     overlays = load_ratio_overlays()
+    overlays["bands"] = bands_for_flags(f3.get("flags"))
     out = Path(args.out)
     art = Path(args.artifacts)
     jobs = [
@@ -2167,6 +2237,138 @@ def main():
     )
 
 
+def plot_role_band_geometry(out_paths):
+    """Four frozen flag-set bands. 1.20 is investigate for Exit, not Guard."""
+    catalog = load_role_bands()
+    fig, ax = plt.subplots(figsize=(11.0, 5.4))
+    roles = ("Exit", "Exit+Guard", "Guard", "Middle")
+    ax.axvspan(0.70, 1.90, color=BAD, alpha=0.06)
+    ax.axvline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
+    ax.axvline(1.20, color=NAVY, linestyle=":", linewidth=1.3)
+    ax.annotate(
+        "1.20  ·  Exit p98.7 (investigate)\n"
+        "Guard p91.6 (uncommon)",
+        xy=(1.20, 3.45), xytext=(1.42, 3.55),
+        fontsize=8, color=NAVY,
+        arrowprops=dict(arrowstyle="->", color=NAVY),
+        bbox=dict(boxstyle="round,pad=0.3", fc="#f7f7f7", ec="#dddddd"),
+    )
+    for i, role in enumerate(roles):
+        b = catalog["roles"][role]
+        y = len(roles) - 1 - i
+        ax.barh(y, b["invest_hi"] - b["invest_lo"], left=b["invest_lo"],
+                height=0.52, color=AMBER, alpha=0.35, zorder=1)
+        ax.barh(y, b["typical_hi"] - b["typical_lo"], left=b["typical_lo"],
+                height=0.52, color=GREEN, alpha=0.7, zorder=2)
+        ax.plot([b["invest_lo"], b["invest_lo"]], [y - 0.32, y + 0.32],
+                color=BAD, lw=1.6, zorder=3)
+        ax.plot([b["invest_hi"], b["invest_hi"]], [y - 0.32, y + 0.32],
+                color=BAD, lw=1.6, zorder=3)
+        ax.text(0.705, y, f"{role}  n={b['n']}", va="center", ha="left",
+                fontsize=8.5, fontweight="bold", color=NAVY)
+        ax.text(
+            1.73, y,
+            f"typical p10–p90  {b['typical_lo']:.2f}–{b['typical_hi']:.2f}"
+            f"   investigate >p98  {b['invest_hi']:.2f}",
+            va="center", ha="left", fontsize=7.5, color=GRAY,
+        )
+    ax.set_yticks([])
+    ax.set_xlim(0.70, 2.15)
+    ax.set_ylim(-0.6, 4.1)
+    ax.set_xlabel("Write / read  (frozen 1-month month-mean, ≥50 KB/s)")
+    ax.set_title("Role-specific bands  ·  typical = this flag set’s p10–p90  ·  "
+                 "investigate = beyond this flag set’s p98")
+    fig.text(
+        0.01, 0.01,
+        "Frozen from Onionoo 2026-08-15 19:00 UTC. Do not recompute live — "
+        "a DoS that hits every Exit would move p10–p90 and hide itself. "
+        "The role-median overlay on the relay chart is the confirmation, "
+        "not a second set of bands.",
+        fontsize=8, color=GRAY,
+    )
+    fig.subplots_adjust(bottom=0.16, right=0.98)
+    save(fig, out_paths)
+
+
+def plot_dos_frozen_vs_live(det, bw_by_fp, out_paths, shift=0.25):
+    """A network-wide Exit DoS: frozen bands still alarm; live p10–p90 hide it."""
+    month = []
+    for r in det.values():
+        if role_of(r.get("flags")) != "Exit":
+            continue
+        doc = bw_by_fp.get(r["fingerprint"])
+        if not doc:
+            continue
+        w = history_map((doc.get("write_history") or {}).get("1_month"))
+        rd = history_map((doc.get("read_history") or {}).get("1_month"))
+        keys = [t for t in w if t in rd and rd[t] > 0]
+        if len(keys) < 3:
+            continue
+        sw = sum(w[t] for t in keys)
+        sr = sum(rd[t] for t in keys)
+        thru = (sw + sr) / (2 * len(keys))
+        if thru < 50_000:
+            continue
+        month.append(sw / sr)
+    if len(month) < 50:
+        print("skip DoS figure: not enough Exit ratios")
+        return
+    quiet = np.asarray(month, float)
+    dos = quiet + shift
+    bands = bands_for_flags(["Exit"])
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ilo, ihi = bands["invest_lo"], bands["invest_hi"]
+    live_lo, live_hi = np.percentile(dos, 10), np.percentile(dos, 90)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.2, 5.4), sharey=True)
+    for ax, vals, title, lo, hi, kind in (
+        (axes[0], dos,
+         f"Frozen Exit bands  ·  typical {tlo:.2f}–{thi:.2f}",
+         tlo, thi, "frozen"),
+        (axes[1], dos,
+         f"Live Exit p10–p90 of the DoS week  ·  {live_lo:.2f}–{live_hi:.2f}",
+         live_lo, live_hi, "live"),
+    ):
+        clipped = vals[(vals >= 0.6) & (vals <= 1.8)]
+        ax.hist(clipped, bins=40, color=BLUE, alpha=0.7, edgecolor="white")
+        ax.axvspan(lo, hi, color=GREEN, alpha=0.20)
+        ax.axvline(lo, color=GREEN, lw=1.2)
+        ax.axvline(hi, color=GREEN, lw=1.2)
+        if kind == "frozen":
+            ax.axvline(ihi, color=BAD, lw=1.2)
+        ax.axvline(1.0, color=GREEN, linestyle="--", lw=1.0)
+        ax.set_xlim(0.70, 1.70)
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel("Exit write / read  (month-mean + 0.25)")
+        in_green = float(np.mean((vals >= lo) & (vals <= hi)))
+        ax.text(
+            0.04, 0.96,
+            f"{in_green * 100:.0f}% of Exits fall in the green band",
+            transform=ax.transAxes, va="top", fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.3", fc="#f7f7f7", ec="#dddddd"),
+        )
+    axes[0].set_ylabel("Exits")
+    # Fix the leftover text; annotate investigate on the frozen panel.
+    axes[0].axvspan(ihi, 1.70, color=BAD, alpha=0.10)
+    axes[0].text(0.04, 0.82, f"investigate >{ihi:.2f} (Exit p98)",
+                 transform=axes[0].transAxes, fontsize=8, color=BAD)
+    fig.suptitle(
+        "DoS that hits every Exit (+0.25 write/read)  ·  "
+        "frozen bands still fire  ·  live percentiles hide the event",
+        fontsize=12, fontweight="bold",
+    )
+    fig.text(
+        0.01, 0.01,
+        "Quiet snapshot Exits shifted +0.25. Frozen typical is this role’s "
+        "p10–p90 from 2026-08-15. Live p10–p90 is computed on the shifted "
+        "week. The role-median overlay would also move — that is how you "
+        "see “the whole role moved.” The band must not move with it.",
+        fontsize=8, color=GRAY,
+    )
+    fig.subplots_adjust(bottom=0.16, top=0.82)
+    save(fig, out_paths)
+
+
 def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
                               f3_overlays, w_ts, read_m, write_m,
                               advertised_mbit, events, ov_status, out, art):
@@ -2214,6 +2416,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
             j_overlays["operator_label"] = (
                 f"This family  (1aeo effective-family median, n={j_overlays['family_n']})"
             )
+            j_overlays["bands"] = bands_for_flags(jg.get("flags"))
             jg_ctx = relay_page_context(jg, published, "Guard")
             for name, kwargs in (
                 ("relay_bandwidth_a_jeangrae.png",
@@ -2281,6 +2484,17 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
                 opt["overload"], heading_overload=opt.get("heading_overload"),
             )
         print("wrote", opt["file"])
+
+    plot_role_band_geometry(
+        [out / "ratio_bands_by_role.png", art / "ratio_bands_by_role.png"],
+    )
+    print("wrote ratio_bands_by_role.png")
+    plot_dos_frozen_vs_live(
+        det, bw_all,
+        [out / "ratio_bands_dos_frozen_vs_live.png",
+         art / "ratio_bands_dos_frozen_vs_live.png"],
+    )
+    print("wrote ratio_bands_dos_frozen_vs_live.png")
 
 
 if __name__ == "__main__":
