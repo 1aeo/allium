@@ -147,10 +147,11 @@ Share of ≥50 KB/s relays whose *month-mean* sits inside each candidate:
 **Asymmetric**: 901 above 1.15, 147 below 0.90. Write-heavy is the real
 tail. Do not lower the floor to “balance” the band.
 
-1.20 is the middle of the amber shoulder. On 6M it is rarer (3.1% above
-1.20) and on 5Y it is rare (1.0%) — a long-period mean of 1.20 is more
-interesting than a 1M mean of 1.20. The frozen investigate line still
-stays at 1.50 so a noisy month does not turn red.
+1.20 is the middle of the *global* amber shoulder. On 6M it is rarer
+(3.1% above 1.20) and on 5Y it is rare (1.0%) — a long-period mean of
+1.20 is more interesting than a 1M mean of 1.20. That global 1.50
+investigate line is what we rejected: it leaves an Exit at 1.20 amber.
+The chart now uses this flag set’s p98 instead (Exit investigate >1.13).
 
 ![1-month zones: typical / uncommon / investigate](mockups/ratio_survey_hist_zones.png)
 
