@@ -8,12 +8,27 @@
 
 ## Recommendation
 
-Keep the frozen band at **0.90–1.15**.
+Two frozen layers. Do not treat “outside 0.90–1.15” as “investigate.”
 
-The earlier 400-relay 1-month sample (p10–p90 0.97–1.12) was not lucky. A
-census of every published graph, all four Onionoo periods, says the same
-shape. Do not replace this with a live percentile. Do not tighten to
-0.95–1.10. Do not widen to 0.80–1.25.
+| Layer | Range | What it means | 1M share (≥50 KB/s) |
+|-------|-------|---------------|---------------------|
+| **Typical** | 0.90–1.15 | Where healthy relays live. 1M p10–p90 plus room. | 89.8% |
+| **Uncommon** | 0.80–0.90 and 1.15–1.50 | Shoulder. Look at the role overlay. **1.20 is here.** | 8.0% |
+| **Investigate** | <0.80 or >1.50 | Rare. Something unusual, or a directory authority. | 2.2% |
+
+0.90–1.15 is a **typicality** band, not an outlier alarm. The histogram
+makes that obvious: 1.20 is past the peak but still a real pile of
+relays (647, 6.3%), and 302 of the 492 relays between 1.15 and 1.30 are
+Guards. Guard p90 is 1.17. Painting 1.20 red would cry wolf.
+
+Investigate is **<0.80 or >1.50**. That is 231 relays on 1M (2.2%): 15
+read-heavy, 216 write-heavy. The worst write-heavy cases are directory
+authorities (moria1 41×, gabelmoo 28×). An Exit at 1.20 is uncommon for
+an Exit (role overlay at 1.01) but not rare-for-anyone; red is reserved
+for rare-for-anyone.
+
+Do not replace either layer with a live percentile. A network DoS that
+hits every exit would move p10–p90 and hide the event.
 
 ## How the survey was done
 
@@ -47,8 +62,8 @@ Onionoo graph coverage at this snapshot:
 
 Median is 1.01–1.02 on every period. Longer graphs are tighter because
 they average more buckets. **1 month is the noisiest and the chart
-default**, so the band has to fit 1M. 0.90–1.15 is 1M p10–p90
-(0.965–1.130) with a little room.
+default**, so the typical band has to fit 1M. 0.90–1.15 is 1M p10–p90
+(0.965–1.130) with a little room. It is not the investigate line.
 
 ![Write/read by period](mockups/ratio_survey_period_box.png)
 
@@ -64,8 +79,8 @@ default**, so the band has to fit 1M. 0.90–1.15 is 1M p10–p90
 Exits are almost 1:1. Guards sit a bit write-heavy (median 1.04, p90
 1.17). That is a **role shape**, not a reason to widen the alarm. The
 role-peer overlay is how the operator sees “the whole Guard set moved.”
-A single Guard at 1.17 is unusual vs bidirectional circuits, not unusual
-vs other Guards.
+A single Guard at 1.17 is uncommon vs bidirectional circuits, typical
+vs other Guards. Amber + role overlay, not red.
 
 ![Write/read by role](mockups/ratio_survey_role_box_1m.png)
 
@@ -91,7 +106,7 @@ Share of ≥50 KB/s relays whose *month-mean* sits inside each candidate:
 |------|---:|---:|---:|---:|---------|
 | 0.80–1.25 | 95.0% | 97.7% | 98.3% | 99.2% | Too wide. Hides the 500 relays above 1.25 |
 | 0.85–1.20 | 93.4% | 96.8% | 97.3% | 98.9% | Only +3.6 points vs 0.90–1.15 on 1M |
-| **0.90–1.15** | **89.8%** | **95.4%** | **96.5%** | **98.0%** | **Keep. Matches 1M p10–p90 plus room** |
+| **0.90–1.15** | **89.8%** | **95.4%** | **96.5%** | **98.0%** | **Typical layer. Not investigate.** |
 | 0.92–1.12 | 86.1% | 93.3% | 95.3% | 97.3% | Clips Guard p90 (1.17) |
 | 0.95–1.10 | 80.1% | 90.6% | 93.8% | 96.4% | Cries wolf on a normal 1M Guard |
 
@@ -99,11 +114,31 @@ Share of ≥50 KB/s relays whose *month-mean* sits inside each candidate:
 
 ![1-month histogram](mockups/ratio_survey_hist_1m.png)
 
-## Who is outside 0.90–1.15 on 1 month
+## Who is outside typical, and who is actually rare
 
-1,048 of 10,312 relays (10.2%). **Asymmetric**: 901 above 1.15, 147
-below 0.90. Only 15 are below 0.80; 500 are above 1.25. Write-heavy is
-the real tail. Do not lower the floor to “balance” the band.
+1,048 of 10,312 1M relays (10.2%) sit outside 0.90–1.15. That is the
+**shoulder plus the tail**, not a 10% investigate list.
+
+| 1M bucket | n | share | Mostly |
+|-----------|--:|------:|--------|
+| <0.80 investigate | 15 | 0.1% | Middles |
+| 0.80–0.90 uncommon | 132 | 1.3% | Middles (103) |
+| 0.90–1.15 typical | 9,264 | 89.8% | everyone |
+| 1.15–1.20 uncommon | 254 | 2.5% | Guards (153) |
+| 1.20–1.30 uncommon | 238 | 2.3% | Guards (149) |
+| 1.30–1.50 uncommon | 193 | 1.9% | Guards (112) |
+| 1.50–2.00 investigate | 112 | 1.1% | Guards + middles |
+| >2.00 investigate | 104 | 1.0% | dirauths + a few broken |
+
+**Asymmetric**: 901 above 1.15, 147 below 0.90. Write-heavy is the real
+tail. Do not lower the floor to “balance” the band.
+
+1.20 is the middle of the amber shoulder. On 6M it is rarer (3.1% above
+1.20) and on 5Y it is rare (1.0%) — a long-period mean of 1.20 is more
+interesting than a 1M mean of 1.20. The frozen investigate line still
+stays at 1.50 so a noisy month does not turn red.
+
+![1-month zones: typical / uncommon / investigate](mockups/ratio_survey_hist_zones.png)
 
 The worst 20 are not a mystery. Most of the extreme write-heavy middles
 are **directory authorities** (moria1 41×, gabelmoo 28×, longclaw,
@@ -111,21 +146,25 @@ maatuska, bastet, dannenberg, dizum, Serge, tor26). They serve directory
 documents. Write >> read is expected. The band should mark them.
 
 The F3 / relayon family (n=24 in this cut) still has four members above
-1.15 (2.10, 1.86, 1.65, 1.47). The example relay `3C89…03F7` (F3Netze)
-is 1.026 / 1.028 / 1.023 / 1.010 on 1M / 6M / 1Y / 5Y — inside the band
-on every period.
+1.15 (2.10, 1.86, 1.65, 1.47). Three of those are investigate (>1.50);
+1.47 is amber uncommon. The example relay `3C89…03F7` (F3Netze) is
+1.026 / 1.028 / 1.023 / 1.010 on 1M / 6M / 1Y / 5Y — typical on every
+period.
 
 ## What we considered and rejected
 
 - **Live p10–p90 as the green band.** A network DoS that hits every exit
   would move the percentile and hide the event. Role / operator medians
   are overlays on a frozen band, not a replacement for it.
-- **0.90–1.20 to swallow Guard p90.** That also swallows Exit+Guard p90
-  (1.15) and hides more real write-heavy exits. Guard write-heaviness
-  belongs on the role overlay.
-- **Per-role bands.** The question on a relay page is “are circuits
-  bidirectional?”, not “am I normal for a Guard?” One band, role line
-  on top.
+- **Treat 0.90–1.15 as the investigate line.** That paints 10% of 1M
+  relays red, including hundreds of ordinary Guards at 1.16–1.30. Two
+  layers: typical vs rare.
+- **0.90–1.20 as a single wider typical band.** Swallows Guard p90 and
+  hides Exit+Guard p90. Keep typical at 0.90–1.15; put 1.20 in amber.
+- **Per-role investigate lines.** The question on a relay page is “are
+  circuits bidirectional?”, not “am I normal for a Guard?” One typical
+  band, role overlay for the shoulder, one rare-event line.
+- **Live p95 as investigate.** Same DoS problem as a live typical band.
 
 ## Regenerating
 

@@ -43,12 +43,16 @@ NAVY = "#1B3A4B"
 BAD = "#C0392B"
 RESTART = NAVY
 OVERLOAD = BAD
-# Frozen expected write/read range — not a live percentile.
-# Full-network Onionoo census (2026-08-15 19:00, ≥50 KB/s):
-# 1M p10–p90 0.965–1.130, median 1.021. 6M/1Y/5Y tighter.
+# Two frozen write/read layers — not live percentiles.
+# Typical 0.90–1.15 = 1M p10–p90 plus room (89.8% of relays ≥50 KB/s).
+# Investigate <0.80 or >1.50 = rare (2.2% of 1M). 1.20 is uncommon, not an
+# outlier: 6.3% of 1M relays, mostly Guards (Guard p90 is 1.17).
 # A DoS that hits everyone would move a percentile band and hide the event.
 RATIO_LO = 0.90
 RATIO_HI = 1.15
+RATIO_INVESTIGATE_LO = 0.80
+RATIO_INVESTIGATE_HI = 1.50
+AMBER = ORANGE
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
@@ -923,10 +927,14 @@ def overlay_values(ts, series):
 def ratio_legend_handles(overlays=None):
     handles = [
         Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-              label=f"Expected  {RATIO_LO:.2f}–{RATIO_HI:.2f}  (fixed, not a percentile)"),
-        Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
+              label=f"Typical  {RATIO_LO:.2f}–{RATIO_HI:.2f}"),
+        Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER,
+              label=f"Uncommon  {RATIO_INVESTIGATE_LO:.2f}–{RATIO_LO:.2f} / "
+                    f"{RATIO_HI:.2f}–{RATIO_INVESTIGATE_HI:.2f}  ·  check role overlay"),
         Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
-              label="Outside the expected range — unusual, usually something wrong"),
+              label=f"Investigate  <{RATIO_INVESTIGATE_LO:.2f} or "
+                    f">{RATIO_INVESTIGATE_HI:.2f}"),
+        Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay  write / read"),
     ]
     overlays = overlays or {}
     if overlays.get("role"):
@@ -945,9 +953,11 @@ def ratio_legend_handles(overlays=None):
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
     overlays = overlays or {}
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
+    axr.axhspan(0.45, RATIO_INVESTIGATE_LO, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(RATIO_INVESTIGATE_LO, RATIO_LO, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(RATIO_LO, RATIO_HI, color=GREEN, alpha=0.16, zorder=0)
-    axr.axhspan(0.45, RATIO_LO, color=BAD, alpha=0.07, zorder=0)
-    axr.axhspan(RATIO_HI, 1.85, color=BAD, alpha=0.07, zorder=0)
+    axr.axhspan(RATIO_HI, RATIO_INVESTIGATE_HI, color=AMBER, alpha=0.10, zorder=0)
+    axr.axhspan(RATIO_INVESTIGATE_HI, 1.85, color=BAD, alpha=0.10, zorder=0)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
     role = overlay_values(ts, overlays.get("role"))
     if role is not None:
@@ -955,12 +965,12 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None):
     op = overlay_values(ts, overlays.get("operator"))
     if op is not None:
         axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=1.6, zorder=2)
-    in_band = (ratio >= RATIO_LO) & (ratio <= RATIO_HI)
-    if in_band.any():
-        y = np.ma.masked_where(~in_band, ratio)
+    investigate = (ratio < RATIO_INVESTIGATE_LO) | (ratio > RATIO_INVESTIGATE_HI)
+    if (~investigate).any():
+        y = np.ma.masked_where(investigate, ratio)
         axr.plot(ts, y, color=NAVY, linewidth=1.7, zorder=3)
-    if (~in_band).any():
-        y = np.ma.masked_where(in_band, ratio)
+    if investigate.any():
+        y = np.ma.masked_where(~investigate, ratio)
         axr.plot(ts, y, color=BAD, linewidth=2.0, zorder=4)
     draw_event_lines(axr, events)
     pad_xlim(axr, ts)
@@ -1010,14 +1020,14 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     fam_out = (overlays or {}).get("family_outliers") or 0
     caption(
         fig, published,
-        f"Story: this relay mean write/read {mean_ratio:.2f}, inside the fixed "
-        f"{RATIO_LO:.2f}–{RATIO_HI:.2f} expected range (not a live percentile — "
-        f"a network DoS would move a percentile band and hide it). Exit+Guard "
-        f"peers and this operator’s family median sit on top of it. "
-        f"{fam_out} of {fam_n} family relays have a month-mean above 1.15; "
-        f"this one does not. Delivered write ~{np.mean(write_m):.0f} Mbit/s "
-        f"({used:.0f}% of advertised). Overload is a now-badge, not a time "
-        f"range — Onionoo has no incident history.",
+        f"Story: this relay mean write/read {mean_ratio:.2f}, inside typical "
+        f"{RATIO_LO:.2f}–{RATIO_HI:.2f}. Uncommon is amber (1.20 is not an "
+        f"outlier — 6% of 1M relays, mostly Guards). Investigate is red, only "
+        f"below {RATIO_INVESTIGATE_LO:.2f} or above {RATIO_INVESTIGATE_HI:.2f} "
+        f"(2% of 1M). Exit+Guard peers and this operator’s family median sit "
+        f"on top. {fam_out} of {fam_n} family relays have a month-mean above "
+        f"1.15; this one does not. Delivered write ~{np.mean(write_m):.0f} "
+        f"Mbit/s ({used:.0f}% of advertised). Overload is a now-badge.",
     )
     save(fig, out_paths)
 

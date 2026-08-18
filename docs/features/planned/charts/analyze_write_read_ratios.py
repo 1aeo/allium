@@ -238,6 +238,34 @@ def plot_hist(values, title, out_path, lo=0.90, hi=1.15):
     plt.close(fig)
 
 
+def plot_hist_zones(values, out_path):
+    """Typical vs uncommon vs investigate — 1.20 is in the amber shoulder."""
+    fig, ax = plt.subplots(figsize=(10.8, 5.6))
+    clipped = [v for v in values if 0.4 <= v <= 2.0]
+    ax.hist(clipped, bins=80, color=BLUE, alpha=0.70, edgecolor="white")
+    ax.axvspan(0.40, 0.80, color=BAD, alpha=0.12)
+    ax.axvspan(0.80, 0.90, color=ORANGE, alpha=0.12)
+    ax.axvspan(0.90, 1.15, color=GREEN, alpha=0.20)
+    ax.axvspan(1.15, 1.50, color=ORANGE, alpha=0.12)
+    ax.axvspan(1.50, 2.00, color=BAD, alpha=0.12)
+    ax.axvline(1.0, color=GREEN, linestyle="--", linewidth=1.2)
+    ax.axvline(1.20, color=NAVY, linestyle=":", linewidth=1.4)
+    ax.annotate(
+        "1.20  ·  uncommon, not investigate\n"
+        "6.3% of 1M relays  ·  mostly Guards",
+        xy=(1.20, 900), xytext=(1.42, 1600),
+        fontsize=8.5, color=NAVY,
+        arrowprops=dict(arrowstyle="->", color=NAVY),
+        bbox=dict(boxstyle="round,pad=0.35", fc="#f7f7f7", ec="#dddddd"),
+    )
+    ax.set_xlim(0.4, 2.0)
+    ax.set_xlabel("Write / read  (per-relay ratio of means)")
+    ax.set_ylabel("Relays")
+    ax.set_title("1-month write/read zones  ·  ≥50 KB/s   ·   green typical · amber uncommon · red investigate")
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bandwidth", default="/tmp/onionoo/bandwidth_all.json")
@@ -458,7 +486,11 @@ def main():
     save_both(
         "ratio_survey_hist_1m.png",
         plot_hist, box_period.get("1_month") or [],
-        "1-month write/read  ·  all relays ≥ 50 KB/s  ·  green = 0.90–1.15",
+        "1-month write/read  ·  all relays ≥ 50 KB/s  ·  green = 0.90–1.15 typical",
+    )
+    save_both(
+        "ratio_survey_hist_zones.png",
+        plot_hist_zones, box_period.get("1_month") or [],
     )
 
     # Console summary
