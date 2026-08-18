@@ -970,6 +970,29 @@ def throughput_legend_handles(advertised_mbit, events, overload_status=None,
     return handles
 
 
+def _blank_legend_handle():
+    return Line2D([], [], linestyle="None", marker="None", color="none", label=" ")
+
+
+def legend_handles_row_major(rows):
+    """Reorder so matplotlib's column-major legend matches these rows.
+
+    Matplotlib 3.x still fills legends column-first. Two separate legend
+    boxes left a large shelf between Write/Read and overload. One box
+    with labelspacing ≈ half the default is the 50% tighter wrap.
+    """
+    rows = [list(r) for r in rows if r]
+    if not rows:
+        return [], 1
+    ncol = max(len(r) for r in rows)
+    padded = [r + [_blank_legend_handle()] * (ncol - len(r)) for r in rows]
+    ordered = []
+    for col in range(ncol):
+        for row in padded:
+            ordered.append(row[col])
+    return ordered, ncol
+
+
 def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
                             wrap_last=False):
     """Legend in the empty band above advertised / data_max.
@@ -978,7 +1001,7 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     left on a tight ylim — that is what sat the legend on the series.
 
     When overload is in the legend, wrap that last item onto a second
-    row (ncol = n-1). A single 5-item row is wider than the axes;
+    row of the same box. A single 5-item row is wider than the axes;
     bbox=tight then stretches the figure to the right and leaves a
     blank shelf under the legend.
     """
@@ -991,27 +1014,22 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
         edgecolor="#eeeeee",
         facecolor="white",
         framealpha=0.96,
-        borderaxespad=0.30,
+        borderaxespad=0.25,
         columnspacing=1.0,
         handlelength=1.6,
+        handletextpad=0.4,
     )
-    # Matplotlib fills column-first, so ncol=n-1 still parks the last
-    # handle on row 1. Two legends force overload onto its own line.
     if wrap_last and len(handles) > 1:
-        first = ax.legend(
-            handles=handles[:-1], loc="upper left",
-            ncol=min(len(handles) - 1, 4), **style,
-        )
-        ax.add_artist(first)
+        ordered, ncol = legend_handles_row_major([handles[:-1], handles[-1:]])
         ax.legend(
-            handles=handles[-1:], loc="upper left",
-            bbox_to_anchor=(0.0, 0.92), bbox_transform=ax.transAxes,
-            **style,
+            handles=ordered, loc="upper left", ncol=ncol,
+            labelspacing=0.22, **style,
         )
         return
     if ncol is None:
         ncol = min(len(handles), 4)
-    ax.legend(handles=handles, loc="upper left", ncol=ncol, **style)
+    ax.legend(handles=handles, loc="upper left", ncol=ncol,
+              labelspacing=0.15, **style)
 
 
 def apply_throughput_title(ax, title, overload_status, overload_mode):
@@ -1033,7 +1051,10 @@ def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1):
     """Leave a legend shelf above advertised (or data, if higher)."""
     data_max = max(list(write_m) + list(read_m) + [0.0])
     ceiling = max(advertised_mbit or 0.0, data_max) or 1.0
-    extra = 1.42 if legend_rows >= 2 else 1.26
+    # One compact two-row box needs less shelf than the old stacked
+    # legends (1.42). Keep a little more than a single row so the
+    # diamond does not sit on the advertised line.
+    extra = 1.28 if legend_rows >= 2 else 1.26
     ax.set_ylim(0, ceiling * extra)
 
 
@@ -1314,7 +1335,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           period_key="1_month"):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    hspace = 0.14 if page_ready else 0.16
+    hspace = 0.10 if page_ready else 0.16
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
@@ -1539,17 +1560,16 @@ def bandwidth_periods_equal(periods, advertised_mbit, events, overload_status,
     handles = throughput_legend_handles(
         advertised_mbit, events, overload_status, overload_in_legend=True,
     )
-    main, extra = (handles[:-1], handles[-1:]) if (
-        overload_status and len(handles) > 1
-    ) else (handles, [])
-    fig.legend(
-        handles=main, loc="upper left", bbox_to_anchor=(0.08, 0.98),
-        ncol=min(len(main), 4), fontsize=8.0, frameon=False,
-    )
-    if extra:
+    if overload_status and len(handles) > 1:
+        ordered, ncol = legend_handles_row_major([handles[:-1], handles[-1:]])
         fig.legend(
-            handles=extra, loc="upper left", bbox_to_anchor=(0.08, 0.935),
-            ncol=1, fontsize=8.0, frameon=False,
+            handles=ordered, loc="upper left", bbox_to_anchor=(0.08, 0.98),
+            ncol=ncol, fontsize=8.0, frameon=False, labelspacing=0.22,
+        )
+    else:
+        fig.legend(
+            handles=handles, loc="upper left", bbox_to_anchor=(0.08, 0.98),
+            ncol=min(len(handles), 4), fontsize=8.0, frameon=False,
         )
     for i, key in enumerate(PERIOD_ORDER):
         ax = axes[i // 2][i % 2]
@@ -2181,7 +2201,7 @@ def build_ratio_overlays(details_relays, bw_by_fp, role, contact_substr=None,
     outliers = sum(1 for m in op_means if m > RATIO_HI)
     return {
         "role": role_daily,
-        "role_label": f"Peers {role} (network median, n={role_n})",
+        "role_label": f"Peers {role} (network median)",
         "operator": op_daily if op_n > 1 else {},
         "operator_label": operator_label or f"Operator Family (median, n={op_n})",
         "family_outliers": outliers,
@@ -2587,6 +2607,11 @@ def main():
     parser.add_argument("--bandwidth-all", default="/tmp/onionoo/bandwidth_all.json")
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "mockups"))
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
+    parser.add_argument(
+        "--only", choices=("all", "bandwidth", "uptime", "flags"),
+        default="all",
+        help="Skip unrelated mockup families when iterating on one chart.",
+    )
     args = parser.parse_args()
 
     style()
@@ -2652,66 +2677,75 @@ def main():
     overlays["bands"] = bands_for_flags(f3.get("flags"))
     out = Path(args.out)
     art = Path(args.artifacts)
-    jobs = [
-        ("relay_uptime_a_annotated_line.png", uptime_a_annotated_line, (ts, pct, published)),
-        ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published, extra)),
-        ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
-        ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
-        ("relay_uptime_b_two_clocks_th4r.png", uptime_b_two_clocks,
-         (ts, pct, published, extra["last_restarted"], "th4r")),
-        ("relay_uptime_b_two_clocks_f3.png", uptime_b_two_clocks,
-         (*f3_periods["1_month"], published, f3.get("last_restarted"), "F3Netze")),
-        ("relay_uptime_onionoo_info.png", uptime_onionoo_info, (published,)),
-        ("relay_uptime_periods_pills_th4r.png", uptime_periods_pills,
-         (th4r_periods, "1_month", "th4r", published,
-          "Question: how do we switch 1M / 6M / 1Y / 5Y on a static page? "
-          "CSS pills, one SVG visible. th4r has 1M/6M/1Y. Onionoo omitted "
-          "5_years (first seen Oct 2025) — no 0% tab. Default 1M. "
-          "C heatmap stays 1-month-only.")),
-        ("relay_uptime_periods_pills_f3_5y.png", uptime_periods_pills,
-         (f3_periods, "5_years", "F3Netze", published,
-          "Question: why include 5Y at all? F3Netze 1M is 99.2% (looks fine). "
-          "5Y average is 89% with real zeros. The long graph is the one that "
-          "changes the story. Same B encoding; only the series and bucket "
-          "size change.")),
-        ("relay_uptime_periods_pills_young.png", uptime_periods_pills,
-         (pirate_periods, "1_month", "PirateyMatey", published,
-          "Question: what if Onionoo only published 1_month? Show that pill "
-          "alone. 16 four-hour points (first seen 12 Aug) — say “not enough "
-          "history for 6M/1Y/5Y”, do not invent 0% periods. "
-          "Allium's count<30 → 0.0 trap must not become a chart.")),
-        ("relay_uptime_periods_multiples.png", uptime_periods_multiples,
-         (f3_periods, "F3Netze", published)),
-        ("relay_uptime_periods_hero_sparks.png", uptime_periods_hero_sparks,
-         (f3_periods, "F3Netze", published)),
-        ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
-         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
-          ov_status)),
-        ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
-         (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
-          ov_status)),
-        ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
-         (w_ts, read_m, write_m, advertised_mbit, events, published, ov_status)),
-        ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_core, published)),
-        ("relay_flags_b_overlay.png", flags_b_overlay, (flag_core, published)),
-        ("relay_flags_c_cause_effect.png", flags_c_cause_effect,
-         (flag_series, published, extra)),
-        ("relay_flags_d_episodes.png", flags_d_episodes,
-         (flag_series, published, extra)),
-        ("relay_flags_e_diverged_only.png", flags_e_diverged_only,
-         (flag_series, published, extra)),
-        ("relay_flags_f_status_story.png", flags_f_status_story,
-         (flag_series, published, extra)),
-    ]
+    jobs = []
+    if args.only in ("all", "uptime"):
+        jobs.extend([
+            ("relay_uptime_a_annotated_line.png", uptime_a_annotated_line, (ts, pct, published)),
+            ("relay_uptime_b_area_threshold.png", uptime_b_area_threshold, (ts, pct, published, extra)),
+            ("relay_uptime_c_heatmap.png", uptime_c_heatmap, (ts, pct, published, extra)),
+            ("relay_uptime_section_numbers.png", uptime_section_numbers, (ts, pct, published, extra)),
+            ("relay_uptime_b_two_clocks_th4r.png", uptime_b_two_clocks,
+             (ts, pct, published, extra["last_restarted"], "th4r")),
+            ("relay_uptime_b_two_clocks_f3.png", uptime_b_two_clocks,
+             (*f3_periods["1_month"], published, f3.get("last_restarted"), "F3Netze")),
+            ("relay_uptime_onionoo_info.png", uptime_onionoo_info, (published,)),
+            ("relay_uptime_periods_pills_th4r.png", uptime_periods_pills,
+             (th4r_periods, "1_month", "th4r", published,
+              "Question: how do we switch 1M / 6M / 1Y / 5Y on a static page? "
+              "CSS pills, one SVG visible. th4r has 1M/6M/1Y. Onionoo omitted "
+              "5_years (first seen Oct 2025) — no 0% tab. Default 1M. "
+              "C heatmap stays 1-month-only.")),
+            ("relay_uptime_periods_pills_f3_5y.png", uptime_periods_pills,
+             (f3_periods, "5_years", "F3Netze", published,
+              "Question: why include 5Y at all? F3Netze 1M is 99.2% (looks fine). "
+              "5Y average is 89% with real zeros. The long graph is the one that "
+              "changes the story. Same B encoding; only the series and bucket "
+              "size change.")),
+            ("relay_uptime_periods_pills_young.png", uptime_periods_pills,
+             (pirate_periods, "1_month", "PirateyMatey", published,
+              "Question: what if Onionoo only published 1_month? Show that pill "
+              "alone. 16 four-hour points (first seen 12 Aug) — say “not enough "
+              "history for 6M/1Y/5Y”, do not invent 0% periods. "
+              "Allium's count<30 → 0.0 trap must not become a chart.")),
+            ("relay_uptime_periods_multiples.png", uptime_periods_multiples,
+             (f3_periods, "F3Netze", published)),
+            ("relay_uptime_periods_hero_sparks.png", uptime_periods_hero_sparks,
+             (f3_periods, "F3Netze", published)),
+        ])
+    if args.only in ("all", "bandwidth"):
+        jobs.extend([
+            ("relay_bandwidth_a_dual_line.png", bandwidth_a_dual_line,
+             (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
+              ov_status)),
+            ("relay_bandwidth_b_area_ratio.png", bandwidth_b_area_ratio,
+             (w_ts, read_m, write_m, advertised_mbit, events, published, overlays,
+              ov_status)),
+            ("relay_bandwidth_c_bars_advertised.png", bandwidth_c_bars_advertised,
+             (w_ts, read_m, write_m, advertised_mbit, events, published, ov_status)),
+        ])
+    if args.only in ("all", "flags"):
+        jobs.extend([
+            ("relay_flags_a_swimlane.png", flags_a_swimlane, (flag_core, published)),
+            ("relay_flags_b_overlay.png", flags_b_overlay, (flag_core, published)),
+            ("relay_flags_c_cause_effect.png", flags_c_cause_effect,
+             (flag_series, published, extra)),
+            ("relay_flags_d_episodes.png", flags_d_episodes,
+             (flag_series, published, extra)),
+            ("relay_flags_e_diverged_only.png", flags_e_diverged_only,
+             (flag_series, published, extra)),
+            ("relay_flags_f_status_story.png", flags_f_status_story,
+             (flag_series, published, extra)),
+        ])
     for name, fn, fn_args in jobs:
         fn(*fn_args, [out / name, art / name])
         print("wrote", name)
 
-    write_page_layout_mockups(
-        det, bw_doc, Path(args.bandwidth_all), published, overlays,
-        w_ts, read_m, write_m, advertised_mbit, events, ov_status,
-        out, art,
-    )
+    if args.only in ("all", "bandwidth"):
+        write_page_layout_mockups(
+            det, bw_doc, Path(args.bandwidth_all), published, overlays,
+            w_ts, read_m, write_m, advertised_mbit, events, ov_status,
+            out, art,
+        )
 
 
 def plot_role_band_geometry(out_paths):

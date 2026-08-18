@@ -428,12 +428,14 @@ chart is a new `h5`, tables untouched.
 | 2 After scalars | After Capacity / Measurement, before Network Participation | Title-right cue | Rejected |
 | **3 History** | After Network Participation, before Values Explained | Diamond in the legend, **wrapped to a second line** | **Ship this** |
 
-When overload is in the legend, that last item wraps onto row 2. Do not
-keep a one-row legend that is wider than the axes — `bbox=tight` then
-stretches the figure to the right and leaves a blank shelf under the
-legend. Drop the “Progressive enhancement: the tables stay if this SVG
-is missing” footnote under the chart; the tables are already on the
-page.
+When overload is in the legend, that last item wraps onto row 2 of the
+**same** legend box (Write / Read / Advertised / Last restarted, then
+the diamond). Two stacked boxes left a large gap; one box at half the
+default `labelspacing` is the tighter wrap. Do not keep a one-row
+legend that is wider than the axes — `bbox=tight` then stretches the
+figure to the right and leaves a blank shelf under the legend. Drop the
+“Progressive enhancement: the tables stay if this SVG is missing”
+footnote under the chart; the tables are already on the page.
 
 Page mockups (open the HTML):
 
