@@ -54,6 +54,9 @@ dd { margin:2px 0 0; }
   border:1px solid var(--color-border-subtle); }
 .chart-wrap img { width:100%; height:auto; display:block; }
 .chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.layout-label { margin:16px 0 8px; padding:8px 12px; background:#fff;
+  border-left:3px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.layout-label strong { display:block; font-size:14px; margin-bottom:2px; }
 .heading-row { display:flex; align-items:baseline; justify-content:space-between;
   gap:12px; flex-wrap:wrap; }
 .overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
@@ -78,7 +81,7 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   <p class="breadcrumb">Home &gt; Browse by Network &gt; AS205100 &gt; F3Netze</p>
   <div class="option-banner">
     <strong>Option 3 of 3 — History subsection after Network Participation</strong>
-    All snapshot numbers stay together. Chart is a named subsection before “Bandwidth Values Explained”. Overload is a diamond in the legend, not a banner or title shout.
+    Chosen. Snapshot numbers stay together. History is a named subsection before “Bandwidth Values Explained”. Three period layouts below — pick one. Overload wraps onto a second legend line; the progressive-enhancement footnote is gone.
     Relay: <strong>F3Netze</strong> (f3netze.de)
     · overloaded.
   </div>
@@ -155,12 +158,16 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
       Exit: 0.3377%
     </div>
         <h5 class="subsection-header" style="margin-top:16px;">History
-          <span class="al-text-small-muted">(Onionoo, 1 month)</span></h5>
-        <div class="chart-wrap">
-      <img src="relay_bandwidth_page_opt3_history_f3.png" alt="Throughput last 30 days for F3Netze">
-      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code>
-      · 1-month daily buckets · advertised is the descriptor snapshot, not a history.
-      Progressive enhancement: the tables stay if this SVG is missing.</p>
+          <span class="al-text-small-muted">(Onionoo write / read)</span></h5>
+        <div class="layout-label"><strong>Period layout 1 — pills (toggle 1M / 6M / 1Y / 5Y)</strong></div><div class="chart-wrap">
+      <img src="relay_bandwidth_periods_pills_f3.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">Default 1M. Omit a pill if Onionoo omitted the graph. A static site pre-renders each selected period.</p>
+    </div><div class="layout-label"><strong>Period layout 2 — equal 2×2 of every published graph</strong></div><div class="chart-wrap">
+      <img src="relay_bandwidth_periods_equal_f3.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">Same size, no click. Empty cell = not published, not 0.</p>
+    </div><div class="layout-label"><strong>Period layout 3 — 1M hero + 6M / 1Y / 5Y sparks</strong></div><div class="chart-wrap">
+      <img src="relay_bandwidth_periods_hero_sparks_f3.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">1M stays large (finest buckets). Longer graphs are context underneath. Omit a spark if unpublished.</p>
     </div>
         <div class="explain">
           <strong>Bandwidth Values Explained:</strong><br>

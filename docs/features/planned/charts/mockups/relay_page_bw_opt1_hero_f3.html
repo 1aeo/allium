@@ -54,6 +54,9 @@ dd { margin:2px 0 0; }
   border:1px solid var(--color-border-subtle); }
 .chart-wrap img { width:100%; height:auto; display:block; }
 .chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.layout-label { margin:16px 0 8px; padding:8px 12px; background:#fff;
+  border-left:3px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.layout-label strong { display:block; font-size:14px; margin-bottom:2px; }
 .heading-row { display:flex; align-items:baseline; justify-content:space-between;
   gap:12px; flex-wrap:wrap; }
 .overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
@@ -78,7 +81,7 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   <p class="breadcrumb">Home &gt; Browse by Network &gt; AS205100 &gt; F3Netze</p>
   <div class="option-banner">
     <strong>Option 1 of 3 — Hero under the heading</strong>
-    Chart is the first thing #bandwidth lands on. The section heading owns the title; overload is a small rust status next to “Bandwidth Metrics”, not a red pill. Snapshot numbers sit under the chart.
+    Rejected alt. Chart is the first thing #bandwidth lands on.
     Relay: <strong>F3Netze</strong> (f3netze.de)
     · overloaded.
   </div>
@@ -131,10 +134,8 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
         </div>
     
         <div class="chart-wrap">
-      <img src="relay_bandwidth_page_opt1_hero_f3.png" alt="Throughput last 30 days for F3Netze">
-      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code>
-      · 1-month daily buckets · advertised is the descriptor snapshot, not a history.
-      Progressive enhancement: the tables stay if this SVG is missing.</p>
+      <img src="relay_bandwidth_page_opt1_hero_f3.png" alt="Throughput history for F3Netze">
+      <p class="chart-note">Onionoo <code>write_history</code> / <code>read_history</code> · advertised is the descriptor snapshot, not a history.</p>
     </div>
         <div class="row">
           <div class="col">

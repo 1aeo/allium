@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import textwrap
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -183,9 +184,10 @@ def save(fig, paths):
 
 
 def caption(fig, published, story, y=0.012):
+    wrapped = textwrap.fill(story, width=108)
     fig.text(
         0.01, y,
-        f"{story}\nSource: Onionoo  ·  relays_published {published} UTC  ·  Allium relay-page mockup",
+        f"{wrapped}\nSource: Onionoo  ·  relays_published {published} UTC  ·  Allium relay-page mockup",
         fontsize=8, color=GRAY, va="bottom",
     )
 
@@ -955,24 +957,34 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     """
     if not handles:
         return
-    if wrap_last and len(handles) > 1:
-        ncol = len(handles) - 1
-    elif ncol is None:
-        ncol = min(len(handles), 4)
-    ax.legend(
-        handles=handles,
-        loc="upper left",
-        ncol=ncol,
+    style = dict(
         fontsize=fontsize,
         frameon=True,
         fancybox=False,
         edgecolor="#eeeeee",
         facecolor="white",
         framealpha=0.96,
-        borderaxespad=0.35,
+        borderaxespad=0.30,
         columnspacing=1.0,
         handlelength=1.6,
     )
+    # Matplotlib fills column-first, so ncol=n-1 still parks the last
+    # handle on row 1. Two legends force overload onto its own line.
+    if wrap_last and len(handles) > 1:
+        first = ax.legend(
+            handles=handles[:-1], loc="upper left",
+            ncol=min(len(handles) - 1, 4), **style,
+        )
+        ax.add_artist(first)
+        ax.legend(
+            handles=handles[-1:], loc="upper left",
+            bbox_to_anchor=(0.0, 0.84), bbox_transform=ax.transAxes,
+            **style,
+        )
+        return
+    if ncol is None:
+        ncol = min(len(handles), 4)
+    ax.legend(handles=handles, loc="upper left", ncol=ncol, **style)
 
 
 def apply_throughput_title(ax, title, overload_status, overload_mode):
@@ -1251,7 +1263,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
-            advertised_mbit, events, overload_status,
+            advertised_mbit, events_in_span(events, ts), overload_status,
             overload_in_legend=(overload_mode == "legend"),
         ),
         wrap_last=wrap_last,
@@ -1414,7 +1426,8 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
-            advertised_mbit, events, overload_status, overload_in_legend=True,
+            advertised_mbit, events_in_span(events, ts), overload_status,
+            overload_in_legend=True,
         ),
         wrap_last=wrap_last,
     )
@@ -1451,10 +1464,18 @@ def bandwidth_periods_equal(periods, advertised_mbit, events, overload_status,
     handles = throughput_legend_handles(
         advertised_mbit, events, overload_status, overload_in_legend=True,
     )
+    main, extra = (handles[:-1], handles[-1:]) if (
+        overload_status and len(handles) > 1
+    ) else (handles, [])
     fig.legend(
-        handles=handles, loc="upper left", bbox_to_anchor=(0.08, 0.98),
-        ncol=3, fontsize=8.0, frameon=False,
+        handles=main, loc="upper left", bbox_to_anchor=(0.08, 0.98),
+        ncol=min(len(main), 4), fontsize=8.0, frameon=False,
     )
+    if extra:
+        fig.legend(
+            handles=extra, loc="upper left", bbox_to_anchor=(0.08, 0.935),
+            ncol=1, fontsize=8.0, frameon=False,
+        )
     for i, key in enumerate(PERIOD_ORDER):
         ax = axes[i // 2][i % 2]
         meta = BW_PERIOD_META[key]
@@ -1512,7 +1533,8 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
-            advertised_mbit, events, overload_status, overload_in_legend=True,
+            advertised_mbit, events_in_span(events, block["ts"]),
+            overload_status, overload_in_legend=True,
         ),
         wrap_last=wrap_last,
     )
