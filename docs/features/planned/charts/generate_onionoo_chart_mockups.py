@@ -406,20 +406,24 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
             )
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
+        axr.axhspan(0.50, 0.80, color=VERM, alpha=0.10)
+        axr.axhspan(0.80, 0.90, color=ORANGE, alpha=0.10)
         axr.axhspan(0.90, 1.15, color=GREEN, alpha=0.16)
-        axr.axhspan(0.50, 0.90, color=VERM, alpha=0.07)
-        axr.axhspan(1.15, 1.70, color=VERM, alpha=0.07)
+        axr.axhspan(1.15, 1.50, color=ORANGE, alpha=0.10)
+        axr.axhspan(1.50, 1.70, color=VERM, alpha=0.10)
         axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0)
         axr.plot(w_ts, ratio, color=NAVY, linewidth=1.6)
         axr.set_ylim(0.50, 1.70)
         axr.set_ylabel("Write / read")
         axr.legend(handles=[
             Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-                  label="Expected  0.90–1.15  (fixed, not a percentile)"),
-            Line2D([0], [0], color=NAVY, lw=1.6, label="This relay  write / read"),
+                  label="Typical  0.90–1.15"),
+            Patch(facecolor=ORANGE, alpha=0.16, edgecolor=ORANGE,
+                  label="Uncommon  0.80–0.90 / 1.15–1.50  ·  check role overlay"),
             Patch(facecolor=VERM, alpha=0.16, edgecolor=VERM,
-                  label="Outside the band — unusual, usually something wrong"),
-        ], loc="upper right", fontsize=8, frameon=True, edgecolor="#dddddd")
+                  label="Investigate  <0.80 or >1.50"),
+            Line2D([0], [0], color=NAVY, lw=1.6, label="This relay  write / read"),
+        ], loc="upper right", fontsize=7.5, frameon=True, edgecolor="#dddddd")
         axr.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
     ax.set_ylabel("Throughput (Mbit/s)")
     ax.set_title("6. Bandwidth history — F3Netze (overloaded exit)")

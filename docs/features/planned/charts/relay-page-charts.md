@@ -303,9 +303,9 @@ Do not run C on 6M/1Y/5Y. If a 1Y series starts at `first_seen` (th4r:
 ### R2. Bandwidth (read / write)
 
 Same data: F3Netze `read_history.1_month` / `write_history.1_month` (daily
-buckets). Red is reserved for problems (current overload badge; ratio
-outside the band). Write is purple, read is blue, advertised is orange
-dashed.
+buckets). Red is reserved for problems (current overload badge; write/read
+**investigate** <0.80 or >1.50). 1.20 is amber uncommon, not red. Write
+is purple, read is blue, advertised is orange dashed.
 
 #### Overload is a now-indicator, not a time series
 
@@ -355,15 +355,19 @@ add live aggregates as lines on top of it.
 
 | Layer | What | Why |
 |-------|------|-----|
-| Expected 0.90–1.15 | Frozen. Full-network Onionoo census (2026-08-15 19:00, 10,312 relays ≥50 KB/s): 1M p10–p90 is 0.965–1.130, median 1.021. 6M/1Y/5Y are tighter (p90 1.07 / 1.06 / 1.04). 0.90–1.15 is that 1M shape with a little room. See [write-read-band.md](write-read-band.md). | Alarm that does not move when the network does |
+| Typical 0.90–1.15 | Frozen typicality band. Full-network census: 1M p10–p90 is 0.965–1.130. **1.20 is uncommon, not investigate** (6.3% of 1M, mostly Guards). | Where healthy relays live |
+| Uncommon 0.80–0.90 / 1.15–1.50 | Amber. Check the role overlay — a Guard at 1.20 is normal-for-Guards; an Exit at 1.20 is not. | Shoulder. Do not paint it red |
+| Investigate <0.80 or >1.50 | Frozen rare-event line. 2.2% of 1M. Dirauths and genuinely lopsided relays. | The actual “look at this” alarm |
 | This relay | Navy line | The thing the operator is debugging |
 | Role peers | Dashed. Median write/read of the same flag set (Exit+Guard for F3Netze) | Did the whole role move? |
 | This operator | Dotted. Median of the AROI / contact / effective-family group (F3: 24 relays). Omit if the group is 1. Use **median**, not mean — F3's mean is 1.17 because 4 of 24 members sit at 1.5–2.2 | Is this relay the odd one in the family? |
 
-How to read a dip:
+How to read the strip:
 
-- Relay leaves the band, role and family stay → this relay (DoS on this host, rate-limit, bad peer, config).
-- Role line leaves the band too → role-wide / network event. The fixed band is what tells you it is abnormal.
+- Line stays green (0.90–1.15) → typical. Done.
+- Line in amber (1.15–1.50 or 0.80–0.90), role overlay still near 1.0 → uncommon for this role; worth a glance, not a fire drill. 1.20 lives here.
+- Line in amber, role overlay moved too → role-wide / network. The frozen typical band is what tells you the role moved.
+- Line in red (<0.80 or >1.50) → rare. Investigate (or it is a directory authority).
 - Family leaves, role stays → operator / AS / upstream.
 
 Do not replace the green band with "this week's p25–p75." That is the
@@ -544,10 +548,11 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 2. Render **build-time SVG** in the Jinja templates. One static Chart.js
    on 11k pages is the wrong default for a static site.
 3. Color: red only for problems this relay owns (local Running gap,
-   current overload badge, write/read outside 0.90–1.15, missing flags).
-   Shared/network gaps are orange + gray, not red. Write is purple, read
-   is blue, advertised is orange, last-restarted is navy. The write/read
-   expected range is a frozen constant, not a live percentile. Restart is
+   current overload badge, write/read **investigate** <0.80 or >1.50,
+   missing flags). 1.20 is amber uncommon, not red. Shared/network gaps
+   are orange + gray, not red. Write is purple, read is blue, advertised
+   is orange, last-restarted is navy. Typical 0.90–1.15 and investigate
+   <0.80 / >1.50 are frozen constants, not live percentiles. Restart is
    an `axvline` at `last_restarted`. Overload is **not** on the time
    axis: if `current_overload_status` (from `evaluate_overload`) says
    the relay is currently overloaded, draw a now-badge; otherwise omit
