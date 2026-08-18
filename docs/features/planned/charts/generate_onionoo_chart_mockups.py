@@ -346,11 +346,13 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
 
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(11, 7.0), sharex=True,
-        gridspec_kw={"height_ratios": [3.1, 1.3], "hspace": 0.08},
+        gridspec_kw={"height_ratios": [3.1, 1.3], "hspace": 0.22},
     )
+    fig.subplots_adjust(top=0.84)
     fp = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
     relay = next((r for r in bw_doc.get("relays", []) if r.get("fingerprint") == fp), None)
     det = next((r for r in details_relays if r.get("fingerprint") == fp), {})
+    ov = None
     if relay:
         w_ts, w_vals = history_series((relay.get("write_history") or {}).get("1_month"))
         _, r_vals = history_series((relay.get("read_history") or {}).get("1_month"))
@@ -362,7 +364,7 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
         if advertised:
             ax.axhline(advertised, color=ORANGE, linestyle="--", linewidth=1.4,
                        label=f"Advertised  {advertised:.0f} Mbit/s")
-            ax.set_ylim(0, max(advertised, max(w_mbit + r_mbit)) * 1.08)
+            ax.set_ylim(0, max(advertised, max(w_mbit + r_mbit)) * 1.26)
         events = []
         if det.get("last_restarted"):
             when = parse_onionoo_ts(det["last_restarted"])
@@ -373,12 +375,11 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
                 "ls": "-.",
                 "legend": f"Last restarted  {when.strftime('%-d %b')}",
             })
-        # Onionoo has no overload history — current-status badge only.
+        # Onionoo has no overload history — title cue only, not a time range.
         pub_ts = None
         if published and published != "unknown":
             pub_ts = parse_onionoo_ts(published).timestamp()
         ov = current_overload_status(det, pub_ts)
-        ov_status = ov["label"] if ov else None
         for ev in events:
             ax.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
             axr.axvline(ev["when"], color=ev["color"], linestyle=ev["ls"], linewidth=1.8)
@@ -396,14 +397,22 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
                 [0], [0], color=ev["color"], linestyle=ev["ls"], lw=1.8,
                 label=ev["legend"],
             ))
-        ax.legend(handles=handles, loc="upper left", fontsize=9, ncol=2)
-        if ov_status:
-            fig.text(
-                0.99, 1.0, ov_status,
-                ha="right", va="bottom",
-                fontsize=8.5, color="white", fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.4", fc="#C0392B", ec="#C0392B"),
-            )
+        ax.legend(
+            handles=handles, loc="upper left",
+            ncol=min(len(handles), 5), fontsize=8.5,
+            frameon=True, fancybox=False, edgecolor="#eeeeee",
+            facecolor="white", framealpha=0.96,
+        )
+        if ov:
+            when = ov["last_report"]
+            cue = "currently overloaded"
+            if when:
+                cue += f" · last report {when.strftime('%-d %b %H:%M')} UTC"
+            ax.set_title("6. Bandwidth history — F3Netze", loc="left", pad=28)
+            ax.set_title(cue, loc="right", pad=28, color="#C0392B",
+                         fontsize=9, fontweight="normal")
+        else:
+            ax.set_title("6. Bandwidth history — F3Netze", pad=28)
 
         ratio = [w / r if r else float("nan") for w, r in zip(w_mbit, r_mbit)]
         axr.axhspan(0.50, 0.80, color=VERM, alpha=0.10)
@@ -426,7 +435,6 @@ def chart_bandwidth_history(bw_doc, details_relays, published, out_paths):
         ], loc="upper right", fontsize=7.5, frameon=True, edgecolor="#dddddd")
         axr.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
     ax.set_ylabel("Throughput (Mbit/s)")
-    ax.set_title("6. Bandwidth history — F3Netze (overloaded exit)")
     footer(fig, published)
     save(fig, out_paths)
 
