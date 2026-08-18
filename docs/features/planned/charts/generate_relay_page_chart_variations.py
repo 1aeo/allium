@@ -43,13 +43,10 @@ NAVY = "#1B3A4B"
 BAD = "#C0392B"
 RESTART = NAVY
 OVERLOAD = BAD
-# Two frozen write/read layers — not live percentiles.
-# Typical 0.90–1.15 = 1M p10–p90 plus room (89.8% of relays ≥50 KB/s).
-# Investigate <0.80 or >1.50 = rare (2.2% of 1M). 1.20 is uncommon, not an
-# outlier: 6.3% of 1M relays, mostly Guards (Guard p90 is 1.17).
-# A DoS that hits everyone would move a percentile band and hide the event.
-# Global fallback only — the strip uses frozen per-role bands from
-# data/role_ratio_bands.json. Do not recompute these from live Onionoo.
+# Global fallback only. The strip uses frozen per-role bands from
+# data/role_ratio_bands.json (this flag set's p10–p90 / beyond p98).
+# Do not recompute those from live Onionoo — a DoS that hits every Exit
+# would move a live percentile and hide the event.
 RATIO_LO = 0.90
 RATIO_HI = 1.15
 RATIO_INVESTIGATE_LO = 0.80

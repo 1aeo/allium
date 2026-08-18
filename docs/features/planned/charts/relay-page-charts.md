@@ -307,8 +307,9 @@ Do not run C on 6M/1Y/5Y. If a 1Y series starts at `first_seen` (th4r:
 Same data: F3Netze `read_history.1_month` / `write_history.1_month` (daily
 buckets), plus **jeangrae** (`02B1…B108CF`) as a 1aeo.com Guard (effective
 family 241, not overloaded). Red is reserved for problems (current overload
-**title cue**; write/read **investigate** <0.80 or >1.50). 1.20 is amber
-uncommon, not red. Write is purple, read is blue, advertised is orange dashed.
+**title cue**; write/read beyond **this flag set’s p98**). A Guard at 1.20
+is amber; an Exit at 1.20 is red. Write is purple, read is blue,
+advertised is orange dashed.
 
 The throughput legend sits **above the axes**, never on the series or the
 advertised line. Chart title on the page is `Throughput · last 30 days`
