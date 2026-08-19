@@ -922,7 +922,7 @@ def restart_legend_label(whens):
     return f"Last restarted  {dates}" if dates else "Last restarted"
 
 
-def draw_event_lines(ax, events, x_values=None):
+def draw_event_lines(ax, events, x_values=None, lw=1.8):
     """Restart is a point on the time axis. Overload is not drawn here.
 
     Onionoo has no overload history graph — only a last-detected timestamp —
@@ -934,7 +934,7 @@ def draw_event_lines(ax, events, x_values=None):
             continue
         for when in event_whens(ev):
             x = event_x(when, x_values)
-            ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+            ax.axvline(x, color=ev["color"], linestyle=ev["ls"], linewidth=lw,
                        alpha=0.95, zorder=3)
 
 
@@ -1084,20 +1084,23 @@ def throughput_title_loc(overload_status, overload_mode):
     return "center"
 
 
-def apply_throughput_title(ax, title, overload_status, overload_mode):
+def apply_throughput_title(ax, title, overload_status, overload_mode,
+                          loc=None, pad=None):
     """overload_mode: title | legend | none."""
     if not title:
         return
-    loc = throughput_title_loc(overload_status, overload_mode)
+    pad = THROUGHPUT_TITLE_PAD if pad is None else pad
+    loc = loc or throughput_title_loc(overload_status, overload_mode)
     if loc == "left":
-        ax.set_title(title, loc="left", pad=THROUGHPUT_TITLE_PAD)
-        ax.set_title(
-            overload_quiet_text(overload_status),
-            loc="right", pad=THROUGHPUT_TITLE_PAD, color=OVERLOAD,
-            fontsize=9, fontweight="normal",
-        )
+        ax.set_title(title, loc="left", pad=pad)
+        if overload_mode == "title" and overload_status:
+            ax.set_title(
+                overload_quiet_text(overload_status),
+                loc="right", pad=pad, color=OVERLOAD,
+                fontsize=9, fontweight="normal",
+            )
         return
-    ax.set_title(title, pad=THROUGHPUT_TITLE_PAD)
+    ax.set_title(title, pad=pad)
 
 
 def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1):
@@ -1283,6 +1286,224 @@ def apply_ratio_title(ax, title, loc="center", fontsize=None, pad=None):
     if fontsize is not None:
         kwargs["fontsize"] = fontsize
     ax.set_title(title, **kwargs)
+
+
+# Light-theme chrome borrowed from 1aeo-blog-charts: hide top/right spines,
+# y-grid only, left titles, a method subtitle, series-weight hierarchy, and
+# at most one programmatic callout. Keep Okabe–Ito. Do not use the blog
+# dark surface or #00ff7f on every relay page.
+CHROME_STYLE_ORDER = ("despine", "left_title", "weights", "subtitle", "callout")
+CHROME_STYLES = {
+    "despine": {
+        "id": "1",
+        "name": "Despine + y-grid",
+        "blurb": (
+            "Smallest change. Hide the top and right spines and keep only "
+            "the y-grid. Titles stay centered. Line weights stay equal. "
+            "Shows how much of the “boxed matplotlib” look is just chrome."
+        ),
+        "spines": "left_bottom",
+        "grid": "y",
+        "title_loc": "center",
+        "weights": "flat",
+        "subtitle": False,
+        "callout": False,
+    },
+    "left_title": {
+        "id": "2",
+        "name": "Left titles",
+        "blurb": (
+            "Style 1 plus left-aligned titles on both strips. Matches the "
+            "blog header alignment without a narrative headline. Overload "
+            "still uses the title-right cue when that mode is on."
+        ),
+        "spines": "left_bottom",
+        "grid": "y",
+        "title_loc": "left",
+        "weights": "flat",
+        "subtitle": False,
+        "callout": False,
+    },
+    "weights": {
+        "id": "3",
+        "name": "Series weights",
+        "blurb": (
+            "Style 2 plus a weight hierarchy: write / this-relay heaviest, "
+            "read a step down, advertised and overlays thinner. The eye "
+            "hits the operator’s series first."
+        ),
+        "spines": "left_bottom",
+        "grid": "y",
+        "title_loc": "left",
+        "weights": "hierarchy",
+        "subtitle": False,
+        "callout": False,
+    },
+    "subtitle": {
+        "id": "4",
+        "name": "Method subtitle",
+        "blurb": (
+            "Style 3 plus a gray method line under each title: Onionoo "
+            "bucket on throughput, frozen-band rule on write/read. Method, "
+            "not a story. Census n stays the footnote."
+        ),
+        "spines": "left_bottom",
+        "grid": "y",
+        "title_loc": "left",
+        "weights": "hierarchy",
+        "subtitle": True,
+        "callout": False,
+    },
+    "callout": {
+        "id": "5",
+        "name": "Recommended — one auto-callout",
+        "blurb": (
+            "Ship this. Style 4 plus one programmatic callout when a day "
+            "is beyond this role’s p98. Built from the series (date, "
+            "ratio). No callout when the strip is typical. Still light, "
+            "still Okabe–Ito. No hand-placed arrows, no neon green."
+        ),
+        "spines": "left_bottom",
+        "grid": "y",
+        "title_loc": "left",
+        "weights": "hierarchy",
+        "subtitle": True,
+        "callout": True,
+        "recommend": True,
+    },
+}
+CHROME_WEIGHTS = {
+    "flat": {
+        "write": 1.8, "read": 1.8, "advertised": 1.4, "restart": 1.8,
+        "relay": 1.7, "family": 1.6, "peers": 1.4, "investigate": 2.0,
+    },
+    "hierarchy": {
+        "write": 2.35, "read": 1.65, "advertised": 1.15, "restart": 1.25,
+        "relay": 2.15, "family": 1.25, "peers": 1.25, "investigate": 2.3,
+    },
+}
+SUBTITLE_TITLE_PAD = 22
+
+
+def chrome_spec(name):
+    return CHROME_STYLES[name]
+
+
+def chrome_weights(chrome):
+    key = (chrome or {}).get("weights") or "flat"
+    return dict(CHROME_WEIGHTS.get(key) or CHROME_WEIGHTS["flat"])
+
+
+def chrome_title_loc(chrome, overload_status, overload_mode):
+    if overload_mode == "title" and overload_status:
+        return "left"
+    if chrome and chrome.get("title_loc"):
+        return chrome["title_loc"]
+    return throughput_title_loc(overload_status, overload_mode)
+
+
+def apply_chrome_axes(ax, chrome):
+    if not chrome:
+        return
+    if chrome.get("spines") == "left_bottom":
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#bbbbbb")
+        ax.spines["bottom"].set_color("#bbbbbb")
+    if chrome.get("grid") == "y":
+        ax.grid(True, axis="y")
+        ax.xaxis.grid(False)
+        ax.set_axisbelow(True)
+    ax.tick_params(colors="#555555")
+
+
+def apply_method_subtitle(ax, text):
+    if not text:
+        return
+    ax.text(
+        0.0, 1.028, text, transform=ax.transAxes, ha="left", va="bottom",
+        fontsize=8.0, color="#6B7280",
+    )
+
+
+def throughput_method_subtitle(period_key="1_month"):
+    meta = BW_PERIOD_META.get(period_key) or BW_PERIOD_META["1_month"]
+    return (
+        f"Onionoo write/read_history · {meta['bucket']} buckets · "
+        f"advertised is the current descriptor, not a history"
+    )
+
+
+def ratio_method_subtitle(bands):
+    return (
+        "Frozen quiet-census bands · typical is this flag set’s p10–p90 · "
+        "investigate is beyond p98"
+    )
+
+
+def auto_spike_callout(ax, ts, write_m, read_m, bands):
+    """One annotation on the worst investigate day. Skip if none."""
+    if not ts:
+        return False
+    ihi = (bands or {}).get("invest_hi", RATIO_INVESTIGATE_HI)
+    rows = []
+    for t, w, r in zip(ts, write_m, read_m):
+        if not r:
+            continue
+        ratio = w / r
+        if ratio > ihi:
+            rows.append((ratio, t, w, r))
+    if not rows:
+        return False
+    peak = max(rows, key=lambda row: row[0])
+    peak_t = peak[1]
+    run = [peak]
+    by_day = {row[1].date(): row for row in rows}
+    day = peak_t.date()
+    prev = day - timedelta(days=1)
+    nxt = day + timedelta(days=1)
+    if prev in by_day:
+        run.append(by_day[prev])
+    if nxt in by_day:
+        run.append(by_day[nxt])
+    run.sort(key=lambda row: row[1])
+    scale_bit = (
+        "off the 1.70 scale" if peak[0] > 1.70 else "beyond this role’s p98"
+    )
+    if len(run) == 1:
+        label = (
+            f"{peak_t.strftime('%-d %b')} · write/read {peak[0]:.2f} · "
+            f"{scale_bit}"
+        )
+    else:
+        ratios = " / ".join(f"{row[0]:.2f}" for row in run)
+        label = (
+            f"{run[0][1].strftime('%-d')}–{run[-1][1].strftime('%-d %b')} · "
+            f"write/read {ratios} · {scale_bit}"
+        )
+    span = (ts[-1] - ts[0]).total_seconds()
+    frac = ((peak_t - ts[0]).total_seconds() / span) if span else 0.0
+    if frac > 0.62:
+        xytext, ha = (-14, 16), "right"
+    else:
+        xytext, ha = (14, 16), "left"
+    ax.annotate(
+        label,
+        xy=(peak_t, peak[2]),
+        xytext=xytext,
+        textcoords="offset points",
+        fontsize=8.0,
+        color=NAVY,
+        fontweight="bold",
+        ha=ha,
+        va="bottom",
+        arrowprops=dict(arrowstyle="-", color=GRAY, lw=0.8),
+        bbox=dict(
+            boxstyle="round,pad=0.28", fc="white", ec="#dddddd", alpha=0.94,
+        ),
+        zorder=6,
+    )
+    return True
 
 
 def _ratio_legend_style():
@@ -1489,7 +1710,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
                       legend_above=True, bands=None, show_legend=True,
                       period_key=None, band_copy=None, title=None,
                       title_loc="center", title_fontsize=None,
-                      legend_loc="below"):
+                      legend_loc="below", chrome=None, title_pad=None):
     overlays = overlays or {}
     bands = bands or overlays.get("bands") or {
         "role": "all relays",
@@ -1505,22 +1726,25 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
     axr.axhspan(thi, ihi, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(ihi, 1.85, color=BAD, alpha=0.10, zorder=0)
+    wt = chrome_weights(chrome)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
     role = overlay_values(ts, overlays.get("role"))
     if role is not None:
-        axr.plot(ts, role, color=SKY, linestyle="--", linewidth=1.4, zorder=2)
+        axr.plot(ts, role, color=SKY, linestyle="--", linewidth=wt["peers"],
+                 zorder=2)
     op = overlay_values(ts, overlays.get("operator"))
     if op is not None:
-        axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=1.6, zorder=2)
+        axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=wt["family"],
+                 zorder=2)
     # Clip to ylim. A Guard write spike (jeangrae 22–23 Jul, ratio 4.45 / 3.15)
     # is investigate and used to vanish — the navy line was masked and the
     # red line sat above 1.70.
     y_plot = np.clip(ratio, ylo, yhi)
     investigate = (ratio < ilo) | (ratio > ihi)
-    axr.plot(ts, y_plot, color=NAVY, linewidth=1.7, zorder=3)
+    axr.plot(ts, y_plot, color=NAVY, linewidth=wt["relay"], zorder=3)
     if investigate.any():
         axr.plot(ts, np.ma.masked_where(~investigate, y_plot),
-                 color=BAD, linewidth=2.0, zorder=4)
+                 color=BAD, linewidth=wt["investigate"], zorder=4)
     off_hi = np.isfinite(ratio) & (ratio > yhi)
     off_lo = np.isfinite(ratio) & (ratio < ylo)
     ts_arr = np.array(ts)
@@ -1530,7 +1754,8 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     if off_lo.any():
         axr.scatter(ts_arr[off_lo], np.full(int(off_lo.sum()), ylo),
                     marker="v", color=BAD, s=32, zorder=5, clip_on=False)
-    draw_event_lines(axr, events)
+    draw_event_lines(axr, events, lw=wt["restart"])
+    apply_chrome_axes(axr, chrome)
     pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
     axr.set_ylim(ylo, yhi)
@@ -1545,7 +1770,8 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
             place_ratio_legend_right(axr, handles)
         else:
             place_ratio_legend_below(axr, handles)
-    apply_ratio_title(axr, title, loc=title_loc, fontsize=title_fontsize)
+    apply_ratio_title(axr, title, loc=title_loc, fontsize=title_fontsize,
+                     pad=title_pad)
     return float(np.nanmean(ratio))
 
 
@@ -1603,21 +1829,24 @@ def events_in_span(events, ts):
 
 def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=False, period_key=None, legend_rows=1,
-                            compact=False):
+                            compact=False, chrome=None):
     ev = events_in_span(events, ts)
-    lw = 1.0 if compact else 1.8
+    wt = chrome_weights(chrome)
+    lw_w = 1.0 if compact else wt["write"]
+    lw_r = 1.0 if compact else wt["read"]
     if fill:
         ax.fill_between(ts, write_m, color=WRITE, alpha=0.22)
         ax.fill_between(ts, read_m, color=BLUE, alpha=0.22)
         ax.plot(ts, write_m, color=WRITE, linewidth=1.2)
         ax.plot(ts, read_m, color=BLUE, linewidth=1.2)
     else:
-        ax.plot(ts, write_m, color=WRITE, linewidth=lw)
-        ax.plot(ts, read_m, color=BLUE, linewidth=lw)
+        ax.plot(ts, write_m, color=WRITE, linewidth=lw_w)
+        ax.plot(ts, read_m, color=BLUE, linewidth=lw_r)
     if advertised_mbit:
         ax.axhline(advertised_mbit, color=ORANGE, linestyle="--",
-                   linewidth=1.0 if compact else 1.4)
-    draw_event_lines(ax, ev)
+                   linewidth=1.0 if compact else wt["advertised"])
+    draw_event_lines(ax, ev, lw=1.0 if compact else wt["restart"])
+    apply_chrome_axes(ax, chrome)
     pad_xlim(ax, ts)
     if compact:
         data_max = max(list(write_m) + list(read_m) + [0.0])
@@ -1643,27 +1872,44 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           story=None,
                           bands=None,
                           period_key="1_month",
-                          band_copy=None):
+                          band_copy=None,
+                          chrome=None):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    hspace = 0.22 if page_ready else 0.26
+    subtitle_on = bool(chrome and chrome.get("subtitle"))
+    if chrome:
+        hspace = 0.34 if subtitle_on else (0.24 if page_ready else 0.28)
+        fig_h = 7.4 if subtitle_on else (7.1 if page_ready else 8.3)
+        top = 0.86 if subtitle_on else 0.91
+    else:
+        hspace = 0.22 if page_ready else 0.26
+        fig_h = 7.0 if page_ready else 8.2
+        top = 0.91
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(10.8, 7.0 if page_ready else 8.2), sharex=True,
+        2, 1, figsize=(10.8, fig_h), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
-    fig.subplots_adjust(top=0.91, bottom=0.16 if page_ready else 0.26)
+    fig.subplots_adjust(top=top, bottom=0.16 if page_ready else 0.26)
     plt.setp(ax.get_xticklabels(), visible=False)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
+        chrome=chrome,
     )
     if title is None:
         title = ("Throughput · last 30 days" if page_ready
                  else f"Throughput · last 30 days   ·   {nickname}")
     bw_title = with_role(title, bands)
+    title_loc = chrome_title_loc(chrome, overload_status, overload_mode)
+    title_pad = SUBTITLE_TITLE_PAD if subtitle_on else None
     apply_throughput_title(
         ax, bw_title, overload_status, overload_mode,
+        loc=title_loc, pad=title_pad,
     )
+    if subtitle_on:
+        apply_method_subtitle(ax, throughput_method_subtitle(period_key))
+    if chrome and chrome.get("callout"):
+        auto_spike_callout(ax, ts, write_m, read_m, bands)
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
@@ -1677,8 +1923,11 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         axr, ts, read_m, write_m, events, overlays, bands=bands,
         period_key=period_key, band_copy=band_copy,
         title=sibling_ratio_title(bw_title, bands),
-        title_loc=throughput_title_loc(overload_status, overload_mode),
+        title_loc=title_loc,
+        chrome=chrome, title_pad=title_pad,
     )
+    if subtitle_on:
+        apply_method_subtitle(axr, ratio_method_subtitle(bands))
     ratio_legend = axr.get_legend()
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -2702,7 +2951,9 @@ a:hover { text-decoration:underline; }
 .option-banner { margin:8px 0 16px; padding:10px 14px; border-radius:6px;
   background:#eef6fb; border-left:4px solid #337ab7; font-size:13px; color:#1b3a4b; }
 .option-banner strong { display:block; font-size:14px; margin-bottom:2px; }
+.option-banner.recommend { background:#eef8f1; border-left-color:#009E73; }
 .section-box { margin:20px 0; padding:15px; background: var(--color-bg-light); border-radius:8px; }
+.section-box.recommend { background:#eef8f1; border-left:4px solid #009E73; }
 .section-header { display:inline-block; }
 .section-header a { color:inherit; text-decoration:none; }
 h4 { margin-top:0; margin-bottom:12px; font-size:18px; }
@@ -2961,7 +3212,7 @@ def main():
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "mockups"))
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
     parser.add_argument(
-        "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy"),
+        "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy", "chrome"),
         default="all",
         help="Skip unrelated mockup families when iterating on one chart.",
     )
@@ -3048,6 +3299,16 @@ def main():
             write_band_copy_proposals(left, right, published, out, art)
         else:
             print("skip bandcopy: missing F3Netze or jeangrae series")
+        return
+    if args.only == "chrome":
+        bw_all = dict(bw_doc)
+        bw_all_path = Path(args.bandwidth_all)
+        if bw_all_path.exists():
+            bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
+        write_chrome_style_gallery(
+            det, bw_all, published, f3, f3_bw, overlays, ov_status,
+            w_ts, read_m, write_m, advertised_mbit, events, out, art,
+        )
         return
     jobs = []
     if args.only in ("all", "uptime"):
@@ -3481,6 +3742,132 @@ def write_band_copy_proposals(left, right, published, out, art):
             dest / "relay_page_bw_band_copy.html", published, files,
         )
     print("wrote relay_page_bw_band_copy.html")
+
+
+def write_chrome_html(path, published, cards, f3_name):
+    rows = []
+    for card in cards:
+        rec = ' recommend' if card.get("recommend") else ""
+        badge = " · recommended" if card.get("recommend") else ""
+        rows.append(f"""
+  <section class="section-box{rec}">
+    <h4>Style {card["id"]}  ·  {card["name"]}{badge}</h4>
+    <p class="relay-meta">{card["blurb"]}</p>
+    <div class="chart-wrap">
+      <img src="{card["file"]}" alt="Style {card["id"]} {card["name"]}">
+    </div>
+  </section>""")
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart chrome · five light-theme styles</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner recommend">
+    <strong>Recommended: style 5 — despine, left titles, weights, method
+    subtitle, one auto-callout</strong>
+    Same levers as the 1AEO blog charts, on the light Allium page.
+    Okabe–Ito stays. Do not paste the blog dark surface or
+    <code>#00ff7f</code> onto every relay. The callout is built from
+    the series (date + ratio) and is omitted when nothing is beyond
+    this role’s p98.
+  </div>
+  <p class="relay-meta">
+    Subject is <strong>jeangrae</strong> (Guard, 1aeo.com, family 241).
+    22–23 Jul is off the 1.70 write/read scale — that is the one
+    auto-callout. F3Netze at the bottom shows style 5 with no callout
+    because that strip stays typical.
+  </p>
+  {''.join(rows)}
+  <section class="section-box">
+    <h4>Style 5 on F3Netze  ·  no callout when typical</h4>
+    <p class="relay-meta">
+      Same chrome. The auto-callout stays off because no 1-month day
+      is beyond Exit+Guard p98. That is the point: do not invent a
+      story on a quiet relay.
+    </p>
+    <div class="chart-wrap">
+      <img src="{f3_name}" alt="Style 5 on F3Netze, no callout">
+    </div>
+  </section>
+  <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
+  Light theme. Okabe–Ito series colors. Frozen bands from the
+  2026-08-15 19:00 census.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of chart chrome · Allium
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
+def write_chrome_style_gallery(det, bw_all, published, f3, f3_bw, f3_overlays,
+                               f3_ov, f3_ts, f3_read, f3_write, f3_adv,
+                               f3_events, out, art):
+    """Five light-theme chrome styles on jeangrae, plus style 5 on F3."""
+    jg = det.get(JEANGRAE)
+    jg_doc = bw_all.get(JEANGRAE) if jg else None
+    if not jg or not jg_doc:
+        print("skip chrome: missing jeangrae series")
+        return
+    ctx = collect_band_copy_relay(
+        jg, jg_doc, list(det.values()), bw_all, published, "Guard",
+    )
+    if not ctx:
+        print("skip chrome: jeangrae has no 1M series")
+        return
+    s = ctx["series"]
+    cards = []
+    for key in CHROME_STYLE_ORDER:
+        spec = chrome_spec(key)
+        name = f"relay_bandwidth_chrome_{spec['id']}_{key}_jeangrae.png"
+        bandwidth_a_dual_line(
+            s["ts"], s["read_m"], s["write_m"], s["advertised_mbit"],
+            s["events"], published, ctx["overlays"], ctx["ov"],
+            [out / name, art / name],
+            title="Throughput · last 30 days",
+            overload_mode="title",
+            page_ready=True,
+            nickname="jeangrae",
+            chrome=spec,
+        )
+        print("wrote", name)
+        cards.append({
+            "id": spec["id"],
+            "name": spec["name"],
+            "blurb": spec["blurb"],
+            "file": name,
+            "recommend": bool(spec.get("recommend")),
+        })
+    f3_name = "relay_bandwidth_chrome_5_callout_f3.png"
+    bandwidth_a_dual_line(
+        f3_ts, f3_read, f3_write, f3_adv, f3_events, published,
+        f3_overlays, f3_ov, [out / f3_name, art / f3_name],
+        title="Throughput · last 30 days",
+        overload_mode="legend",
+        page_ready=True,
+        nickname="F3Netze",
+        chrome=chrome_spec("callout"),
+    )
+    print("wrote", f3_name)
+    for dest in (out, art):
+        write_chrome_html(dest / "relay_page_bw_chrome.html", published,
+                          cards, f3_name)
+    print("wrote relay_page_bw_chrome.html")
 
 
 def write_role_band_gallery_html(path, rows, published):

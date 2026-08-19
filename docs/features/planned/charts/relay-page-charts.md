@@ -543,6 +543,37 @@ Chart title on the page is `Throughput · last 30 days · Exit+Guard`
 the page `h1`. Overload details stay in
 `#uptime` `#overload`; the chart only repeats *that it is on*.
 
+#### Chart chrome (light theme)
+
+The 1AEO blog charts are also matplotlib. What to steal is chrome, not
+the dark surface or `#00ff7f`. Those stay on 1AEO-vs-network pages.
+
+Five incremental styles on **jeangrae** (the 22–23 Jul write/read spike).
+Style 5 is also shown on F3Netze, where the strip is typical and the
+callout stays off.
+
+| Style | What it adds | File |
+|-------|--------------|------|
+| 1 Despine + y-grid | Hide top/right spines. Y-grid only. Center titles. Flat weights. | [`relay_bandwidth_chrome_1_despine_jeangrae.png`](mockups/relay_bandwidth_chrome_1_despine_jeangrae.png) |
+| 2 Left titles | Style 1 plus left-aligned titles on both strips. | [`relay_bandwidth_chrome_2_left_title_jeangrae.png`](mockups/relay_bandwidth_chrome_2_left_title_jeangrae.png) |
+| 3 Series weights | Style 2 plus write / this-relay heaviest, read a step down, advertised and overlays thinner. | [`relay_bandwidth_chrome_3_weights_jeangrae.png`](mockups/relay_bandwidth_chrome_3_weights_jeangrae.png) |
+| 4 Method subtitle | Style 3 plus a gray method line under each title. Census n stays the footnote. | [`relay_bandwidth_chrome_4_subtitle_jeangrae.png`](mockups/relay_bandwidth_chrome_4_subtitle_jeangrae.png) |
+| **5 Recommended** | Style 4 plus one programmatic callout when a day is beyond this role’s p98. | [`relay_bandwidth_chrome_5_callout_jeangrae.png`](mockups/relay_bandwidth_chrome_5_callout_jeangrae.png) |
+
+**Ship style 5.** Still light theme, still Okabe–Ito. The callout is
+built from the series (date + ratio). No callout when nothing is
+beyond p98 — see
+[`relay_bandwidth_chrome_5_callout_f3.png`](mockups/relay_bandwidth_chrome_5_callout_f3.png).
+No hand-placed arrows. No narrative headline. No neon green on every
+relay page.
+
+Gallery: [`relay_page_bw_chrome.html`](mockups/relay_page_bw_chrome.html).
+
+Method subtitle copy (do not put census n here):
+
+- Throughput: `Onionoo write/read_history · {bucket} buckets · advertised is the current descriptor, not a history`
+- Write/read: `Frozen quiet-census bands · typical is this flag set’s p10–p90 · investigate is beyond p98`
+
 ---
 
 ### R3. Flag flapping — encodings vs questions
@@ -730,9 +761,17 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 
 ```bash
 python3 docs/features/planned/charts/generate_relay_page_chart_variations.py
+python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
+  --out docs/features/planned/charts/mockups \
+  --artifacts /tmp/chart_artifacts \
+  --only chrome
 python3 docs/features/planned/charts/analyze_write_read_ratios.py \
   --details /tmp/onionoo/details_flags.json
 ```
+
+`--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
+`bandcopy`, or `chrome`. Chrome is the five light-theme styles plus
+style 5 on F3Netze.
 
 Chart mockups need the Onionoo snapshots already used by
 [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
