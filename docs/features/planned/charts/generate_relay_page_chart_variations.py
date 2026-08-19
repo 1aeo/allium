@@ -970,29 +970,6 @@ def throughput_legend_handles(advertised_mbit, events, overload_status=None,
     return handles
 
 
-def _blank_legend_handle():
-    return Line2D([], [], linestyle="None", marker="None", color="none", label=" ")
-
-
-def legend_handles_row_major(rows):
-    """Reorder so matplotlib's column-major legend matches these rows.
-
-    Matplotlib 3.x still fills legends column-first. Two separate legend
-    boxes left a large shelf between Write/Read and overload. One box
-    with labelspacing ≈ half the default is the 50% tighter wrap.
-    """
-    rows = [list(r) for r in rows if r]
-    if not rows:
-        return [], 1
-    ncol = max(len(r) for r in rows)
-    padded = [r + [_blank_legend_handle()] * (ncol - len(r)) for r in rows]
-    ordered = []
-    for col in range(ncol):
-        for row in padded:
-            ordered.append(row[col])
-    return ordered, ncol
-
-
 def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
                             wrap_last=False):
     """Legend in the empty band above advertised / data_max.
@@ -1000,10 +977,10 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     ylim reserves that band (see throughput_ylim). Do not use loc=upper
     left on a tight ylim — that is what sat the legend on the series.
 
-    When overload is in the legend, wrap that last item onto a second
-    row of the same box. A single 5-item row is wider than the axes;
-    bbox=tight then stretches the figure to the right and leaves a
-    blank shelf under the legend.
+    Overload wraps onto a second line, but it must be a *separate*
+    legend. Putting it in the same ncol grid parks the long
+    “currently overloaded · last report …” label in Write’s column
+    and opens a huge gap before Read.
     """
     if not handles:
         return
@@ -1018,18 +995,32 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
         columnspacing=1.0,
         handlelength=1.6,
         handletextpad=0.4,
+        labelspacing=0.15,
     )
     if wrap_last and len(handles) > 1:
-        ordered, ncol = legend_handles_row_major([handles[:-1], handles[-1:]])
+        first = ax.legend(
+            handles=handles[:-1], loc="upper left",
+            ncol=len(handles) - 1, **style,
+        )
+        ax.add_artist(first)
+        fig = ax.figure
+        fig.canvas.draw()
+        bbox = first.get_window_extent(fig.canvas.get_renderer())
+        (x0, y0), _ = ax.transAxes.inverted().transform(
+            [[bbox.x0, bbox.y0], [bbox.x1, bbox.y1]]
+        )
+        second = dict(style)
+        second["frameon"] = False
+        second["borderaxespad"] = 0.0
         ax.legend(
-            handles=ordered, loc="upper left", ncol=ncol,
-            labelspacing=0.22, **style,
+            handles=handles[-1:], loc="upper left",
+            bbox_to_anchor=(x0, y0 - 0.006), bbox_transform=ax.transAxes,
+            **second,
         )
         return
     if ncol is None:
         ncol = min(len(handles), 4)
-    ax.legend(handles=handles, loc="upper left", ncol=ncol,
-              labelspacing=0.15, **style)
+    ax.legend(handles=handles, loc="upper left", ncol=ncol, **style)
 
 
 def apply_throughput_title(ax, title, overload_status, overload_mode):
@@ -1685,10 +1676,14 @@ def bandwidth_periods_equal(periods, advertised_mbit, events, overload_status,
         advertised_mbit, events, overload_status, overload_in_legend=True,
     )
     if overload_status and len(handles) > 1:
-        ordered, ncol = legend_handles_row_major([handles[:-1], handles[-1:]])
         fig.legend(
-            handles=ordered, loc="upper left", bbox_to_anchor=(0.08, 0.98),
-            ncol=ncol, fontsize=8.0, frameon=False, labelspacing=0.22,
+            handles=handles[:-1], loc="upper left", bbox_to_anchor=(0.08, 0.98),
+            ncol=len(handles) - 1, fontsize=8.0, frameon=False,
+            columnspacing=1.0,
+        )
+        fig.legend(
+            handles=handles[-1:], loc="upper left", bbox_to_anchor=(0.08, 0.945),
+            ncol=1, fontsize=8.0, frameon=False,
         )
     else:
         fig.legend(
