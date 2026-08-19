@@ -455,6 +455,7 @@ Page mockups (open the HTML):
 - [Option C — History, F3Netze, three period layouts](mockups/relay_page_bw_opt3_history_f3.html)
 - [Option C — one chart per flag-set band](mockups/relay_page_bw_opt3_role_bands.html)
 - [Chart chrome — five light-theme styles](mockups/relay_page_bw_chrome.html)
+- [Legend attachment and subtitle copy](mockups/relay_page_bw_legend_subtitle.html)
 - [Option 1 — rejected hero](mockups/relay_page_bw_opt1_hero_f3.html)
 - [Option 2 — rejected after scalars](mockups/relay_page_bw_opt2_after_metrics_jeangrae.html)
 
@@ -572,8 +573,54 @@ Gallery: [`relay_page_bw_chrome.html`](mockups/relay_page_bw_chrome.html).
 
 Method subtitle copy (do not put census n here):
 
-- Throughput: `Onionoo write/read_history · {bucket} buckets · advertised is the current descriptor, not a history`
-- Write/read: `Frozen quiet-census bands · typical is this flag set’s p10–p90 · investigate is beyond p98`
+- Throughput: `Daily write and read · dashed line is today’s advertised bandwidth`
+- Write/read: `Compared with other Guards · typical is the middle 80% · investigate is the tails`
+
+(`Guards` becomes `Exits` / `Exit+Guards` / `middle relays` from this
+relay’s flags.)
+
+#### Legend attachment (one pattern)
+
+Style 5 first put the throughput key in the empty band above
+advertised and the write/read key under the dates. That is two
+patterns. Pick one attachment rule.
+
+| Placement | What it does | File |
+|-----------|--------------|------|
+| Split (current) | Throughput key on the plot. Write/read key under the dates. | [`relay_bandwidth_legend_split_jeangrae.png`](mockups/relay_bandwidth_legend_split_jeangrae.png) |
+| Both at top | Write/read gets a white shelf above 1.70 so the key matches throughput. | [`relay_bandwidth_legend_top_jeangrae.png`](mockups/relay_bandwidth_legend_top_jeangrae.png) |
+| **Both under their panel** | Same rule on both strips. Throughput ylim tightens. | [`relay_bandwidth_legend_bottom_jeangrae.png`](mockups/relay_bandwidth_legend_bottom_jeangrae.png) |
+
+**Ship both keys under their panel.** The write/read triangles live at
+the top of that strip — a top key fights them. Under-the-panel already
+worked there. Matching it on throughput is the smaller move.
+
+Gallery: [`relay_page_bw_legend_subtitle.html`](mockups/relay_page_bw_legend_subtitle.html).
+
+#### What “frozen quiet-census bands” meant
+
+Contributor shorthand, not operator copy. We measured write/read for
+every Guard (or Exit, …) on one quiet snapshot (15 Aug 2026), saved
+those percentiles, and we do not recompute them at build time.
+**Frozen** = not live. **Quiet** = not during a network attack.
+**Census** = this flag set, not this family. A live p10–p90 would walk
+with a network-wide Exit flood and paint the event green. That reason
+stays in [`write-read-band.md`](write-read-band.md). It does not belong
+on the chart.
+
+Subtitle options (all on the recommended legend layout):
+
+| Option | Line | Status |
+|--------|------|--------|
+| A | `Frozen quiet-census bands · typical is this flag set’s p10–p90 · investigate is beyond p98` | Reject — jargon |
+| **B** | `Compared with other Guards · typical is the middle 80% · investigate is the tails` | **Ship this** |
+| C | `Green is usual for Guards · red is rare for Guards` | Alt — duplicates the legend |
+| D | `Vs other Guards · fixed baseline, not this week’s ranking` | Alt — hints at frozen |
+| E | (no subtitle) | Alt — cleanest chrome |
+
+Census n stays the footnote (`Guard write/read bands · frozen census,
+n=4444`). A later pass can turn that into `Compared with 4,444 Guards ·
+baseline 15 Aug 2026` if the leftover “frozen census” still itches.
 
 ---
 
@@ -766,13 +813,18 @@ python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
   --out docs/features/planned/charts/mockups \
   --artifacts /tmp/chart_artifacts \
   --only chrome
+python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
+  --out docs/features/planned/charts/mockups \
+  --artifacts /tmp/chart_artifacts \
+  --only legends
 python3 docs/features/planned/charts/analyze_write_read_ratios.py \
   --details /tmp/onionoo/details_flags.json
 ```
 
 `--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
-`bandcopy`, or `chrome`. Chrome is the five light-theme styles plus
-style 5 on F3Netze.
+`bandcopy`, `chrome`, or `legends`. Chrome is the five light-theme
+styles plus style 5 on F3Netze. `legends` is the unified-key and
+subtitle-copy gallery.
 
 Chart mockups need the Onionoo snapshots already used by
 [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
