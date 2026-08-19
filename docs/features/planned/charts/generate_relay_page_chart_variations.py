@@ -129,7 +129,9 @@ def style():
         "axes.titleweight": "bold",
         "axes.labelsize": 10,
         "legend.frameon": False,
+        "figure.dpi": 140,
         "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.08,
         "savefig.dpi": 140,
     })
 
@@ -177,10 +179,32 @@ def by_fp(doc):
     return {r["fingerprint"]: r for r in doc.get("relays", [])}
 
 
-def save(fig, paths):
+def _trim_rgba(rgba, pad_px=12, white=250):
+    """Crop outer white from a canvas dump. savefig(bbox='tight') re-anchors
+    out-of-axes legends and opens a gap under the date labels.
+    """
+    rgb = rgba[:, :, :3]
+    ink = rgb.min(axis=2) < white
+    rows = np.where(ink.any(axis=1))[0]
+    cols = np.where(ink.any(axis=0))[0]
+    if len(rows) == 0 or len(cols) == 0:
+        return rgba
+    y0 = max(0, int(rows[0]) - pad_px)
+    y1 = min(rgb.shape[0], int(rows[-1]) + pad_px + 1)
+    x0 = max(0, int(cols[0]) - pad_px)
+    x1 = min(rgb.shape[1], int(cols[-1]) + pad_px + 1)
+    return rgba[y0:y1, x0:x1]
+
+
+def save(fig, paths, *, trim=False):
     for p in paths:
         p.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(p)
+        if trim:
+            fig.canvas.draw()
+            rgba = np.asarray(fig.canvas.buffer_rgba())
+            plt.imsave(p, _trim_rgba(rgba))
+        else:
+            fig.savefig(p)
     plt.close(fig)
 
 
@@ -1311,39 +1335,26 @@ def _row_major_ratio_handles(series, bands):
     return out
 
 
-def place_ratio_legend_below(ax, handles, gap_pt=3.0):
+def place_ratio_legend_below(ax, handles, gap_pt=16.0):
     """Legend just under the date labels, never on the series or the bands.
 
     loc=upper right inside the axes sat the box on the colored bands
     and on off-scale markers (jeangrae 22–23 Jul triangles). One box,
-    series on the first row and band swatches on the second. Anchor is
-    the date-label bbox in axes coordinates so savefig dpi / bbox=tight
-    cannot open a white gap.
+    series on the first row and band swatches on the second. Convert the
+    point gap to this axes' height — a mixed ScaledTranslation is ignored
+    as a legend bbox_transform, and a fixed -0.32 fraction is far too
+    much on a short write/read strip.
     """
     if not handles:
         return None
     series, bands = _split_ratio_handles(handles)
-    ax.tick_params(axis="x", pad=1.5)
-    fig = ax.figure
-    fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
-    y_disp = None
-    for tick in ax.get_xticklabels():
-        if not tick.get_visible() or not (tick.get_text() or "").strip():
-            continue
-        y0 = tick.get_window_extent(renderer).y0
-        if y_disp is None or y0 < y_disp:
-            y_disp = y0
-    if y_disp is None:
-        y_disp = ax.get_window_extent(renderer).y0
-    gap_px = gap_pt * fig.dpi / 72.0
-    x_disp = ax.transAxes.transform((0.0, 0.0))[0]
-    y_axes = ax.transAxes.inverted().transform((x_disp, y_disp - gap_px))[1]
+    ax.tick_params(axis="x", pad=2, labelbottom=True)
+    axes_h_in = ax.get_position().height * ax.figure.get_figheight()
+    offset = gap_pt / 72.0 / max(axes_h_in, 0.05)
     return ax.legend(
         handles=_row_major_ratio_handles(series, bands),
         loc="upper left",
-        bbox_to_anchor=(0.0, y_axes),
-        bbox_transform=ax.transAxes,
+        bbox_to_anchor=(0.0, -offset),
         ncol=max(len(series), 1),
         **_ratio_legend_style(),
     )
@@ -1637,10 +1648,11 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     wrap_last = overload_mode == "legend" and bool(overload_status)
     hspace = 0.22 if page_ready else 0.26
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(10.8, 7.6 if page_ready else 8.8), sharex=True,
+        2, 1, figsize=(10.8, 7.0 if page_ready else 8.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.10)
+    fig.subplots_adjust(top=0.91, bottom=0.16 if page_ready else 0.26)
+    plt.setp(ax.get_xticklabels(), visible=False)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
@@ -1696,16 +1708,17 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         )
     else:
         apply_census_footnote(fig, bands, under=ratio_legend)
-    save(fig, out_paths)
+    save(fig, out_paths, trim=True)
 
 
 def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
                            overlays, overload_status, out_paths):
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(10.8, 8.4), sharex=True,
+        2, 1, figsize=(10.8, 8.0), sharex=True,
         gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.26},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.08)
+    fig.subplots_adjust(top=0.91, bottom=0.26)
+    plt.setp(ax.get_xticklabels(), visible=False)
     _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=True)
     b_bands = bands_for_flags(["Exit", "Guard"])
@@ -1738,7 +1751,7 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
         footnote=census_footnote(b_bands),
         under=axr.get_legend(),
     )
-    save(fig, out_paths)
+    save(fig, out_paths, trim=True)
 
 
 def bandwidth_c_bars_advertised(ts, read_m, write_m, advertised_mbit, events,
