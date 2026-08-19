@@ -1071,6 +1071,58 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     ax.legend(handles=handles, loc="upper left", ncol=ncol, **style)
 
 
+def place_legend_below_axes(ax, handles, wrap_last=False, gap_pt=8.0,
+                            fontsize=8.5):
+    """Same attachment as the write/read key: just under this panel.
+
+    Used when both legends sit under their axes so the page has one
+    pattern, not “throughput key on the series, ratio key under the
+    dates.”
+    """
+    if not handles:
+        return None
+    axes_h_in = ax.get_position().height * ax.figure.get_figheight()
+    offset = gap_pt / 72.0 / max(axes_h_in, 0.05)
+    style = dict(
+        fontsize=fontsize,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#eeeeee",
+        facecolor="white",
+        framealpha=0.96,
+        borderaxespad=0.0,
+        borderpad=0.25,
+        columnspacing=1.0,
+        handlelength=1.6,
+        handletextpad=0.4,
+        labelspacing=0.15,
+    )
+    if wrap_last and len(handles) > 1:
+        first = ax.legend(
+            handles=handles[:-1], loc="upper left",
+            bbox_to_anchor=(0.0, -offset), ncol=len(handles) - 1, **style,
+        )
+        ax.add_artist(first)
+        fig = ax.figure
+        fig.canvas.draw()
+        bbox = first.get_window_extent(fig.canvas.get_renderer())
+        (x0, y0), _ = ax.transAxes.inverted().transform(
+            [[bbox.x0, bbox.y0], [bbox.x1, bbox.y1]]
+        )
+        second = dict(style)
+        second["frameon"] = False
+        return ax.legend(
+            handles=handles[-1:], loc="upper left",
+            bbox_to_anchor=(x0, y0 - 0.012), bbox_transform=ax.transAxes,
+            **second,
+        )
+    ncol = min(len(handles), 4)
+    return ax.legend(
+        handles=handles, loc="upper left",
+        bbox_to_anchor=(0.0, -offset), ncol=ncol, **style,
+    )
+
+
 THROUGHPUT_TITLE_PAD = 10
 # Same pad as throughput so the two stacked headers line up. The
 # write/read legend sits *below* the strip, not under the title.
@@ -1103,14 +1155,21 @@ def apply_throughput_title(ax, title, overload_status, overload_mode,
     ax.set_title(title, pad=pad)
 
 
-def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1):
-    """Leave a legend shelf above advertised (or data, if higher)."""
+def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1,
+                   tight=False):
+    """Leave a legend shelf above advertised (or data, if higher).
+
+    tight=True when the key sits under the panel — no empty band.
+    """
     data_max = max(list(write_m) + list(read_m) + [0.0])
     ceiling = max(advertised_mbit or 0.0, data_max) or 1.0
-    # One compact two-row box needs less shelf than the old stacked
-    # legends (1.42). Keep a little more than a single row so the
-    # diamond does not sit on the advertised line.
-    extra = 1.28 if legend_rows >= 2 else 1.26
+    if tight:
+        extra = 1.10
+    else:
+        # One compact two-row box needs less shelf than the old stacked
+        # legends (1.42). Keep a little more than a single row so the
+        # diamond does not sit on the advertised line.
+        extra = 1.28 if legend_rows >= 2 else 1.26
     ax.set_ylim(0, ceiling * extra)
 
 
@@ -1441,6 +1500,52 @@ def ratio_method_subtitle(bands):
     )
 
 
+def peers_word(bands):
+    """Operator-facing plural for this flag set. Not 'flag set' or 'role'."""
+    role = bands_role(bands) or "relays"
+    return {
+        "Guard": "Guards",
+        "Exit": "Exits",
+        "Exit+Guard": "Exit+Guards",
+        "Middle": "middle relays",
+    }.get(role, role)
+
+
+def throughput_subtitle_text(period_key="1_month", style=None):
+    """style: None/jargon | peers | plain | baseline | none."""
+    if style in (None, "jargon"):
+        return throughput_method_subtitle(period_key)
+    if style == "peers":
+        return (
+            "Daily write and read · dashed line is today’s advertised bandwidth"
+        )
+    if style == "plain":
+        return (
+            "Each point is one day · advertised is the current limit, "
+            "not a history"
+        )
+    if style == "baseline":
+        return "Daily totals · advertised is today’s descriptor, not a history"
+    return ""
+
+
+def ratio_subtitle_text(bands, style=None):
+    """style: None/jargon | peers | plain | baseline | none."""
+    if style in (None, "jargon"):
+        return ratio_method_subtitle(bands)
+    peers = peers_word(bands)
+    if style == "peers":
+        return (
+            f"Compared with other {peers} · typical is the middle 80% · "
+            f"investigate is the tails"
+        )
+    if style == "plain":
+        return f"Green is usual for {peers} · red is rare for {peers}"
+    if style == "baseline":
+        return f"Vs other {peers} · fixed baseline, not this week’s ranking"
+    return ""
+
+
 def auto_spike_callout(ax, ts, write_m, read_m, bands):
     """One annotation on the worst investigate day. Skip if none."""
     if not ts:
@@ -1576,6 +1681,21 @@ def place_ratio_legend_below(ax, handles, gap_pt=16.0):
         handles=_row_major_ratio_handles(series, bands),
         loc="upper left",
         bbox_to_anchor=(0.0, -offset),
+        ncol=max(len(series), 1),
+        **_ratio_legend_style(),
+    )
+
+
+def place_ratio_legend_shelf(ax, handles):
+    """Legend in a reserved white band above 1.70. Same 'key at the
+    top of the panel' pattern as the throughput shelf.
+    """
+    if not handles:
+        return None
+    series, bands = _split_ratio_handles(handles)
+    return ax.legend(
+        handles=_row_major_ratio_handles(series, bands),
+        loc="upper left",
         ncol=max(len(series), 1),
         **_ratio_legend_style(),
     )
@@ -1721,11 +1841,12 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
     ylo, yhi = 0.50, 1.70
+    shelf = 0.40 if legend_loc == "shelf" else 0.0
     axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
     axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
     axr.axhspan(thi, ihi, color=AMBER, alpha=0.10, zorder=0)
-    axr.axhspan(ihi, 1.85, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(ihi, yhi if shelf else 1.85, color=BAD, alpha=0.10, zorder=0)
     wt = chrome_weights(chrome)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
     role = overlay_values(ts, overlays.get("role"))
@@ -1758,7 +1879,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     apply_chrome_axes(axr, chrome)
     pad_xlim(axr, ts)
     axr.set_ylabel("Write / read")
-    axr.set_ylim(ylo, yhi)
+    axr.set_ylim(ylo, yhi + shelf)
     apply_ratio_yticks(axr, bands, ylo, yhi)
     if period_key:
         period_date_axis(axr, period_key)
@@ -1768,6 +1889,8 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
         handles = ratio_legend_handles(overlays, bands, band_copy=band_copy)
         if legend_loc == "right":
             place_ratio_legend_right(axr, handles)
+        elif legend_loc == "shelf":
+            place_ratio_legend_shelf(axr, handles)
         else:
             place_ratio_legend_below(axr, handles)
     apply_ratio_title(axr, title, loc=title_loc, fontsize=title_fontsize,
@@ -1829,7 +1952,7 @@ def events_in_span(events, ts):
 
 def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=False, period_key=None, legend_rows=1,
-                            compact=False, chrome=None):
+                            compact=False, chrome=None, tight_ylim=False):
     ev = events_in_span(events, ts)
     wt = chrome_weights(chrome)
     lw_w = 1.0 if compact else wt["write"]
@@ -1855,7 +1978,7 @@ def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
         ax.tick_params(labelsize=7)
     else:
         throughput_ylim(ax, read_m, write_m, advertised_mbit,
-                        legend_rows=legend_rows)
+                        legend_rows=legend_rows, tight=tight_ylim)
         ax.set_ylabel("Throughput (Mbit/s)")
     if period_key:
         period_date_axis(ax, period_key)
@@ -1873,28 +1996,51 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           bands=None,
                           period_key="1_month",
                           band_copy=None,
-                          chrome=None):
+                          chrome=None,
+                          legend_attach=None,
+                          subtitle_style=None):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    subtitle_on = bool(chrome and chrome.get("subtitle"))
-    if chrome:
-        hspace = 0.34 if subtitle_on else (0.24 if page_ready else 0.28)
-        fig_h = 7.4 if subtitle_on else (7.1 if page_ready else 8.3)
+    legend_attach = legend_attach or "split"
+    if subtitle_style == "none":
+        subtitle_on = False
+    elif subtitle_style:
+        subtitle_on = True
+    else:
+        subtitle_on = bool(chrome and chrome.get("subtitle"))
+    if legend_attach == "below":
+        hspace = 0.62 if wrap_last else 0.48
+        fig_h = 8.2 if wrap_last else 7.9
+        if not subtitle_on:
+            hspace -= 0.06
+            fig_h -= 0.25
         top = 0.86 if subtitle_on else 0.91
+        bottom = 0.20 if page_ready else 0.28
+        height_ratios = [3.2, 1.35]
+    elif chrome:
+        hspace = 0.34 if subtitle_on else (0.24 if page_ready else 0.28)
+        fig_h = 7.6 if (legend_attach == "above" and subtitle_on) else (
+            7.4 if subtitle_on else (7.1 if page_ready else 8.3)
+        )
+        top = 0.86 if subtitle_on else 0.91
+        bottom = 0.16 if page_ready else 0.26
+        height_ratios = [3.2, 1.55] if legend_attach == "above" else [3.2, 1.35]
     else:
         hspace = 0.22 if page_ready else 0.26
         fig_h = 7.0 if page_ready else 8.2
         top = 0.91
+        bottom = 0.16 if page_ready else 0.26
+        height_ratios = [3.2, 1.35]
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, fig_h), sharex=True,
-        gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
+        gridspec_kw={"height_ratios": height_ratios, "hspace": hspace},
     )
-    fig.subplots_adjust(top=top, bottom=0.16 if page_ready else 0.26)
+    fig.subplots_adjust(top=top, bottom=bottom)
     plt.setp(ax.get_xticklabels(), visible=False)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
-        chrome=chrome,
+        chrome=chrome, tight_ylim=(legend_attach == "below"),
     )
     if title is None:
         title = ("Throughput · last 30 days" if page_ready
@@ -1907,17 +2053,19 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         loc=title_loc, pad=title_pad,
     )
     if subtitle_on:
-        apply_method_subtitle(ax, throughput_method_subtitle(period_key))
+        apply_method_subtitle(
+            ax, throughput_subtitle_text(period_key, subtitle_style),
+        )
     if chrome and chrome.get("callout"):
         auto_spike_callout(ax, ts, write_m, read_m, bands)
-    place_legend_above_axes(
-        ax,
-        throughput_legend_handles(
-            advertised_mbit, events_in_span(events, ts), overload_status,
-            overload_in_legend=(overload_mode == "legend"),
-        ),
-        wrap_last=wrap_last,
+    bw_handles = throughput_legend_handles(
+        advertised_mbit, events_in_span(events, ts), overload_status,
+        overload_in_legend=(overload_mode == "legend"),
     )
+    if legend_attach == "below":
+        place_legend_below_axes(ax, bw_handles, wrap_last=wrap_last)
+    else:
+        place_legend_above_axes(ax, bw_handles, wrap_last=wrap_last)
 
     mean_ratio = _plot_ratio_strip(
         axr, ts, read_m, write_m, events, overlays, bands=bands,
@@ -1925,9 +2073,10 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         title=sibling_ratio_title(bw_title, bands),
         title_loc=title_loc,
         chrome=chrome, title_pad=title_pad,
+        legend_loc="shelf" if legend_attach == "above" else "below",
     )
     if subtitle_on:
-        apply_method_subtitle(axr, ratio_method_subtitle(bands))
+        apply_method_subtitle(axr, ratio_subtitle_text(bands, subtitle_style))
     ratio_legend = axr.get_legend()
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -2956,6 +3105,7 @@ a:hover { text-decoration:underline; }
 .section-box.recommend { background:#eef8f1; border-left:4px solid #009E73; }
 .section-header { display:inline-block; }
 .section-header a { color:inherit; text-decoration:none; }
+h3 { font-size:16px; color: var(--color-text-heading); margin:24px 0 8px; }
 h4 { margin-top:0; margin-bottom:12px; font-size:18px; }
 .subsection-header { margin:0 0 10px; padding-bottom:6px; font-weight:600;
   font-size:15px; color: var(--color-text-dark); border-bottom:2px solid var(--color-border-light); }
@@ -3212,7 +3362,8 @@ def main():
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "mockups"))
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
     parser.add_argument(
-        "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy", "chrome"),
+        "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy",
+                           "chrome", "legends"),
         default="all",
         help="Skip unrelated mockup families when iterating on one chart.",
     )
@@ -3306,6 +3457,16 @@ def main():
         if bw_all_path.exists():
             bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
         write_chrome_style_gallery(
+            det, bw_all, published, f3, f3_bw, overlays, ov_status,
+            w_ts, read_m, write_m, advertised_mbit, events, out, art,
+        )
+        return
+    if args.only == "legends":
+        bw_all = dict(bw_doc)
+        bw_all_path = Path(args.bandwidth_all)
+        if bw_all_path.exists():
+            bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
+        write_legend_subtitle_gallery(
             det, bw_all, published, f3, f3_bw, overlays, ov_status,
             w_ts, read_m, write_m, advertised_mbit, events, out, art,
         )
@@ -3868,6 +4029,228 @@ def write_chrome_style_gallery(det, bw_all, published, f3, f3_bw, f3_overlays,
         write_chrome_html(dest / "relay_page_bw_chrome.html", published,
                           cards, f3_name)
     print("wrote relay_page_bw_chrome.html")
+
+
+def write_legend_subtitle_html(path, published, legend_cards, subtitle_cards,
+                               f3_name):
+    def cards_html(cards):
+        rows = []
+        for card in cards:
+            rec = " recommend" if card.get("recommend") else ""
+            badge = " · recommended" if card.get("recommend") else ""
+            rows.append(f"""
+  <section class="section-box{rec}">
+    <h4>{card["name"]}{badge}</h4>
+    <p class="relay-meta">{card["blurb"]}</p>
+    <div class="chart-wrap">
+      <img src="{card["file"]}" alt="{card["name"]}">
+    </div>
+  </section>""")
+        return "".join(rows)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legend attachment · subtitle copy</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner recommend">
+    <strong>Recommended: both keys under their panel · “Compared with
+    other Guards”</strong>
+    One attachment rule. The colored bands are other Guards, not a
+    live ranking of this week. “Frozen quiet-census bands” is
+    contributor jargon — it does not belong on the chart.
+  </div>
+  <p class="relay-meta">
+    Style 5 chrome (despine, left titles, weights, callout). Subject is
+    <strong>jeangrae</strong>. Legend mocks all use the recommended
+    subtitle so the only change is where the keys sit.
+  </p>
+  <h3>Where the keys sit</h3>
+  {cards_html(legend_cards)}
+  <h3>Write/read subtitle copy</h3>
+  <p class="relay-meta">
+    All of these use both keys under their panel. The current line
+    (“Frozen quiet-census bands …”) is option A — reject it.
+  </p>
+  {cards_html(subtitle_cards)}
+  <section class="section-box recommend">
+    <h4>Recommended combo on F3Netze</h4>
+    <p class="relay-meta">
+      Both keys under their panel. Overload still wraps onto a second
+      legend line. No callout — the strip is typical. Subtitle says
+      “other Exit+Guards.”
+    </p>
+    <div class="chart-wrap">
+      <img src="{f3_name}" alt="Recommended legends and subtitle on F3Netze">
+    </div>
+  </section>
+  <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
+  Light theme. Okabe–Ito. Bands from the 2026-08-15 19:00 snapshot.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of legend attachment and subtitle copy · Allium
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
+def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
+                                  f3_overlays, f3_ov, f3_ts, f3_read,
+                                  f3_write, f3_adv, f3_events, out, art):
+    """Unified legends + subtitle copy on style 5."""
+    jg = det.get(JEANGRAE)
+    jg_doc = bw_all.get(JEANGRAE) if jg else None
+    if not jg or not jg_doc:
+        print("skip legends: missing jeangrae series")
+        return
+    ctx = collect_band_copy_relay(
+        jg, jg_doc, list(det.values()), bw_all, published, "Guard",
+    )
+    if not ctx:
+        print("skip legends: jeangrae has no 1M series")
+        return
+    s = ctx["series"]
+    chrome = chrome_spec("callout")
+    common = dict(
+        title="Throughput · last 30 days",
+        overload_mode="title",
+        page_ready=True,
+        nickname="jeangrae",
+        chrome=chrome,
+    )
+
+    def draw(name, **extra):
+        bandwidth_a_dual_line(
+            s["ts"], s["read_m"], s["write_m"], s["advertised_mbit"],
+            s["events"], published, ctx["overlays"], ctx["ov"],
+            [out / name, art / name], **common, **extra,
+        )
+        print("wrote", name)
+
+    legend_jobs = [
+        (
+            "split",
+            "Current — one key on the plot, one under the dates",
+            "Style 5 today. Throughput key sits in the empty band above "
+            "advertised. Write/read key sits under the dates. Two "
+            "patterns to learn.",
+            "relay_bandwidth_legend_split_jeangrae.png",
+            False,
+        ),
+        (
+            "above",
+            "Both keys at the top of their panel",
+            "Throughput key stays in the shelf above advertised. "
+            "Write/read gets a matching white shelf above 1.70 so the "
+            "key is not on the bands or the triangles.",
+            "relay_bandwidth_legend_top_jeangrae.png",
+            False,
+        ),
+        (
+            "below",
+            "Both keys under their panel",
+            "Ship this. Same rule on both strips: read the series, then "
+            "the key under it. Throughput ylim tightens — no empty "
+            "shelf. Write/read key stays off the triangles.",
+            "relay_bandwidth_legend_bottom_jeangrae.png",
+            True,
+        ),
+    ]
+    legend_cards = []
+    for attach, name, blurb, fname, rec in legend_jobs:
+        draw(fname, legend_attach=attach, subtitle_style="peers")
+        legend_cards.append({
+            "name": name, "blurb": blurb, "file": fname, "recommend": rec,
+        })
+
+    subtitle_jobs = [
+        (
+            "jargon",
+            "A — Frozen quiet-census bands",
+            "Current line. Contributor shorthand for “we saved "
+            "percentiles from one quiet snapshot and do not recompute "
+            "them live.” Operators have no reason to know that.",
+            "relay_bandwidth_subtitle_jargon_jeangrae.png",
+            False,
+        ),
+        (
+            "peers",
+            "B — Compared with other Guards",
+            "Ship this. Says who the colors compare against, and what "
+            "typical / investigate mean, without “census” or “frozen.” "
+            "The DoS reason stays in the docs.",
+            "relay_bandwidth_legend_bottom_jeangrae.png",
+            True,
+        ),
+        (
+            "plain",
+            "C — Green is usual / red is rare",
+            "Plainest. Duplicates the legend swatches. Fine if we want "
+            "the subtitle to stay short.",
+            "relay_bandwidth_subtitle_plain_jeangrae.png",
+            False,
+        ),
+        (
+            "baseline",
+            "D — Fixed baseline, not this week’s ranking",
+            "Sneaks in “frozen” without the word. Useful if we ever "
+            "need to hint at the DoS reason on-chart. Still a bit "
+            "abstract.",
+            "relay_bandwidth_subtitle_baseline_jeangrae.png",
+            False,
+        ),
+        (
+            "none",
+            "E — No subtitle",
+            "Title already says Guard. Legend already says typical / "
+            "p10–p90. Cleanest chrome. Loses “compared with other "
+            "Guards” for anyone who skips the legend.",
+            "relay_bandwidth_subtitle_none_jeangrae.png",
+            False,
+        ),
+    ]
+    subtitle_cards = []
+    for style, name, blurb, fname, rec in subtitle_jobs:
+        if style != "peers":
+            draw(fname, legend_attach="below", subtitle_style=style)
+        subtitle_cards.append({
+            "name": name, "blurb": blurb, "file": fname, "recommend": rec,
+        })
+
+    f3_name = "relay_bandwidth_legend_bottom_f3.png"
+    bandwidth_a_dual_line(
+        f3_ts, f3_read, f3_write, f3_adv, f3_events, published,
+        f3_overlays, f3_ov, [out / f3_name, art / f3_name],
+        title="Throughput · last 30 days",
+        overload_mode="legend",
+        page_ready=True,
+        nickname="F3Netze",
+        chrome=chrome,
+        legend_attach="below",
+        subtitle_style="peers",
+    )
+    print("wrote", f3_name)
+    for dest in (out, art):
+        write_legend_subtitle_html(
+            dest / "relay_page_bw_legend_subtitle.html", published,
+            legend_cards, subtitle_cards, f3_name,
+        )
+    print("wrote relay_page_bw_legend_subtitle.html")
 
 
 def write_role_band_gallery_html(path, rows, published):
