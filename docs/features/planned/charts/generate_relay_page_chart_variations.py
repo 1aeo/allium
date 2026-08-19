@@ -31,6 +31,7 @@ import numpy as np
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyBboxPatch, Patch
+from matplotlib.transforms import ScaledTranslation
 
 # Palette: red (BAD) is reserved for problems. Series and events that are
 # not "wrong" use blue / purple / orange / navy / green.
@@ -183,14 +184,36 @@ def save(fig, paths):
     plt.close(fig)
 
 
-def caption(fig, published, story, y=0.012, footnote=None):
+def _text_just_under(fig, artist, text, *, fontsize, color, offset_pt=5,
+                     va="top", style=None):
+    """Pin a note to an artist so bbox=tight cannot keep a figure-bottom slab."""
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    bbox = artist.get_window_extent(renderer)
+    x0, y0 = fig.transFigure.inverted().transform((bbox.x0, bbox.y0))
+    trans = fig.transFigure + ScaledTranslation(
+        0, -offset_pt / 72.0, fig.dpi_scale_trans,
+    )
+    kw = dict(
+        fontsize=fontsize, color=color, va=va, ha="left", transform=trans,
+    )
+    if style:
+        kw["style"] = style
+    return fig.text(x0, y0, text, **kw)
+
+
+def caption(fig, published, story, y=0.012, footnote=None, under=None):
     wrapped = textwrap.fill(story, width=108)
     note = f"{footnote}\n" if footnote else ""
-    fig.text(
-        0.01, y,
-        f"{note}{wrapped}\nSource: Onionoo  ·  relays_published {published} UTC  ·  Allium relay-page mockup",
-        fontsize=8, color=GRAY, va="bottom",
+    text = (
+        f"{note}{wrapped}\n"
+        f"Source: Onionoo  ·  relays_published {published} UTC  ·  "
+        f"Allium relay-page mockup"
     )
+    if under is not None:
+        _text_just_under(fig, under, text, fontsize=8, color=GRAY, offset_pt=6)
+        return
+    fig.text(0.01, y, text, fontsize=8, color=GRAY, va="bottom")
 
 
 def date_axis(ax):
@@ -1247,10 +1270,11 @@ def _ratio_legend_style():
         facecolor="white",
         framealpha=0.96,
         borderaxespad=0.0,
+        borderpad=0.25,
         columnspacing=0.9,
         handlelength=1.35,
         handletextpad=0.32,
-        labelspacing=0.16,
+        labelspacing=0.25,
     )
 
 
@@ -1272,32 +1296,57 @@ def place_ratio_legend_right(ax, handles):
     )
 
 
-def place_ratio_legend_below(ax, handles):
-    """Legend under the date labels, never on the series or the bands.
+def _row_major_ratio_handles(series, bands):
+    """Interleave so ncol=len(series) paints series on row 1, bands on row 2.
+
+    Matplotlib fills a legend grid by column.
+    """
+    n = max(len(series), len(bands), 1)
+    out = []
+    for i in range(n):
+        if i < len(series):
+            out.append(series[i])
+        if i < len(bands):
+            out.append(bands[i])
+    return out
+
+
+def place_ratio_legend_below(ax, handles, gap_pt=3.0):
+    """Legend just under the date labels, never on the series or the bands.
 
     loc=upper right inside the axes sat the box on the colored bands
-    and on off-scale markers (jeangrae 22–23 Jul triangles). Two
-    legends keep series on one row and band swatches on the next
-    (matplotlib fills a single ncol grid by column).
+    and on off-scale markers (jeangrae 22–23 Jul triangles). One box,
+    series on the first row and band swatches on the second. Anchor is
+    the date-label bbox in axes coordinates so savefig dpi / bbox=tight
+    cannot open a white gap.
     """
     if not handles:
-        return
+        return None
     series, bands = _split_ratio_handles(handles)
-    style = _ratio_legend_style()
-    # Short strip: date labels eat a large axes-fraction. Sit under them.
-    if series:
-        first = ax.legend(
-            handles=series, loc="upper left",
-            bbox_to_anchor=(0.0, -0.32),
-            ncol=max(len(series), 1), **style,
-        )
-        ax.add_artist(first)
-    if bands:
-        ax.legend(
-            handles=bands, loc="upper left",
-            bbox_to_anchor=(0.0, -0.48),
-            ncol=max(len(bands), 1), **style,
-        )
+    ax.tick_params(axis="x", pad=1.5)
+    fig = ax.figure
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    y_disp = None
+    for tick in ax.get_xticklabels():
+        if not tick.get_visible() or not (tick.get_text() or "").strip():
+            continue
+        y0 = tick.get_window_extent(renderer).y0
+        if y_disp is None or y0 < y_disp:
+            y_disp = y0
+    if y_disp is None:
+        y_disp = ax.get_window_extent(renderer).y0
+    gap_px = gap_pt * fig.dpi / 72.0
+    x_disp = ax.transAxes.transform((0.0, 0.0))[0]
+    y_axes = ax.transAxes.inverted().transform((x_disp, y_disp - gap_px))[1]
+    return ax.legend(
+        handles=_row_major_ratio_handles(series, bands),
+        loc="upper left",
+        bbox_to_anchor=(0.0, y_axes),
+        bbox_transform=ax.transAxes,
+        ncol=max(len(series), 1),
+        **_ratio_legend_style(),
+    )
 
 
 def census_footnote(bands):
@@ -1308,11 +1357,15 @@ def census_footnote(bands):
     return f"{role} write/read bands · frozen census"
 
 
-def apply_census_footnote(fig, bands, y=0.012):
+def apply_census_footnote(fig, bands, y=0.012, under=None, offset_pt=5):
     text = census_footnote(bands)
     if not text:
-        return
-    fig.text(0.01, y, text, fontsize=7.5, color=GRAY, va="bottom")
+        return None
+    if under is not None:
+        return _text_just_under(
+            fig, under, text, fontsize=7.5, color=GRAY, offset_pt=offset_pt,
+        )
+    return fig.text(0.01, y, text, fontsize=7.5, color=GRAY, va="bottom")
 
 
 def band_legend_labels(bands, style=None):
@@ -1471,6 +1524,10 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     axr.set_ylabel("Write / read")
     axr.set_ylim(ylo, yhi)
     apply_ratio_yticks(axr, bands, ylo, yhi)
+    if period_key:
+        period_date_axis(axr, period_key)
+    else:
+        date_axis(axr)
     if show_legend:
         handles = ratio_legend_handles(overlays, bands, band_copy=band_copy)
         if legend_loc == "right":
@@ -1478,10 +1535,6 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
         else:
             place_ratio_legend_below(axr, handles)
     apply_ratio_title(axr, title, loc=title_loc, fontsize=title_fontsize)
-    if period_key:
-        period_date_axis(axr, period_key)
-    else:
-        date_axis(axr)
     return float(np.nanmean(ratio))
 
 
@@ -1587,7 +1640,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         2, 1, figsize=(10.8, 7.6 if page_ready else 8.8), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.22 if page_ready else 0.28)
+    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.10)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
@@ -1614,6 +1667,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         title=sibling_ratio_title(bw_title, bands),
         title_loc=throughput_title_loc(overload_status, overload_mode),
     )
+    ratio_legend = axr.get_legend()
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
         fam_n = (overlays or {}).get("family_n") or 0
@@ -1638,9 +1692,10 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                 f"{off_bit}"
             ),
             footnote=census_footnote(bands),
+            under=ratio_legend,
         )
     else:
-        apply_census_footnote(fig, bands, y=0.012)
+        apply_census_footnote(fig, bands, under=ratio_legend)
     save(fig, out_paths)
 
 
@@ -1650,7 +1705,7 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
         2, 1, figsize=(10.8, 8.4), sharex=True,
         gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.26},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.26)
+    fig.subplots_adjust(top=0.90, bottom=0.08)
     _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=True)
     b_bands = bands_for_flags(["Exit", "Guard"])
@@ -1681,6 +1736,7 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
         "bands (p10–p90 / beyond p98), and role / operator overlays as A. "
         "Area fill is the alternate encoding; A is the preferred default.",
         footnote=census_footnote(b_bands),
+        under=axr.get_legend(),
     )
     save(fig, out_paths)
 
@@ -1811,9 +1867,12 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
             f"{', '.join(available)}{omit}. A static site cannot fetch on "
             f"click — each pill is a pre-rendered SVG.",
             footnote=census_footnote((overlays or {}).get("bands")),
+            under=axr.get_legend(),
         )
     else:
-        apply_census_footnote(fig, (overlays or {}).get("bands"), y=0.012)
+        apply_census_footnote(
+            fig, (overlays or {}).get("bands"), under=axr.get_legend(),
+        )
     save(fig, out_paths)
 
 
