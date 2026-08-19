@@ -1024,19 +1024,33 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     ax.legend(handles=handles, loc="upper left", ncol=ncol, **style)
 
 
+THROUGHPUT_TITLE_PAD = 10
+# Same pad as throughput so the two stacked headers line up. The
+# write/read legend sits *below* the strip, not under the title.
+RATIO_TITLE_PAD = THROUGHPUT_TITLE_PAD
+
+
+def throughput_title_loc(overload_status, overload_mode):
+    """Same loc on both stacked titles so the headers line up."""
+    if overload_mode == "title" and overload_status:
+        return "left"
+    return "center"
+
+
 def apply_throughput_title(ax, title, overload_status, overload_mode):
     """overload_mode: title | legend | none."""
     if not title:
         return
-    if overload_mode == "title" and overload_status:
-        ax.set_title(title, loc="left", pad=10)
+    loc = throughput_title_loc(overload_status, overload_mode)
+    if loc == "left":
+        ax.set_title(title, loc="left", pad=THROUGHPUT_TITLE_PAD)
         ax.set_title(
             overload_quiet_text(overload_status),
-            loc="right", pad=10, color=OVERLOAD,
+            loc="right", pad=THROUGHPUT_TITLE_PAD, color=OVERLOAD,
             fontsize=9, fontweight="normal",
         )
         return
-    ax.set_title(title, pad=10)
+    ax.set_title(title, pad=THROUGHPUT_TITLE_PAD)
 
 
 def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1):
@@ -1199,6 +1213,93 @@ def with_role(title, bands):
     return f"{title}  ·  {role}"
 
 
+def sibling_ratio_title(throughput_title, bands=None):
+    """Keep the write/read title in lockstep with the throughput title.
+
+    `Throughput · last 30 days · jeangrae · Guard` becomes
+    `Write / read · last 30 days · jeangrae · Guard`. An empty
+    throughput title (rejected hero option) stays empty on the strip.
+    """
+    if throughput_title is None:
+        return with_role("Write / read", bands)
+    if not throughput_title:
+        return ""
+    if throughput_title.startswith("Throughput"):
+        return "Write / read" + throughput_title[len("Throughput"):]
+    return with_role("Write / read", bands)
+
+
+def apply_ratio_title(ax, title, loc="center", fontsize=None, pad=None):
+    if not title:
+        return
+    kwargs = {"pad": RATIO_TITLE_PAD if pad is None else pad, "loc": loc}
+    if fontsize is not None:
+        kwargs["fontsize"] = fontsize
+    ax.set_title(title, **kwargs)
+
+
+def _ratio_legend_style():
+    return dict(
+        fontsize=6.6,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#dddddd",
+        facecolor="white",
+        framealpha=0.96,
+        borderaxespad=0.0,
+        columnspacing=0.9,
+        handlelength=1.35,
+        handletextpad=0.32,
+        labelspacing=0.16,
+    )
+
+
+def _split_ratio_handles(handles):
+    series = [h for h in handles if not isinstance(h, Patch)]
+    bands = [h for h in handles if isinstance(h, Patch)]
+    return series, bands
+
+
+def place_ratio_legend_right(ax, handles):
+    """Legend to the right of the axes. Used when two strips are stacked
+    (band-copy): a below-legend on the top strip lands on the bottom one.
+    """
+    if not handles:
+        return
+    ax.legend(
+        handles=handles, loc="center left",
+        bbox_to_anchor=(1.02, 0.5), ncol=1, **_ratio_legend_style(),
+    )
+
+
+def place_ratio_legend_below(ax, handles):
+    """Legend under the date labels, never on the series or the bands.
+
+    loc=upper right inside the axes sat the box on the colored bands
+    and on off-scale markers (jeangrae 22–23 Jul triangles). Two
+    legends keep series on one row and band swatches on the next
+    (matplotlib fills a single ncol grid by column).
+    """
+    if not handles:
+        return
+    series, bands = _split_ratio_handles(handles)
+    style = _ratio_legend_style()
+    # Short strip: date labels eat a large axes-fraction. Sit under them.
+    if series:
+        first = ax.legend(
+            handles=series, loc="upper left",
+            bbox_to_anchor=(0.0, -0.32),
+            ncol=max(len(series), 1), **style,
+        )
+        ax.add_artist(first)
+    if bands:
+        ax.legend(
+            handles=bands, loc="upper left",
+            bbox_to_anchor=(0.0, -0.48),
+            ncol=max(len(bands), 1), **style,
+        )
+
+
 def census_footnote(bands):
     role = bands_role(bands) or "this role"
     n = (bands or {}).get("n") or 0
@@ -1321,8 +1422,10 @@ def ratio_legend_handles(overlays=None, bands=None, band_copy=None):
 
 
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
-                      legend_above=False, bands=None, show_legend=True,
-                      period_key=None, band_copy=None):
+                      legend_above=True, bands=None, show_legend=True,
+                      period_key=None, band_copy=None, title=None,
+                      title_loc="center", title_fontsize=None,
+                      legend_loc="below"):
     overlays = overlays or {}
     bands = bands or overlays.get("bands") or {
         "role": "all relays",
@@ -1370,11 +1473,11 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     apply_ratio_yticks(axr, bands, ylo, yhi)
     if show_legend:
         handles = ratio_legend_handles(overlays, bands, band_copy=band_copy)
-        axr.legend(
-            handles=handles, loc="upper right", fontsize=6.8,
-            frameon=True, fancybox=False, edgecolor="#dddddd",
-            borderaxespad=0.25, labelspacing=0.28,
-        )
+        if legend_loc == "right":
+            place_ratio_legend_right(axr, handles)
+        else:
+            place_ratio_legend_below(axr, handles)
+    apply_ratio_title(axr, title, loc=title_loc, fontsize=title_fontsize)
     if period_key:
         period_date_axis(axr, period_key)
     else:
@@ -1479,12 +1582,12 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           band_copy=None):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    hspace = 0.10 if page_ready else 0.16
+    hspace = 0.22 if page_ready else 0.26
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
+        2, 1, figsize=(10.8, 7.6 if page_ready else 8.8), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.16)
+    fig.subplots_adjust(top=0.90, bottom=0.22 if page_ready else 0.28)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
@@ -1492,8 +1595,9 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     if title is None:
         title = ("Throughput · last 30 days" if page_ready
                  else f"Throughput · last 30 days   ·   {nickname}")
+    bw_title = with_role(title, bands)
     apply_throughput_title(
-        ax, with_role(title, bands), overload_status, overload_mode,
+        ax, bw_title, overload_status, overload_mode,
     )
     place_legend_above_axes(
         ax,
@@ -1505,8 +1609,10 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     )
 
     mean_ratio = _plot_ratio_strip(
-        axr, ts, read_m, write_m, events, overlays, legend_above=page_ready,
-        bands=bands, period_key=period_key, band_copy=band_copy,
+        axr, ts, read_m, write_m, events, overlays, bands=bands,
+        period_key=period_key, band_copy=band_copy,
+        title=sibling_ratio_title(bw_title, bands),
+        title_loc=throughput_title_loc(overload_status, overload_mode),
     )
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -1541,15 +1647,15 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
 def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, published,
                            overlays, overload_status, out_paths):
     fig, (ax, axr) = plt.subplots(
-        2, 1, figsize=(10.8, 7.1), sharex=True,
-        gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.18},
+        2, 1, figsize=(10.8, 8.4), sharex=True,
+        gridspec_kw={"height_ratios": [3.1, 1.35], "hspace": 0.26},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.14)
+    fig.subplots_adjust(top=0.90, bottom=0.26)
     _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=True)
+    b_bands = bands_for_flags(["Exit", "Guard"])
     apply_throughput_title(
-        ax, with_role("Bandwidth B — overlapping area   ·   F3Netze",
-                      bands_for_flags(["Exit", "Guard"])),
+        ax, with_role("Bandwidth B — overlapping area   ·   F3Netze", b_bands),
         overload_status, "title",
     )
     handles = [
@@ -1561,9 +1667,14 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
                               label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     handles.extend(event_legend_handles(events))
     place_legend_above_axes(ax, handles)
-    b_bands = bands_for_flags(["Exit", "Guard"])
-    _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays,
-                      bands=b_bands)
+    strip_title = sibling_ratio_title(
+        with_role("Throughput · last 30 days   ·   F3Netze", b_bands), b_bands,
+    )
+    _plot_ratio_strip(
+        axr, ts, read_m, write_m, events, overlays, bands=b_bands,
+        title=strip_title,
+        title_loc=throughput_title_loc(overload_status, "title"),
+    )
     caption(
         fig, published,
         "Same restart marker, title-line overload cue, Exit+Guard frozen "
@@ -1657,23 +1768,21 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
     block = periods[selected_key]
     ts, write_m, read_m = block["ts"], block["write_m"], block["read_m"]
     wrap_last = bool(overload_status)
-    fig = plt.figure(figsize=(10.8, 7.0 if page_ready else 7.6))
+    fig = plt.figure(figsize=(10.8, 8.4 if page_ready else 9.0))
     available = [BW_PERIOD_META[k]["short"] for k in PERIOD_ORDER if k in periods]
     draw_period_pills(fig, available, meta["short"])
-    ax = fig.add_axes([0.08, 0.40, 0.90, 0.36])
-    axr = fig.add_axes([0.08, 0.10 if page_ready else 0.16, 0.90, 0.22], sharex=ax)
+    ax = fig.add_axes([0.08, 0.50, 0.90, 0.32])
+    axr = fig.add_axes([0.08, 0.22 if page_ready else 0.26, 0.90, 0.20], sharex=ax)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=selected_key, legend_rows=2 if wrap_last else 1,
     )
-    apply_throughput_title(
-        ax,
-        with_role(
-            f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
-            (overlays or {}).get("bands"),
-        ),
-        overload_status, "legend",
+    bands = (overlays or {}).get("bands")
+    bw_title = with_role(
+        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        bands,
     )
+    apply_throughput_title(ax, bw_title, overload_status, "legend")
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
@@ -1684,8 +1793,9 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
     )
     _plot_ratio_strip(
         axr, ts, read_m, write_m, events, _period_overlays(overlays, selected_key),
-        legend_above=page_ready, bands=(overlays or {}).get("bands"),
-        period_key=selected_key,
+        bands=bands, period_key=selected_key,
+        title=sibling_ratio_title(bw_title, bands),
+        title_loc=throughput_title_loc(overload_status, "legend"),
     )
     extra = _span_note(ts, selected_key)
     if extra:
@@ -1778,23 +1888,21 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
         hero_key = "1_month" if "1_month" in periods else next(iter(periods))
     others = [k for k in PERIOD_ORDER if k in periods and k != hero_key]
     wrap_last = bool(overload_status)
-    fig = plt.figure(figsize=(10.8, 8.4 if others else 6.6))
-    ax = fig.add_axes([0.08, 0.52 if others else 0.34, 0.90, 0.36 if others else 0.50])
-    axr = fig.add_axes([0.08, 0.34 if others else 0.10, 0.90, 0.14], sharex=ax)
+    fig = plt.figure(figsize=(10.8, 9.8 if others else 8.2))
+    ax = fig.add_axes([0.08, 0.58 if others else 0.42, 0.90, 0.28 if others else 0.42])
+    axr = fig.add_axes([0.08, 0.36 if others else 0.22, 0.90, 0.14], sharex=ax)
     block = periods[hero_key]
     meta = BW_PERIOD_META[hero_key]
     _draw_throughput_series(
         ax, block["ts"], block["read_m"], block["write_m"], advertised_mbit,
         events, period_key=hero_key, legend_rows=2 if wrap_last else 1,
     )
-    apply_throughput_title(
-        ax,
-        with_role(
-            f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
-            (overlays or {}).get("bands"),
-        ),
-        overload_status, "legend",
+    bands = (overlays or {}).get("bands")
+    bw_title = with_role(
+        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        bands,
     )
+    apply_throughput_title(ax, bw_title, overload_status, "legend")
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
@@ -1805,15 +1913,15 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
     )
     _plot_ratio_strip(
         axr, block["ts"], block["read_m"], block["write_m"], events,
-        _period_overlays(overlays, hero_key), legend_above=False,
-        bands=(overlays or {}).get("bands"), show_legend=True,
-        period_key=hero_key,
+        _period_overlays(overlays, hero_key), bands=bands, show_legend=True,
+        period_key=hero_key, title=sibling_ratio_title(bw_title, bands),
+        title_loc=throughput_title_loc(overload_status, "legend"),
     )
     if others:
         n = len(others)
         width = 0.90 / n
         for i, key in enumerate(others):
-            a = fig.add_axes([0.08 + i * width, 0.07, width - 0.03, 0.22])
+            a = fig.add_axes([0.08 + i * width, 0.06, width - 0.03, 0.16])
             b = periods[key]
             _draw_throughput_series(
                 a, b["ts"], b["read_m"], b["write_m"], advertised_mbit,
@@ -3118,10 +3226,10 @@ def plot_band_copy_pair(left, right, style, published, out_paths):
     """Stacked write/read strips: Exit+Guard on top, Guard below."""
     meta = BAND_COPY_META[style]
     fig, axes = plt.subplots(
-        2, 1, figsize=(11.2, 6.8),
+        2, 1, figsize=(11.2, 7.4),
         gridspec_kw={"hspace": 0.34},
     )
-    fig.subplots_adjust(top=0.88, bottom=0.10, left=0.09, right=0.98)
+    fig.subplots_adjust(top=0.88, bottom=0.12, left=0.09, right=0.70)
     fig.suptitle(meta["title"], fontsize=13, fontweight="bold")
     for ax, ctx in ((axes[0], left), (axes[1], right)):
         s = ctx["series"]
@@ -3129,10 +3237,10 @@ def plot_band_copy_pair(left, right, style, published, out_paths):
             ax, s["ts"], s["read_m"], s["write_m"], s["events"],
             ctx["overlays"], bands=ctx["overlays"]["bands"],
             band_copy=style,
-        )
-        ax.set_title(
-            f"{ctx['nickname']}  ·  {ctx['role']}",
-            loc="left", fontsize=10, fontweight="bold",
+            title=f"{ctx['nickname']}  ·  {ctx['role']}",
+            title_loc="left",
+            title_fontsize=10,
+            legend_loc="right",
         )
     caption(
         fig, published, meta["blurb"],
