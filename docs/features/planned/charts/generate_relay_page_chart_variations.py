@@ -183,11 +183,12 @@ def save(fig, paths):
     plt.close(fig)
 
 
-def caption(fig, published, story, y=0.012):
+def caption(fig, published, story, y=0.012, footnote=None):
     wrapped = textwrap.fill(story, width=108)
+    note = f"{footnote}\n" if footnote else ""
     fig.text(
         0.01, y,
-        f"{wrapped}\nSource: Onionoo  ·  relays_published {published} UTC  ·  Allium relay-page mockup",
+        f"{note}{wrapped}\nSource: Onionoo  ·  relays_published {published} UTC  ·  Allium relay-page mockup",
         fontsize=8, color=GRAY, va="bottom",
     )
 
@@ -1114,7 +1115,7 @@ def load_ratio_overlays():
 
     return {
         "role": as_series(raw.get("exitguard_daily") or []),
-        "role_label": "Peers Exit+Guard (network median)",
+        "role_label": "Peers (network median)",
         "operator": as_series(raw.get("family_daily") or []),
         "operator_label": "Operator Family (median, n=24)",
         "family_outliers": raw.get("family_outliers", 0),
@@ -1128,8 +1129,9 @@ def overlay_values(ts, series):
     return [series.get(t, np.nan) for t in ts]
 
 
-# How the three band swatches are worded. Default stays "current" until
-# a proposal is chosen. See band_legend_labels() and relay-page-charts.md.
+# Locked: judgment + numeric range + percentile. Role lives on the
+# chart title; census n is a footnote. See band_legend_labels().
+DEFAULT_BAND_COPY = "range_pct"
 BAND_COPY_STYLES = (
     "current",
     "full",
@@ -1160,9 +1162,9 @@ BAND_COPY_META = {
         "short": "2 · Range + percentile",
         "title": "Proposal 2 — range + percentile",
         "blurb": (
-            "Name, numeric range, percentile. Role is already on Peers. "
-            "n is dropped (same census, already in the frozen file). "
-            "Investigate uses <p2 or >p98 to match the two-sided tail."
+            "Chosen. Judgment + numeric range + percentile on every "
+            "swatch. Role is on the chart title. Census n is the "
+            "footnote. Investigate uses <p2 or >p98 for the two-sided tail."
         ),
     },
     "range_only": {
@@ -1185,14 +1187,43 @@ BAND_COPY_META = {
 }
 
 
-def band_legend_labels(bands, style="current"):
+def bands_role(bands):
+    return (bands or {}).get("role") or ""
+
+
+def with_role(title, bands):
+    """Put the flag-set role on the title so the legend does not repeat it."""
+    role = bands_role(bands)
+    if not title or not role or role in title:
+        return title
+    return f"{title}  ·  {role}"
+
+
+def census_footnote(bands):
+    role = bands_role(bands) or "this role"
+    n = (bands or {}).get("n") or 0
+    if n:
+        return f"{role} write/read bands · frozen census, n={n}"
+    return f"{role} write/read bands · frozen census"
+
+
+def apply_census_footnote(fig, bands, y=0.012):
+    text = census_footnote(bands)
+    if not text:
+        return
+    fig.text(0.01, y, text, fontsize=7.5, color=GRAY, va="bottom")
+
+
+def band_legend_labels(bands, style=None):
     """Typical / Uncommon / Investigate copy. Same fields per style.
 
     Frozen numbers come from data/role_ratio_bands.json:
       typical = this role's p10–p90
       uncommon = the shoulders (p2–p10 and p90–p98)
       investigate = outside p2–p98
+    Default style is judgment + range + percentile (range_pct).
     """
+    style = style or DEFAULT_BAND_COPY
     bands = bands or {
         "role": "all relays",
         "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
@@ -1249,17 +1280,16 @@ def band_legend_labels(bands, style="current"):
     }
 
 
-def ratio_legend_handles(overlays=None, bands=None, band_copy="current"):
+def ratio_legend_handles(overlays=None, bands=None, band_copy=None):
     bands = bands or {
         "role": "all relays",
         "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
         "invest_lo": RATIO_INVESTIGATE_LO, "invest_hi": RATIO_INVESTIGATE_HI,
         "n": 0,
     }
-    role = bands.get("role") or "this role"
     overlays = overlays or {}
     op_n = overlays.get("family_n") or 0
-    copy = band_legend_labels(bands, band_copy)
+    copy = band_legend_labels(bands, band_copy or DEFAULT_BAND_COPY)
     handles = [
         Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay"),
     ]
@@ -1272,8 +1302,7 @@ def ratio_legend_handles(overlays=None, bands=None, band_copy="current"):
     if overlays.get("role"):
         handles.append(Line2D(
             [0], [0], color=SKY, linestyle="--", linewidth=1.4,
-            label=overlays.get("role_label")
-            or f"Peers {role} (network median)",
+            label=overlays.get("role_label") or "Peers (network median)",
         ))
     if copy.get("header"):
         handles.append(Line2D(
@@ -1293,7 +1322,7 @@ def ratio_legend_handles(overlays=None, bands=None, band_copy="current"):
 
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
                       legend_above=False, bands=None, show_legend=True,
-                      period_key=None, band_copy="current"):
+                      period_key=None, band_copy=None):
     overlays = overlays or {}
     bands = bands or overlays.get("bands") or {
         "role": "all relays",
@@ -1447,7 +1476,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           story=None,
                           bands=None,
                           period_key="1_month",
-                          band_copy="current"):
+                          band_copy=None):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
     hspace = 0.10 if page_ready else 0.16
@@ -1455,7 +1484,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         2, 1, figsize=(10.8, 6.5 if page_ready else 7.2), sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.35], "hspace": hspace},
     )
-    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.14)
+    fig.subplots_adjust(top=0.90, bottom=0.08 if page_ready else 0.16)
     _draw_throughput_series(
         ax, ts, read_m, write_m, advertised_mbit, events,
         period_key=period_key, legend_rows=2 if wrap_last else 1,
@@ -1463,7 +1492,9 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     if title is None:
         title = ("Throughput · last 30 days" if page_ready
                  else f"Throughput · last 30 days   ·   {nickname}")
-    apply_throughput_title(ax, title, overload_status, overload_mode)
+    apply_throughput_title(
+        ax, with_role(title, bands), overload_status, overload_mode,
+    )
     place_legend_above_axes(
         ax,
         throughput_legend_handles(
@@ -1500,7 +1531,10 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                 f"~{np.mean(write_m):.0f} Mbit/s ({used:.0f}% of advertised)."
                 f"{off_bit}"
             ),
+            footnote=census_footnote(bands),
         )
+    else:
+        apply_census_footnote(fig, bands, y=0.012)
     save(fig, out_paths)
 
 
@@ -1514,7 +1548,8 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
     _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
                             fill=True)
     apply_throughput_title(
-        ax, "Bandwidth B — overlapping area   ·   F3Netze",
+        ax, with_role("Bandwidth B — overlapping area   ·   F3Netze",
+                      bands_for_flags(["Exit", "Guard"])),
         overload_status, "title",
     )
     handles = [
@@ -1526,13 +1561,15 @@ def bandwidth_b_area_ratio(ts, read_m, write_m, advertised_mbit, events, publish
                               label=f"Advertised  {advertised_mbit:.0f} Mbit/s"))
     handles.extend(event_legend_handles(events))
     place_legend_above_axes(ax, handles)
+    b_bands = bands_for_flags(["Exit", "Guard"])
     _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays,
-                      bands=bands_for_flags(["Exit", "Guard"]))
+                      bands=b_bands)
     caption(
         fig, published,
         "Same restart marker, title-line overload cue, Exit+Guard frozen "
         "bands (p10–p90 / beyond p98), and role / operator overlays as A. "
         "Area fill is the alternate encoding; A is the preferred default.",
+        footnote=census_footnote(b_bands),
     )
     save(fig, out_paths)
 
@@ -1631,7 +1668,10 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
     )
     apply_throughput_title(
         ax,
-        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        with_role(
+            f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+            (overlays or {}).get("bands"),
+        ),
         overload_status, "legend",
     )
     place_legend_above_axes(
@@ -1660,7 +1700,10 @@ def bandwidth_periods_pills(periods, selected_key, advertised_mbit, events,
             f"Period pills on {nickname}. Onionoo published "
             f"{', '.join(available)}{omit}. A static site cannot fetch on "
             f"click — each pill is a pre-rendered SVG.",
+            footnote=census_footnote((overlays or {}).get("bands")),
         )
+    else:
+        apply_census_footnote(fig, (overlays or {}).get("bands"), y=0.012)
     save(fig, out_paths)
 
 
@@ -1746,7 +1789,10 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
     )
     apply_throughput_title(
         ax,
-        f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+        with_role(
+            f"Throughput · {meta['title']}  ·  {meta['bucket']} buckets",
+            (overlays or {}).get("bands"),
+        ),
         overload_status, "legend",
     )
     place_legend_above_axes(
@@ -1783,7 +1829,10 @@ def bandwidth_periods_hero_sparks(periods, advertised_mbit, events, overlays,
             f"Hero is {BW_PERIOD_META[hero_key]['short']} on {nickname}. "
             "Click a spark to move it to the hero slot; the previous hero "
             "drops into the spark row. Omit a spark if Onionoo omitted the graph.",
+            footnote=census_footnote((overlays or {}).get("bands")),
         )
+    else:
+        apply_census_footnote(fig, (overlays or {}).get("bands"), y=0.012)
     save(fig, out_paths)
 
 
@@ -2320,7 +2369,7 @@ def build_ratio_overlays(details_relays, bw_by_fp, role, contact_substr=None,
     outliers = sum(1 for m in op_means if m > RATIO_HI)
     return {
         "role": role_daily,
-        "role_label": f"Peers {role} (network median)",
+        "role_label": "Peers (network median)",
         "operator": op_daily if op_n > 1 else {},
         "operator_label": operator_label or f"Operator Family (median, n={op_n})",
         "family_outliers": outliers,
@@ -3085,7 +3134,13 @@ def plot_band_copy_pair(left, right, style, published, out_paths):
             f"{ctx['nickname']}  ·  {ctx['role']}",
             loc="left", fontsize=10, fontweight="bold",
         )
-    caption(fig, published, meta["blurb"])
+    caption(
+        fig, published, meta["blurb"],
+        footnote=(
+            f"{census_footnote(left['overlays'].get('bands'))}  ·  "
+            f"{census_footnote(right['overlays'].get('bands'))}"
+        ),
+    )
     save(fig, out_paths)
 
 
@@ -3178,10 +3233,11 @@ def write_band_copy_html(path, published, files):
 </div></nav>
 <div class="container">
   <div class="option-banner">
-    <strong>Align Typical / Uncommon / Investigate</strong>
-    Same frozen Exit+Guard (F3Netze) and Guard (jeangrae) 1-month
-    Onionoo series on every panel. Default ship copy is unchanged
-    until one proposal is chosen.
+    <strong>Typical / Uncommon / Investigate — chosen copy</strong>
+    Judgment + numeric range + percentile on every swatch. Role sits
+    on the chart title. Census n is a footnote. Same frozen
+    Exit+Guard (F3Netze) and Guard (jeangrae) 1-month series on every
+    panel. Other wordings below are rejected alts.
   </div>
   <section class="section-box">
     <h4>Current field inventory</h4>
