@@ -320,8 +320,10 @@ advertised line. Chart title on the page is `Throughput · last 30 days`
 (the `#bandwidth` heading already says Bandwidth Metrics). The write/read
 strip uses the same title pattern (`Write / read · last 30 days · Guard`)
 and the same title `pad` / `loc` so the two stacked headers line up. Its
-legend sits **below the strip**, not inside the plot — the bands go to
-ylim and an in-axes box covers the series (and off-scale markers).
+legend sits **just under the date labels**, not inside the plot and not
+a figure-bottom slab — the bands go to ylim and an in-axes box covers
+the series (and off-scale markers). The census footnote is pinned to
+that legend.
 
 #### Overload is a now-indicator, not a time series
 
@@ -366,9 +368,11 @@ navy dash-dot at `last_restarted` (a point). Overload is a title-line
 cue, not a band on the time axis and not a floating red badge. The
 legend is above the plot so it cannot cover write, read, or advertised.
 The write/read strip gets a matching title (`Write / read · last 30
-days · Guard`) with the same `pad` and `loc`. Its legend sits below
-the date labels so it cannot cover the series or the off-scale
-markers.
+days · Guard`) with the same `pad` and `loc`. Its legend sits just
+under the date labels so it cannot cover the series or the off-scale
+markers. The census footnote sits immediately under that legend — do
+not pin it to the figure bottom (that opens a white slab and makes
+the legend look detached).
 
 The bottom strip is write/read. The bands are **this relay’s flag set**,
 frozen from a quiet census — Exit, Guard, Exit+Guard, or Middle. Typical
@@ -479,14 +483,14 @@ history.
 The write/read strip title is the throughput title with `Throughput`
 replaced by `Write / read` (`Write / read · last 30 days · Exit+Guard`).
 Same `pad` and `loc` as the throughput title (centered, or left when
-overload sits on the title-right). The strip legend sits **below the
-date labels**, in this order: **This relay**, **Operator Family
-(median, n=x)** (family size, not the census), **Peers (network
-median)**, then Typical / Uncommon / Investigate. Each band swatch is
-**judgment + numeric range + percentile**. The flag-set role sits on
-the chart title. Census n is a small footnote (`Exit+Guard write/read
-bands · frozen census, n=1625`). `p10–p90` and `>p98` sit on the left
-y-axis with 0.5 / 1.0 / 1.5.
+overload sits on the title-right). The strip legend sits **just under the date labels**, in this order:
+**This relay**, **Operator Family (median, n=x)** (family size, not
+the census), **Peers (network median)**, then Typical / Uncommon /
+Investigate. Each band swatch is **judgment + numeric range +
+percentile**. The flag-set role sits on the chart title. Census n is
+a small footnote immediately under the legend (`Exit+Guard write/read
+bands · frozen census, n=1625`) — not a figure-bottom slab. `p10–p90`
+and `>p98` sit on the left y-axis with 0.5 / 1.0 / 1.5.
 
 #### Typical / Uncommon / Investigate copy (locked)
 
