@@ -473,6 +473,54 @@ median)**, then Typical / Uncommon / Investigate. `p10–p90` and `>p98`
 sit on the left y-axis with 0.5 / 1.0 / 1.5, not as floating labels on
 the right.
 
+#### Typical / Uncommon / Investigate copy (open)
+
+The three band swatches do not currently share the same fields.
+Built in `band_legend_labels()` from frozen
+[`data/role_ratio_bands.json`](data/role_ratio_bands.json):
+
+| Swatch | Range | Role | Percentile | n |
+|--------|-------|------|------------|---|
+| Typical | `a–b` (p10–p90) | yes | `p10–p90` | yes |
+| Uncommon | `a–b / c–d` (the two shoulders) | no | no | no |
+| Investigate | `<a or >b` (outside p2–p98) | yes | `beyond p98` | no |
+
+Exit+Guard (F3Netze) today:
+
+- Typical  0.97–1.15  ·  Exit+Guard p10–p90, n=1625
+- Uncommon  0.93–0.97 / 1.15–1.71
+- Investigate  <0.93 or >1.71  ·  Exit+Guard beyond p98
+
+Guard (jeangrae) today:
+
+- Typical  1.01–1.17  ·  Guard p10–p90, n=4444
+- Uncommon  0.99–1.01 / 1.17–1.58
+- Investigate  <0.99 or >1.58  ·  Guard beyond p98
+
+Four alignment proposals, each mocked on both relays. Default ship
+copy stays **Current** until one is chosen.
+
+| # | Idea | What every row has |
+|---|------|--------------------|
+| 1 | Fill every slot | range · role · percentile · n |
+| 2 | Range + percentile | range · percentile (role lives on Peers) |
+| 3 | Name + range | judgment word + numbers (percentiles stay on the y-axis) |
+| 4 | Shared role header | one `{role} · n=` line, then range · percentile |
+
+[Gallery — current vs proposals](mockups/relay_page_bw_band_copy.html)
+
+![All wordings at a glance](mockups/relay_bandwidth_band_copy_cards.png)
+
+![Current — F3Netze and jeangrae](mockups/relay_bandwidth_band_copy_current.png)
+
+![Proposal 1 — fill every slot](mockups/relay_bandwidth_band_copy_full.png)
+
+![Proposal 2 — range + percentile](mockups/relay_bandwidth_band_copy_range_pct.png)
+
+![Proposal 3 — name + range](mockups/relay_bandwidth_band_copy_range_only.png)
+
+![Proposal 4 — shared role header](mockups/relay_bandwidth_band_copy_header.png)
+
 Multiple restarts share one legend entry (`Last restarted  31 Jul, 20
 Jul, 5 Jul`) and get one vertical line each. Onionoo only publishes
 `last_restarted`; extra marks on the 6M/1Y/5Y mocks are a stand-in

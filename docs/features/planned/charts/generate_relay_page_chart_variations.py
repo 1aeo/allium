@@ -1137,7 +1137,71 @@ def overlay_values(ts, series):
     return [series.get(t, np.nan) for t in ts]
 
 
-def ratio_legend_handles(overlays=None, bands=None):
+# How the three band swatches are worded. Default stays "current" until
+# a proposal is chosen. See band_legend_labels() and relay-page-charts.md.
+BAND_COPY_STYLES = (
+    "current",
+    "full",
+    "range_pct",
+    "range_only",
+    "header",
+)
+BAND_COPY_META = {
+    "current": {
+        "short": "Current",
+        "title": "Current — uneven slots",
+        "blurb": (
+            "Typical carries range + role + percentile + n. Uncommon is "
+            "two ranges only. Investigate has range + role + a different "
+            "percentile phrase, and no n."
+        ),
+    },
+    "full": {
+        "short": "1 · Fill every slot",
+        "title": "Proposal 1 — fill every slot",
+        "blurb": (
+            "Same four fields on every row: range, role, percentile, n. "
+            "Uncommon gets p2–p10 / p90–p98. n is the same census on all "
+            "three (redundant, but parallel)."
+        ),
+    },
+    "range_pct": {
+        "short": "2 · Range + percentile",
+        "title": "Proposal 2 — range + percentile",
+        "blurb": (
+            "Name, numeric range, percentile. Role is already on Peers. "
+            "n is dropped (same census, already in the frozen file). "
+            "Investigate uses <p2 or >p98 to match the two-sided tail."
+        ),
+    },
+    "range_only": {
+        "short": "3 · Name + range",
+        "title": "Proposal 3 — name + range",
+        "blurb": (
+            "Only the judgment word and the numbers. Percentiles stay on "
+            "the y-axis (p10–p90, >p98). Uncommon uses “or” like "
+            "Investigate, not a slash."
+        ),
+    },
+    "header": {
+        "short": "4 · Shared role header",
+        "title": "Proposal 4 — shared role header",
+        "blurb": (
+            "Role and n sit on one header line. The three bands then "
+            "share the same two fields: range + percentile."
+        ),
+    },
+}
+
+
+def band_legend_labels(bands, style="current"):
+    """Typical / Uncommon / Investigate copy. Same fields per style.
+
+    Frozen numbers come from data/role_ratio_bands.json:
+      typical = this role's p10–p90
+      uncommon = the shoulders (p2–p10 and p90–p98)
+      investigate = outside p2–p98
+    """
     bands = bands or {
         "role": "all relays",
         "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
@@ -1149,8 +1213,62 @@ def ratio_legend_handles(overlays=None, bands=None):
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     n_bit = f", n={n}" if n else ""
+    rng_t = f"{tlo:.2f}–{thi:.2f}"
+    rng_u_slash = f"{ilo:.2f}–{tlo:.2f} / {thi:.2f}–{ihi:.2f}"
+    rng_u_or = f"{ilo:.2f}–{tlo:.2f} or {thi:.2f}–{ihi:.2f}"
+    rng_i = f"<{ilo:.2f} or >{ihi:.2f}"
+    if style == "full":
+        return {
+            "header": None,
+            "typical": f"Typical  {rng_t}  ·  {role} p10–p90{n_bit}",
+            "uncommon": (
+                f"Uncommon  {rng_u_slash}  ·  {role} p2–p10 / p90–p98{n_bit}"
+            ),
+            "investigate": (
+                f"Investigate  {rng_i}  ·  {role} beyond p98{n_bit}"
+            ),
+        }
+    if style == "range_pct":
+        return {
+            "header": None,
+            "typical": f"Typical  {rng_t}  ·  p10–p90",
+            "uncommon": f"Uncommon  {rng_u_or}  ·  p2–p10 / p90–p98",
+            "investigate": f"Investigate  {rng_i}  ·  <p2 or >p98",
+        }
+    if style == "range_only":
+        return {
+            "header": None,
+            "typical": f"Typical  {rng_t}",
+            "uncommon": f"Uncommon  {rng_u_or}",
+            "investigate": f"Investigate  {rng_i}",
+        }
+    if style == "header":
+        header = f"{role}  ·  n={n}" if n else role
+        return {
+            "header": header,
+            "typical": f"Typical  {rng_t}  ·  p10–p90",
+            "uncommon": f"Uncommon  {rng_u_or}  ·  p2–p10 / p90–p98",
+            "investigate": f"Investigate  {rng_i}  ·  <p2 or >p98",
+        }
+    return {
+        "header": None,
+        "typical": f"Typical  {rng_t}  ·  {role} p10–p90{n_bit}",
+        "uncommon": f"Uncommon  {rng_u_slash}",
+        "investigate": f"Investigate  {rng_i}  ·  {role} beyond p98",
+    }
+
+
+def ratio_legend_handles(overlays=None, bands=None, band_copy="current"):
+    bands = bands or {
+        "role": "all relays",
+        "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
+        "invest_lo": RATIO_INVESTIGATE_LO, "invest_hi": RATIO_INVESTIGATE_HI,
+        "n": 0,
+    }
+    role = bands.get("role") or "this role"
     overlays = overlays or {}
     op_n = overlays.get("family_n") or 0
+    copy = band_legend_labels(bands, band_copy)
     handles = [
         Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay"),
     ]
@@ -1166,20 +1284,25 @@ def ratio_legend_handles(overlays=None, bands=None):
             label=overlays.get("role_label")
             or f"Peers {role} (network median)",
         ))
+    if copy.get("header"):
+        handles.append(Line2D(
+            [], [], linestyle="None", marker="None", color="none",
+            label=copy["header"],
+        ))
     handles.extend([
         Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN,
-              label=f"Typical  {tlo:.2f}–{thi:.2f}  ·  {role} p10–p90{n_bit}"),
+              label=copy["typical"]),
         Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER,
-              label=f"Uncommon  {ilo:.2f}–{tlo:.2f} / {thi:.2f}–{ihi:.2f}"),
+              label=copy["uncommon"]),
         Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD,
-              label=f"Investigate  <{ilo:.2f} or >{ihi:.2f}  ·  {role} beyond p98"),
+              label=copy["investigate"]),
     ])
     return handles
 
 
 def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
                       legend_above=False, bands=None, show_legend=True,
-                      period_key=None):
+                      period_key=None, band_copy="current"):
     overlays = overlays or {}
     bands = bands or overlays.get("bands") or {
         "role": "all relays",
@@ -1226,7 +1349,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     axr.set_ylim(ylo, yhi)
     apply_ratio_yticks(axr, bands, ylo, yhi)
     if show_legend:
-        handles = ratio_legend_handles(overlays, bands)
+        handles = ratio_legend_handles(overlays, bands, band_copy=band_copy)
         axr.legend(
             handles=handles, loc="upper right", fontsize=6.8,
             frameon=True, fancybox=False, edgecolor="#dddddd",
@@ -1332,7 +1455,8 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           page_ready=False,
                           story=None,
                           bands=None,
-                          period_key="1_month"):
+                          period_key="1_month",
+                          band_copy="current"):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
     hspace = 0.10 if page_ready else 0.16
@@ -1360,7 +1484,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
 
     mean_ratio = _plot_ratio_strip(
         axr, ts, read_m, write_m, events, overlays, legend_above=page_ready,
-        bands=bands, period_key=period_key,
+        bands=bands, period_key=period_key, band_copy=band_copy,
     )
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -2386,6 +2510,11 @@ dd { margin:2px 0 0; }
 .heading-row { display:flex; align-items:baseline; justify-content:space-between;
   gap:12px; flex-wrap:wrap; }
 .overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
+.copy-table { border-collapse:collapse; width:100%; font-size:13px; }
+.copy-table th, .copy-table td {
+  border:1px solid var(--color-border-light); padding:6px 8px; text-align:left;
+}
+.copy-table th { background:#fff; color:#555; }
 .ghost { opacity:0.45; }
 .explain { font-size:12px; color:#555; margin-top:12px; padding:8px;
   background:#fff; border-radius:4px; border-left:3px solid #17a2b8; }
@@ -2608,7 +2737,7 @@ def main():
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "mockups"))
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
     parser.add_argument(
-        "--only", choices=("all", "bandwidth", "uptime", "flags"),
+        "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy"),
         default="all",
         help="Skip unrelated mockup families when iterating on one chart.",
     )
@@ -2677,6 +2806,25 @@ def main():
     overlays["bands"] = bands_for_flags(f3.get("flags"))
     out = Path(args.out)
     art = Path(args.artifacts)
+    if args.only == "bandcopy":
+        bw_all = dict(bw_doc)
+        bw_all_path = Path(args.bandwidth_all)
+        if bw_all_path.exists():
+            bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
+        left = collect_band_copy_relay(
+            f3, bw_all.get(F3NETZE) or f3_bw, list(det.values()),
+            bw_all, published, "Exit+Guard",
+        )
+        jg = det.get(JEANGRAE)
+        right = collect_band_copy_relay(
+            jg, bw_all.get(JEANGRAE), list(det.values()),
+            bw_all, published, "Guard",
+        ) if jg else None
+        if left and right:
+            write_band_copy_proposals(left, right, published, out, art)
+        else:
+            print("skip bandcopy: missing F3Netze or jeangrae series")
+        return
     jobs = []
     if args.only in ("all", "uptime"):
         jobs.extend([
@@ -2900,6 +3048,210 @@ def _one_month_series(relay, bw_relay):
     }
 
 
+def collect_band_copy_relay(relay, doc, details_relays, bw_all, published, role):
+    series = _one_month_series(relay, doc)
+    if not series:
+        return None
+    family = set(relay.get("effective_family") or [])
+    overlays = build_ratio_overlays(
+        details_relays, bw_all, role, family_fps=family or None,
+    )
+    overlays["bands"] = bands_for_flags(relay.get("flags"))
+    if family:
+        overlays["operator_label"] = (
+            f"Operator Family (median, n={overlays['family_n']})"
+        )
+    return {
+        "nickname": relay.get("nickname") or role,
+        "role": role,
+        "series": series,
+        "overlays": overlays,
+        "ov": overload_now_status(relay, published),
+    }
+
+
+def plot_band_copy_pair(left, right, style, published, out_paths):
+    """Stacked write/read strips: Exit+Guard on top, Guard below."""
+    meta = BAND_COPY_META[style]
+    fig, axes = plt.subplots(
+        2, 1, figsize=(11.2, 6.8),
+        gridspec_kw={"hspace": 0.34},
+    )
+    fig.subplots_adjust(top=0.88, bottom=0.10, left=0.09, right=0.98)
+    fig.suptitle(meta["title"], fontsize=13, fontweight="bold")
+    for ax, ctx in ((axes[0], left), (axes[1], right)):
+        s = ctx["series"]
+        _plot_ratio_strip(
+            ax, s["ts"], s["read_m"], s["write_m"], s["events"],
+            ctx["overlays"], bands=ctx["overlays"]["bands"],
+            band_copy=style,
+        )
+        ax.set_title(
+            f"{ctx['nickname']}  ·  {ctx['role']}",
+            loc="left", fontsize=10, fontweight="bold",
+        )
+    caption(fig, published, meta["blurb"])
+    save(fig, out_paths)
+
+
+def plot_band_copy_cards(out_paths):
+    """All five wordings as swatches — easier to compare than full strips."""
+    eg = bands_for_flags(["Exit", "Guard"])
+    guard = bands_for_flags(["Guard"])
+    roles = [("Exit+Guard  ·  F3Netze", eg), ("Guard  ·  jeangrae", guard)]
+    styles = list(BAND_COPY_STYLES)
+    fig, axes = plt.subplots(
+        len(styles), 2, figsize=(12.4, 11.2),
+        gridspec_kw={"hspace": 0.08, "wspace": 0.08},
+    )
+    fig.subplots_adjust(top=0.93, bottom=0.04, left=0.04, right=0.98)
+    fig.suptitle(
+        "Typical / Uncommon / Investigate  ·  current vs aligned proposals",
+        fontsize=13, fontweight="bold",
+    )
+    colors = (GREEN, AMBER, BAD)
+    keys = ("typical", "uncommon", "investigate")
+    for r, style in enumerate(styles):
+        for c, (role_title, bands) in enumerate(roles):
+            ax = axes[r][c]
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis("off")
+            copy = band_legend_labels(bands, style)
+            meta = BAND_COPY_META[style]
+            if c == 0:
+                ax.text(
+                    0.0, 0.96, meta["short"], fontsize=9, fontweight="bold",
+                    color=NAVY, va="top",
+                )
+            if r == 0:
+                ax.text(
+                    1.0, 0.96, role_title, fontsize=8.5, color=GRAY,
+                    va="top", ha="right",
+                )
+            lines = []
+            if copy.get("header"):
+                lines.append((None, copy["header"]))
+            for color, key in zip(colors, keys):
+                lines.append((color, copy[key]))
+            y = 0.72
+            for color, text in lines:
+                if color is None:
+                    ax.text(0.02, y, text, fontsize=8, color=NAVY, va="center",
+                            fontweight="bold")
+                else:
+                    ax.add_patch(plt.Rectangle(
+                        (0.02, y - 0.07), 0.045, 0.12, facecolor=color,
+                        edgecolor=color, alpha=0.45, transform=ax.transAxes,
+                        clip_on=False,
+                    ))
+                    ax.text(0.09, y, text, fontsize=8, color="#222", va="center")
+                y -= 0.22
+            ax.add_patch(plt.Rectangle(
+                (0.0, 0.02), 1.0, 0.86, fill=False, edgecolor="#dddddd",
+                linewidth=0.8, transform=ax.transAxes, clip_on=False,
+            ))
+    save(fig, out_paths)
+
+
+def write_band_copy_html(path, published, files):
+    cards = []
+    for style, fname in files:
+        meta = BAND_COPY_META[style]
+        cards.append(f"""
+  <section class="section-box">
+    <h4>{meta["title"]}</h4>
+    <p class="relay-meta">{meta["blurb"]}</p>
+    <div class="chart-wrap">
+      <img src="{fname}" alt="{meta["title"]}">
+    </div>
+  </section>""")
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Band-copy proposals · Typical / Uncommon / Investigate</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner">
+    <strong>Align Typical / Uncommon / Investigate</strong>
+    Same frozen Exit+Guard (F3Netze) and Guard (jeangrae) 1-month
+    Onionoo series on every panel. Default ship copy is unchanged
+    until one proposal is chosen.
+  </div>
+  <section class="section-box">
+    <h4>Current field inventory</h4>
+    <p class="relay-meta">
+      Each swatch is built in <code>band_legend_labels()</code> from
+      <code>data/role_ratio_bands.json</code>. Typical = p10–p90.
+      Uncommon = p2–p10 and p90–p98. Investigate = outside p2–p98.
+    </p>
+    <table class="copy-table">
+      <thead><tr>
+        <th></th><th>Range</th><th>Role</th><th>Percentile</th><th>n</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Typical</td><td>yes, a–b</td><td>yes</td>
+          <td>p10–p90</td><td>yes</td></tr>
+        <tr><td>Uncommon</td><td>yes, a–b / c–d</td><td>no</td>
+          <td>no</td><td>no</td></tr>
+        <tr><td>Investigate</td><td>yes, &lt;a or &gt;b</td><td>yes</td>
+          <td>beyond p98</td><td>no</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="section-box">
+    <h4>All wordings at a glance</h4>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_band_copy_cards.png"
+           alt="Current and proposed band labels">
+    </div>
+  </section>
+  {''.join(cards)}
+  <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
+  Bands frozen from the 2026-08-15 19:00 census.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of write/read band copy · Allium
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
+def write_band_copy_proposals(left, right, published, out, art):
+    files = []
+    plot_band_copy_cards(
+        [out / "relay_bandwidth_band_copy_cards.png",
+         art / "relay_bandwidth_band_copy_cards.png"],
+    )
+    print("wrote relay_bandwidth_band_copy_cards.png")
+    for style in BAND_COPY_STYLES:
+        name = f"relay_bandwidth_band_copy_{style}.png"
+        plot_band_copy_pair(
+            left, right, style, published, [out / name, art / name],
+        )
+        files.append((style, name))
+        print("wrote", name)
+    for dest in (out, art):
+        write_band_copy_html(
+            dest / "relay_page_bw_band_copy.html", published, files,
+        )
+    print("wrote relay_page_bw_band_copy.html")
+
+
 def write_role_band_gallery_html(path, rows, published):
     """Option-C chrome with one History chart per frozen flag-set band."""
     cards = []
@@ -3058,6 +3410,7 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
     ]
     gallery_rows = []
     jg_ctx = None
+    band_copy_relays = {}
     for fp, role, name in role_specs:
         relay = det.get(fp)
         doc = bw_all.get(fp)
@@ -3122,6 +3475,14 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
                 f"{ratio_zone_phrase(mean_ratio, overlays['bands'])}."
             ),
         })
+        if fp in (F3NETZE, JEANGRAE):
+            band_copy_relays[fp] = {
+                "nickname": relay.get("nickname") or role,
+                "role": role,
+                "series": series,
+                "overlays": overlays,
+                "ov": ov,
+            }
 
     options = [
         {
@@ -3201,6 +3562,12 @@ def write_page_layout_mockups(det, bw_doc, bandwidth_all_path, published,
                 gallery_rows, published,
             )
         print("wrote relay_page_bw_opt3_role_bands.html")
+
+    if F3NETZE in band_copy_relays and JEANGRAE in band_copy_relays:
+        write_band_copy_proposals(
+            band_copy_relays[F3NETZE], band_copy_relays[JEANGRAE],
+            published, out, art,
+        )
 
     plot_role_band_geometry(
         [out / "ratio_bands_by_role.png", art / "ratio_bands_by_role.png"],
