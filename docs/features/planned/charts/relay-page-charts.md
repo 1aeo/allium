@@ -454,6 +454,7 @@ Page mockups (open the HTML):
 
 - [Option C — History, F3Netze, three period layouts](mockups/relay_page_bw_opt3_history_f3.html)
 - [Option C — one chart per flag-set band](mockups/relay_page_bw_opt3_role_bands.html)
+- [Chart chrome — five light-theme styles](mockups/relay_page_bw_chrome.html)
 - [Option 1 — rejected hero](mockups/relay_page_bw_opt1_hero_f3.html)
 - [Option 2 — rejected after scalars](mockups/relay_page_bw_opt2_after_metrics_jeangrae.html)
 
