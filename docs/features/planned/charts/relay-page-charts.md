@@ -618,9 +618,9 @@ Subtitle options (all on the recommended legend layout):
 | D | `Vs other Guards · fixed baseline, not this week’s ranking` | Alt — hints at frozen |
 | E | (no subtitle) | Alt — cleanest chrome |
 
-Census n stays the footnote (`Guard write/read bands · frozen census,
-n=4444`). A later pass can turn that into `Compared with 4,444 Guards ·
-baseline 15 Aug 2026` if the leftover “frozen census” still itches.
+On the recommended mocks the footnote is `4,444 Guards · baseline 15
+Aug 2026` (or `1,625 Exit+Guards · …`). The old `frozen census, n=…`
+line is gone there.
 
 ---
 

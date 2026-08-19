@@ -1701,16 +1701,22 @@ def place_ratio_legend_shelf(ax, handles):
     )
 
 
-def census_footnote(bands):
+def census_footnote(bands, style=None):
     role = bands_role(bands) or "this role"
     n = (bands or {}).get("n") or 0
+    if style == "peers":
+        peers = peers_word(bands)
+        if n:
+            return f"{n:,} {peers} · baseline 15 Aug 2026"
+        return f"{peers} · baseline 15 Aug 2026"
     if n:
         return f"{role} write/read bands · frozen census, n={n}"
     return f"{role} write/read bands · frozen census"
 
 
-def apply_census_footnote(fig, bands, y=0.012, under=None, offset_pt=5):
-    text = census_footnote(bands)
+def apply_census_footnote(fig, bands, y=0.012, under=None, offset_pt=5,
+                         style=None):
+    text = census_footnote(bands, style=style)
     if not text:
         return None
     if under is not None:
@@ -2105,7 +2111,12 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
             under=ratio_legend,
         )
     else:
-        apply_census_footnote(fig, bands, under=ratio_legend)
+        if legend_attach == "above":
+            apply_census_footnote(fig, bands, style=subtitle_style)
+        else:
+            apply_census_footnote(
+                fig, bands, under=ratio_legend, style=subtitle_style,
+            )
     save(fig, out_paths, trim=True)
 
 
