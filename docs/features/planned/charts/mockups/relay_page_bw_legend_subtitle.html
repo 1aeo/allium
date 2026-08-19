@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legend attachment · subtitle copy</title>
+  <style>
+:root { --aeo-green:#00ff7f; --aeo-dark-surface:#1e1e1e; --aeo-text-muted:#ccc;
+  --color-success:#28a745; --color-danger:#dc3545; --color-warning-text:#856404;
+  --color-muted:#6c757d; --color-info:#17a2b8; --color-link:#337ab7;
+  --color-bg-light:#f8f9fa; --color-text-dark:#495057; --color-text-heading:#2c3e50;
+  --color-border-light:#dee2e6; --color-border-subtle:#e9ecef; --overload:#c0392b; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size:14px; color:#333; background:#fff; }
+a { color: var(--color-link); text-decoration:none; }
+a:hover { text-decoration:underline; }
+.aeo-cross-nav { background: var(--aeo-dark-surface); padding:10px 0; }
+.aeo-nav-container { max-width:1120px; margin:0 auto; padding:0 16px;
+  display:flex; justify-content:space-between; align-items:center; }
+.aeo-nav-brand { color: var(--aeo-green); font-weight:bold; text-decoration:none; }
+.aeo-nav-links a { color: var(--aeo-text-muted); margin-left:16px; text-decoration:none; }
+.aeo-nav-links a.active { color: var(--aeo-green); }
+.container { max-width:1120px; margin:0 auto; padding:12px 16px 40px; }
+.page-title { font-size:28px; margin:12px 0 6px; color: var(--color-text-heading); }
+.relay-meta { font-size:13px; color:#555; line-height:1.6; margin:0 0 12px; }
+.breadcrumb { font-size:13px; color:#777; margin:0 0 8px; }
+.option-banner { margin:8px 0 16px; padding:10px 14px; border-radius:6px;
+  background:#eef6fb; border-left:4px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.option-banner strong { display:block; font-size:14px; margin-bottom:2px; }
+.option-banner.recommend { background:#eef8f1; border-left-color:#009E73; }
+.section-box { margin:20px 0; padding:15px; background: var(--color-bg-light); border-radius:8px; }
+.section-box.recommend { background:#eef8f1; border-left:4px solid #009E73; }
+.section-header { display:inline-block; }
+.section-header a { color:inherit; text-decoration:none; }
+h3 { font-size:16px; color: var(--color-text-heading); margin:24px 0 8px; }
+h4 { margin-top:0; margin-bottom:12px; font-size:18px; }
+.subsection-header { margin:0 0 10px; padding-bottom:6px; font-weight:600;
+  font-size:15px; color: var(--color-text-dark); border-bottom:2px solid var(--color-border-light); }
+.row { display:flex; flex-wrap:wrap; margin:0 -8px; }
+.col { flex:1 1 300px; padding:0 8px; min-width:0; }
+dl { margin:0; }
+dt { font-weight:600; color:#555; font-size:13px; margin-top:8px; }
+dd { margin:2px 0 0; }
+.al-status-success { color: var(--color-success); }
+.al-status-danger { color: var(--color-danger); }
+.al-status-warning { color: var(--color-warning-text); }
+.al-status-muted { color: var(--color-muted); }
+.al-text-small-muted { font-size:12px; color: var(--color-muted); }
+.health-status-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:8px 24px; }
+.health-row { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+.health-row dt { margin:0; min-width:88px; }
+.health-row dd { margin:0; }
+.participation { margin-top:12px; padding:10px; background:#fff; border-radius:4px;
+  border:1px solid var(--color-border-subtle); font-size:13px; }
+.chart-wrap { margin:12px 0; background:#fff; border-radius:6px; padding:8px 8px 4px;
+  border:1px solid var(--color-border-subtle); }
+.chart-wrap img { width:100%; height:auto; display:block; }
+.chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.layout-label { margin:16px 0 8px; padding:8px 12px; background:#fff;
+  border-left:3px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.layout-label strong { display:block; font-size:14px; margin-bottom:2px; }
+.heading-row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; }
+.overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
+.copy-table { border-collapse:collapse; width:100%; font-size:13px; }
+.copy-table th, .copy-table td {
+  border:1px solid var(--color-border-light); padding:6px 8px; text-align:left;
+}
+.copy-table th { background:#fff; color:#555; }
+.ghost { opacity:0.45; }
+.explain { font-size:12px; color:#555; margin-top:12px; padding:8px;
+  background:#fff; border-radius:4px; border-left:3px solid #17a2b8; }
+code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
+.aeo-footer { background: var(--aeo-dark-surface); color:#aaa; text-align:center;
+  padding:18px 12px; font-size:12px; margin-top:24px; }
+.aeo-footer a { color: var(--aeo-green); }
+</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner recommend">
+    <strong>Recommended: both keys under their panel · “Compared with
+    other Guards”</strong>
+    One attachment rule. The colored bands are other Guards, not a
+    live ranking of this week. “Frozen quiet-census bands” is
+    contributor jargon — it does not belong on the chart.
+  </div>
+  <p class="relay-meta">
+    Style 5 chrome (despine, left titles, weights, callout). Subject is
+    <strong>jeangrae</strong>. Legend mocks all use the recommended
+    subtitle so the only change is where the keys sit.
+  </p>
+  <h3>Where the keys sit</h3>
+  
+  <section class="section-box">
+    <h4>Current — one key on the plot, one under the dates</h4>
+    <p class="relay-meta">Style 5 today. Throughput key sits in the empty band above advertised. Write/read key sits under the dates. Two patterns to learn.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_legend_split_jeangrae.png" alt="Current — one key on the plot, one under the dates">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>Both keys at the top of their panel</h4>
+    <p class="relay-meta">Throughput key stays in the shelf above advertised. Write/read gets a matching white shelf above 1.70 so the key is not on the bands or the triangles.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_legend_top_jeangrae.png" alt="Both keys at the top of their panel">
+    </div>
+  </section>
+  <section class="section-box recommend">
+    <h4>Both keys under their panel · recommended</h4>
+    <p class="relay-meta">Ship this. Same rule on both strips: read the series, then the key under it. Throughput ylim tightens — no empty shelf. Write/read key stays off the triangles.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_legend_bottom_jeangrae.png" alt="Both keys under their panel">
+    </div>
+  </section>
+  <h3>Write/read subtitle copy</h3>
+  <p class="relay-meta">
+    All of these use both keys under their panel. The current line
+    (“Frozen quiet-census bands …”) is option A — reject it.
+  </p>
+  
+  <section class="section-box">
+    <h4>A — Frozen quiet-census bands</h4>
+    <p class="relay-meta">Current line. Contributor shorthand for “we saved percentiles from one quiet snapshot and do not recompute them live.” Operators have no reason to know that.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_subtitle_jargon_jeangrae.png" alt="A — Frozen quiet-census bands">
+    </div>
+  </section>
+  <section class="section-box recommend">
+    <h4>B — Compared with other Guards · recommended</h4>
+    <p class="relay-meta">Ship this. Says who the colors compare against, and what typical / investigate mean, without “census” or “frozen.” The DoS reason stays in the docs.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_legend_bottom_jeangrae.png" alt="B — Compared with other Guards">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>C — Green is usual / red is rare</h4>
+    <p class="relay-meta">Plainest. Duplicates the legend swatches. Fine if we want the subtitle to stay short.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_subtitle_plain_jeangrae.png" alt="C — Green is usual / red is rare">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>D — Fixed baseline, not this week’s ranking</h4>
+    <p class="relay-meta">Sneaks in “frozen” without the word. Useful if we ever need to hint at the DoS reason on-chart. Still a bit abstract.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_subtitle_baseline_jeangrae.png" alt="D — Fixed baseline, not this week’s ranking">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>E — No subtitle</h4>
+    <p class="relay-meta">Title already says Guard. Legend already says typical / p10–p90. Cleanest chrome. Loses “compared with other Guards” for anyone who skips the legend.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_subtitle_none_jeangrae.png" alt="E — No subtitle">
+    </div>
+  </section>
+  <section class="section-box recommend">
+    <h4>Recommended combo on F3Netze</h4>
+    <p class="relay-meta">
+      Both keys under their panel. Overload still wraps onto a second
+      legend line. No callout — the strip is typical. Subtitle says
+      “other Exit+Guards.”
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_legend_bottom_f3.png" alt="Recommended legends and subtitle on F3Netze">
+    </div>
+  </section>
+  <p class="al-text-small-muted">Onionoo relays_published 2026-08-15 06:00:00 UTC.
+  Light theme. Okabe–Ito. Bands from the 2026-08-15 19:00 snapshot.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of legend attachment and subtitle copy · Allium
+</footer>
+</body>
+</html>
