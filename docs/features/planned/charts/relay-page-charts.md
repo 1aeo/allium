@@ -469,58 +469,31 @@ Advertised is the current descriptor snapshot on every panel, not a
 history.
 
 The write/read strip legend is upper-right, in this order: **This
-relay**, **Operator Family (median, n=x)**, **Peers {role} (network
-median)**, then Typical / Uncommon / Investigate. `p10–p90` and `>p98`
-sit on the left y-axis with 0.5 / 1.0 / 1.5, not as floating labels on
-the right.
+relay**, **Operator Family (median, n=x)** (family size, not the
+census), **Peers (network median)**, then Typical / Uncommon /
+Investigate. Each band swatch is **judgment + numeric range +
+percentile**. The flag-set role sits on the chart title
+(`Throughput · last 30 days · Exit+Guard`). Census n is a small
+footnote (`Exit+Guard write/read bands · frozen census, n=1625`).
+`p10–p90` and `>p98` sit on the left y-axis with 0.5 / 1.0 / 1.5.
 
-#### Typical / Uncommon / Investigate copy (open)
+#### Typical / Uncommon / Investigate copy (locked)
 
-The three band swatches do not currently share the same fields.
-Built in `band_legend_labels()` from frozen
+Every swatch uses the same three fields: judgment, range, percentile.
+Role is not repeated in the legend. Built in `band_legend_labels()`
+(`range_pct`) from frozen
 [`data/role_ratio_bands.json`](data/role_ratio_bands.json):
 
-| Swatch | Range | Role | Percentile | n |
-|--------|-------|------|------------|---|
-| Typical | `a–b` (p10–p90) | yes | `p10–p90` | yes |
-| Uncommon | `a–b / c–d` (the two shoulders) | no | no | no |
-| Investigate | `<a or >b` (outside p2–p98) | yes | `beyond p98` | no |
+| Swatch | Exit+Guard (F3Netze) | Guard (jeangrae) |
+|--------|----------------------|------------------|
+| Typical | 0.97–1.15  ·  p10–p90 | 1.01–1.17  ·  p10–p90 |
+| Uncommon | 0.93–0.97 or 1.15–1.71  ·  p2–p10 / p90–p98 | 0.99–1.01 or 1.17–1.58  ·  p2–p10 / p90–p98 |
+| Investigate | <0.93 or >1.71  ·  <p2 or >p98 | <0.99 or >1.58  ·  <p2 or >p98 |
 
-Exit+Guard (F3Netze) today:
+Rejected alts (role + n on every row, name+range only, shared header)
+stay in [the copy gallery](mockups/relay_page_bw_band_copy.html).
 
-- Typical  0.97–1.15  ·  Exit+Guard p10–p90, n=1625
-- Uncommon  0.93–0.97 / 1.15–1.71
-- Investigate  <0.93 or >1.71  ·  Exit+Guard beyond p98
-
-Guard (jeangrae) today:
-
-- Typical  1.01–1.17  ·  Guard p10–p90, n=4444
-- Uncommon  0.99–1.01 / 1.17–1.58
-- Investigate  <0.99 or >1.58  ·  Guard beyond p98
-
-Four alignment proposals, each mocked on both relays. Default ship
-copy stays **Current** until one is chosen.
-
-| # | Idea | What every row has |
-|---|------|--------------------|
-| 1 | Fill every slot | range · role · percentile · n |
-| 2 | Range + percentile | range · percentile (role lives on Peers) |
-| 3 | Name + range | judgment word + numbers (percentiles stay on the y-axis) |
-| 4 | Shared role header | one `{role} · n=` line, then range · percentile |
-
-[Gallery — current vs proposals](mockups/relay_page_bw_band_copy.html)
-
-![All wordings at a glance](mockups/relay_bandwidth_band_copy_cards.png)
-
-![Current — F3Netze and jeangrae](mockups/relay_bandwidth_band_copy_current.png)
-
-![Proposal 1 — fill every slot](mockups/relay_bandwidth_band_copy_full.png)
-
-![Proposal 2 — range + percentile](mockups/relay_bandwidth_band_copy_range_pct.png)
-
-![Proposal 3 — name + range](mockups/relay_bandwidth_band_copy_range_only.png)
-
-![Proposal 4 — shared role header](mockups/relay_bandwidth_band_copy_header.png)
+![Chosen copy — F3Netze and jeangrae](mockups/relay_bandwidth_band_copy_range_pct.png)
 
 Multiple restarts share one legend entry (`Last restarted  31 Jul, 20
 Jul, 5 Jul`) and get one vertical line each. Onionoo only publishes
@@ -550,8 +523,9 @@ The History strip uses **this relay’s flags**. Mocked on four relays:
 
 ![Middle band — 10dxx](mockups/relay_bandwidth_a_role_middle_10dxx.png)
 
-Chart title on the page is `Throughput · last 30 days` (or the selected
-period). Nickname stays in the page `h1`. Overload details stay in
+Chart title on the page is `Throughput · last 30 days · Exit+Guard`
+(or the selected period and this relay’s flag set). Nickname stays in
+the page `h1`. Overload details stay in
 `#uptime` `#overload`; the chart only repeats *that it is on*.
 
 ---
