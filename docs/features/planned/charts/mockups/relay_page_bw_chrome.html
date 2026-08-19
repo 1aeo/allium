@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart chrome · five light-theme styles</title>
+  <style>
+:root { --aeo-green:#00ff7f; --aeo-dark-surface:#1e1e1e; --aeo-text-muted:#ccc;
+  --color-success:#28a745; --color-danger:#dc3545; --color-warning-text:#856404;
+  --color-muted:#6c757d; --color-info:#17a2b8; --color-link:#337ab7;
+  --color-bg-light:#f8f9fa; --color-text-dark:#495057; --color-text-heading:#2c3e50;
+  --color-border-light:#dee2e6; --color-border-subtle:#e9ecef; --overload:#c0392b; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size:14px; color:#333; background:#fff; }
+a { color: var(--color-link); text-decoration:none; }
+a:hover { text-decoration:underline; }
+.aeo-cross-nav { background: var(--aeo-dark-surface); padding:10px 0; }
+.aeo-nav-container { max-width:1120px; margin:0 auto; padding:0 16px;
+  display:flex; justify-content:space-between; align-items:center; }
+.aeo-nav-brand { color: var(--aeo-green); font-weight:bold; text-decoration:none; }
+.aeo-nav-links a { color: var(--aeo-text-muted); margin-left:16px; text-decoration:none; }
+.aeo-nav-links a.active { color: var(--aeo-green); }
+.container { max-width:1120px; margin:0 auto; padding:12px 16px 40px; }
+.page-title { font-size:28px; margin:12px 0 6px; color: var(--color-text-heading); }
+.relay-meta { font-size:13px; color:#555; line-height:1.6; margin:0 0 12px; }
+.breadcrumb { font-size:13px; color:#777; margin:0 0 8px; }
+.option-banner { margin:8px 0 16px; padding:10px 14px; border-radius:6px;
+  background:#eef6fb; border-left:4px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.option-banner strong { display:block; font-size:14px; margin-bottom:2px; }
+.option-banner.recommend { background:#eef8f1; border-left-color:#009E73; }
+.section-box { margin:20px 0; padding:15px; background: var(--color-bg-light); border-radius:8px; }
+.section-box.recommend { background:#eef8f1; border-left:4px solid #009E73; }
+.section-header { display:inline-block; }
+.section-header a { color:inherit; text-decoration:none; }
+h4 { margin-top:0; margin-bottom:12px; font-size:18px; }
+.subsection-header { margin:0 0 10px; padding-bottom:6px; font-weight:600;
+  font-size:15px; color: var(--color-text-dark); border-bottom:2px solid var(--color-border-light); }
+.row { display:flex; flex-wrap:wrap; margin:0 -8px; }
+.col { flex:1 1 300px; padding:0 8px; min-width:0; }
+dl { margin:0; }
+dt { font-weight:600; color:#555; font-size:13px; margin-top:8px; }
+dd { margin:2px 0 0; }
+.al-status-success { color: var(--color-success); }
+.al-status-danger { color: var(--color-danger); }
+.al-status-warning { color: var(--color-warning-text); }
+.al-status-muted { color: var(--color-muted); }
+.al-text-small-muted { font-size:12px; color: var(--color-muted); }
+.health-status-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:8px 24px; }
+.health-row { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+.health-row dt { margin:0; min-width:88px; }
+.health-row dd { margin:0; }
+.participation { margin-top:12px; padding:10px; background:#fff; border-radius:4px;
+  border:1px solid var(--color-border-subtle); font-size:13px; }
+.chart-wrap { margin:12px 0; background:#fff; border-radius:6px; padding:8px 8px 4px;
+  border:1px solid var(--color-border-subtle); }
+.chart-wrap img { width:100%; height:auto; display:block; }
+.chart-note { font-size:12px; color:#666; margin:4px 8px 8px; }
+.layout-label { margin:16px 0 8px; padding:8px 12px; background:#fff;
+  border-left:3px solid #337ab7; font-size:13px; color:#1b3a4b; }
+.layout-label strong { display:block; font-size:14px; margin-bottom:2px; }
+.heading-row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; }
+.overload-cue { color: var(--overload); font-size:13px; font-weight:600; }
+.copy-table { border-collapse:collapse; width:100%; font-size:13px; }
+.copy-table th, .copy-table td {
+  border:1px solid var(--color-border-light); padding:6px 8px; text-align:left;
+}
+.copy-table th { background:#fff; color:#555; }
+.ghost { opacity:0.45; }
+.explain { font-size:12px; color:#555; margin-top:12px; padding:8px;
+  background:#fff; border-radius:4px; border-left:3px solid #17a2b8; }
+code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
+.aeo-footer { background: var(--aeo-dark-surface); color:#aaa; text-align:center;
+  padding:18px 12px; font-size:12px; margin-top:24px; }
+.aeo-footer a { color: var(--aeo-green); }
+</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner recommend">
+    <strong>Recommended: style 5 — despine, left titles, weights, method
+    subtitle, one auto-callout</strong>
+    Same levers as the 1AEO blog charts, on the light Allium page.
+    Okabe–Ito stays. Do not paste the blog dark surface or
+    <code>#00ff7f</code> onto every relay. The callout is built from
+    the series (date + ratio) and is omitted when nothing is beyond
+    this role’s p98.
+  </div>
+  <p class="relay-meta">
+    Subject is <strong>jeangrae</strong> (Guard, 1aeo.com, family 241).
+    22–23 Jul is off the 1.70 write/read scale — that is the one
+    auto-callout. F3Netze at the bottom shows style 5 with no callout
+    because that strip stays typical.
+  </p>
+  
+  <section class="section-box">
+    <h4>Style 1  ·  Despine + y-grid</h4>
+    <p class="relay-meta">Smallest change. Hide the top and right spines and keep only the y-grid. Titles stay centered. Line weights stay equal. Shows how much of the “boxed matplotlib” look is just chrome.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_1_despine_jeangrae.png" alt="Style 1 Despine + y-grid">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>Style 2  ·  Left titles</h4>
+    <p class="relay-meta">Style 1 plus left-aligned titles on both strips. Matches the blog header alignment without a narrative headline. Overload still uses the title-right cue when that mode is on.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_2_left_title_jeangrae.png" alt="Style 2 Left titles">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>Style 3  ·  Series weights</h4>
+    <p class="relay-meta">Style 2 plus a weight hierarchy: write / this-relay heaviest, read a step down, advertised and overlays thinner. The eye hits the operator’s series first.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_3_weights_jeangrae.png" alt="Style 3 Series weights">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>Style 4  ·  Method subtitle</h4>
+    <p class="relay-meta">Style 3 plus a gray method line under each title: Onionoo bucket on throughput, frozen-band rule on write/read. Method, not a story. Census n stays the footnote.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_4_subtitle_jeangrae.png" alt="Style 4 Method subtitle">
+    </div>
+  </section>
+  <section class="section-box recommend">
+    <h4>Style 5  ·  Recommended — one auto-callout · recommended</h4>
+    <p class="relay-meta">Ship this. Style 4 plus one programmatic callout when a day is beyond this role’s p98. Built from the series (date, ratio). No callout when the strip is typical. Still light, still Okabe–Ito. No hand-placed arrows, no neon green.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_5_callout_jeangrae.png" alt="Style 5 Recommended — one auto-callout">
+    </div>
+  </section>
+  <section class="section-box">
+    <h4>Style 5 on F3Netze  ·  no callout when typical</h4>
+    <p class="relay-meta">
+      Same chrome. The auto-callout stays off because no 1-month day
+      is beyond Exit+Guard p98. That is the point: do not invent a
+      story on a quiet relay.
+    </p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_chrome_5_callout_f3.png" alt="Style 5 on F3Netze, no callout">
+    </div>
+  </section>
+  <p class="al-text-small-muted">Onionoo relays_published 2026-08-15 06:00:00 UTC.
+  Light theme. Okabe–Ito series colors. Frozen bands from the
+  2026-08-15 19:00 census.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of chart chrome · Allium
+</footer>
+</body>
+</html>
