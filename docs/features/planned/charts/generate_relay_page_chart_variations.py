@@ -1560,6 +1560,17 @@ def _role_article(role):
     return f"a {role}"
 
 
+def _n_day_runs(dates):
+    dates = sorted(dates)
+    if not dates:
+        return 0
+    n = 1
+    for i in range(1, len(dates)):
+        if (dates[i] - dates[i - 1]).days > 1:
+            n += 1
+    return n
+
+
 def _format_day_span(dates):
     dates = sorted(dates)
     if not dates:
@@ -1727,8 +1738,7 @@ def format_outcome_subtitle(outcome, which, style):
             return body + ov_bit
         if style == "verdict":
             if outcome["thru"] == "spike":
-                n = n_inv or 1
-                day = "day" if n == 1 else "days"
+                n = _n_day_runs([row[0].date() for row in outcome["invest"]]) or 1
                 kind = "write" if outcome["spike"] == "write" else "read"
                 body = f"{n} {kind} spike{'' if n == 1 else 's'} · the rest of the month is quiet"
             elif outcome["thru"] == "crash":
@@ -4637,7 +4647,7 @@ OUTCOME_SCENARIOS = (
             "2 days off the 1.70 scale (4.45 / 3.15) · month-mean 1.21, uncommon for a Guard",
         ),
         "verdict": (
-            "2 write spikes · the rest of the month is quiet",
+            "1 write spike · the rest of the month is quiet",
             "2 investigate days · the rest uncommon",
         ),
         "who": (
@@ -4669,7 +4679,7 @@ OUTCOME_SCENARIOS = (
             "2 investigate days 8–9 Aug · month-mean 1.34, uncommon for an Exit",
         ),
         "verdict": (
-            "2 write spikes · the rest of the month is quiet",
+            "1 write spike · the rest of the month is quiet",
             "2 investigate days · the rest uncommon",
         ),
         "who": (
