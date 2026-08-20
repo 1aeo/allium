@@ -456,6 +456,7 @@ Page mockups (open the HTML):
 - [Option C — one chart per flag-set band](mockups/relay_page_bw_opt3_role_bands.html)
 - [Chart chrome — five light-theme styles](mockups/relay_page_bw_chrome.html)
 - [Legend attachment and subtitle copy](mockups/relay_page_bw_legend_subtitle.html)
+- [Outcome subtitles](mockups/relay_page_bw_outcomes.html)
 - [Option 1 — rejected hero](mockups/relay_page_bw_opt1_hero_f3.html)
 - [Option 2 — rejected after scalars](mockups/relay_page_bw_opt2_after_metrics_jeangrae.html)
 
@@ -571,56 +572,51 @@ relay page.
 
 Gallery: [`relay_page_bw_chrome.html`](mockups/relay_page_bw_chrome.html).
 
-Method subtitle copy (do not put census n here):
+**Ship both keys at the top of their panel**, same 8 pt type. Throughput
+key sits in the empty band above advertised. Write/read key sits in a
+white shelf above 1.70 so it is not on the bands or the triangles.
 
-- Throughput: `Daily write and read · dashed line is today’s advertised bandwidth`
-- Write/read: `Compared with other Guards · typical is the middle 80% · investigate is the tails`
+Method and “compared with other Guards” subtitles are rejected — they
+repeat the legend or say nothing about this relay. The subtitle
+summarizes the **outcome**. Title names the chart. Legend names the
+series. Subtitle says what happened.
 
-(`Guards` becomes `Exits` / `Exit+Guards` / `middle relays` from this
-relay’s flags.)
+#### Outcome subtitles
 
-#### Legend attachment (one pattern)
+Three styles. Built from the series (zone, spike days, overlays,
+utilization, overload). No hand-written copy per relay.
 
-Style 5 first put the throughput key in the empty band above
-advertised and the write/read key under the dates. That is two
-patterns. Pick one attachment rule.
+| Style | What it says | File |
+|-------|--------------|------|
+| A Date + number | When and by how much. Duplicates the callout on a spike. | [`relay_bandwidth_outcome_dated_jeangrae.png`](mockups/relay_bandwidth_outcome_dated_jeangrae.png) |
+| B Verdict | Short story, no figures. Empty on a quiet month. | [`relay_bandwidth_outcome_verdict_jeangrae.png`](mockups/relay_bandwidth_outcome_verdict_jeangrae.png) |
+| **C Who moved** | Whose problem. Family/peers stayed or moved. All-clear when nothing left. | [`relay_bandwidth_outcome_who_jeangrae.png`](mockups/relay_bandwidth_outcome_who_jeangrae.png) |
 
-| Placement | What it does | File |
-|-----------|--------------|------|
-| Split (current) | Throughput key on the plot. Write/read key under the dates. | [`relay_bandwidth_legend_split_jeangrae.png`](mockups/relay_bandwidth_legend_split_jeangrae.png) |
-| Both at top | Write/read gets a white shelf above 1.70 so the key matches throughput. | [`relay_bandwidth_legend_top_jeangrae.png`](mockups/relay_bandwidth_legend_top_jeangrae.png) |
-| **Both under their panel** | Same rule on both strips. Throughput ylim tightens. | [`relay_bandwidth_legend_bottom_jeangrae.png`](mockups/relay_bandwidth_legend_bottom_jeangrae.png) |
+**Ship C.** On jeangrae: *This relay left the Guard band 22–23 Jul ·
+family and peers stayed.* On F3Netze: *Still with other Exit+Guards.*
 
-**Ship both keys under their panel.** The write/read triangles live at
-the top of that strip — a top key fights them. Under-the-panel already
-worked there. Matching it on throughput is the smaller move.
+Stories the two strips can conclude (not a cartesian product):
 
-Gallery: [`relay_page_bw_legend_subtitle.html`](mockups/relay_page_bw_legend_subtitle.html).
+1. Not enough history
+2. Quiet typical
+3. Typical + currently overloaded
+4. Typical + restart in the window (restart stays a vertical line)
+5. Uncommon month, no investigate day
+6. Investigate spike, this relay only
+7. Investigate spike, family moved, role stayed
+8. Investigate spike, the whole role moved
+9. Persistent investigate month
+10. Read-heavy month
+11. Throughput crash (write and read both fell)
+12. Near advertised
+13. Overloaded + investigate spike
 
-#### What “frozen quiet-census bands” meant
+Card of every story × A/B/C:
+[`relay_bandwidth_outcome_scenarios.png`](mockups/relay_bandwidth_outcome_scenarios.png).
+Gallery: [`relay_page_bw_outcomes.html`](mockups/relay_page_bw_outcomes.html).
 
-Contributor shorthand, not operator copy. We measured write/read for
-every Guard (or Exit, …) on one quiet snapshot (15 Aug 2026), saved
-those percentiles, and we do not recompute them at build time.
-**Frozen** = not live. **Quiet** = not during a network attack.
-**Census** = this flag set, not this family. A live p10–p90 would walk
-with a network-wide Exit flood and paint the event green. That reason
-stays in [`write-read-band.md`](write-read-band.md). It does not belong
-on the chart.
-
-Subtitle options (all on the recommended legend layout):
-
-| Option | Line | Status |
-|--------|------|--------|
-| A | `Frozen quiet-census bands · typical is this flag set’s p10–p90 · investigate is beyond p98` | Reject — jargon |
-| **B** | `Compared with other Guards · typical is the middle 80% · investigate is the tails` | **Ship this** |
-| C | `Green is usual for Guards · red is rare for Guards` | Alt — duplicates the legend |
-| D | `Vs other Guards · fixed baseline, not this week’s ranking` | Alt — hints at frozen |
-| E | (no subtitle) | Alt — cleanest chrome |
-
-On the recommended mocks the footnote is `4,444 Guards · baseline 15
-Aug 2026` (or `1,625 Exit+Guards · …`). The old `frozen census, n=…`
-line is gone there.
+Footnote stays `4,444 Guards · baseline 15 Aug 2026`. How the bands
+were frozen stays in [`write-read-band.md`](write-read-band.md).
 
 ---
 
@@ -817,14 +813,18 @@ python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
   --out docs/features/planned/charts/mockups \
   --artifacts /tmp/chart_artifacts \
   --only legends
+python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
+  --out docs/features/planned/charts/mockups \
+  --artifacts /tmp/chart_artifacts \
+  --only outcomes
 python3 docs/features/planned/charts/analyze_write_read_ratios.py \
   --details /tmp/onionoo/details_flags.json
 ```
 
 `--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
-`bandcopy`, `chrome`, or `legends`. Chrome is the five light-theme
-styles plus style 5 on F3Netze. `legends` is the unified-key and
-subtitle-copy gallery.
+`bandcopy`, `chrome`, `legends`, or `outcomes`. `outcomes` is both
+keys at the top, matched 8 pt type, and the three outcome-subtitle
+styles.
 
 Chart mockups need the Onionoo snapshots already used by
 [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
