@@ -1018,7 +1018,10 @@ def throughput_legend_handles(advertised_mbit, events, overload_status=None,
     return handles
 
 
-def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
+LEGEND_FONTSIZE = 8.0
+
+
+def place_legend_above_axes(ax, handles, fontsize=None, ncol=None,
                             wrap_last=False):
     """Legend in the empty band above advertised / data_max.
 
@@ -1033,7 +1036,7 @@ def place_legend_above_axes(ax, handles, fontsize=8.5, ncol=None,
     if not handles:
         return
     style = dict(
-        fontsize=fontsize,
+        fontsize=LEGEND_FONTSIZE if fontsize is None else fontsize,
         frameon=True,
         fancybox=False,
         edgecolor="#eeeeee",
@@ -1546,6 +1549,260 @@ def ratio_subtitle_text(bands, style=None):
     return ""
 
 
+OUTCOME_STYLES = ("dated", "verdict", "who")
+
+
+def _role_article(role):
+    if not role:
+        return "a relay"
+    if role[0].lower() in "aeiou":
+        return f"an {role}"
+    return f"a {role}"
+
+
+def _format_day_span(dates):
+    dates = sorted(dates)
+    if not dates:
+        return ""
+    if len(dates) == 1:
+        return dates[0].strftime("%-d %b")
+    consec = all((dates[i] - dates[i - 1]).days == 1 for i in range(1, len(dates)))
+    if consec:
+        return f"{dates[0].strftime('%-d')}–{dates[-1].strftime('%-d %b')}"
+    return ", ".join(d.strftime("%-d %b") for d in dates)
+
+
+def _overlay_left_typical(ts, series, bands, day_set):
+    """True if the overlay is outside typical on most of those days."""
+    if not series or not day_set:
+        return None
+    vals = overlay_values(ts, series)
+    if vals is None:
+        return None
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    hits = []
+    for t, v in zip(ts, vals):
+        if t.date() not in day_set:
+            continue
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            continue
+        hits.append(v < tlo or v > thi)
+    if not hits:
+        return None
+    return sum(hits) >= max(1, (len(hits) + 1) // 2)
+
+
+def summarize_bandwidth_outcome(ts, write_m, read_m, advertised_mbit, events,
+                                overlays, bands, overload_status):
+    """What the two strips conclude. Used by outcome subtitles."""
+    bands = bands or {}
+    overlays = overlays or {}
+    tlo = bands.get("typical_lo", RATIO_LO)
+    thi = bands.get("typical_hi", RATIO_HI)
+    ilo = bands.get("invest_lo", RATIO_INVESTIGATE_LO)
+    ihi = bands.get("invest_hi", RATIO_INVESTIGATE_HI)
+    role = bands_role(bands) or "relay"
+    rows = []
+    for t, w, r in zip(ts or [], write_m or [], read_m or []):
+        if not r:
+            continue
+        rows.append((t, w, r, w / r))
+    if len(rows) < 3:
+        return {
+            "enough": False, "role": role, "overloaded": bool(overload_status),
+        }
+    mean_ratio = float(np.mean([row[3] for row in rows]))
+    mean_write = float(np.mean([row[1] for row in rows]))
+    mean_read = float(np.mean([row[2] for row in rows]))
+    if tlo <= mean_ratio <= thi:
+        zone = "typical"
+    elif ilo <= mean_ratio <= ihi:
+        zone = "uncommon"
+    else:
+        zone = "investigate"
+    invest = [row for row in rows if row[3] < ilo or row[3] > ihi]
+    off = [row for row in rows if row[3] > 1.70]
+    write_heavy = [row for row in invest if row[3] > thi]
+    read_heavy = [row for row in invest if row[3] < tlo]
+    day_set = {row[0].date() for row in invest}
+    family_left = _overlay_left_typical(
+        ts, overlays.get("operator"), bands, day_set,
+    )
+    role_left = _overlay_left_typical(
+        ts, overlays.get("role"), bands, day_set,
+    )
+    if not invest:
+        who = "with_peers"
+    elif role_left:
+        who = "role"
+    elif family_left:
+        who = "family"
+    else:
+        who = "relay"
+    util = (100.0 * mean_write / advertised_mbit) if advertised_mbit else None
+    if write_heavy and len(write_heavy) >= len(read_heavy):
+        spike = "write"
+    elif read_heavy:
+        spike = "read"
+    else:
+        spike = None
+    persistent = zone == "investigate" and len(invest) >= max(5, len(rows) // 3)
+    ev = events_in_span(events, ts)
+    restarts = []
+    for item in ev:
+        if item.get("kind") == "restart":
+            restarts.extend(item.get("whens") or [])
+    if util is None:
+        thru = "unknown"
+    elif spike and not persistent:
+        thru = "spike"
+    elif mean_write < 20 and mean_read < 20:
+        thru = "crash"
+    elif util >= 70:
+        thru = "near"
+    elif util < 25:
+        thru = "low"
+    else:
+        thru = "steady"
+    return {
+        "enough": True,
+        "role": role,
+        "zone": zone,
+        "mean_ratio": mean_ratio,
+        "mean_write": mean_write,
+        "mean_read": mean_read,
+        "advertised": advertised_mbit,
+        "util": util,
+        "invest": invest,
+        "off": off,
+        "who": who,
+        "family_left": family_left,
+        "role_left": role_left,
+        "spike": spike,
+        "persistent": persistent,
+        "thru": thru,
+        "overloaded": bool(overload_status),
+        "restarts": restarts,
+    }
+
+
+def format_outcome_subtitle(outcome, which, style):
+    """which: throughput | ratio. style: dated | verdict | who."""
+    if not outcome or not outcome.get("enough"):
+        if which == "throughput":
+            return "Not enough history to chart"
+        return "Need more than a couple of days"
+    role = outcome["role"]
+    art = _role_article(role)
+    zone = outcome["zone"]
+    n_inv = len(outcome["invest"])
+    n_off = len(outcome["off"])
+    span = _format_day_span([row[0].date() for row in outcome["invest"]])
+    off_span = _format_day_span([row[0].date() for row in outcome["off"]])
+    ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["off"][:3])
+    if not ratios and outcome["invest"]:
+        ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["invest"][:3])
+    util = outcome.get("util")
+    write = outcome["mean_write"]
+    adv = outcome.get("advertised")
+    ov = outcome["overloaded"]
+    ov_bit = " · currently overloaded" if ov else ""
+
+    if which == "throughput":
+        if style == "dated":
+            if outcome["thru"] == "spike" and span:
+                kind = "Write" if outcome["spike"] == "write" else "Read"
+                body = f"{kind} jumped {span}"
+            elif outcome["thru"] == "crash":
+                body = "Write and read both dropped"
+            elif util is not None and adv:
+                body = (
+                    f"Month-mean write {write:.0f} Mbit/s "
+                    f"({util:.0f}% of advertised)"
+                )
+            else:
+                body = f"Month-mean write {write:.0f} Mbit/s"
+            if outcome["thru"] == "spike" and util is not None:
+                body += f" · month-mean {write:.0f} Mbit/s ({util:.0f}% of advertised)"
+            return body + ov_bit
+        if style == "verdict":
+            if outcome["thru"] == "spike":
+                n = n_inv or 1
+                day = "day" if n == 1 else "days"
+                kind = "write" if outcome["spike"] == "write" else "read"
+                body = f"{n} {kind} spike{'' if n == 1 else 's'} · the rest of the month is quiet"
+            elif outcome["thru"] == "crash":
+                body = "Throughput crashed · write and read both fell"
+            elif outcome["thru"] == "near":
+                body = "Delivering most of advertised"
+            elif outcome["thru"] == "low":
+                body = "Steady · well below advertised"
+            else:
+                body = "Steady throughput"
+            return body + ov_bit
+        # who
+        if outcome["thru"] == "spike":
+            body = "This relay’s write moved · advertised is unchanged"
+        elif outcome["thru"] == "crash":
+            body = "This relay’s write and read both moved"
+        elif outcome["thru"] == "near":
+            body = "This relay is using most of its advertised bandwidth"
+        else:
+            body = "Write and read stayed together"
+            if util is not None:
+                body += f" · {util:.0f}% of advertised"
+        return body + ov_bit
+
+    # ratio
+    if style == "dated":
+        if n_off:
+            return (
+                f"{n_off} day{'s' if n_off != 1 else ''} off the 1.70 scale "
+                f"({ratios}) · month-mean {outcome['mean_ratio']:.2f}, "
+                f"{zone} for {art}"
+            )
+        if n_inv:
+            return (
+                f"{n_inv} investigate day{'s' if n_inv != 1 else ''} "
+                f"{span} · month-mean {outcome['mean_ratio']:.2f}, "
+                f"{zone} for {art}"
+            )
+        return (
+            f"Month-mean write/read {outcome['mean_ratio']:.2f} · "
+            f"{zone} for {art}"
+        )
+    if style == "verdict":
+        if n_off or n_inv:
+            n = n_off or n_inv
+            return (
+                f"{n} investigate day{'s' if n != 1 else ''} · "
+                f"the rest {('typical' if zone == 'typical' else zone)}"
+            )
+        if zone == "typical":
+            return "Typical all month"
+        if zone == "uncommon":
+            return f"Uncommon for {art} · no investigate day"
+        return f"Investigate for {art} · the whole month"
+    # who
+    if outcome["who"] == "role":
+        return (
+            f"This relay and other {peers_word({'role': role})} left the band"
+            + (f" {span}" if span else "")
+        )
+    if outcome["who"] == "family":
+        return (
+            f"This relay and its family left the {role} band · "
+            f"other {peers_word({'role': role})} stayed"
+        )
+    if outcome["who"] == "relay" and (n_off or n_inv):
+        return (
+            f"This relay left the {role} band"
+            + (f" {span}" if span else "")
+            + " · family and peers stayed"
+        )
+    return f"Still with other {peers_word({'role': role})}"
+
+
 def auto_spike_callout(ax, ts, write_m, read_m, bands):
     """One annotation on the worst investigate day. Skip if none."""
     if not ts:
@@ -1612,19 +1869,20 @@ def auto_spike_callout(ax, ts, write_m, read_m, bands):
 
 
 def _ratio_legend_style():
+    """Same type size as the throughput key. Do not go smaller."""
     return dict(
-        fontsize=6.6,
+        fontsize=LEGEND_FONTSIZE,
         frameon=True,
         fancybox=False,
-        edgecolor="#dddddd",
+        edgecolor="#eeeeee",
         facecolor="white",
         framealpha=0.96,
         borderaxespad=0.0,
         borderpad=0.25,
-        columnspacing=0.9,
-        handlelength=1.35,
-        handletextpad=0.32,
-        labelspacing=0.25,
+        columnspacing=0.85,
+        handlelength=1.6,
+        handletextpad=0.4,
+        labelspacing=0.18,
     )
 
 
@@ -1847,7 +2105,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
     ylo, yhi = 0.50, 1.70
-    shelf = 0.40 if legend_loc == "shelf" else 0.0
+    shelf = 0.52 if legend_loc == "shelf" else 0.0
     axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
     axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
@@ -2007,7 +2265,8 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           subtitle_style=None):
     bands = bands or (overlays or {}).get("bands")
     wrap_last = overload_mode == "legend" and bool(overload_status)
-    legend_attach = legend_attach or "split"
+    if legend_attach is None:
+        legend_attach = "above" if chrome else "split"
     if subtitle_style == "none":
         subtitle_on = False
     elif subtitle_style:
@@ -2030,7 +2289,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         )
         top = 0.86 if subtitle_on else 0.91
         bottom = 0.16 if page_ready else 0.26
-        height_ratios = [3.2, 1.55] if legend_attach == "above" else [3.2, 1.35]
+        height_ratios = [3.2, 1.75] if legend_attach == "above" else [3.2, 1.35]
     else:
         hspace = 0.22 if page_ready else 0.26
         fig_h = 7.0 if page_ready else 8.2
@@ -2058,10 +2317,16 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         ax, bw_title, overload_status, overload_mode,
         loc=title_loc, pad=title_pad,
     )
+    outcome = summarize_bandwidth_outcome(
+        ts, write_m, read_m, advertised_mbit, events, overlays, bands,
+        overload_status,
+    )
     if subtitle_on:
-        apply_method_subtitle(
-            ax, throughput_subtitle_text(period_key, subtitle_style),
-        )
+        if subtitle_style in OUTCOME_STYLES:
+            thru_sub = format_outcome_subtitle(outcome, "throughput", subtitle_style)
+        else:
+            thru_sub = throughput_subtitle_text(period_key, subtitle_style)
+        apply_method_subtitle(ax, thru_sub)
     if chrome and chrome.get("callout"):
         auto_spike_callout(ax, ts, write_m, read_m, bands)
     bw_handles = throughput_legend_handles(
@@ -2082,7 +2347,11 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         legend_loc="shelf" if legend_attach == "above" else "below",
     )
     if subtitle_on:
-        apply_method_subtitle(axr, ratio_subtitle_text(bands, subtitle_style))
+        if subtitle_style in OUTCOME_STYLES:
+            ratio_sub = format_outcome_subtitle(outcome, "ratio", subtitle_style)
+        else:
+            ratio_sub = ratio_subtitle_text(bands, subtitle_style)
+        apply_method_subtitle(axr, ratio_sub)
     ratio_legend = axr.get_legend()
     if not page_ready:
         used = 100.0 * np.mean(write_m) / advertised_mbit if advertised_mbit else 0
@@ -2111,11 +2380,14 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
             under=ratio_legend,
         )
     else:
+        fn_style = (
+            "peers" if subtitle_style in OUTCOME_STYLES else subtitle_style
+        )
         if legend_attach == "above":
-            apply_census_footnote(fig, bands, style=subtitle_style)
+            apply_census_footnote(fig, bands, style=fn_style)
         else:
             apply_census_footnote(
-                fig, bands, under=ratio_legend, style=subtitle_style,
+                fig, bands, under=ratio_legend, style=fn_style,
             )
     save(fig, out_paths, trim=True)
 
@@ -3374,7 +3646,7 @@ def main():
     parser.add_argument("--artifacts", default="/opt/cursor/artifacts")
     parser.add_argument(
         "--only", choices=("all", "bandwidth", "uptime", "flags", "bandcopy",
-                           "chrome", "legends"),
+                           "chrome", "legends", "outcomes"),
         default="all",
         help="Skip unrelated mockup families when iterating on one chart.",
     )
@@ -3478,6 +3750,16 @@ def main():
         if bw_all_path.exists():
             bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
         write_legend_subtitle_gallery(
+            det, bw_all, published, f3, f3_bw, overlays, ov_status,
+            w_ts, read_m, write_m, advertised_mbit, events, out, art,
+        )
+        return
+    if args.only == "outcomes":
+        bw_all = dict(bw_doc)
+        bw_all_path = Path(args.bandwidth_all)
+        if bw_all_path.exists():
+            bw_all.update(by_fp(json.loads(bw_all_path.read_text())))
+        write_outcome_subtitle_gallery(
             det, bw_all, published, f3, f3_bw, overlays, ov_status,
             w_ts, read_m, write_m, advertised_mbit, events, out, art,
         )
@@ -4262,6 +4544,464 @@ def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             legend_cards, subtitle_cards, f3_name,
         )
     print("wrote relay_page_bw_legend_subtitle.html")
+
+
+# Operator-facing outcomes the two strips can conclude. Not the cartesian
+# product of every flag — the distinct stories a subtitle has to cover.
+OUTCOME_SCENARIOS = (
+    {
+        "id": "empty",
+        "name": "Not enough history",
+        "dated": (
+            "Not enough history to chart",
+            "Need more than a couple of days",
+        ),
+        "verdict": (
+            "Not enough history to chart",
+            "Need more than a couple of days",
+        ),
+        "who": (
+            "Not enough history to chart",
+            "Need more than a couple of days",
+        ),
+    },
+    {
+        "id": "quiet",
+        "name": "Quiet typical",
+        "dated": (
+            "Month-mean write 380 Mbit/s (47% of advertised)",
+            "Month-mean write/read 1.03 · typical for an Exit+Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised",
+            "Typical all month",
+        ),
+        "who": (
+            "Write and read stayed together · 47% of advertised",
+            "Still with other Exit+Guards",
+        ),
+    },
+    {
+        "id": "overload",
+        "name": "Typical + currently overloaded",
+        "dated": (
+            "Month-mean write 412 Mbit/s (51% of advertised) · currently overloaded",
+            "Month-mean write/read 1.03 · typical for an Exit+Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised · currently overloaded",
+            "Typical all month",
+        ),
+        "who": (
+            "Write and read stayed together · 51% of advertised · currently overloaded",
+            "Still with other Exit+Guards",
+        ),
+    },
+    {
+        "id": "restart",
+        "name": "Typical + restart in the window",
+        "dated": (
+            "Month-mean write 210 Mbit/s (38% of advertised)",
+            "Month-mean write/read 1.04 · typical for a Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised",
+            "Typical all month",
+        ),
+        "who": (
+            "Write and read stayed together · 38% of advertised",
+            "Still with other Guards",
+        ),
+    },
+    {
+        "id": "uncommon",
+        "name": "Uncommon month, no investigate day",
+        "dated": (
+            "Month-mean write 140 Mbit/s (22% of advertised)",
+            "Month-mean write/read 1.21 · uncommon for a Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised",
+            "Uncommon for a Guard · no investigate day",
+        ),
+        "who": (
+            "Write and read stayed together · 22% of advertised",
+            "Still with other Guards",
+        ),
+    },
+    {
+        "id": "spike_relay",
+        "name": "Investigate spike · this relay only",
+        "dated": (
+            "Write jumped 22–23 Jul · month-mean 98 Mbit/s (15% of advertised)",
+            "2 days off the 1.70 scale (4.45 / 3.15) · month-mean 1.21, uncommon for a Guard",
+        ),
+        "verdict": (
+            "2 write spikes · the rest of the month is quiet",
+            "2 investigate days · the rest uncommon",
+        ),
+        "who": (
+            "This relay’s write moved · advertised is unchanged",
+            "This relay left the Guard band 22–23 Jul · family and peers stayed",
+        ),
+    },
+    {
+        "id": "spike_family",
+        "name": "Investigate spike · family moved, role stayed",
+        "dated": (
+            "Write jumped 4 Aug · month-mean 220 Mbit/s (31% of advertised)",
+            "1 day off the 1.70 scale (3.02) · month-mean 1.18, uncommon for a Guard",
+        ),
+        "verdict": (
+            "1 write spike · the rest of the month is quiet",
+            "1 investigate day · the rest uncommon",
+        ),
+        "who": (
+            "This relay’s write moved · advertised is unchanged",
+            "This relay and its family left the Guard band · other Guards stayed",
+        ),
+    },
+    {
+        "id": "spike_role",
+        "name": "Investigate spike · the whole role moved",
+        "dated": (
+            "Write jumped 8–9 Aug · month-mean 90 Mbit/s (18% of advertised)",
+            "2 investigate days 8–9 Aug · month-mean 1.34, uncommon for an Exit",
+        ),
+        "verdict": (
+            "2 write spikes · the rest of the month is quiet",
+            "2 investigate days · the rest uncommon",
+        ),
+        "who": (
+            "This relay’s write moved · advertised is unchanged",
+            "This relay and other Exits left the band 8–9 Aug",
+        ),
+    },
+    {
+        "id": "persistent",
+        "name": "Persistent investigate month",
+        "dated": (
+            "Month-mean write 60 Mbit/s (9% of advertised)",
+            "Month-mean write/read 1.82 · investigate for a Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised",
+            "Investigate for a Guard · the whole month",
+        ),
+        "who": (
+            "Write and read stayed together · 9% of advertised",
+            "This relay left the Guard band · family and peers stayed",
+        ),
+    },
+    {
+        "id": "read_heavy",
+        "name": "Read-heavy month",
+        "dated": (
+            "Month-mean write 80 Mbit/s (12% of advertised)",
+            "Month-mean write/read 0.71 · uncommon for a Guard",
+        ),
+        "verdict": (
+            "Steady · well below advertised",
+            "Uncommon for a Guard · no investigate day",
+        ),
+        "who": (
+            "Write and read stayed together · 12% of advertised",
+            "Still with other Guards",
+        ),
+    },
+    {
+        "id": "crash",
+        "name": "Throughput crash",
+        "dated": (
+            "Write and read both dropped",
+            "Month-mean write/read 1.02 · typical for a Middle",
+        ),
+        "verdict": (
+            "Throughput crashed · write and read both fell",
+            "Typical all month",
+        ),
+        "who": (
+            "This relay’s write and read both moved",
+            "Still with other middle relays",
+        ),
+    },
+    {
+        "id": "near",
+        "name": "Near advertised",
+        "dated": (
+            "Month-mean write 720 Mbit/s (90% of advertised)",
+            "Month-mean write/read 1.01 · typical for an Exit",
+        ),
+        "verdict": (
+            "Delivering most of advertised",
+            "Typical all month",
+        ),
+        "who": (
+            "This relay is using most of its advertised bandwidth",
+            "Still with other Exits",
+        ),
+    },
+    {
+        "id": "both",
+        "name": "Overloaded + investigate spike",
+        "dated": (
+            "Write jumped 1 Aug · month-mean 300 Mbit/s (37% of advertised) · currently overloaded",
+            "1 day off the 1.70 scale (2.40) · month-mean 1.11, typical for an Exit+Guard",
+        ),
+        "verdict": (
+            "1 write spike · the rest of the month is quiet · currently overloaded",
+            "1 investigate day · the rest typical",
+        ),
+        "who": (
+            "This relay’s write moved · advertised is unchanged · currently overloaded",
+            "This relay left the Exit+Guard band 1 Aug · family and peers stayed",
+        ),
+    },
+)
+
+
+def plot_outcome_scenario_cards(out_paths):
+    """Every distinct story × the three subtitle styles."""
+    styles = (
+        ("dated", "A  Date + number"),
+        ("verdict", "B  Verdict"),
+        ("who", "C  Who moved  ·  recommended"),
+    )
+    n = len(OUTCOME_SCENARIOS)
+    fig_h = 1.15 + n * 1.42
+    fig, ax = plt.subplots(figsize=(11.4, fig_h))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, n)
+    ax.axis("off")
+    fig.subplots_adjust(top=0.955, bottom=0.035, left=0.04, right=0.98)
+    fig.text(
+        0.04, 0.985,
+        "Outcome subtitles  ·  every story the two strips can conclude",
+        fontsize=13, fontweight="bold", va="top",
+    )
+    fig.text(
+        0.04, 0.968,
+        "Title names the chart. Legend names the series. The subtitle says "
+        "what happened. C is the recommendation: whose problem, not the method.",
+        fontsize=8.5, color=GRAY, va="top",
+    )
+    for i, sc in enumerate(OUTCOME_SCENARIOS):
+        y = n - 1 - i
+        if i % 2 == 0:
+            ax.add_patch(plt.Rectangle(
+                (0.0, y), 1.0, 1.0, facecolor="#f4f6f7",
+                edgecolor="none", zorder=0,
+            ))
+        ax.text(0.02, y + 0.86, sc["name"], fontsize=9.5, fontweight="bold",
+                va="top", zorder=1)
+        for j, (key, label) in enumerate(styles):
+            t_line, r_line = sc[key]
+            rec = key == "who"
+            yy = y + 0.68 - j * 0.24
+            ax.text(
+                0.02, yy, label, fontsize=7.4,
+                fontweight="bold" if rec else "normal",
+                color=GREEN if rec else NAVY, va="top", zorder=1,
+            )
+            ax.text(0.28, yy, f"T  {t_line}", fontsize=7.3, color="#222",
+                    va="top", zorder=1)
+            ax.text(0.28, yy - 0.10, f"R  {r_line}", fontsize=7.3, color="#222",
+                    va="top", zorder=1)
+    fig.text(
+        0.04, 0.012,
+        "T = throughput strip  ·  R = write/read strip  ·  "
+        "Restart is a vertical line, not a subtitle. Overload is a legend "
+        "diamond and a clause on T when it is on.",
+        fontsize=7.5, color=GRAY, va="bottom",
+    )
+    save(fig, out_paths)
+
+
+def write_outcome_html(path, published, cards, scenario_name, f3_cards):
+    def block(card):
+        rec = " recommend" if card.get("recommend") else ""
+        badge = " · recommended" if card.get("recommend") else ""
+        return f"""
+  <section class="section-box{rec}">
+    <h4>{card["name"]}{badge}</h4>
+    <p class="relay-meta">{card["blurb"]}</p>
+    <div class="chart-wrap">
+      <img src="{card["file"]}" alt="{card["name"]}">
+    </div>
+  </section>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outcome subtitles · three styles</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body>
+<nav class="aeo-cross-nav"><div class="aeo-nav-container">
+  <a class="aeo-nav-brand" href="#">1AEO</a>
+  <div class="aeo-nav-links">
+    <a href="#">Home</a><a class="active" href="#">Metrics</a>
+  </div>
+</div></nav>
+<div class="container">
+  <div class="option-banner recommend">
+    <strong>Recommended: C — who moved</strong>
+    Both keys at the top of their panel, same type size. The subtitle
+    says whose problem it is, not how the bands were built. Date +
+    number duplicates the callout on a spike. Verdict is empty on a
+    quiet month.
+  </div>
+  <p class="relay-meta">
+    Legends match at 8 pt, both in a shelf at the top of the panel.
+    Subject is <strong>jeangrae</strong> (spike, this relay only) and
+    <strong>F3Netze</strong> (typical, currently overloaded).
+  </p>
+  <h3>Every story these two strips can conclude</h3>
+  <div class="chart-wrap">
+    <img src="{scenario_name}" alt="Outcome subtitle scenarios">
+  </div>
+  <h3>Three styles on jeangrae</h3>
+  {''.join(block(c) for c in cards)}
+  <h3>Same three styles on F3Netze</h3>
+  {''.join(block(c) for c in f3_cards)}
+  <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
+  Light theme. Okabe–Ito. Both keys at the top. 8 pt legend text.</p>
+</div>
+<footer class="aeo-footer">
+  Mockup of outcome subtitles · Allium
+</footer>
+</body>
+</html>
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html)
+    return path
+
+
+def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
+                                   f3_overlays, f3_ov, f3_ts, f3_read,
+                                   f3_write, f3_adv, f3_events, out, art):
+    """Both keys at top, matched type, three outcome-subtitle styles."""
+    jg = det.get(JEANGRAE)
+    jg_doc = bw_all.get(JEANGRAE) if jg else None
+    if not jg or not jg_doc:
+        print("skip outcomes: missing jeangrae series")
+        return
+    ctx = collect_band_copy_relay(
+        jg, jg_doc, list(det.values()), bw_all, published, "Guard",
+    )
+    if not ctx:
+        print("skip outcomes: jeangrae has no 1M series")
+        return
+    s = ctx["series"]
+    chrome = chrome_spec("callout")
+    plot_outcome_scenario_cards(
+        [out / "relay_bandwidth_outcome_scenarios.png",
+         art / "relay_bandwidth_outcome_scenarios.png"],
+    )
+    print("wrote relay_bandwidth_outcome_scenarios.png")
+
+    meta = {
+        "dated": (
+            "A — Date + number",
+            "What happened, when, and by how much. On a spike this "
+            "repeats the callout. On a quiet month it is the utilization "
+            "number the title does not give you.",
+        ),
+        "verdict": (
+            "B — Verdict",
+            "Shortest. Names the story without the figures. On a quiet "
+            "month it is almost empty (“Typical all month”).",
+        ),
+        "who": (
+            "C — Who moved",
+            "Ship this. Answers “is it just me?” Family and peers "
+            "stayed on jeangrae. F3 is still with other Exit+Guards. "
+            "Falls back to a quiet all-clear when nothing left the band.",
+        ),
+    }
+    cards = []
+    for style in OUTCOME_STYLES:
+        name = f"relay_bandwidth_outcome_{style}_jeangrae.png"
+        bandwidth_a_dual_line(
+            s["ts"], s["read_m"], s["write_m"], s["advertised_mbit"],
+            s["events"], published, ctx["overlays"], ctx["ov"],
+            [out / name, art / name],
+            title="Throughput · last 30 days",
+            overload_mode="title",
+            page_ready=True,
+            nickname="jeangrae",
+            chrome=chrome,
+            legend_attach="above",
+            subtitle_style=style,
+        )
+        print("wrote", name)
+        title, blurb = meta[style]
+        cards.append({
+            "name": title, "blurb": blurb, "file": name,
+            "recommend": style == "who",
+        })
+
+    f3_cards = []
+    for style in OUTCOME_STYLES:
+        name = f"relay_bandwidth_outcome_{style}_f3.png"
+        bandwidth_a_dual_line(
+            f3_ts, f3_read, f3_write, f3_adv, f3_events, published,
+            f3_overlays, f3_ov, [out / name, art / name],
+            title="Throughput · last 30 days",
+            overload_mode="legend",
+            page_ready=True,
+            nickname="F3Netze",
+            chrome=chrome,
+            legend_attach="above",
+            subtitle_style=style,
+        )
+        print("wrote", name)
+        title, blurb = meta[style]
+        f3_cards.append({
+            "name": f"F3Netze · {title}",
+            "blurb": "Typical strip. Overload stays a legend diamond plus a clause on the throughput line.",
+            "file": name,
+            "recommend": style == "who",
+        })
+
+    # Refresh official style 5 to the locked chrome: top keys, 8 pt, who.
+    for dest_name, args in (
+        ("relay_bandwidth_chrome_5_callout_jeangrae.png", dict(
+            ts=s["ts"], read_m=s["read_m"], write_m=s["write_m"],
+            advertised_mbit=s["advertised_mbit"], events=s["events"],
+            overlays=ctx["overlays"], ov=ctx["ov"], nickname="jeangrae",
+            overload_mode="title",
+        )),
+        ("relay_bandwidth_chrome_5_callout_f3.png", dict(
+            ts=f3_ts, read_m=f3_read, write_m=f3_write,
+            advertised_mbit=f3_adv, events=f3_events,
+            overlays=f3_overlays, ov=f3_ov, nickname="F3Netze",
+            overload_mode="legend",
+        )),
+    ):
+        bandwidth_a_dual_line(
+            args["ts"], args["read_m"], args["write_m"], args["advertised_mbit"],
+            args["events"], published, args["overlays"], args["ov"],
+            [out / dest_name, art / dest_name],
+            title="Throughput · last 30 days",
+            overload_mode=args["overload_mode"],
+            page_ready=True,
+            nickname=args["nickname"],
+            chrome=chrome,
+            legend_attach="above",
+            subtitle_style="who",
+        )
+        print("wrote", dest_name)
+
+    for dest in (out, art):
+        write_outcome_html(
+            dest / "relay_page_bw_outcomes.html", published,
+            cards, "relay_bandwidth_outcome_scenarios.png", f3_cards,
+        )
+    print("wrote relay_page_bw_outcomes.html")
 
 
 def write_role_band_gallery_html(path, rows, published):
