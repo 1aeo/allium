@@ -578,41 +578,54 @@ white shelf above 1.70 so it is not on the bands or the triangles.
 
 Method and “compared with other Guards” subtitles are rejected — they
 repeat the legend or say nothing about this relay. The subtitle
-summarizes the **outcome**. Title names the chart. Legend names the
-series. Subtitle says what happened.
+summarizes the **outcome**. Title names the chart and the nickname.
+Legend names the series. Subtitle says who moved.
 
 #### Outcome subtitles
 
-Three styles. Built from the series (zone, spike days, overlays,
-utilization, overload). No hand-written copy per relay.
+**Locked: C — who moved.** Built from the series (zone, spike days,
+overlays, utilization). No hand-written copy per relay. A (date +
+number) and B (verdict) were tried and dropped.
 
-| Style | What it says | File |
-|-------|--------------|------|
-| A Date + number | When and by how much. Duplicates the callout on a spike. | [`relay_bandwidth_outcome_dated_jeangrae.png`](mockups/relay_bandwidth_outcome_dated_jeangrae.png) |
-| B Verdict | Short story, no figures. Empty on a quiet month. | [`relay_bandwidth_outcome_verdict_jeangrae.png`](mockups/relay_bandwidth_outcome_verdict_jeangrae.png) |
-| **C Who moved** | Whose problem. Family/peers stayed or moved. All-clear when nothing left. | [`relay_bandwidth_outcome_who_jeangrae.png`](mockups/relay_bandwidth_outcome_who_jeangrae.png) |
+Copy rules:
 
-**Ship C.** On jeangrae: *This relay left the Guard band 22–23 Jul ·
-family and peers stayed.* On F3Netze: *Still with other Exit+Guards.*
+1. Thin history or all-clear → empty subtitle. All-clear means typical
+   write/read, no investigate day, no spike, no crash.
+2. Say “With other Guards”, not “Still with…”.
+3. Do not say “This relay…”. The page is about that relay. Put the
+   nickname on the title:
+   `Throughput · last 30 days · {nickname} · {role}`.
+4. Whenever we say X% of advertised, also show raw throughput:
+   `99 Mbit/s (15% of advertised)`.
+
+Overload stays in the legend. Do not invent a subtitle just for
+overload. Restart stays a vertical line.
+
+Live C charts:
+
+- jeangrae (spike, this relay only):
+  [`relay_bandwidth_outcome_c_jeangrae.png`](mockups/relay_bandwidth_outcome_c_jeangrae.png)
+- F3Netze (all-clear, overload in the legend, empty subtitles):
+  [`relay_bandwidth_outcome_c_f3.png`](mockups/relay_bandwidth_outcome_c_f3.png)
 
 Stories the two strips can conclude (not a cartesian product):
 
-1. Not enough history
-2. Quiet typical
-3. Typical + currently overloaded
-4. Typical + restart in the window (restart stays a vertical line)
+1. Not enough history — empty / empty
+2. Quiet typical — empty / empty
+3. Typical + currently overloaded — empty / empty
+4. Typical + restart in the window — empty / empty
 5. Uncommon month, no investigate day
 6. Investigate spike, this relay only
 7. Investigate spike, family moved, role stayed
 8. Investigate spike, the whole role moved
 9. Persistent investigate month
 10. Read-heavy month
-11. Throughput crash (write and read both fell)
-12. Near advertised
+11. Throughput crash (write and read both moved; ratio typical → R empty)
+12. Near advertised — empty / empty
 13. Overloaded + investigate spike
 
-Card of every story × A/B/C:
-[`relay_bandwidth_outcome_scenarios.png`](mockups/relay_bandwidth_outcome_scenarios.png).
+C-only table (scenario · T · R):
+[`relay_bandwidth_outcome_c_table.png`](mockups/relay_bandwidth_outcome_c_table.png).
 Gallery: [`relay_page_bw_outcomes.html`](mockups/relay_page_bw_outcomes.html).
 
 Footnote stays `4,444 Guards · baseline 15 Aug 2026`. How the bands
@@ -822,9 +835,9 @@ python3 docs/features/planned/charts/analyze_write_read_ratios.py \
 ```
 
 `--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
-`bandcopy`, `chrome`, `legends`, or `outcomes`. `outcomes` is both
-keys at the top, matched 8 pt type, and the three outcome-subtitle
-styles.
+`bandcopy`, `chrome`, `legends`, or `outcomes`. `outcomes` is the
+C-only table, live C charts on jeangrae and F3Netze, and a refresh of
+official style 5.
 
 Chart mockups need the Onionoo snapshots already used by
 [`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
