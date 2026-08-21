@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import textwrap
 from datetime import datetime, timedelta, timezone
@@ -1325,19 +1326,83 @@ def with_role(title, bands):
     return f"{title}  ·  {role}"
 
 
+
+# Contact `url:` host, optional scheme. Same token Allium uses for AROI.
+_RE_URL_FIELD = re.compile(r"\burl:(?:https?://)?([^,\s/]+)", re.I)
+
+
+def operator_from_contact(contact):
+    """Short operator label for the chart identity.
+
+    AROI / `url:` host only. Omit when missing — do not dump the raw
+    contact, an email, or `as_name` (that is usually the host, not the
+    operator).
+    """
+    if not contact:
+        return ""
+    match = _RE_URL_FIELD.search(contact)
+    if not match:
+        return ""
+    host = match.group(1).strip().lower()
+    if host.startswith("www."):
+        host = host[4:]
+    host = host.split("/")[0]
+    if "." not in host or host in ("none", "localhost"):
+        return ""
+    return host
+
+
+def chart_identity(nickname, operator=None):
+    """`jeangrae · 1aeo.com`, or just the nickname when there is no AROI."""
+    nick = (nickname or "").strip()
+    op = (operator or "").strip()
+    if op and nick and op.lower() != nick.lower():
+        return f"{nick}  ·  {op}"
+    return nick or op
+
+
+IDENTITY_FONTSIZE = 10.5
+IDENTITY_TITLE_GAP_PT = 5
+
+
+def apply_chart_identity(ax, identity, loc="left", title_pad=None):
+    """Eyebrow above the metric title. Smaller than the 13 pt title so it
+    does not compete with the page h1, still the first line in a screenshot.
+    """
+    if not identity:
+        return
+    pad = THROUGHPUT_TITLE_PAD if title_pad is None else title_pad
+    ha = "left" if loc == "left" else "center"
+    x = 0.0 if loc == "left" else 0.5
+    ax.text(
+        x, 1.0, identity,
+        transform=ax.transAxes + ScaledTranslation(
+            0, (pad + IDENTITY_TITLE_GAP_PT) / 72.0, ax.figure.dpi_scale_trans,
+        ),
+        ha=ha, va="bottom",
+        fontsize=IDENTITY_FONTSIZE, fontweight="medium", color=NAVY,
+        clip_on=False,
+    )
+
+
 def sibling_ratio_title(throughput_title, bands=None):
     """Keep the write/read title in lockstep with the throughput title.
 
-    `Throughput · last 30 days · jeangrae · Guard` becomes
-    `Write / read · last 30 days · jeangrae · Guard`. An empty
-    throughput title (rejected hero option) stays empty on the strip.
+    Identity lives above the stacked figure, not in this string.
+    `Throughput · last 30 days · Guard` becomes
+    `Write / read · last 30 days · Guard`. An empty throughput title
+    (rejected hero option) stays empty on the strip. If a comparison
+    mockup prefixes the identity in front of Throughput, drop that
+    prefix here — the write/read panel is not the overall chart.
     """
     if throughput_title is None:
         return with_role("Write / read", bands)
     if not throughput_title:
         return ""
-    if throughput_title.startswith("Throughput"):
-        return "Write / read" + throughput_title[len("Throughput"):]
+    metric = throughput_title.split("\n")[-1]
+    idx = metric.find("Throughput")
+    if idx >= 0:
+        return "Write / read" + metric[idx + len("Throughput"):]
     return with_role("Write / read", bands)
 
 
@@ -2287,6 +2352,8 @@ def _draw_throughput_series(ax, ts, read_m, write_m, advertised_mbit, events,
 def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, published,
                           overlays, overload_status, out_paths,
                           nickname="F3Netze",
+                          operator=None,
+                          identity_placement="above",
                           title=None,
                           overload_mode="title",
                           page_ready=False,
@@ -2345,6 +2412,11 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         top = 0.91
         bottom = 0.16 if page_ready else 0.26
         height_ratios = [3.2, 1.35]
+    ident = chart_identity(nickname, operator)
+    identity_on = bool(ident) and identity_placement == "above"
+    if identity_on:
+        fig_h += 0.22
+        top = max(0.78, top - 0.035)
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, fig_h), sharex=True,
         gridspec_kw={"height_ratios": height_ratios, "hspace": hspace},
@@ -2357,16 +2429,19 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         chrome=chrome, tight_ylim=(legend_attach == "below"),
     )
     if title is None:
-        title = f"Throughput · last 30 days · {nickname}"
-    elif nickname and nickname not in title:
-        title = f"{title} · {nickname}"
+        title = "Throughput · last 30 days"
+    if identity_placement == "infront" and ident and title and ident not in title:
+        title = f"{ident}  ·  {title}"
     bw_title = with_role(title, bands)
     title_loc = chrome_title_loc(chrome, overload_status, overload_mode)
     title_pad = SUBTITLE_TITLE_PAD if subtitle_on else None
+    used_pad = THROUGHPUT_TITLE_PAD if title_pad is None else title_pad
     apply_throughput_title(
         ax, bw_title, overload_status, overload_mode,
         loc=title_loc, pad=title_pad,
     )
+    if identity_on:
+        apply_chart_identity(ax, ident, loc=title_loc, title_pad=used_pad)
     if thru_sub:
         apply_method_subtitle(ax, thru_sub)
     if chrome and chrome.get("callout"):
@@ -3357,9 +3432,7 @@ def relay_page_context(det, published, role_label):
     mid_p = det.get("middle_probability") or 0
     exit_p = det.get("exit_probability") or 0
     contact = det.get("contact") or ""
-    aroi = "1aeo.com" if "1aeo.com" in contact else None
-    if not aroi and "f3netze.de" in contact:
-        aroi = "f3netze.de"
+    aroi = operator_from_contact(contact) or None
     return {
         "nickname": det.get("nickname") or "unknown",
         "fingerprint": det.get("fingerprint") or "",
@@ -4741,14 +4814,14 @@ def plot_outcome_scenario_cards(out_paths):
     fig.text(
         0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
-        "Nickname lives on the title, not in the subtitle. "
+        "Nickname and operator sit above Throughput, not in the subtitle. "
         "No “this relay” / “still with.”",
         fontsize=7.4, color=GRAY, va="bottom",
     )
     save(fig, out_paths)
 
 
-def write_outcome_html(path, published, cards, scenario_name):
+def write_outcome_html(path, published, cards, scenario_name, identity_cards=None):
     def block(card):
         return f"""
   <section class="section-box recommend">
@@ -4779,8 +4852,10 @@ def write_outcome_html(path, published, cards, scenario_name):
     <strong>Locked: C — who moved</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). Overload
-    stays in the legend. Restart is a vertical line. Nickname is on
-    the title. Any advertised share is raw throughput plus percent:
+    stays in the legend. Restart is a vertical line. Nickname and
+    operator sit <em>above</em> Throughput so a screenshot still names
+    the relay without repeating the page h1. Any advertised share is
+    raw throughput plus percent:
     <code>99 Mbit/s (15% of advertised)</code>.
   </div>
   <p class="relay-meta">
@@ -4793,6 +4868,7 @@ def write_outcome_html(path, published, cards, scenario_name):
     <img src="{scenario_name}" alt="Outcome subtitle C table">
   </div>
   {''.join(block(c) for c in cards)}
+  {('<h3>Where the name sits</h3>' + ''.join(block(c) for c in identity_cards)) if identity_cards else ''}
   <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
   Light theme. Okabe–Ito. Both keys at the top. 8 pt legend text.</p>
 </div>
@@ -4824,6 +4900,8 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
         return
     s = ctx["series"]
     chrome = chrome_spec("callout")
+    jg_op = operator_from_contact(jg.get("contact"))
+    f3_op = operator_from_contact((f3 or {}).get("contact"))
     table_names = (
         "relay_bandwidth_outcome_c_table.png",
         "relay_bandwidth_outcome_scenarios.png",
@@ -4836,6 +4914,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     live = (
         {
             "nick": "jeangrae",
+            "operator": jg_op,
             "files": (
                 "relay_bandwidth_outcome_c_jeangrae.png",
                 "relay_bandwidth_outcome_who_jeangrae.png",
@@ -4847,12 +4926,13 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "name": "jeangrae · C who moved",
             "blurb": (
                 "Write moved off the Guard band; family and peers stayed. "
-                "Title carries the nickname. Throughput is raw plus percent "
-                "of advertised."
+                "Identity sits above Throughput: jeangrae · 1aeo.com. "
+                "Throughput is raw plus percent of advertised."
             ),
         },
         {
             "nick": "F3Netze",
+            "operator": f3_op,
             "files": (
                 "relay_bandwidth_outcome_c_f3.png",
                 "relay_bandwidth_outcome_who_f3.png",
@@ -4865,7 +4945,8 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "blurb": (
                 "All-clear month: typical write/read, no investigate day, "
                 "no spike, no crash. Subtitles stay empty. Overload is the "
-                "legend diamond. Nickname is on the title."
+                "legend diamond. Identity sits above Throughput: "
+                "F3Netze · f3netze.de."
             ),
         },
     )
@@ -4880,6 +4961,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             overload_mode=spec["overload_mode"],
             page_ready=True,
             nickname=spec["nick"],
+            operator=spec["operator"],
             chrome=chrome,
             legend_attach="above",
             subtitle_style="who",
@@ -4897,13 +4979,13 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             ts=s["ts"], read_m=s["read_m"], write_m=s["write_m"],
             advertised_mbit=s["advertised_mbit"], events=s["events"],
             overlays=ctx["overlays"], ov=ctx["ov"], nickname="jeangrae",
-            overload_mode="title",
+            operator=jg_op, overload_mode="title",
         )),
         ("relay_bandwidth_chrome_5_callout_f3.png", dict(
             ts=f3_ts, read_m=f3_read, write_m=f3_write,
             advertised_mbit=f3_adv, events=f3_events,
             overlays=f3_overlays, ov=f3_ov, nickname="F3Netze",
-            overload_mode="legend",
+            operator=f3_op, overload_mode="legend",
         )),
     ):
         bandwidth_a_dual_line(
@@ -4914,16 +4996,60 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             overload_mode=args["overload_mode"],
             page_ready=True,
             nickname=args["nickname"],
+            operator=args["operator"],
             chrome=chrome,
             legend_attach="above",
             subtitle_style="who",
         )
         print("wrote", dest_name)
 
+    identity_files = {
+        "above": "relay_bandwidth_identity_above_jeangrae.png",
+        "infront": "relay_bandwidth_identity_infront_jeangrae.png",
+    }
+    identity_cards = []
+    for place, fname in identity_files.items():
+        bandwidth_a_dual_line(
+            s["ts"], s["read_m"], s["write_m"], s["advertised_mbit"],
+            s["events"], published, ctx["overlays"], ctx["ov"],
+            [out / fname, art / fname],
+            title="Throughput · last 30 days",
+            overload_mode="title",
+            page_ready=True,
+            nickname="jeangrae",
+            operator=jg_op,
+            identity_placement=place,
+            chrome=chrome,
+            legend_attach="above",
+            subtitle_style="who",
+        )
+        print("wrote", fname)
+        if place == "above":
+            identity_cards.append({
+                "name": "Above Throughput · ship this",
+                "blurb": (
+                    "Eyebrow: jeangrae · 1aeo.com. Metric title stays short. "
+                    "A screenshot still names the relay. On the page this is "
+                    "a figure label, not a second h1."
+                ),
+                "file": fname,
+            })
+        else:
+            identity_cards.append({
+                "name": "In front of Throughput · rejected",
+                "blurb": (
+                    "jeangrae · 1aeo.com · Throughput · last 30 days · Guard "
+                    "is one long line. It wraps and repeats the page heading "
+                    "at title weight."
+                ),
+                "file": fname,
+            })
+
     for dest in (out, art):
         write_outcome_html(
             dest / "relay_page_bw_outcomes.html", published,
             cards, "relay_bandwidth_outcome_c_table.png",
+            identity_cards=identity_cards,
         )
     print("wrote relay_page_bw_outcomes.html")
 

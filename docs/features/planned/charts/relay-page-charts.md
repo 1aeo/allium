@@ -316,14 +316,16 @@ is amber; an Exit at 1.20 is red. Write is purple, read is blue,
 advertised is orange dashed.
 
 The throughput legend sits **above the axes**, never on the series or the
-advertised line. Chart title on the page is `Throughput · last 30 days`
-(the `#bandwidth` heading already says Bandwidth Metrics). The write/read
-strip uses the same title pattern (`Write / read · last 30 days · Guard`)
-and the same title `pad` / `loc` so the two stacked headers line up. Its
-legend sits **just under the date labels**, not inside the plot and not
-a figure-bottom slab — the bands go to ylim and an in-axes box covers
-the series (and off-scale markers). The census footnote is pinned to
-that legend.
+advertised line. The overall chart opens with an identity eyebrow
+(`jeangrae · 1aeo.com`) then `Throughput · last 30 days · Guard`. The
+`#bandwidth` heading already says Bandwidth Metrics; the page h1 already
+says the nickname. The write/read strip uses the same title pattern
+(`Write / read · last 30 days · Guard`) and the same title `pad` / `loc`
+so the two stacked headers line up. Identity is not repeated on the
+strip. Its legend sits **just under the date labels**, not inside the
+plot and not a figure-bottom slab — the bands go to ylim and an in-axes
+box covers the series (and off-scale markers). The census footnote is
+pinned to that legend.
 
 #### Overload is a now-indicator, not a time series
 
@@ -542,9 +544,37 @@ The History strip uses **this relay’s flags**. Mocked on four relays:
 ![Middle band — 10dxx](mockups/relay_bandwidth_a_role_middle_10dxx.png)
 
 Chart title on the page is `Throughput · last 30 days · Exit+Guard`
-(or the selected period and this relay’s flag set). Nickname stays in
-the page `h1`. Overload details stay in
-`#uptime` `#overload`; the chart only repeats *that it is on*.
+(or the selected period and this relay’s flag set). Nickname and
+operator sit **above** that line, not in front of it. The page `h1`
+still names the relay. Overload details stay in `#uptime` `#overload`;
+the chart only repeats *that it is on*.
+
+#### Chart identity
+
+A screenshot of the stacked figure has to name the relay. The page
+already has `View Relay "jeangrae"` as the h1, so the chart must not
+grow a second heading.
+
+**Ship the names above Throughput**, as an 11 pt navy eyebrow:
+
+```
+jeangrae · 1aeo.com
+Throughput · last 30 days · Guard
+```
+
+Operator is the AROI / contact `url:` host when present (`1aeo.com`,
+`f3netze.de`). Omit it when the contact has no `url:`. Do not use
+`as_name` (that is usually the host) or dump the raw contact.
+
+In front (`jeangrae · 1aeo.com · Throughput · last 30 days · Guard`)
+was tried and rejected: one long wrapping line, title-weight repeat of
+the page h1, and the write/read sibling title no longer starts with a
+clean metric word.
+
+- Above (ship):
+  [`relay_bandwidth_identity_above_jeangrae.png`](mockups/relay_bandwidth_identity_above_jeangrae.png)
+- In front (rejected):
+  [`relay_bandwidth_identity_infront_jeangrae.png`](mockups/relay_bandwidth_identity_infront_jeangrae.png)
 
 #### Chart chrome (light theme)
 
@@ -593,8 +623,11 @@ Copy rules:
    write/read, no investigate day, no spike, no crash.
 2. Say “With other Guards”, not “Still with…”.
 3. Do not say “This relay…”. The page is about that relay. Put the
-   nickname on the title:
-   `Throughput · last 30 days · {nickname} · {role}`.
+   nickname, and the operator AROI when the contact has a `url:`,
+   **above** Throughput as an 11 pt navy eyebrow:
+   `jeangrae · 1aeo.com` then `Throughput · last 30 days · Guard`.
+   Do not put the names in front of Throughput — that makes one long
+   wrapping line and repeats the page h1 at title weight.
 4. Whenever we say X% of advertised, also show raw throughput:
    `99 Mbit/s (15% of advertised)`.
 
