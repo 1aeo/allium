@@ -4854,10 +4854,10 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
     <strong>Locked: C — who moved</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). Overload
-    stays in the legend. Restart is a vertical line. Nickname and
-    operator sit <em>above</em> Throughput so a screenshot still names
-    the relay without repeating the page h1. Any advertised share is
-    raw throughput plus percent:
+    stays in the legend. Restart is a vertical line. Nickname is on
+    the title:
+    <code>Throughput · last 30 days · {{nickname}} · {{role}}</code>.
+    Any advertised share is raw throughput plus percent:
     <code>99 Mbit/s (15% of advertised)</code>.
   </div>
   <p class="relay-meta">
