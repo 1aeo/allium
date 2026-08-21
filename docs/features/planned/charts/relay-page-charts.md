@@ -555,12 +555,20 @@ A screenshot of the stacked figure has to name the relay. The page
 already has `View Relay "jeangrae"` as the h1, so the chart must not
 grow a second heading.
 
-**Ship the names above Throughput**, as an 11 pt navy eyebrow:
+**Ship the names above Throughput**, at **13 pt bold** — tied with the
+metric titles (`axes.titlesize: 13`). Identity is the largest type on
+the figure, or tied for largest. Do not leave it as a 10.5 / 11 pt
+navy eyebrow.
 
 ```
 jeangrae · 1aeo.com
 Throughput · last 30 days · Guard
 ```
+
+Leave a real vertical gap so the identity line cannot overlap
+Throughput, the outcome subtitle, or either legend. Identity stays
+above Throughput, never in front of it, and is not repeated on the
+write/read strip.
 
 Operator is the AROI / contact `url:` host when present (`1aeo.com`,
 `f3netze.de`). Omit it when the contact has no `url:`. Do not use
@@ -573,6 +581,8 @@ clean metric word.
 
 - Above (ship):
   [`relay_bandwidth_identity_above_jeangrae.png`](mockups/relay_bandwidth_identity_above_jeangrae.png)
+- F3Netze above (ship, empty C subtitles):
+  [`relay_bandwidth_identity_above_f3.png`](mockups/relay_bandwidth_identity_above_f3.png)
 - In front (rejected):
   [`relay_bandwidth_identity_infront_jeangrae.png`](mockups/relay_bandwidth_identity_infront_jeangrae.png)
 
@@ -608,8 +618,9 @@ white shelf above 1.70 so it is not on the bands or the triangles.
 
 Method and “compared with other Guards” subtitles are rejected — they
 repeat the legend or say nothing about this relay. The subtitle
-summarizes the **outcome**. Title names the chart and the nickname.
-Legend names the series. Subtitle says who moved.
+summarizes the **outcome**. Title names the chart. Identity names the
+relay above Throughput. Legend names the series. Subtitle says who
+moved.
 
 #### Outcome subtitles
 
@@ -623,8 +634,12 @@ Copy rules:
    write/read, no investigate day, no spike, no crash.
 2. Say “With other Guards”, not “Still with…”.
 3. Do not say “This relay…”. The page is about that relay. Put the
-   nickname on the title:
-   `Throughput · last 30 days · {nickname} · {role}`.
+   nickname, and the operator AROI when the contact has a `url:`,
+   **above** Throughput at 13 pt bold (same size as the metric title):
+   `jeangrae · 1aeo.com` then `Throughput · last 30 days · Guard`.
+   Leave a clear gap so the names do not overlap Throughput.
+   Do not put the names in front of Throughput — that makes one long
+   wrapping line and repeats the page h1 at title weight.
 4. Whenever we say X% of advertised, also show raw throughput:
    `99 Mbit/s (15% of advertised)`.
 
