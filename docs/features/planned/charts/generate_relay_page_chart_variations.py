@@ -1361,26 +1361,51 @@ def chart_identity(nickname, operator=None):
     return nick or op
 
 
-IDENTITY_FONTSIZE = 10.5
-IDENTITY_TITLE_GAP_PT = 5
+# Tied with axes.titlesize (13 pt bold). Largest type on the figure,
+# without overshooting the page h1.
+IDENTITY_FONTSIZE = 13
+# Clear air between the identity baseline box and the Throughput title.
+# The old 5 pt offset sat on top of the 13 pt title.
+IDENTITY_TITLE_GAP_PT = 12
+IDENTITY_EXTRA_FIG_H = 0.48
+IDENTITY_TOP_SHIFT = 0.075
+IDENTITY_TITLE_PAD_BOOST = 6
 
 
 def apply_chart_identity(ax, identity, loc="left", title_pad=None):
-    """Eyebrow above the metric title. Smaller than the 13 pt title so it
-    does not compete with the page h1, still the first line in a screenshot.
+    """Names above the metric title, same 13 pt bold as Throughput.
+
+    Offset is measured from the rendered title so the two lines cannot
+    collide. Falls back to pad + title size + gap if the title is empty.
+    Identity is never drawn on the write/read strip.
     """
     if not identity:
         return
     pad = THROUGHPUT_TITLE_PAD if title_pad is None else title_pad
     ha = "left" if loc == "left" else "center"
     x = 0.0 if loc == "left" else 0.5
+    fig = ax.figure
+    fig.canvas.draw()
+    title = ax.title
+    if title is not None and title.get_text():
+        renderer = fig.canvas.get_renderer()
+        title_top_px = title.get_window_extent(renderer).y1
+        axes_top_px = ax.transAxes.transform((0.0, 1.0))[1]
+        offset_in = (
+            (title_top_px - axes_top_px) / fig.dpi
+            + IDENTITY_TITLE_GAP_PT / 72.0
+        )
+    else:
+        offset_in = (
+            pad + IDENTITY_FONTSIZE + IDENTITY_TITLE_GAP_PT
+        ) / 72.0
     ax.text(
         x, 1.0, identity,
         transform=ax.transAxes + ScaledTranslation(
-            0, (pad + IDENTITY_TITLE_GAP_PT) / 72.0, ax.figure.dpi_scale_trans,
+            0, offset_in, fig.dpi_scale_trans,
         ),
         ha=ha, va="bottom",
-        fontsize=IDENTITY_FONTSIZE, fontweight="normal", color=NAVY,
+        fontsize=IDENTITY_FONTSIZE, fontweight="bold", color=NAVY,
         clip_on=False,
     )
 
@@ -1788,7 +1813,7 @@ def format_outcome_subtitle(outcome, which, style):
     """which: throughput | ratio. style: dated | verdict | who.
 
     Who (ship this): empty when history is thin or the month is all-clear.
-    No “this relay” — the title has the nickname. No “still with.”
+    No “this relay” — identity sits above Throughput. No “still with.”
     Any advertised share is `N Mbit/s (P% of advertised)`.
     """
     if not outcome or not outcome.get("enough"):
@@ -2353,7 +2378,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           overlays, overload_status, out_paths,
                           nickname="F3Netze",
                           operator=None,
-                          identity_placement=None,
+                          identity_placement="above",
                           title=None,
                           overload_mode="title",
                           page_ready=False,
@@ -2415,8 +2440,8 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     ident = chart_identity(nickname, operator)
     identity_on = bool(ident) and identity_placement == "above"
     if identity_on:
-        fig_h += 0.22
-        top = max(0.78, top - 0.035)
+        fig_h += IDENTITY_EXTRA_FIG_H
+        top = max(0.70, top - IDENTITY_TOP_SHIFT)
     fig, (ax, axr) = plt.subplots(
         2, 1, figsize=(10.8, fig_h), sharex=True,
         gridspec_kw={"height_ratios": height_ratios, "hspace": hspace},
@@ -2432,12 +2457,12 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         title = "Throughput · last 30 days"
     if identity_placement == "infront" and ident and title and ident not in title:
         title = f"{ident}  ·  {title}"
-    elif identity_placement != "above" and nickname and nickname not in (title or ""):
-        title = f"{title} · {nickname}"
     bw_title = with_role(title, bands)
     title_loc = chrome_title_loc(chrome, overload_status, overload_mode)
-    title_pad = SUBTITLE_TITLE_PAD if subtitle_on else None
-    used_pad = THROUGHPUT_TITLE_PAD if title_pad is None else title_pad
+    title_pad = SUBTITLE_TITLE_PAD if subtitle_on else THROUGHPUT_TITLE_PAD
+    if identity_on:
+        title_pad += IDENTITY_TITLE_PAD_BOOST
+    used_pad = title_pad
     apply_throughput_title(
         ax, bw_title, overload_status, overload_mode,
         loc=title_loc, pad=title_pad,
@@ -4816,7 +4841,7 @@ def plot_outcome_scenario_cards(out_paths):
     fig.text(
         0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
-        "Nickname lives on the title, not in the subtitle. "
+        "Nickname and operator sit above Throughput, not in the subtitle. "
         "No “this relay” / “still with.”",
         fontsize=7.4, color=GRAY, va="bottom",
     )
@@ -4854,9 +4879,10 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
     <strong>Locked: C — who moved</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). Overload
-    stays in the legend. Restart is a vertical line. Nickname is on
-    the title:
-    <code>Throughput · last 30 days · {{nickname}} · {{role}}</code>.
+    stays in the legend. Restart is a vertical line. Identity sits
+    above Throughput at 13 pt bold:
+    <code>jeangrae · 1aeo.com</code> then
+    <code>Throughput · last 30 days · Guard</code>.
     Any advertised share is raw throughput plus percent:
     <code>99 Mbit/s (15% of advertised)</code>.
   </div>
@@ -4928,7 +4954,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "name": "jeangrae · C who moved",
             "blurb": (
                 "Write moved off the Guard band; family and peers stayed. "
-                "Title is Throughput · last 30 days · jeangrae · Guard. "
+                "Identity sits above Throughput: jeangrae · 1aeo.com. "
                 "Throughput is raw plus percent of advertised."
             ),
         },
@@ -4947,8 +4973,8 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "blurb": (
                 "All-clear month: typical write/read, no investigate day, "
                 "no spike, no crash. Subtitles stay empty. Overload is the "
-                "legend diamond. Title is Throughput · last 30 days · "
-                "F3Netze · Exit+Guard."
+                "legend diamond. Identity sits above Throughput: "
+                "F3Netze · f3netze.de."
             ),
         },
     )
@@ -4975,7 +5001,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "file": spec["files"][0],
         })
 
-    # Refresh official style 5 to locked C copy + nickname on the title.
+    # Refresh official style 5 to locked C copy + identity above Throughput.
     for dest_name, args in (
         ("relay_bandwidth_chrome_5_callout_jeangrae.png", dict(
             ts=s["ts"], read_m=s["read_m"], write_m=s["write_m"],
@@ -5027,12 +5053,27 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
         )
         print("wrote", fname)
         if place == "above":
+            f3_above = "relay_bandwidth_identity_above_f3.png"
+            bandwidth_a_dual_line(
+                f3_ts, f3_read, f3_write, f3_adv, f3_events, published,
+                f3_overlays, f3_ov, [out / f3_above, art / f3_above],
+                title="Throughput · last 30 days",
+                overload_mode="legend",
+                page_ready=True,
+                nickname="F3Netze",
+                operator=f3_op,
+                identity_placement="above",
+                chrome=chrome,
+                legend_attach="above",
+                subtitle_style="who",
+            )
+            print("wrote", f3_above)
             identity_cards.append({
                 "name": "Above Throughput · ship this",
                 "blurb": (
-                    "Eyebrow: jeangrae · 1aeo.com. Metric title stays short. "
-                    "A screenshot still names the relay. On the page this is "
-                    "a figure label, not a second h1."
+                    "13 pt bold: jeangrae · 1aeo.com, tied with Throughput. "
+                    "A real gap sits under the names. Metric title stays "
+                    "short. A screenshot still names the relay."
                 ),
                 "file": fname,
             })
