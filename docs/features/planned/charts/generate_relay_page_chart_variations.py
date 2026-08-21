@@ -54,6 +54,15 @@ RATIO_LO = 0.90
 RATIO_HI = 1.15
 RATIO_INVESTIGATE_LO = 0.80
 RATIO_INVESTIGATE_HI = 1.50
+# Write/read strip scale. 1.70 is the default clip (jeangrae 4.45 stays
+# a triangle). The top Investigate band is always reserved: when this
+# role's p98 sits at or above the clip (Exit+Guard 1.71), raise the
+# data top so invest_hi → yhi is a real red shelf, not a hairline.
+RATIO_SCALE_LO = 0.50
+RATIO_SCALE_HI = 1.70
+RATIO_LEGEND_SHELF = 0.52
+MIN_TOP_INVESTIGATE = 0.12
+RAISED_TOP_INVESTIGATE = 0.18
 AMBER = ORANGE
 ROLE_BANDS_PATH = Path(__file__).resolve().parent / "data" / "role_ratio_bands.json"
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
@@ -1639,7 +1648,11 @@ def ratio_subtitle_text(bands, style=None):
     return ""
 
 
+# C (style "who") is locked / shipped. dated and verdict are leftover
+# unused style branches, not live choices — still wired if someone
+# passes --only leftovers or an old style name.
 OUTCOME_STYLES = ("dated", "verdict", "who")
+SHIPPED_OUTCOME_STYLE = "who"
 
 
 def _role_article(role):
@@ -1810,9 +1823,12 @@ def _is_all_clear(outcome):
 
 
 def format_outcome_subtitle(outcome, which, style):
-    """which: throughput | ratio. style: dated | verdict | who.
+    """which: throughput | ratio.
 
-    Who (ship this): empty when history is thin or the month is all-clear.
+    C (style ``who``) is locked / shipped, not one of three experiments.
+    dated and verdict are leftover unused style branches, not live choices.
+
+    Empty when history is thin or the month is all-clear.
     No “this relay” — identity sits above Throughput. No “still with.”
     No “moved” — a write/read spike says spiked (bad); both-fell says
     dropped (bad). Investigate / off-band says Outside the band, not Left.
@@ -1823,7 +1839,7 @@ def format_outcome_subtitle(outcome, which, style):
     """
     if not outcome or not outcome.get("enough"):
         return ""
-    if style == "who" and _is_all_clear(outcome):
+    if style == SHIPPED_OUTCOME_STYLE and _is_all_clear(outcome):
         return ""
     role = outcome["role"]
     art = _role_article(role)
@@ -1871,7 +1887,7 @@ def format_outcome_subtitle(outcome, which, style):
             if util_bit and outcome["thru"] in ("near", "low", "steady", "crash"):
                 body += f" · {util_bit}"
             return body + ov_bit
-        # who
+        # shipped C
         if outcome["thru"] == "spike":
             kind = "Write" if outcome["spike"] == "write" else "Read"
             body = f"{kind} spiked"
@@ -1915,7 +1931,7 @@ def format_outcome_subtitle(outcome, which, style):
         if zone == "uncommon":
             return f"Uncommon for {art} · no investigate day"
         return f"Investigate for {art} · the whole month"
-    # who
+    # shipped C
     peers = peers_word({"role": role})
     if outcome["who"] == "role":
         return (
@@ -2084,9 +2100,24 @@ def place_ratio_legend_below(ax, handles, gap_pt=16.0):
     )
 
 
+def ratio_strip_data_hi(invest_hi):
+    """Display-scale top of the write/read strip (below the legend shelf).
+
+    Always reserves a visible Investigate band above this role's p98.
+    Guard already has ~0.12 of red under the 1.70 clip (1.58–1.70) —
+    keep that clip. Exit+Guard p98 is 1.71, so the old clip left no
+    red at all; raise just enough for a real band under the shelf.
+    """
+    ihi = float(invest_hi)
+    room = RATIO_SCALE_HI - ihi
+    if room + 1e-9 >= MIN_TOP_INVESTIGATE:
+        return RATIO_SCALE_HI
+    return ihi + RAISED_TOP_INVESTIGATE
+
+
 def place_ratio_legend_shelf(ax, handles):
-    """Legend in a reserved white band above 1.70. Same 'key at the
-    top of the panel' pattern as the throughput shelf.
+    """Legend in a reserved white band above the top investigate zone.
+    Same 'key at the top of the panel' pattern as the throughput shelf.
     """
     if not handles:
         return None
@@ -2244,13 +2275,19 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
-    ylo, yhi = 0.50, 1.70
-    shelf = 0.52 if legend_loc == "shelf" else 0.0
+    ylo = RATIO_SCALE_LO
+    yhi = ratio_strip_data_hi(ihi)
+    shelf = RATIO_LEGEND_SHELF if legend_loc == "shelf" else 0.0
     axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
     axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
     axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
     axr.axhspan(thi, ihi, color=AMBER, alpha=0.10, zorder=0)
-    axr.axhspan(ihi, yhi if shelf else 1.85, color=BAD, alpha=0.10, zorder=0)
+    # Always-on top investigate: invest_hi → data top is a real band,
+    # even when p98 is at or above the 1.70 clip (Exit+Guard 1.71).
+    axr.axhspan(ihi, yhi if shelf else yhi + 0.15, color=BAD, alpha=0.10,
+                zorder=0)
+    if shelf:
+        axr.axhspan(yhi, yhi + shelf + 0.02, color="white", zorder=0)
     wt = chrome_weights(chrome)
     axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
     role = overlay_values(ts, overlays.get("role"))
@@ -2261,9 +2298,10 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     if op is not None:
         axr.plot(ts, op, color=GRAY, linestyle=":", linewidth=wt["family"],
                  zorder=2)
-    # Clip to ylim. A Guard write spike (jeangrae 22–23 Jul, ratio 4.45 / 3.15)
-    # is investigate and used to vanish — the navy line was masked and the
-    # red line sat above 1.70.
+    # Clip to the display scale. A Guard write spike (jeangrae 22–23 Jul,
+    # ratio 4.45 / 3.15) is investigate and used to vanish — the navy
+    # line was masked and the red line sat above 1.70. Off-scale days
+    # stay red triangles at the top of the investigate band.
     y_plot = np.clip(ratio, ylo, yhi)
     investigate = (ratio < ilo) | (ratio > ihi)
     axr.plot(ts, y_plot, color=NAVY, linewidth=wt["relay"], zorder=3)
@@ -2302,7 +2340,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     return float(np.nanmean(ratio))
 
 
-def apply_ratio_yticks(axr, bands, ylo=0.50, yhi=1.70):
+def apply_ratio_yticks(axr, bands, ylo=RATIO_SCALE_LO, yhi=RATIO_SCALE_HI):
     """Percentile labels live on the left axis with 0.5 / 1.0 / 1.5."""
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ihi = bands["invest_hi"]
@@ -4603,8 +4641,9 @@ def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "above",
             "Both keys at the top of their panel",
             "Throughput key stays in the shelf above advertised. "
-            "Write/read gets a matching white shelf above 1.70 so the "
-            "key is not on the bands or the triangles.",
+            "Write/read gets a matching white shelf above the top "
+            "investigate band so the key is not on the bands or the "
+            "triangles.",
             "relay_bandwidth_legend_top_jeangrae.png",
             False,
         ),
@@ -4700,7 +4739,7 @@ def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     print("wrote relay_page_bw_legend_subtitle.html")
 
 
-# Operator-facing outcomes the two strips can conclude. C only.
+# Operator-facing outcomes the two strips can conclude. C is shipped / locked.
 # T / R are empty when history is thin or the month is all-clear.
 OUTCOME_SCENARIOS = (
     {
@@ -4796,12 +4835,12 @@ OUTCOME_SCENARIOS = (
 
 
 def _empty_cell(text):
-    """Show a missing C subtitle as an em dash."""
+    """Show a missing shipped-C subtitle as an em dash."""
     return text if text else "—"
 
 
 def plot_outcome_scenario_cards(out_paths):
-    """Compact C-only table: scenario · T · R."""
+    """Compact shipped-C table: scenario · T · R."""
     n = len(OUTCOME_SCENARIOS)
     # One header row + n data rows in axes coords (row 0 is the header).
     rows = n + 1
@@ -4893,7 +4932,7 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
 </div></nav>
 <div class="container">
   <div class="option-banner recommend">
-    <strong>Locked: C</strong>
+    <strong>Ship C · locked going forward</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). A write spike
     says <code>Write spiked</code> (bad / investigate). Both-fell says
@@ -4936,7 +4975,7 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
 def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                                    f3_overlays, f3_ov, f3_ts, f3_read,
                                    f3_write, f3_adv, f3_events, out, art):
-    """C outcome table plus live C charts on jeangrae and F3Netze."""
+    """Shipped C outcome table plus live C charts on jeangrae and F3Netze."""
     jg = det.get(JEANGRAE)
     jg_doc = bw_all.get(JEANGRAE) if jg else None
     if not jg or not jg_doc:
@@ -5014,7 +5053,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             operator=spec["operator"],
             chrome=chrome,
             legend_attach="above",
-            subtitle_style="who",
+            subtitle_style=SHIPPED_OUTCOME_STYLE,
         )
         print("wrote", spec["files"][0])
         cards.append({
@@ -5049,7 +5088,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             operator=args["operator"],
             chrome=chrome,
             legend_attach="above",
-            subtitle_style="who",
+            subtitle_style=SHIPPED_OUTCOME_STYLE,
         )
         print("wrote", dest_name)
 
@@ -5071,7 +5110,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             identity_placement=place,
             chrome=chrome,
             legend_attach="above",
-            subtitle_style="who",
+            subtitle_style=SHIPPED_OUTCOME_STYLE,
         )
         print("wrote", fname)
         if place == "above":
@@ -5087,7 +5126,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                 identity_placement="above",
                 chrome=chrome,
                 legend_attach="above",
-                subtitle_style="who",
+                subtitle_style=SHIPPED_OUTCOME_STYLE,
             )
             print("wrote", f3_above)
             identity_cards.append({
