@@ -1380,7 +1380,7 @@ def apply_chart_identity(ax, identity, loc="left", title_pad=None):
             0, (pad + IDENTITY_TITLE_GAP_PT) / 72.0, ax.figure.dpi_scale_trans,
         ),
         ha=ha, va="bottom",
-        fontsize=IDENTITY_FONTSIZE, fontweight="medium", color=NAVY,
+        fontsize=IDENTITY_FONTSIZE, fontweight="normal", color=NAVY,
         clip_on=False,
     )
 
