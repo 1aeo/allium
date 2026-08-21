@@ -623,11 +623,8 @@ Copy rules:
    write/read, no investigate day, no spike, no crash.
 2. Say “With other Guards”, not “Still with…”.
 3. Do not say “This relay…”. The page is about that relay. Put the
-   nickname, and the operator AROI when the contact has a `url:`,
-   **above** Throughput as an 11 pt navy eyebrow:
-   `jeangrae · 1aeo.com` then `Throughput · last 30 days · Guard`.
-   Do not put the names in front of Throughput — that makes one long
-   wrapping line and repeats the page h1 at title weight.
+   nickname on the title:
+   `Throughput · last 30 days · {nickname} · {role}`.
 4. Whenever we say X% of advertised, also show raw throughput:
    `99 Mbit/s (15% of advertised)`.
 
