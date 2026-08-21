@@ -1697,19 +1697,45 @@ def summarize_bandwidth_outcome(ts, write_m, read_m, advertised_mbit, events,
     }
 
 
-def format_outcome_subtitle(outcome, which, style):
-    """which: throughput | ratio. style: dated | verdict | who."""
+def _util_clause(outcome):
+    """Raw write next to % of advertised. Never % alone."""
+    write = outcome.get("mean_write")
+    util = outcome.get("util")
+    if write is None:
+        return ""
+    if util is not None:
+        return f"{write:.0f} Mbit/s ({util:.0f}% of advertised)"
+    return f"{write:.0f} Mbit/s"
+
+
+def _is_all_clear(outcome):
+    """Nothing to say: typical strip, no spike, no crash."""
     if not outcome or not outcome.get("enough"):
-        if which == "throughput":
-            return "Not enough history to chart"
-        return "Need more than a couple of days"
+        return False
+    return (
+        outcome["thru"] not in ("spike", "crash")
+        and not outcome["invest"]
+        and outcome["zone"] == "typical"
+    )
+
+
+def format_outcome_subtitle(outcome, which, style):
+    """which: throughput | ratio. style: dated | verdict | who.
+
+    Who (ship this): empty when history is thin or the month is all-clear.
+    No “this relay” — the title has the nickname. No “still with.”
+    Any advertised share is `N Mbit/s (P% of advertised)`.
+    """
+    if not outcome or not outcome.get("enough"):
+        return ""
+    if style == "who" and _is_all_clear(outcome):
+        return ""
     role = outcome["role"]
     art = _role_article(role)
     zone = outcome["zone"]
     n_inv = len(outcome["invest"])
     n_off = len(outcome["off"])
     span = _format_day_span([row[0].date() for row in outcome["invest"]])
-    off_span = _format_day_span([row[0].date() for row in outcome["off"]])
     ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["off"][:3])
     if not ratios and outcome["invest"]:
         ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["invest"][:3])
@@ -1718,6 +1744,7 @@ def format_outcome_subtitle(outcome, which, style):
     adv = outcome.get("advertised")
     ov = outcome["overloaded"]
     ov_bit = " · currently overloaded" if ov else ""
+    util_bit = _util_clause(outcome)
 
     if which == "throughput":
         if style == "dated":
@@ -1726,15 +1753,12 @@ def format_outcome_subtitle(outcome, which, style):
                 body = f"{kind} jumped {span}"
             elif outcome["thru"] == "crash":
                 body = "Write and read both dropped"
-            elif util is not None and adv:
-                body = (
-                    f"Month-mean write {write:.0f} Mbit/s "
-                    f"({util:.0f}% of advertised)"
-                )
+            elif util_bit:
+                body = util_bit
             else:
                 body = f"Month-mean write {write:.0f} Mbit/s"
-            if outcome["thru"] == "spike" and util is not None:
-                body += f" · month-mean {write:.0f} Mbit/s ({util:.0f}% of advertised)"
+            if outcome["thru"] == "spike" and util_bit:
+                body += f" · {util_bit}"
             return body + ov_bit
         if style == "verdict":
             if outcome["thru"] == "spike":
@@ -1749,19 +1773,22 @@ def format_outcome_subtitle(outcome, which, style):
                 body = "Steady · well below advertised"
             else:
                 body = "Steady throughput"
+            if util_bit and outcome["thru"] in ("near", "low", "steady", "crash"):
+                body += f" · {util_bit}"
             return body + ov_bit
         # who
         if outcome["thru"] == "spike":
-            body = "This relay’s write moved · advertised is unchanged"
-        elif outcome["thru"] == "crash":
-            body = "This relay’s write and read both moved"
-        elif outcome["thru"] == "near":
-            body = "This relay is using most of its advertised bandwidth"
-        else:
-            body = "Write and read stayed together"
-            if util is not None:
-                body += f" · {util:.0f}% of advertised"
-        return body + ov_bit
+            kind = "Write" if outcome["spike"] == "write" else "Read"
+            body = f"{kind} moved"
+            if util_bit:
+                body += f" · {util_bit}"
+            return body
+        if outcome["thru"] == "crash":
+            body = "Write and read both moved"
+            if util_bit:
+                body += f" · {util_bit}"
+            return body
+        return util_bit
 
     # ratio
     if style == "dated":
@@ -1794,23 +1821,20 @@ def format_outcome_subtitle(outcome, which, style):
             return f"Uncommon for {art} · no investigate day"
         return f"Investigate for {art} · the whole month"
     # who
+    peers = peers_word({"role": role})
     if outcome["who"] == "role":
-        return (
-            f"This relay and other {peers_word({'role': role})} left the band"
-            + (f" {span}" if span else "")
-        )
+        return "Left the band with other " + peers + (f" {span}" if span else "")
     if outcome["who"] == "family":
+        return f"Left the {role} band with the family · other {peers} stayed"
+    if outcome["who"] == "relay" and (n_off or n_inv or outcome["persistent"]):
         return (
-            f"This relay and its family left the {role} band · "
-            f"other {peers_word({'role': role})} stayed"
-        )
-    if outcome["who"] == "relay" and (n_off or n_inv):
-        return (
-            f"This relay left the {role} band"
+            f"Left the {role} band"
             + (f" {span}" if span else "")
             + " · family and peers stayed"
         )
-    return f"Still with other {peers_word({'role': role})}"
+    if not outcome["invest"] and zone == "typical":
+        return ""
+    return f"With other {peers}"
 
 
 def auto_spike_callout(ax, ts, write_m, read_m, bands):
@@ -2277,12 +2301,27 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
     wrap_last = overload_mode == "legend" and bool(overload_status)
     if legend_attach is None:
         legend_attach = "above" if chrome else "split"
-    if subtitle_style == "none":
+    outcome = summarize_bandwidth_outcome(
+        ts, write_m, read_m, advertised_mbit, events, overlays, bands,
+        overload_status,
+    )
+    if subtitle_style in OUTCOME_STYLES:
+        thru_sub = format_outcome_subtitle(outcome, "throughput", subtitle_style)
+        ratio_sub = format_outcome_subtitle(outcome, "ratio", subtitle_style)
+        subtitle_on = bool(thru_sub or ratio_sub)
+    elif subtitle_style == "none":
+        thru_sub = ratio_sub = ""
         subtitle_on = False
     elif subtitle_style:
+        thru_sub = throughput_subtitle_text(period_key, subtitle_style)
+        ratio_sub = ratio_subtitle_text(bands, subtitle_style)
         subtitle_on = True
     else:
+        thru_sub = ratio_sub = ""
         subtitle_on = bool(chrome and chrome.get("subtitle"))
+        if subtitle_on:
+            thru_sub = throughput_subtitle_text(period_key, subtitle_style)
+            ratio_sub = ratio_subtitle_text(bands, subtitle_style)
     if legend_attach == "below":
         hspace = 0.62 if wrap_last else 0.48
         fig_h = 8.2 if wrap_last else 7.9
@@ -2318,8 +2357,9 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         chrome=chrome, tight_ylim=(legend_attach == "below"),
     )
     if title is None:
-        title = ("Throughput · last 30 days" if page_ready
-                 else f"Throughput · last 30 days   ·   {nickname}")
+        title = f"Throughput · last 30 days · {nickname}"
+    elif nickname and nickname not in title:
+        title = f"{title} · {nickname}"
     bw_title = with_role(title, bands)
     title_loc = chrome_title_loc(chrome, overload_status, overload_mode)
     title_pad = SUBTITLE_TITLE_PAD if subtitle_on else None
@@ -2327,15 +2367,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         ax, bw_title, overload_status, overload_mode,
         loc=title_loc, pad=title_pad,
     )
-    outcome = summarize_bandwidth_outcome(
-        ts, write_m, read_m, advertised_mbit, events, overlays, bands,
-        overload_status,
-    )
-    if subtitle_on:
-        if subtitle_style in OUTCOME_STYLES:
-            thru_sub = format_outcome_subtitle(outcome, "throughput", subtitle_style)
-        else:
-            thru_sub = throughput_subtitle_text(period_key, subtitle_style)
+    if thru_sub:
         apply_method_subtitle(ax, thru_sub)
     if chrome and chrome.get("callout"):
         auto_spike_callout(ax, ts, write_m, read_m, bands)
@@ -2356,11 +2388,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         chrome=chrome, title_pad=title_pad,
         legend_loc="shelf" if legend_attach == "above" else "below",
     )
-    if subtitle_on:
-        if subtitle_style in OUTCOME_STYLES:
-            ratio_sub = format_outcome_subtitle(outcome, "ratio", subtitle_style)
-        else:
-            ratio_sub = ratio_subtitle_text(bands, subtitle_style)
+    if ratio_sub:
         apply_method_subtitle(axr, ratio_sub)
     ratio_legend = axr.get_legend()
     if not page_ready:
@@ -4556,245 +4584,143 @@ def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     print("wrote relay_page_bw_legend_subtitle.html")
 
 
-# Operator-facing outcomes the two strips can conclude. Not the cartesian
-# product of every flag — the distinct stories a subtitle has to cover.
+# Operator-facing outcomes the two strips can conclude. C who-moved only.
+# T / R are empty when history is thin or the month is all-clear.
 OUTCOME_SCENARIOS = (
     {
         "id": "empty",
         "name": "Not enough history",
-        "dated": (
-            "Not enough history to chart",
-            "Need more than a couple of days",
-        ),
-        "verdict": (
-            "Not enough history to chart",
-            "Need more than a couple of days",
-        ),
-        "who": (
-            "Not enough history to chart",
-            "Need more than a couple of days",
-        ),
+        "who": ("", ""),
     },
     {
         "id": "quiet",
         "name": "Quiet typical",
-        "dated": (
-            "Month-mean write 380 Mbit/s (47% of advertised)",
-            "Month-mean write/read 1.03 · typical for an Exit+Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised",
-            "Typical all month",
-        ),
-        "who": (
-            "Write and read stayed together · 47% of advertised",
-            "Still with other Exit+Guards",
-        ),
+        "who": ("", ""),
     },
     {
         "id": "overload",
         "name": "Typical + currently overloaded",
-        "dated": (
-            "Month-mean write 412 Mbit/s (51% of advertised) · currently overloaded",
-            "Month-mean write/read 1.03 · typical for an Exit+Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised · currently overloaded",
-            "Typical all month",
-        ),
-        "who": (
-            "Write and read stayed together · 51% of advertised · currently overloaded",
-            "Still with other Exit+Guards",
-        ),
+        "who": ("", ""),
     },
     {
         "id": "restart",
         "name": "Typical + restart in the window",
-        "dated": (
-            "Month-mean write 210 Mbit/s (38% of advertised)",
-            "Month-mean write/read 1.04 · typical for a Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised",
-            "Typical all month",
-        ),
-        "who": (
-            "Write and read stayed together · 38% of advertised",
-            "Still with other Guards",
-        ),
+        "who": ("", ""),
     },
     {
         "id": "uncommon",
         "name": "Uncommon month, no investigate day",
-        "dated": (
-            "Month-mean write 140 Mbit/s (22% of advertised)",
-            "Month-mean write/read 1.21 · uncommon for a Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised",
-            "Uncommon for a Guard · no investigate day",
-        ),
         "who": (
-            "Write and read stayed together · 22% of advertised",
-            "Still with other Guards",
+            "140 Mbit/s (22% of advertised)",
+            "With other Guards",
         ),
     },
     {
         "id": "spike_relay",
         "name": "Investigate spike · this relay only",
-        "dated": (
-            "Write jumped 22–23 Jul · month-mean 98 Mbit/s (15% of advertised)",
-            "2 days off the 1.70 scale (4.45 / 3.15) · month-mean 1.21, uncommon for a Guard",
-        ),
-        "verdict": (
-            "1 write spike · the rest of the month is quiet",
-            "2 investigate days · the rest uncommon",
-        ),
         "who": (
-            "This relay’s write moved · advertised is unchanged",
-            "This relay left the Guard band 22–23 Jul · family and peers stayed",
+            "Write moved · 98 Mbit/s (15% of advertised)",
+            "Left the Guard band 22–23 Jul · family and peers stayed",
         ),
     },
     {
         "id": "spike_family",
         "name": "Investigate spike · family moved, role stayed",
-        "dated": (
-            "Write jumped 4 Aug · month-mean 220 Mbit/s (31% of advertised)",
-            "1 day off the 1.70 scale (3.02) · month-mean 1.18, uncommon for a Guard",
-        ),
-        "verdict": (
-            "1 write spike · the rest of the month is quiet",
-            "1 investigate day · the rest uncommon",
-        ),
         "who": (
-            "This relay’s write moved · advertised is unchanged",
-            "This relay and its family left the Guard band · other Guards stayed",
+            "Write moved · 220 Mbit/s (31% of advertised)",
+            "Left the Guard band with the family · other Guards stayed",
         ),
     },
     {
         "id": "spike_role",
         "name": "Investigate spike · the whole role moved",
-        "dated": (
-            "Write jumped 8–9 Aug · month-mean 90 Mbit/s (18% of advertised)",
-            "2 investigate days 8–9 Aug · month-mean 1.34, uncommon for an Exit",
-        ),
-        "verdict": (
-            "1 write spike · the rest of the month is quiet",
-            "2 investigate days · the rest uncommon",
-        ),
         "who": (
-            "This relay’s write moved · advertised is unchanged",
-            "This relay and other Exits left the band 8–9 Aug",
+            "Write moved · 90 Mbit/s (18% of advertised)",
+            "Left the band with other Exits 8–9 Aug",
         ),
     },
     {
         "id": "persistent",
         "name": "Persistent investigate month",
-        "dated": (
-            "Month-mean write 60 Mbit/s (9% of advertised)",
-            "Month-mean write/read 1.82 · investigate for a Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised",
-            "Investigate for a Guard · the whole month",
-        ),
         "who": (
-            "Write and read stayed together · 9% of advertised",
-            "This relay left the Guard band · family and peers stayed",
+            "60 Mbit/s (9% of advertised)",
+            "Left the Guard band · family and peers stayed",
         ),
     },
     {
         "id": "read_heavy",
         "name": "Read-heavy month",
-        "dated": (
-            "Month-mean write 80 Mbit/s (12% of advertised)",
-            "Month-mean write/read 0.71 · uncommon for a Guard",
-        ),
-        "verdict": (
-            "Steady · well below advertised",
-            "Uncommon for a Guard · no investigate day",
-        ),
         "who": (
-            "Write and read stayed together · 12% of advertised",
-            "Still with other Guards",
+            "80 Mbit/s (12% of advertised)",
+            "With other Guards",
         ),
     },
     {
         "id": "crash",
         "name": "Throughput crash",
-        "dated": (
-            "Write and read both dropped",
-            "Month-mean write/read 1.02 · typical for a Middle",
-        ),
-        "verdict": (
-            "Throughput crashed · write and read both fell",
-            "Typical all month",
-        ),
         "who": (
-            "This relay’s write and read both moved",
-            "Still with other middle relays",
+            "Write and read both moved · 18 Mbit/s (4% of advertised)",
+            "",
         ),
     },
     {
         "id": "near",
         "name": "Near advertised",
-        "dated": (
-            "Month-mean write 720 Mbit/s (90% of advertised)",
-            "Month-mean write/read 1.01 · typical for an Exit",
-        ),
-        "verdict": (
-            "Delivering most of advertised",
-            "Typical all month",
-        ),
-        "who": (
-            "This relay is using most of its advertised bandwidth",
-            "Still with other Exits",
-        ),
+        "who": ("", ""),
     },
     {
         "id": "both",
         "name": "Overloaded + investigate spike",
-        "dated": (
-            "Write jumped 1 Aug · month-mean 300 Mbit/s (37% of advertised) · currently overloaded",
-            "1 day off the 1.70 scale (2.40) · month-mean 1.11, typical for an Exit+Guard",
-        ),
-        "verdict": (
-            "1 write spike · the rest of the month is quiet · currently overloaded",
-            "1 investigate day · the rest typical",
-        ),
         "who": (
-            "This relay’s write moved · advertised is unchanged · currently overloaded",
-            "This relay left the Exit+Guard band 1 Aug · family and peers stayed",
+            "Write moved · 300 Mbit/s (37% of advertised)",
+            "Left the Exit+Guard band 1 Aug · family and peers stayed",
         ),
     },
 )
 
 
+def _empty_cell(text):
+    """Show a missing C subtitle as an em dash."""
+    return text if text else "—"
+
+
 def plot_outcome_scenario_cards(out_paths):
-    """Every distinct story × the three subtitle styles."""
-    styles = (
-        ("dated", "A  Date + number"),
-        ("verdict", "B  Verdict"),
-        ("who", "C  Who moved  ·  recommended"),
-    )
+    """Compact C-only table: scenario · T · R."""
     n = len(OUTCOME_SCENARIOS)
-    fig_h = 1.15 + n * 1.42
-    fig, ax = plt.subplots(figsize=(11.4, fig_h))
+    # One header row + n data rows in axes coords (row 0 is the header).
+    rows = n + 1
+    fig, ax = plt.subplots(figsize=(12.0, 0.72 + rows * 0.38))
     ax.set_xlim(0, 1)
-    ax.set_ylim(0, n)
+    ax.set_ylim(0, rows)
     ax.axis("off")
-    fig.subplots_adjust(top=0.955, bottom=0.035, left=0.04, right=0.98)
+    fig.subplots_adjust(top=0.90, bottom=0.06, left=0.03, right=0.985)
     fig.text(
-        0.04, 0.985,
-        "Outcome subtitles  ·  every story the two strips can conclude",
+        0.03, 0.975,
+        "Outcome subtitles  ·  C who moved",
         fontsize=13, fontweight="bold", va="top",
     )
     fig.text(
-        0.04, 0.968,
-        "Title names the chart. Legend names the series. The subtitle says "
-        "what happened. C is the recommendation: whose problem, not the method.",
-        fontsize=8.5, color=GRAY, va="top",
+        0.03, 0.935,
+        "Empty (—) when history is thin or the month is all-clear. "
+        "Overload stays in the legend. Restart is a vertical line. "
+        "Advertised share is always raw throughput plus percent.",
+        fontsize=8.2, color=GRAY, va="top",
     )
+    cols = (
+        (0.015, "Scenario", 0.27),
+        (0.300, "T  throughput", 0.34),
+        (0.655, "R  write/read", 0.33),
+    )
+    header_y = n
+    ax.add_patch(plt.Rectangle(
+        (0.0, header_y), 1.0, 1.0, facecolor="#1B3A4B",
+        edgecolor="none", zorder=0,
+    ))
+    for x, label, _w in cols:
+        ax.text(
+            x, header_y + 0.50, label, fontsize=8.2, fontweight="bold",
+            color="#ffffff", va="center", zorder=1,
+        )
     for i, sc in enumerate(OUTCOME_SCENARIOS):
         y = n - 1 - i
         if i % 2 == 0:
@@ -4802,38 +4728,31 @@ def plot_outcome_scenario_cards(out_paths):
                 (0.0, y), 1.0, 1.0, facecolor="#f4f6f7",
                 edgecolor="none", zorder=0,
             ))
-        ax.text(0.02, y + 0.86, sc["name"], fontsize=9.5, fontweight="bold",
-                va="top", zorder=1)
-        for j, (key, label) in enumerate(styles):
-            t_line, r_line = sc[key]
-            rec = key == "who"
-            yy = y + 0.68 - j * 0.24
+        t_line, r_line = sc["who"]
+        values = (sc["name"], _empty_cell(t_line), _empty_cell(r_line))
+        for (x, _label, _w), value in zip(cols, values):
+            empty = value == "—"
             ax.text(
-                0.02, yy, label, fontsize=7.4,
-                fontweight="bold" if rec else "normal",
-                color=GREEN if rec else NAVY, va="top", zorder=1,
+                x, y + 0.50, value, fontsize=8.0,
+                fontweight="bold" if x < 0.05 else "normal",
+                color="#9aa0a6" if empty else "#222",
+                va="center", zorder=1,
             )
-            ax.text(0.28, yy, f"T  {t_line}", fontsize=7.3, color="#222",
-                    va="top", zorder=1)
-            ax.text(0.28, yy - 0.10, f"R  {r_line}", fontsize=7.3, color="#222",
-                    va="top", zorder=1)
     fig.text(
-        0.04, 0.012,
+        0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
-        "Restart is a vertical line, not a subtitle. Overload is a legend "
-        "diamond and a clause on T when it is on.",
-        fontsize=7.5, color=GRAY, va="bottom",
+        "Nickname lives on the title, not in the subtitle. "
+        "No “this relay” / “still with.”",
+        fontsize=7.4, color=GRAY, va="bottom",
     )
     save(fig, out_paths)
 
 
-def write_outcome_html(path, published, cards, scenario_name, f3_cards):
+def write_outcome_html(path, published, cards, scenario_name):
     def block(card):
-        rec = " recommend" if card.get("recommend") else ""
-        badge = " · recommended" if card.get("recommend") else ""
         return f"""
-  <section class="section-box{rec}">
-    <h4>{card["name"]}{badge}</h4>
+  <section class="section-box recommend">
+    <h4>{card["name"]}</h4>
     <p class="relay-meta">{card["blurb"]}</p>
     <div class="chart-wrap">
       <img src="{card["file"]}" alt="{card["name"]}">
@@ -4845,7 +4764,7 @@ def write_outcome_html(path, published, cards, scenario_name, f3_cards):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Outcome subtitles · three styles</title>
+  <title>Outcome subtitles · C who moved</title>
   <style>{PAGE_CSS}</style>
 </head>
 <body>
@@ -4857,25 +4776,23 @@ def write_outcome_html(path, published, cards, scenario_name, f3_cards):
 </div></nav>
 <div class="container">
   <div class="option-banner recommend">
-    <strong>Recommended: C — who moved</strong>
-    Both keys at the top of their panel, same type size. The subtitle
-    says whose problem it is, not how the bands were built. Date +
-    number duplicates the callout on a spike. Verdict is empty on a
-    quiet month.
+    <strong>Locked: C — who moved</strong>
+    Empty when history is thin or the month is all-clear (typical
+    write/read, no investigate day, no spike, no crash). Overload
+    stays in the legend. Restart is a vertical line. Nickname is on
+    the title. Any advertised share is raw throughput plus percent:
+    <code>99 Mbit/s (15% of advertised)</code>.
   </div>
   <p class="relay-meta">
     Legends match at 8 pt, both in a shelf at the top of the panel.
-    Subject is <strong>jeangrae</strong> (spike, this relay only) and
-    <strong>F3Netze</strong> (typical, currently overloaded).
+    Live subjects: <strong>jeangrae</strong> (spike, this relay only)
+    and <strong>F3Netze</strong> (all-clear, currently overloaded).
   </p>
   <h3>Every story these two strips can conclude</h3>
   <div class="chart-wrap">
-    <img src="{scenario_name}" alt="Outcome subtitle scenarios">
+    <img src="{scenario_name}" alt="Outcome subtitle C table">
   </div>
-  <h3>Three styles on jeangrae</h3>
   {''.join(block(c) for c in cards)}
-  <h3>Same three styles on F3Netze</h3>
-  {''.join(block(c) for c in f3_cards)}
   <p class="al-text-small-muted">Onionoo relays_published {published} UTC.
   Light theme. Okabe–Ito. Both keys at the top. 8 pt legend text.</p>
 </div>
@@ -4893,7 +4810,7 @@ def write_outcome_html(path, published, cards, scenario_name, f3_cards):
 def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                                    f3_overlays, f3_ov, f3_ts, f3_read,
                                    f3_write, f3_adv, f3_events, out, art):
-    """Both keys at top, matched type, three outcome-subtitle styles."""
+    """C who-moved table plus live C charts on jeangrae and F3Netze."""
     jg = det.get(JEANGRAE)
     jg_doc = bw_all.get(JEANGRAE) if jg else None
     if not jg or not jg_doc:
@@ -4907,77 +4824,74 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
         return
     s = ctx["series"]
     chrome = chrome_spec("callout")
-    plot_outcome_scenario_cards(
-        [out / "relay_bandwidth_outcome_scenarios.png",
-         art / "relay_bandwidth_outcome_scenarios.png"],
+    table_names = (
+        "relay_bandwidth_outcome_c_table.png",
+        "relay_bandwidth_outcome_scenarios.png",
     )
-    print("wrote relay_bandwidth_outcome_scenarios.png")
+    plot_outcome_scenario_cards(
+        [dest / name for dest in (out, art) for name in table_names],
+    )
+    print("wrote", table_names[0])
 
-    meta = {
-        "dated": (
-            "A — Date + number",
-            "What happened, when, and by how much. On a spike this "
-            "repeats the callout. On a quiet month it is the utilization "
-            "number the title does not give you.",
-        ),
-        "verdict": (
-            "B — Verdict",
-            "Shortest. Names the story without the figures. On a quiet "
-            "month it is almost empty (“Typical all month”).",
-        ),
-        "who": (
-            "C — Who moved",
-            "Ship this. Answers “is it just me?” Family and peers "
-            "stayed on jeangrae. F3 is still with other Exit+Guards. "
-            "Falls back to a quiet all-clear when nothing left the band.",
-        ),
-    }
+    live = (
+        {
+            "nick": "jeangrae",
+            "files": (
+                "relay_bandwidth_outcome_c_jeangrae.png",
+                "relay_bandwidth_outcome_who_jeangrae.png",
+            ),
+            "ts": s["ts"], "read_m": s["read_m"], "write_m": s["write_m"],
+            "advertised_mbit": s["advertised_mbit"], "events": s["events"],
+            "overlays": ctx["overlays"], "ov": ctx["ov"],
+            "overload_mode": "title",
+            "name": "jeangrae · C who moved",
+            "blurb": (
+                "Write moved off the Guard band; family and peers stayed. "
+                "Title carries the nickname. Throughput is raw plus percent "
+                "of advertised."
+            ),
+        },
+        {
+            "nick": "F3Netze",
+            "files": (
+                "relay_bandwidth_outcome_c_f3.png",
+                "relay_bandwidth_outcome_who_f3.png",
+            ),
+            "ts": f3_ts, "read_m": f3_read, "write_m": f3_write,
+            "advertised_mbit": f3_adv, "events": f3_events,
+            "overlays": f3_overlays, "ov": f3_ov,
+            "overload_mode": "legend",
+            "name": "F3Netze · C who moved",
+            "blurb": (
+                "All-clear month: typical write/read, no investigate day, "
+                "no spike, no crash. Subtitles stay empty. Overload is the "
+                "legend diamond. Nickname is on the title."
+            ),
+        },
+    )
     cards = []
-    for style in OUTCOME_STYLES:
-        name = f"relay_bandwidth_outcome_{style}_jeangrae.png"
+    for spec in live:
+        paths = [dest / name for dest in (out, art) for name in spec["files"]]
         bandwidth_a_dual_line(
-            s["ts"], s["read_m"], s["write_m"], s["advertised_mbit"],
-            s["events"], published, ctx["overlays"], ctx["ov"],
-            [out / name, art / name],
+            spec["ts"], spec["read_m"], spec["write_m"],
+            spec["advertised_mbit"], spec["events"], published,
+            spec["overlays"], spec["ov"], paths,
             title="Throughput · last 30 days",
-            overload_mode="title",
+            overload_mode=spec["overload_mode"],
             page_ready=True,
-            nickname="jeangrae",
+            nickname=spec["nick"],
             chrome=chrome,
             legend_attach="above",
-            subtitle_style=style,
+            subtitle_style="who",
         )
-        print("wrote", name)
-        title, blurb = meta[style]
+        print("wrote", spec["files"][0])
         cards.append({
-            "name": title, "blurb": blurb, "file": name,
-            "recommend": style == "who",
+            "name": spec["name"],
+            "blurb": spec["blurb"],
+            "file": spec["files"][0],
         })
 
-    f3_cards = []
-    for style in OUTCOME_STYLES:
-        name = f"relay_bandwidth_outcome_{style}_f3.png"
-        bandwidth_a_dual_line(
-            f3_ts, f3_read, f3_write, f3_adv, f3_events, published,
-            f3_overlays, f3_ov, [out / name, art / name],
-            title="Throughput · last 30 days",
-            overload_mode="legend",
-            page_ready=True,
-            nickname="F3Netze",
-            chrome=chrome,
-            legend_attach="above",
-            subtitle_style=style,
-        )
-        print("wrote", name)
-        title, blurb = meta[style]
-        f3_cards.append({
-            "name": f"F3Netze · {title}",
-            "blurb": "Typical strip. Overload stays a legend diamond plus a clause on the throughput line.",
-            "file": name,
-            "recommend": style == "who",
-        })
-
-    # Refresh official style 5 to the locked chrome: top keys, 8 pt, who.
+    # Refresh official style 5 to locked C copy + nickname on the title.
     for dest_name, args in (
         ("relay_bandwidth_chrome_5_callout_jeangrae.png", dict(
             ts=s["ts"], read_m=s["read_m"], write_m=s["write_m"],
@@ -5009,7 +4923,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     for dest in (out, art):
         write_outcome_html(
             dest / "relay_page_bw_outcomes.html", published,
-            cards, "relay_bandwidth_outcome_scenarios.png", f3_cards,
+            cards, "relay_bandwidth_outcome_c_table.png",
         )
     print("wrote relay_page_bw_outcomes.html")
 
