@@ -634,9 +634,10 @@ outside the role band.
 
 #### Outcome subtitles
 
-**Locked: C.** Built from the series (zone, spike days, overlays,
-utilization, mean write/read). No hand-written copy per relay. A
-(date + number) and B (verdict) were tried and dropped.
+**Ship C. Locked going forward.** This is the shipped subtitle copy,
+not a proposal and not one of three styles. Built from the series
+(zone, spike days, overlays, utilization, mean write/read). No
+hand-written copy per relay. The C table below is the spec.
 
 Copy rules:
 
@@ -667,7 +668,7 @@ Copy rules:
 Overload stays in the legend. Do not invent a subtitle just for
 overload. Restart stays a vertical line.
 
-Live C charts:
+Shipped C charts:
 
 - jeangrae (spike, this relay only):
   [`relay_bandwidth_outcome_c_jeangrae.png`](mockups/relay_bandwidth_outcome_c_jeangrae.png)
@@ -693,7 +694,7 @@ cells stay empty — no filler sentence.
 | Near advertised | — | — |
 | Overloaded + investigate spike | `Write spiked · 300 Mbit/s (37% of advertised)` | `Outside the Exit+Guard band 1 Aug · family and peers stayed` |
 
-C-only table (scenario · T · R):
+Shipped C table (the spec · scenario · T · R):
 [`relay_bandwidth_outcome_c_table.png`](mockups/relay_bandwidth_outcome_c_table.png).
 Gallery: [`relay_page_bw_outcomes.html`](mockups/relay_page_bw_outcomes.html).
 
