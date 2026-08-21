@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Outcome subtitles · three styles</title>
+  <title>Outcome subtitles · C who moved</title>
   <style>
 :root { --aeo-green:#00ff7f; --aeo-dark-surface:#1e1e1e; --aeo-text-muted:#ccc;
   --color-success:#28a745; --color-danger:#dc3545; --color-warning-text:#856404;
@@ -86,65 +86,52 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
 </div></nav>
 <div class="container">
   <div class="option-banner recommend">
-    <strong>Recommended: C — who moved</strong>
-    Both keys at the top of their panel, same type size. The subtitle
-    says whose problem it is, not how the bands were built. Date +
-    number duplicates the callout on a spike. Verdict is empty on a
-    quiet month.
+    <strong>Locked: C — who moved</strong>
+    Empty when history is thin or the month is all-clear (typical
+    write/read, no investigate day, no spike, no crash). Overload
+    stays in the legend. Restart is a vertical line. Nickname and
+    operator sit <em>above</em> Throughput so a screenshot still names
+    the relay without repeating the page h1. Any advertised share is
+    raw throughput plus percent:
+    <code>99 Mbit/s (15% of advertised)</code>.
   </div>
   <p class="relay-meta">
     Legends match at 8 pt, both in a shelf at the top of the panel.
-    Subject is <strong>jeangrae</strong> (spike, this relay only) and
-    <strong>F3Netze</strong> (typical, currently overloaded).
+    Live subjects: <strong>jeangrae</strong> (spike, this relay only)
+    and <strong>F3Netze</strong> (all-clear, currently overloaded).
   </p>
   <h3>Every story these two strips can conclude</h3>
   <div class="chart-wrap">
-    <img src="relay_bandwidth_outcome_scenarios.png" alt="Outcome subtitle scenarios">
+    <img src="relay_bandwidth_outcome_c_table.png" alt="Outcome subtitle C table">
   </div>
-  <h3>Three styles on jeangrae</h3>
   
-  <section class="section-box">
-    <h4>A — Date + number</h4>
-    <p class="relay-meta">What happened, when, and by how much. On a spike this repeats the callout. On a quiet month it is the utilization number the title does not give you.</p>
+  <section class="section-box recommend">
+    <h4>jeangrae · C who moved</h4>
+    <p class="relay-meta">Write moved off the Guard band; family and peers stayed. Identity sits above Throughput: jeangrae · 1aeo.com. Throughput is raw plus percent of advertised.</p>
     <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_dated_jeangrae.png" alt="A — Date + number">
-    </div>
-  </section>
-  <section class="section-box">
-    <h4>B — Verdict</h4>
-    <p class="relay-meta">Shortest. Names the story without the figures. On a quiet month it is almost empty (“Typical all month”).</p>
-    <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_verdict_jeangrae.png" alt="B — Verdict">
+      <img src="relay_bandwidth_outcome_c_jeangrae.png" alt="jeangrae · C who moved">
     </div>
   </section>
   <section class="section-box recommend">
-    <h4>C — Who moved · recommended</h4>
-    <p class="relay-meta">Ship this. Answers “is it just me?” Family and peers stayed on jeangrae. F3 is still with other Exit+Guards. Falls back to a quiet all-clear when nothing left the band.</p>
+    <h4>F3Netze · C who moved</h4>
+    <p class="relay-meta">All-clear month: typical write/read, no investigate day, no spike, no crash. Subtitles stay empty. Overload is the legend diamond. Identity sits above Throughput: F3Netze · f3netze.de.</p>
     <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_who_jeangrae.png" alt="C — Who moved">
+      <img src="relay_bandwidth_outcome_c_f3.png" alt="F3Netze · C who moved">
     </div>
   </section>
-  <h3>Same three styles on F3Netze</h3>
-  
-  <section class="section-box">
-    <h4>F3Netze · A — Date + number</h4>
-    <p class="relay-meta">Typical strip. Overload stays a legend diamond plus a clause on the throughput line.</p>
+  <h3>Where the name sits</h3>
+  <section class="section-box recommend">
+    <h4>Above Throughput · ship this</h4>
+    <p class="relay-meta">Eyebrow: jeangrae · 1aeo.com. Metric title stays short. A screenshot still names the relay. On the page this is a figure label, not a second h1.</p>
     <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_dated_f3.png" alt="F3Netze · A — Date + number">
-    </div>
-  </section>
-  <section class="section-box">
-    <h4>F3Netze · B — Verdict</h4>
-    <p class="relay-meta">Typical strip. Overload stays a legend diamond plus a clause on the throughput line.</p>
-    <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_verdict_f3.png" alt="F3Netze · B — Verdict">
+      <img src="relay_bandwidth_identity_above_jeangrae.png" alt="Above Throughput · ship this">
     </div>
   </section>
   <section class="section-box recommend">
-    <h4>F3Netze · C — Who moved · recommended</h4>
-    <p class="relay-meta">Typical strip. Overload stays a legend diamond plus a clause on the throughput line.</p>
+    <h4>In front of Throughput · rejected</h4>
+    <p class="relay-meta">jeangrae · 1aeo.com · Throughput · last 30 days · Guard is one long line. It wraps and repeats the page heading at title weight.</p>
     <div class="chart-wrap">
-      <img src="relay_bandwidth_outcome_who_f3.png" alt="F3Netze · C — Who moved">
+      <img src="relay_bandwidth_identity_infront_jeangrae.png" alt="In front of Throughput · rejected">
     </div>
   </section>
   <p class="al-text-small-muted">Onionoo relays_published 2026-08-15 06:00:00 UTC.
