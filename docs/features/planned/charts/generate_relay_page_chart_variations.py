@@ -2353,7 +2353,7 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
                           overlays, overload_status, out_paths,
                           nickname="F3Netze",
                           operator=None,
-                          identity_placement="above",
+                          identity_placement=None,
                           title=None,
                           overload_mode="title",
                           page_ready=False,
@@ -2432,6 +2432,8 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         title = "Throughput · last 30 days"
     if identity_placement == "infront" and ident and title and ident not in title:
         title = f"{ident}  ·  {title}"
+    elif identity_placement != "above" and nickname and nickname not in (title or ""):
+        title = f"{title} · {nickname}"
     bw_title = with_role(title, bands)
     title_loc = chrome_title_loc(chrome, overload_status, overload_mode)
     title_pad = SUBTITLE_TITLE_PAD if subtitle_on else None
@@ -4814,7 +4816,7 @@ def plot_outcome_scenario_cards(out_paths):
     fig.text(
         0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
-        "Nickname and operator sit above Throughput, not in the subtitle. "
+        "Nickname lives on the title, not in the subtitle. "
         "No “this relay” / “still with.”",
         fontsize=7.4, color=GRAY, va="bottom",
     )
@@ -4926,7 +4928,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "name": "jeangrae · C who moved",
             "blurb": (
                 "Write moved off the Guard band; family and peers stayed. "
-                "Identity sits above Throughput: jeangrae · 1aeo.com. "
+                "Title is Throughput · last 30 days · jeangrae · Guard. "
                 "Throughput is raw plus percent of advertised."
             ),
         },
@@ -4945,8 +4947,8 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "blurb": (
                 "All-clear month: typical write/read, no investigate day, "
                 "no spike, no crash. Subtitles stay empty. Overload is the "
-                "legend diamond. Identity sits above Throughput: "
-                "F3Netze · f3netze.de."
+                "legend diamond. Title is Throughput · last 30 days · "
+                "F3Netze · Exit+Guard."
             ),
         },
     )
