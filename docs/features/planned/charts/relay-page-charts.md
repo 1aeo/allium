@@ -520,9 +520,16 @@ Jul, 5 Jul`) and get one vertical line each. Onionoo only publishes
 `last_restarted`; extra marks on the 6M/1Y/5Y mocks are a stand-in
 for a future restart archive.
 
-A day whose write/read sits above the 1.70 scale (jeangrae 22–23 Jul:
-4.45 and 3.15) is not a missing series. The line is clipped and marked
-with a red triangle at the top of the strip.
+A day whose write/read sits above the display clip (jeangrae 22–23 Jul:
+4.45 and 3.15, clip 1.70) is not a missing series. The line is clipped
+and marked with a red triangle at the top of the investigate band.
+
+The top Investigate band is always reserved in the strip ylim, even
+when this role’s p98 sits at or above the 1.70 clip (Exit+Guard
+>1.71). That red shelf above uncommon-hi is the same kind of band as
+the bottom investigate zone — not a hairline, and not only when a
+day enters it. The write/read legend sits in a white shelf above the
+red, not on it.
 
 #### One chart per frozen flag-set band
 
@@ -614,7 +621,9 @@ Gallery: [`relay_page_bw_chrome.html`](mockups/relay_page_bw_chrome.html).
 
 **Ship both keys at the top of their panel**, same 8 pt type. Throughput
 key sits in the empty band above advertised. Write/read key sits in a
-white shelf above 1.70 so it is not on the bands or the triangles.
+white shelf above the top investigate band (above 1.70 when that clip
+already has room, or above the raised clip when p98 is at or above
+1.70) so it is not on the bands or the triangles.
 
 Method and “compared with other Guards” subtitles are rejected — they
 repeat the legend or say nothing about this relay. The subtitle
