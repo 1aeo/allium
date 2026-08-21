@@ -2100,19 +2100,24 @@ def place_ratio_legend_below(ax, handles, gap_pt=16.0):
     )
 
 
-def ratio_strip_data_hi(invest_hi):
+def ratio_strip_data_hi(invest_hi, invest_lo=None):
     """Display-scale top of the write/read strip (below the legend shelf).
 
     Always reserves a visible Investigate band above this role's p98.
     Guard already has ~0.12 of red under the 1.70 clip (1.58–1.70) —
     keep that clip. Exit+Guard p98 is 1.71, so the old clip left no
-    red at all; raise just enough for a real band under the shelf.
+    red at all; raise the data top so the new red shelf matches the
+    bottom investigate band (same visual weight, not a hairline).
     """
     ihi = float(invest_hi)
     room = RATIO_SCALE_HI - ihi
     if room + 1e-9 >= MIN_TOP_INVESTIGATE:
         return RATIO_SCALE_HI
-    return ihi + RAISED_TOP_INVESTIGATE
+    if invest_lo is None:
+        span = RAISED_TOP_INVESTIGATE
+    else:
+        span = max(float(invest_lo) - RATIO_SCALE_LO, RAISED_TOP_INVESTIGATE)
+    return ihi + span
 
 
 def place_ratio_legend_shelf(ax, handles):
@@ -2276,7 +2281,7 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays=None,
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
     ratio = np.array([w / r if r else np.nan for w, r in zip(write_m, read_m)])
     ylo = RATIO_SCALE_LO
-    yhi = ratio_strip_data_hi(ihi)
+    yhi = ratio_strip_data_hi(ihi, ilo)
     shelf = RATIO_LEGEND_SHELF if legend_loc == "shelf" else 0.0
     axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
     axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
