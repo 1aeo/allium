@@ -1814,6 +1814,11 @@ def format_outcome_subtitle(outcome, which, style):
 
     Who (ship this): empty when history is thin or the month is all-clear.
     No “this relay” — identity sits above Throughput. No “still with.”
+    No “moved” — a write/read spike says spiked (bad); both-fell says
+    dropped (bad). Investigate / off-band says Outside the band, not Left.
+    Uncommon / no-investigate puts the live write/read mean on the same
+    line as inside the {role} band with other {peers}. Quiet typical
+    stays empty — do not invent “inside the band.”
     Any advertised share is `N Mbit/s (P% of advertised)`.
     """
     if not outcome or not outcome.get("enough"):
@@ -1869,12 +1874,12 @@ def format_outcome_subtitle(outcome, which, style):
         # who
         if outcome["thru"] == "spike":
             kind = "Write" if outcome["spike"] == "write" else "Read"
-            body = f"{kind} moved"
+            body = f"{kind} spiked"
             if util_bit:
                 body += f" · {util_bit}"
             return body
         if outcome["thru"] == "crash":
-            body = "Write and read both moved"
+            body = "Write and read both dropped"
             if util_bit:
                 body += f" · {util_bit}"
             return body
@@ -1913,18 +1918,29 @@ def format_outcome_subtitle(outcome, which, style):
     # who
     peers = peers_word({"role": role})
     if outcome["who"] == "role":
-        return "Left the band with other " + peers + (f" {span}" if span else "")
-    if outcome["who"] == "family":
-        return f"Left the {role} band with the family · other {peers} stayed"
-    if outcome["who"] == "relay" and (n_off or n_inv or outcome["persistent"]):
         return (
-            f"Left the {role} band"
+            "Outside the band with other " + peers
             + (f" {span}" if span else "")
+        )
+    if outcome["who"] == "family":
+        return (
+            f"Outside the {role} band with the family · "
+            f"other {peers} stayed"
+        )
+    if outcome["who"] == "relay" and (n_off or n_inv or outcome["persistent"]):
+        # Persistent is the whole month off-band — skip the date list.
+        date_bit = "" if outcome["persistent"] else (f" {span}" if span else "")
+        return (
+            f"Outside the {role} band"
+            + date_bit
             + " · family and peers stayed"
         )
     if not outcome["invest"] and zone == "typical":
         return ""
-    return f"With other {peers}"
+    return (
+        f"Write/read {outcome['mean_ratio']:.2f} · "
+        f"inside the {role} band with other {peers}"
+    )
 
 
 def auto_spike_callout(ax, ts, write_m, read_m, bands):
@@ -4684,7 +4700,7 @@ def write_legend_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     print("wrote relay_page_bw_legend_subtitle.html")
 
 
-# Operator-facing outcomes the two strips can conclude. C who-moved only.
+# Operator-facing outcomes the two strips can conclude. C only.
 # T / R are empty when history is thin or the month is all-clear.
 OUTCOME_SCENARIOS = (
     {
@@ -4712,31 +4728,31 @@ OUTCOME_SCENARIOS = (
         "name": "Uncommon month, no investigate day",
         "who": (
             "140 Mbit/s (22% of advertised)",
-            "With other Guards",
+            "Write/read 1.21 · inside the Guard band with other Guards",
         ),
     },
     {
         "id": "spike_relay",
         "name": "Investigate spike · this relay only",
         "who": (
-            "Write moved · 98 Mbit/s (15% of advertised)",
-            "Left the Guard band 22–23 Jul · family and peers stayed",
+            "Write spiked · 98 Mbit/s (15% of advertised)",
+            "Outside the Guard band 22–23 Jul · family and peers stayed",
         ),
     },
     {
         "id": "spike_family",
         "name": "Investigate spike · family moved, role stayed",
         "who": (
-            "Write moved · 220 Mbit/s (31% of advertised)",
-            "Left the Guard band with the family · other Guards stayed",
+            "Write spiked · 220 Mbit/s (31% of advertised)",
+            "Outside the Guard band with the family · other Guards stayed",
         ),
     },
     {
         "id": "spike_role",
         "name": "Investigate spike · the whole role moved",
         "who": (
-            "Write moved · 90 Mbit/s (18% of advertised)",
-            "Left the band with other Exits 8–9 Aug",
+            "Write spiked · 90 Mbit/s (18% of advertised)",
+            "Outside the band with other Exits 8–9 Aug",
         ),
     },
     {
@@ -4744,7 +4760,7 @@ OUTCOME_SCENARIOS = (
         "name": "Persistent investigate month",
         "who": (
             "60 Mbit/s (9% of advertised)",
-            "Left the Guard band · family and peers stayed",
+            "Outside the Guard band · family and peers stayed",
         ),
     },
     {
@@ -4752,14 +4768,14 @@ OUTCOME_SCENARIOS = (
         "name": "Read-heavy month",
         "who": (
             "80 Mbit/s (12% of advertised)",
-            "With other Guards",
+            "Write/read 0.71 · inside the Guard band with other Guards",
         ),
     },
     {
         "id": "crash",
         "name": "Throughput crash",
         "who": (
-            "Write and read both moved · 18 Mbit/s (4% of advertised)",
+            "Write and read both dropped · 18 Mbit/s (4% of advertised)",
             "",
         ),
     },
@@ -4772,8 +4788,8 @@ OUTCOME_SCENARIOS = (
         "id": "both",
         "name": "Overloaded + investigate spike",
         "who": (
-            "Write moved · 300 Mbit/s (37% of advertised)",
-            "Left the Exit+Guard band 1 Aug · family and peers stayed",
+            "Write spiked · 300 Mbit/s (37% of advertised)",
+            "Outside the Exit+Guard band 1 Aug · family and peers stayed",
         ),
     },
 )
@@ -4789,27 +4805,28 @@ def plot_outcome_scenario_cards(out_paths):
     n = len(OUTCOME_SCENARIOS)
     # One header row + n data rows in axes coords (row 0 is the header).
     rows = n + 1
-    fig, ax = plt.subplots(figsize=(12.0, 0.72 + rows * 0.38))
+    fig, ax = plt.subplots(figsize=(13.4, 0.72 + rows * 0.38))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, rows)
     ax.axis("off")
     fig.subplots_adjust(top=0.90, bottom=0.06, left=0.03, right=0.985)
     fig.text(
         0.03, 0.975,
-        "Outcome subtitles  ·  C who moved",
+        "Outcome subtitles  ·  C",
         fontsize=13, fontweight="bold", va="top",
     )
     fig.text(
         0.03, 0.935,
         "Empty (—) when history is thin or the month is all-clear. "
-        "Overload stays in the legend. Restart is a vertical line. "
-        "Advertised share is always raw throughput plus percent.",
+        "Spiked / dropped are bad. Uncommon months put write/read + "
+        "inside the role band with peers. Investigate says Outside the band. "
+        "Overload stays in the legend. Restart is a vertical line.",
         fontsize=8.2, color=GRAY, va="top",
     )
     cols = (
-        (0.015, "Scenario", 0.27),
-        (0.300, "T  throughput", 0.34),
-        (0.655, "R  write/read", 0.33),
+        (0.012, "Scenario", 0.23),
+        (0.250, "T  throughput", 0.34),
+        (0.600, "R  write/read", 0.39),
     )
     header_y = n
     ax.add_patch(plt.Rectangle(
@@ -4842,7 +4859,7 @@ def plot_outcome_scenario_cards(out_paths):
         0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
         "Nickname and operator sit above Throughput, not in the subtitle. "
-        "No “this relay” / “still with.”",
+        "No “this relay” / “still with” / “moved” / “Left.”",
         fontsize=7.4, color=GRAY, va="bottom",
     )
     save(fig, out_paths)
@@ -4864,7 +4881,7 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Outcome subtitles · C who moved</title>
+  <title>Outcome subtitles · C</title>
   <style>{PAGE_CSS}</style>
 </head>
 <body>
@@ -4876,9 +4893,14 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
 </div></nav>
 <div class="container">
   <div class="option-banner recommend">
-    <strong>Locked: C — who moved</strong>
+    <strong>Locked: C</strong>
     Empty when history is thin or the month is all-clear (typical
-    write/read, no investigate day, no spike, no crash). Overload
+    write/read, no investigate day, no spike, no crash). A write spike
+    says <code>Write spiked</code> (bad / investigate). Both-fell says
+    <code>Write and read both dropped</code>. Investigate / off-band
+    says <code>Outside the Guard band</code>, not “Left.” Uncommon
+    months put the write/read value on the same line as
+    <code>inside the Guard band with other Guards</code>. Overload
     stays in the legend. Restart is a vertical line. Identity sits
     above Throughput at 13 pt bold:
     <code>jeangrae · 1aeo.com</code> then
@@ -4914,7 +4936,7 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
 def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                                    f3_overlays, f3_ov, f3_ts, f3_read,
                                    f3_write, f3_adv, f3_events, out, art):
-    """C who-moved table plus live C charts on jeangrae and F3Netze."""
+    """C outcome table plus live C charts on jeangrae and F3Netze."""
     jg = det.get(JEANGRAE)
     jg_doc = bw_all.get(JEANGRAE) if jg else None
     if not jg or not jg_doc:
@@ -4951,10 +4973,10 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "advertised_mbit": s["advertised_mbit"], "events": s["events"],
             "overlays": ctx["overlays"], "ov": ctx["ov"],
             "overload_mode": "title",
-            "name": "jeangrae · C who moved",
+            "name": "jeangrae · C",
             "blurb": (
-                "Write moved off the Guard band; family and peers stayed. "
-                "Identity sits above Throughput: jeangrae · 1aeo.com. "
+                "Write spiked. Outside the Guard band; family and peers "
+                "stayed. Identity sits above Throughput: jeangrae · 1aeo.com. "
                 "Throughput is raw plus percent of advertised."
             ),
         },
@@ -4969,7 +4991,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "advertised_mbit": f3_adv, "events": f3_events,
             "overlays": f3_overlays, "ov": f3_ov,
             "overload_mode": "legend",
-            "name": "F3Netze · C who moved",
+            "name": "F3Netze · C",
             "blurb": (
                 "All-clear month: typical write/read, no investigate day, "
                 "no spike, no crash. Subtitles stay empty. Overload is the "

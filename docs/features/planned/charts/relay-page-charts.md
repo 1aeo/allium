@@ -619,20 +619,25 @@ white shelf above 1.70 so it is not on the bands or the triangles.
 Method and “compared with other Guards” subtitles are rejected — they
 repeat the legend or say nothing about this relay. The subtitle
 summarizes the **outcome**. Title names the chart. Identity names the
-relay above Throughput. Legend names the series. Subtitle says who
-moved.
+relay above Throughput. Legend names the series. Subtitle says whether
+write/read spiked or dropped, and whether this month is inside or
+outside the role band.
 
 #### Outcome subtitles
 
-**Locked: C — who moved.** Built from the series (zone, spike days,
-overlays, utilization). No hand-written copy per relay. A (date +
-number) and B (verdict) were tried and dropped.
+**Locked: C.** Built from the series (zone, spike days, overlays,
+utilization, mean write/read). No hand-written copy per relay. A
+(date + number) and B (verdict) were tried and dropped.
 
 Copy rules:
 
 1. Thin history or all-clear → empty subtitle. All-clear means typical
-   write/read, no investigate day, no spike, no crash.
-2. Say “With other Guards”, not “Still with…”.
+   write/read, no investigate day, no spike, no crash. Do not invent
+   “inside the band” on a quiet typical month.
+2. Uncommon / no-investigate: show the live write/read mean, then
+   `inside the {role} band with other {peers}` on the same line.
+   Example: `Write/read 1.21 · inside the Guard band with other Guards`.
+   Do not leave a bare “With other Guards.”
 3. Do not say “This relay…”. The page is about that relay. Put the
    nickname, and the operator AROI when the contact has a `url:`,
    **above** Throughput at 13 pt bold (same size as the metric title):
@@ -642,6 +647,13 @@ Copy rules:
    wrapping line and repeats the page h1 at title weight.
 4. Whenever we say X% of advertised, also show raw throughput:
    `99 Mbit/s (15% of advertised)`.
+5. Valence, not “moved”: `Write spiked` / `Read spiked` means that
+   side ran high (investigate / bad). `Write and read both dropped`
+   means throughput crashed (bad). Keep the raw Mbit/s on the same
+   line.
+6. Investigate / off-band says `Outside the {role} band`, not
+   “Left the … band.” Family and whole-role lines use the same
+   outside/inside wording.
 
 Overload stays in the legend. Do not invent a subtitle just for
 overload. Restart stays a vertical line.
@@ -662,15 +674,15 @@ cells stay empty — no filler sentence.
 | Quiet typical | — | — |
 | Typical + currently overloaded | — | — |
 | Typical + restart in the window | — | — |
-| Uncommon month, no investigate day | `140 Mbit/s (22% of advertised)` | With other Guards |
-| Investigate spike · this relay only | `Write moved · 98 Mbit/s (15% of advertised)` | Left the Guard band 22–23 Jul · family and peers stayed |
-| Investigate spike · family moved, role stayed | `Write moved · 220 Mbit/s (31% of advertised)` | Left the Guard band with the family · other Guards stayed |
-| Investigate spike · the whole role moved | `Write moved · 90 Mbit/s (18% of advertised)` | Left the band with other Exits 8–9 Aug |
-| Persistent investigate month | `60 Mbit/s (9% of advertised)` | Left the Guard band · family and peers stayed |
-| Read-heavy month | `80 Mbit/s (12% of advertised)` | With other Guards |
-| Throughput crash | `Write and read both moved · 18 Mbit/s (4% of advertised)` | — (ratio typical) |
+| Uncommon month, no investigate day | `140 Mbit/s (22% of advertised)` | `Write/read 1.21 · inside the Guard band with other Guards` |
+| Investigate spike · this relay only | `Write spiked · 98 Mbit/s (15% of advertised)` | `Outside the Guard band 22–23 Jul · family and peers stayed` |
+| Investigate spike · family moved, role stayed | `Write spiked · 220 Mbit/s (31% of advertised)` | `Outside the Guard band with the family · other Guards stayed` |
+| Investigate spike · the whole role moved | `Write spiked · 90 Mbit/s (18% of advertised)` | `Outside the band with other Exits 8–9 Aug` |
+| Persistent investigate month | `60 Mbit/s (9% of advertised)` | `Outside the Guard band · family and peers stayed` |
+| Read-heavy month | `80 Mbit/s (12% of advertised)` | `Write/read 0.71 · inside the Guard band with other Guards` |
+| Throughput crash | `Write and read both dropped · 18 Mbit/s (4% of advertised)` | — (ratio typical / inside) |
 | Near advertised | — | — |
-| Overloaded + investigate spike | `Write moved · 300 Mbit/s (37% of advertised)` | Left the Exit+Guard band 1 Aug · family and peers stayed |
+| Overloaded + investigate spike | `Write spiked · 300 Mbit/s (37% of advertised)` | `Outside the Exit+Guard band 1 Aug · family and peers stayed` |
 
 C-only table (scenario · T · R):
 [`relay_bandwidth_outcome_c_table.png`](mockups/relay_bandwidth_outcome_c_table.png).
