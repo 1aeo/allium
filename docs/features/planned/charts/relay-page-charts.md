@@ -608,21 +608,24 @@ Live C charts:
 - F3Netze (all-clear, overload in the legend, empty subtitles):
   [`relay_bandwidth_outcome_c_f3.png`](mockups/relay_bandwidth_outcome_c_f3.png)
 
-Stories the two strips can conclude (not a cartesian product):
+Stories the two strips can conclude (not a cartesian product). Empty
+cells stay empty — no filler sentence.
 
-1. Not enough history — empty / empty
-2. Quiet typical — empty / empty
-3. Typical + currently overloaded — empty / empty
-4. Typical + restart in the window — empty / empty
-5. Uncommon month, no investigate day
-6. Investigate spike, this relay only
-7. Investigate spike, family moved, role stayed
-8. Investigate spike, the whole role moved
-9. Persistent investigate month
-10. Read-heavy month
-11. Throughput crash (write and read both moved; ratio typical → R empty)
-12. Near advertised — empty / empty
-13. Overloaded + investigate spike
+| Scenario | Throughput (T) | Write / read (R) |
+|----------|----------------|------------------|
+| Not enough history | — | — |
+| Quiet typical | — | — |
+| Typical + currently overloaded | — | — |
+| Typical + restart in the window | — | — |
+| Uncommon month, no investigate day | `140 Mbit/s (22% of advertised)` | With other Guards |
+| Investigate spike · this relay only | `Write moved · 98 Mbit/s (15% of advertised)` | Left the Guard band 22–23 Jul · family and peers stayed |
+| Investigate spike · family moved, role stayed | `Write moved · 220 Mbit/s (31% of advertised)` | Left the Guard band with the family · other Guards stayed |
+| Investigate spike · the whole role moved | `Write moved · 90 Mbit/s (18% of advertised)` | Left the band with other Exits 8–9 Aug |
+| Persistent investigate month | `60 Mbit/s (9% of advertised)` | Left the Guard band · family and peers stayed |
+| Read-heavy month | `80 Mbit/s (12% of advertised)` | With other Guards |
+| Throughput crash | `Write and read both moved · 18 Mbit/s (4% of advertised)` | — (ratio typical) |
+| Near advertised | — | — |
+| Overloaded + investigate spike | `Write moved · 300 Mbit/s (37% of advertised)` | Left the Exit+Guard band 1 Aug · family and peers stayed |
 
 C-only table (scenario · T · R):
 [`relay_bandwidth_outcome_c_table.png`](mockups/relay_bandwidth_outcome_c_table.png).
