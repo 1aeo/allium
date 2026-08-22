@@ -1,0 +1,7 @@
+# Optional chart-generation extra. Not required for HTML generate.
+# Production generate stays Python 3.8+ and Jinja2-only.
+#
+#   pip3 install -r config/requirements-charts.txt
+#
+# matplotlib 3.8+ needs Python 3.9. On Python 3.8 pin matplotlib<3.8.
+matplotlib>=3.5.0
