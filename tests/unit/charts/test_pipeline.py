@@ -273,6 +273,22 @@ def test_cache_miss_renders_and_publishes(temp_dir, monkeypatch):
     assert os.path.isfile(sidecar)
 
 
+def test_real_spawn_pool_renders_synthetic(temp_dir):
+    """Exercise spawn (not the DummyCtx). Requires matplotlib extra."""
+    if not matplotlib_is_available():
+        import pytest
+        pytest.skip("matplotlib extra not installed")
+    relay_set = _relay_set(temp_dir)
+    args = SimpleNamespace(charts="on", chart_workers=1, output_dir=temp_dir)
+    result = run_chart_pass(relay_set, args)
+    assert result.status == "ok"
+    assert result.rendered == 1
+    published = os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png")
+    assert os.path.isfile(published)
+    with open(published, "rb") as handle:
+        assert handle.read(8) == b"\x89PNG\r\n\x1a\n"
+
+
 def test_cache_hit_publishes_without_renderer(temp_dir, monkeypatch):
     calls = []
 
