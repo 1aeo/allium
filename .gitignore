@@ -42,3 +42,6 @@ refactored_output/
 www_before_opt/
 allium/www_before_opt/
 allium/www_*/
+
+# Chart render cache (content-hash sidecars + PNGs)
+**/.chart-cache/

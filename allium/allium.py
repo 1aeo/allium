@@ -14,6 +14,7 @@ import os
 import sys
 import time
 import urllib.parse
+from lib.charts.pipeline import add_chart_arguments, maybe_run_charts
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
@@ -242,6 +243,7 @@ if __name__ == "__main__":
         help="parallel workers for page generation (default: auto-detected CPU count, min 4)",
         required=False,
     )
+    add_chart_arguments(parser)
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
@@ -318,3 +320,7 @@ if __name__ == "__main__":
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
+
+    # Optional chart pass. Default --charts off is silent and does not
+    # import matplotlib. See docs/features/planned/charts/relay-page-chart-pipeline.md
+    maybe_run_charts(RELAY_SET, args, progress_logger)
