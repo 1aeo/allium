@@ -54,7 +54,11 @@ _BASE_BW = {
 def _payload(**overrides):
     relay = dict(_BASE_RELAY)
     bandwidth = dict(_BASE_BW)
-    extra = {}
+    extra = {
+        "relays_published": "2026-08-15 06:00:00",
+        "bandwidth_units": "bits",
+        "bands_frozen_from": "2026-08-15 19:00:00",
+    }
     if "relay" in overrides:
         relay.update(overrides.pop("relay"))
     if "bandwidth_relay" in overrides:
@@ -63,9 +67,6 @@ def _payload(**overrides):
     return build_relay_bandwidth_1m_payload(
         relay,
         bandwidth_relay=bandwidth,
-        relays_published="2026-08-15 06:00:00",
-        bandwidth_units="bits",
-        bands_frozen_from="2026-08-15 19:00:00",
         **extra
     )
 
