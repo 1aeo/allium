@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from .cache import history_block
-from .identity import operator_from_contact, role_from_flags
+from .identity import role_from_flags
 
 # Same cut as the frozen census and the mockup overlay builder.
 MIN_THROUGHPUT_BPS = 50000
@@ -164,16 +164,28 @@ def overlay_lookup(drawn_ts, overlay, write_1m=None):
     return None
 
 
-def contact_group_key(relay):
-    """Stable operator group: contact hash, else url: host."""
-    relay = relay or {}
-    md5 = relay.get("contact_md5")
-    if md5:
-        return "md5:" + md5
-    host = operator_from_contact(relay.get("contact"))
-    if host:
-        return "host:" + host
-    return ""
+def normalize_fingerprint(value):
+    """Uppercase hex fingerprint, stripping a leading ``$``."""
+    return str(value or "").lstrip("$").upper()
+
+
+def family_group_key(relay):
+    """Stable family id from Onionoo ``effective_family`` (sorted fps).
+
+    Contact-group / AROI host is identity text, not the overlay group.
+    Parent precomputes one median series per distinct family key.
+    """
+    members = []
+    for raw in (relay or {}).get("effective_family") or []:
+        fp = normalize_fingerprint(raw)
+        if fp:
+            members.append(fp)
+    self_fp = normalize_fingerprint((relay or {}).get("fingerprint"))
+    if self_fp and self_fp not in members:
+        members.append(self_fp)
+    if not members:
+        return ""
+    return "fam:" + ",".join(sorted(set(members)))
 
 
 def build_bandwidth_map(bandwidth_data):
@@ -188,15 +200,33 @@ def build_bandwidth_map(bandwidth_data):
     return out
 
 
-def chartable_fingerprints(details_relays, bandwidth_map):
-    """Fingerprints that have a drawable 1M write+read graph."""
+def chartable_fingerprints(details_relays, bandwidth_map, fingerprints=None, limit=0):
+    """Fingerprints that have a drawable 1M write+read graph.
+
+    ``fingerprints`` (repeatable ``--fingerprint``) restricts the set.
+    ``limit`` (``--charts-limit``) keeps the first N remaining, details
+    order. Either is enough to slice a first real chart run.
+    """
+    wanted = None
+    if fingerprints:
+        wanted = frozenset(
+            normalize_fingerprint(fp) for fp in fingerprints if fp
+        )
+    try:
+        cap = int(limit or 0)
+    except (TypeError, ValueError):
+        cap = 0
     fps = []
     for relay in details_relays or []:
         fp = relay.get("fingerprint")
         if not fp or not str(fp).isalnum():
             continue
+        if wanted is not None and normalize_fingerprint(fp) not in wanted:
+            continue
         if has_1m_graph(bandwidth_map.get(fp)):
             fps.append(fp)
+            if cap > 0 and len(fps) >= cap:
+                break
     return fps
 
 
@@ -212,15 +242,17 @@ def _median(values):
 
 
 def precompute_overlays(details_relays, bandwidth_map):
-    """Role and contact-group daily-median write/read maps.
+    """Role medians once, family medians once per ``effective_family``.
 
-    Computed once in the parent. Workers receive aligned ``{n, values}``.
-    Operator overlay is omitted later when the contact group has one relay.
+    Computed in the parent. Workers receive only aligned ``{n, values}``
+    blobs — no details list, no O(n) walk per job. Operator / family
+    line is omitted later when that family has fewer than two members
+    with a 1M graph.
     """
     role_days = {}
     role_n = {}
-    contact_days = {}
-    contact_n = {}
+    family_days = {}
+    family_n = {}
     for relay in details_relays or []:
         fp = relay.get("fingerprint")
         daily = daily_ratios(bandwidth_map.get(fp))
@@ -231,25 +263,25 @@ def precompute_overlays(details_relays, bandwidth_map):
         bucket = role_days.setdefault(role, {})
         for ts, ratio in daily.items():
             bucket.setdefault(ts, []).append(ratio)
-        key = contact_group_key(relay)
+        key = family_group_key(relay)
         if not key:
             continue
-        contact_n[key] = contact_n.get(key, 0) + 1
-        cbucket = contact_days.setdefault(key, {})
+        family_n[key] = family_n.get(key, 0) + 1
+        fbucket = family_days.setdefault(key, {})
         for ts, ratio in daily.items():
-            cbucket.setdefault(ts, []).append(ratio)
+            fbucket.setdefault(ts, []).append(ratio)
 
     role_median = {}
     for role, days in role_days.items():
         role_median[role] = {ts: _median(vals) for ts, vals in days.items()}
-    contact_median = {}
-    for key, days in contact_days.items():
-        contact_median[key] = {ts: _median(vals) for ts, vals in days.items()}
+    family_median = {}
+    for key, days in family_days.items():
+        family_median[key] = {ts: _median(vals) for ts, vals in days.items()}
     return {
         "role_median": role_median,
         "role_n": role_n,
-        "contact_median": contact_median,
-        "contact_n": contact_n,
+        "family_median": family_median,
+        "family_n": family_n,
     }
 
 
@@ -264,13 +296,13 @@ def overlays_for_relay(relay, write_1m, precomputed):
             "n": role_n,
             "values": align_overlay_values(role_median, write_1m),
         }
-    key = contact_group_key(relay)
-    contact_n = (precomputed.get("contact_n") or {}).get(key, 0)
+    key = family_group_key(relay)
+    family_n = (precomputed.get("family_n") or {}).get(key, 0)
     family_overlay = None
-    if key and contact_n >= 2:
-        contact_median = (precomputed.get("contact_median") or {}).get(key) or {}
+    if key and family_n >= 2:
+        family_median = (precomputed.get("family_median") or {}).get(key) or {}
         family_overlay = {
-            "n": contact_n,
-            "values": align_overlay_values(contact_median, write_1m),
+            "n": family_n,
+            "values": align_overlay_values(family_median, write_1m),
         }
     return family_overlay, role_overlay
