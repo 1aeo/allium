@@ -680,6 +680,8 @@ Shipped C charts:
   [`relay_bandwidth_outcome_c_jeangrae.png`](mockups/relay_bandwidth_outcome_c_jeangrae.png)
 - F3Netze (all-clear, overload in the legend, empty subtitles):
   [`relay_bandwidth_outcome_c_f3.png`](mockups/relay_bandwidth_outcome_c_f3.png)
+- Digitalcourage4ipeb (uncommon-inside, no forced date):
+  [`relay_bandwidth_outcome_c_Digitalcourage4ipeb.png`](mockups/relay_bandwidth_outcome_c_Digitalcourage4ipeb.png)
 
 Stories the two strips can conclude (not a cartesian product). Empty
 cells stay empty — no filler sentence.
