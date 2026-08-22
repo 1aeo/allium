@@ -7,8 +7,8 @@ from allium.lib.charts.series import (
     aligned_1m_series,
     build_bandwidth_map,
     chartable_fingerprints,
-    contact_group_key,
     daily_ratios,
+    family_group_key,
     has_1m_graph,
     history_series,
     month_blocks,
@@ -75,29 +75,69 @@ def test_build_bandwidth_map_and_chartable():
     assert chartable_fingerprints(relays, bw_map) == [fp]
 
 
-def test_contact_group_prefers_md5():
-    assert contact_group_key({"contact_md5": "abc"}) == "md5:abc"
-    assert contact_group_key({"contact": "url:1aeo.com"}) == "host:1aeo.com"
-    assert contact_group_key({}) == ""
-
-
-def test_precompute_omits_singleton_contact_overlay():
+def test_chartable_limit_and_fingerprint_filter():
     fp1 = "A" * 40
     fp2 = "B" * 40
+    fp3 = "C" * 40
     relays = [
-        {"fingerprint": fp1, "flags": ["Guard"], "contact_md5": "only-me"},
-        {"fingerprint": fp2, "flags": ["Guard"], "contact_md5": "us", "contact": "url:x.com"},
+        {"fingerprint": fp1, "flags": ["Guard"]},
+        {"fingerprint": fp2, "flags": ["Guard"]},
+        {"fingerprint": fp3, "flags": ["Guard"]},
     ]
-    # Second contact group needs two members for a family overlay.
-    relays.append({
-        "fingerprint": "C" * 40, "flags": ["Guard"], "contact_md5": "us",
+    bw_map = {fp1: _bw(fp1), fp2: _bw(fp2), fp3: _bw(fp3)}
+    assert chartable_fingerprints(relays, bw_map, limit=2) == [fp1, fp2]
+    assert chartable_fingerprints(
+        relays, bw_map, fingerprints=["$" + fp2.lower(), fp3],
+    ) == [fp2, fp3]
+    assert chartable_fingerprints(
+        relays, bw_map, fingerprints=[fp2, fp3], limit=1,
+    ) == [fp2]
+
+
+def test_family_group_key_from_effective_family():
+    fp1 = "A" * 40
+    fp2 = "B" * 40
+    family = ["$" + fp1, "$" + fp2]
+    key_a = family_group_key({
+        "fingerprint": fp1, "effective_family": family, "contact_md5": "only-me",
     })
+    key_b = family_group_key({
+        "fingerprint": fp2, "effective_family": list(reversed(family)),
+        "contact": "url:other.example",
+    })
+    assert key_a == key_b
+    assert key_a.startswith("fam:")
+    singleton = family_group_key({"fingerprint": fp1, "effective_family": [fp1]})
+    assert singleton != key_a
+
+
+def test_precompute_omits_singleton_family_overlay():
+    fp1 = "A" * 40
+    fp2 = "B" * 40
+    fp3 = "C" * 40
+    family_bc = [fp2, fp3]
+    relays = [
+        {
+            "fingerprint": fp1, "flags": ["Guard"],
+            "effective_family": [fp1], "contact_md5": "shared",
+        },
+        {
+            "fingerprint": fp2, "flags": ["Guard"],
+            "effective_family": family_bc, "contact_md5": "shared",
+        },
+        {
+            "fingerprint": fp3, "flags": ["Guard"],
+            "effective_family": family_bc, "contact_md5": "other",
+        },
+    ]
     bw_map = {
         fp1: _bw(fp1),
         fp2: _bw(fp2),
-        "C" * 40: _bw("C" * 40),
+        fp3: _bw(fp3),
     }
     pre = precompute_overlays(relays, bw_map)
+    assert "contact_median" not in pre
+    assert "family_median" in pre
     write_1m, _read = month_blocks(_bw(fp1))
     family, role = overlays_for_relay(relays[0], write_1m, pre)
     assert family is None
