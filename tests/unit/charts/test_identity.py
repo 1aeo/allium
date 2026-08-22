@@ -7,6 +7,7 @@ from allium.lib.charts.identity import (
     ROLE_MIDDLE,
     chart_identity,
     operator_from_contact,
+    peers_word,
     role_from_flags,
 )
 
@@ -53,3 +54,11 @@ def test_role_from_flags():
     assert role_from_flags(["Fast", "Running"]) == ROLE_MIDDLE
     assert role_from_flags([]) == ROLE_MIDDLE
     assert role_from_flags(None) == ROLE_MIDDLE
+
+
+def test_peers_word():
+    assert peers_word(ROLE_GUARD) == "Guards"
+    assert peers_word(ROLE_EXIT) == "Exits"
+    assert peers_word(ROLE_EXIT_GUARD) == "Exit+Guards"
+    assert peers_word(ROLE_MIDDLE) == "middle relays"
+    assert peers_word({"role": "Guard"}) == "Guards"
