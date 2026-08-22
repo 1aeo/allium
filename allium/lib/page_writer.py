@@ -1588,6 +1588,9 @@ def write_relay_info(relay_set):
     fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
     family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
 
+    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
+    bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
+
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
             continue
@@ -1618,6 +1621,8 @@ def write_relay_info(relay_set):
                 base_url, f"relay/{relay['fingerprint']}/index.html"
             ),
             page_number=1,
+            charts_enabled=charts_enabled,
+            has_bandwidth_chart=charts_enabled and relay["fingerprint"] in bandwidth_chart_fps,
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
