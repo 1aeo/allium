@@ -59,3 +59,17 @@ def role_from_flags(flags):
     if guard_f:
         return ROLE_GUARD
     return ROLE_MIDDLE
+
+
+def peers_word(bands_or_role):
+    """Operator-facing plural for this flag set. Not 'flag set' or 'role'."""
+    if isinstance(bands_or_role, dict):
+        role = bands_or_role.get("role") or ""
+    else:
+        role = bands_or_role or ""
+    return {
+        ROLE_GUARD: "Guards",
+        ROLE_EXIT: "Exits",
+        ROLE_EXIT_GUARD: "Exit+Guards",
+        ROLE_MIDDLE: "middle relays",
+    }.get(role, role or "relays")
