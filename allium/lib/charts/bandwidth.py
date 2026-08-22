@@ -146,7 +146,7 @@ def _save_trimmed(fig, dest_path):
     parent = os.path.dirname(dest_path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    tmp = dest_path + ".tmp"
+    tmp = dest_path + ".tmp.png"
     _plt.imsave(tmp, _trim_rgba(rgba))
     os.replace(tmp, dest_path)
     _plt.close(fig)
