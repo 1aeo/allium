@@ -9,6 +9,7 @@ from allium.lib.charts.cache import (
     cache_hit,
     cache_key,
     cached_png_path,
+    currently_overloaded,
     history_block,
     publish_png,
     published_png_path,
@@ -161,12 +162,62 @@ def test_vote_like_fields_are_not_in_payload():
         "as_name",
         "contact",
         "votes",
+        "relays_published",
     ):
         assert leaked not in payload
     assert payload["schema_version"] == CACHE_SCHEMA_VERSION
+    assert payload["currently_overloaded"] is False
     assert payload["role"] == "Guard"
     assert payload["operator"] == "1aeo.com"
     assert payload["write_1m"]["values"][2] is None
+
+
+def test_relays_published_tick_does_not_change_key():
+    """Details published clock must not bust every figure."""
+    earlier = _payload(relays_published="2026-08-15 06:00:00")
+    later = _payload(relays_published="2026-08-15 12:00:00")
+    assert "relays_published" not in earlier
+    assert earlier["currently_overloaded"] is False
+    assert later["currently_overloaded"] is False
+    assert cache_key(earlier) == cache_key(later)
+
+
+# F3Netze snapshot: last report 2026-08-13 05:00 UTC (same as stability tests).
+_F3_TS_MS = 1786597200000
+
+
+def test_currently_overloaded_flip_changes_key():
+    overloaded = dict(_BASE_RELAY)
+    overloaded["overload_general_timestamp"] = _F3_TS_MS
+    inside = build_relay_bandwidth_1m_payload(
+        overloaded,
+        bandwidth_relay=_BASE_BW,
+        relays_published="2026-08-15 06:00:00",
+        bands_frozen_from="2026-08-15 19:00:00",
+    )
+    still_inside = build_relay_bandwidth_1m_payload(
+        overloaded,
+        bandwidth_relay=_BASE_BW,
+        relays_published="2026-08-15 12:00:00",
+        bands_frozen_from="2026-08-15 19:00:00",
+    )
+    expired = build_relay_bandwidth_1m_payload(
+        overloaded,
+        bandwidth_relay=_BASE_BW,
+        relays_published="2026-08-20 06:00:00",
+        bands_frozen_from="2026-08-15 19:00:00",
+    )
+    assert inside["currently_overloaded"] is True
+    assert still_inside["currently_overloaded"] is True
+    assert expired["currently_overloaded"] is False
+    assert cache_key(inside) == cache_key(still_inside)
+    assert cache_key(inside) != cache_key(expired)
+    assert currently_overloaded(
+        overloaded, _BASE_BW, "2026-08-15 06:00:00"
+    ) is True
+    assert currently_overloaded(
+        overloaded, _BASE_BW, "2026-08-20 06:00:00"
+    ) is False
 
 
 def test_overlay_change_changes_key():

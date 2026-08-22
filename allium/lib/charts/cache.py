@@ -1,20 +1,24 @@
 """Content-hash cache for chart PNGs.
 
-Daily rebuilds that only tick votes, uptime scalars, or last_seen must
-not redraw every figure. The key is the SHA-256 of the fields that
-actually change pixels. See relay-page-chart-pipeline.md.
+Daily rebuilds that only tick votes, uptime scalars, last_seen, or
+details ``relays_published`` must not redraw every figure. The key is
+the SHA-256 of the fields that actually change pixels. Overload uses
+derived ``currently_overloaded``, not the raw published clock.
+See relay-page-chart-pipeline.md.
 """
 
 import hashlib
 import json
 import os
 import shutil
+from datetime import datetime, timezone
 
+from ..stability_utils import current_overload_status
 from .identity import operator_from_contact, role_from_flags
 from .registry import RELAY_BANDWIDTH_1M_ID
 
 # Bump when the payload layout changes (added/removed/renamed fields).
-CACHE_SCHEMA_VERSION = 1
+CACHE_SCHEMA_VERSION = 2
 
 # Onionoo graph-history keys that change the drawn series.
 _HISTORY_KEYS = ("first", "last", "interval", "factor", "values")
@@ -57,6 +61,41 @@ def _overload_fd(raw):
     return {"timestamp": raw.get("timestamp")}
 
 
+def _published_clock(relays_published):
+    """Unix seconds for ``current_overload_status``. None if unparseable."""
+    if not relays_published:
+        return None
+    try:
+        parsed = datetime.strptime(str(relays_published), "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=timezone.utc).timestamp()
+
+
+def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
+    """True when ``current_overload_status`` is active at the published clock.
+
+    ``relays_published`` is the 72h clock only. It is not stored in the
+    cache payload — a details tick that does not flip this boolean must
+    not bust every figure.
+    """
+    relay = relay or {}
+    bandwidth_relay = bandwidth_relay or {}
+    merged = {
+        "overload_general_timestamp": relay.get("overload_general_timestamp"),
+        "overload_ratelimits": (
+            bandwidth_relay.get("overload_ratelimits")
+            or relay.get("overload_ratelimits")
+        ),
+        "overload_fd_exhausted": (
+            bandwidth_relay.get("overload_fd_exhausted")
+            or relay.get("overload_fd_exhausted")
+        ),
+    }
+    status = current_overload_status(merged, _published_clock(relays_published))
+    return bool(status)
+
+
 def build_relay_bandwidth_1m_payload(
     relay,
     bandwidth_relay=None,
@@ -73,6 +112,8 @@ def build_relay_bandwidth_1m_payload(
     last_restarted, contact, overload_general_timestamp).
     ``bandwidth_relay`` is the matching ``/bandwidth`` relay dict, or
     None when that fingerprint has no bandwidth document.
+    ``relays_published`` is the overload 72h clock only; the payload
+    stores derived ``currently_overloaded``, not the raw timestamp.
     """
     relay = relay or {}
     bandwidth_relay = bandwidth_relay or {}
@@ -84,7 +125,9 @@ def build_relay_bandwidth_1m_payload(
         "chart_id": RELAY_BANDWIDTH_1M_ID,
         "renderer_version": str(renderer_version),
         "fingerprint": relay.get("fingerprint") or "",
-        "relays_published": relays_published or "",
+        "currently_overloaded": currently_overloaded(
+            relay, bandwidth_relay, relays_published,
+        ),
         "bandwidth_units": bandwidth_units or "bits",
         "nickname": relay.get("nickname") or "",
         "operator": operator_from_contact(relay.get("contact")),
