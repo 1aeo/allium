@@ -2,7 +2,7 @@
 
 **Audience**: Contributors
 **Scope**: Time-series charts on the individual relay page (`relay-info.html`)
-**Status**: Variation review — pick encodings, then implement
+**Status**: Bandwidth encoding locked (style 5 / option C). Build pipeline: [`relay-page-chart-pipeline.md`](relay-page-chart-pipeline.md).
 **Data**: Onionoo `relays_published` 2026-08-15 06:00 UTC
 
 This is page type 1. Network-health, contact, country, and AS pages come after
@@ -853,13 +853,22 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 
 ## Implementation notes (after encoding pick)
 
+Pipeline (when, where, cache, extras):
+[`relay-page-chart-pipeline.md`](relay-page-chart-pipeline.md).
+First chart is a matplotlib PNG after HTML, not an in-template draw.
+The notes below are encoding/data rules for the renderer.
+
 1. Keep every Onionoo-published uptime graph (`1_month` / `6_months` /
    `1_year` / `5_years`) as `values` + `first` + `interval` + `factor`
    on the relay. Same for per-flag uptime and read/write if those
    periods exist. Do not invent a series when Onionoo omitted the key.
    Do not treat Allium's `count < 30 → 0.0` scalar as a chartable 0%.
-2. Render **build-time SVG** in the Jinja templates. One static Chart.js
-   on 11k pages is the wrong default for a static site.
+   The chart pass reads raw `/bandwidth` / `/uptime` documents; do not
+   attach those arrays to every relay dict just for Jinja.
+2. Do **not** draw in the Jinja hot path and do **not** add Chart.js.
+   Build-time PNG via the chart registry (first: `relay_bandwidth_1m`).
+   SVG-via-Jinja is a later renderer option, not the first bandwidth
+   chart. One static Chart.js on 11k pages is the wrong default.
 3. Color: red only for problems this relay owns (local Running gap,
    current overload title/legend cue, write/read beyond **this role’s
    p98**, missing flags). A Guard at 1.20 is amber; an Exit at 1.20 is
