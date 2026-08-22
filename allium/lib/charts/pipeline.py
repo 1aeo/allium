@@ -22,7 +22,6 @@ from .registry import RELAY_BANDWIDTH_1M, enabled_charts
 from .series import (
     build_bandwidth_map,
     chartable_fingerprints,
-    has_1m_graph,
     month_blocks,
     overlays_for_relay,
     precompute_overlays,
@@ -32,6 +31,8 @@ CHARTS_OFF = "off"
 CHARTS_AUTO = "auto"
 CHARTS_ON = "on"
 CHARTS_MODES = (CHARTS_OFF, CHARTS_AUTO, CHARTS_ON)
+# Hard cap. --workers is often 8–16; matplotlib processes are heavier.
+MAX_CHART_WORKERS = 8
 
 # Shown when --charts on cannot run. Always printed (not --progress
 # only) so an operator who asked for charts sees why PNGs are missing.
@@ -54,6 +55,7 @@ class ChartRunResult(object):
         rendered=0,
         cache_hits=0,
         published=0,
+        failed=0,
         elapsed_s=0.0,
     ):
         self.status = status
@@ -62,23 +64,24 @@ class ChartRunResult(object):
         self.rendered = rendered
         self.cache_hits = cache_hits
         self.published = published
+        self.failed = failed
         self.elapsed_s = elapsed_s
 
     def __repr__(self):
         return (
             "ChartRunResult(status={!r}, reason={!r}, charts_mode={!r}, "
-            "rendered={!r}, cache_hits={!r})"
+            "rendered={!r}, cache_hits={!r}, failed={!r})"
         ).format(
             self.status, self.reason, self.charts_mode,
-            self.rendered, self.cache_hits,
+            self.rendered, self.cache_hits, self.failed,
         )
 
 
 def add_chart_arguments(parser):
-    """Register --charts / --no-charts / --chart-workers on the CLI parser.
+    """Register chart CLI flags.
 
-    Default is ``auto``: run after HTML when the charts extra is
-    installed, silent no-op when it is not.
+    Default is ``off``. ``auto`` is an explicit choice: run after HTML
+    when the charts extra is installed, silent no-op when it is not.
     """
     parser.add_argument(
         "--charts",
@@ -86,10 +89,10 @@ def add_chart_arguments(parser):
         nargs="?",
         const=CHARTS_ON,
         choices=list(CHARTS_MODES),
-        default=CHARTS_AUTO,
+        default=CHARTS_OFF,
         help=(
             "generate relay-page charts after HTML "
-            "(off, auto, on; default: auto). "
+            "(off, auto, on; default: off). "
             "auto enables only when the charts extra is installed"
         ),
         required=False,
@@ -103,21 +106,42 @@ def add_chart_arguments(parser):
         required=False,
     )
     parser.add_argument(
+        "--charts-limit",
+        dest="charts_limit",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "chart at most N relays (0 = no limit). "
+            "Use with --charts on/auto to slice a first run"
+        ),
+        required=False,
+    )
+    parser.add_argument(
+        "--fingerprint",
+        dest="chart_fingerprints",
+        action="append",
+        default=None,
+        metavar="FP",
+        help="only chart this fingerprint (repeatable; with --charts on/auto)",
+        required=False,
+    )
+    parser.add_argument(
         "--chart-workers",
         dest="chart_workers",
         type=int,
         default=0,
         help=(
             "process-pool size for chart render "
-            "(default: min(4, CPU count); 0 = auto)"
-        ),
+            "(default: min(4, CPU count); hard cap {}; 0 = auto)"
+        ).format(MAX_CHART_WORKERS),
         required=False,
     )
 
 
 def resolve_charts_mode(args):
     """Return off/auto/on from an argparse namespace."""
-    mode = getattr(args, "charts", CHARTS_AUTO) or CHARTS_AUTO
+    mode = getattr(args, "charts", CHARTS_OFF) or CHARTS_OFF
     if mode not in CHARTS_MODES:
         return CHARTS_OFF
     return mode
@@ -125,10 +149,15 @@ def resolve_charts_mode(args):
 
 def default_chart_workers(override=0):
     """Small process-pool cap. Do not reuse --workers (often 8–16)."""
-    if override and int(override) > 0:
-        return int(override)
+    try:
+        override = int(override or 0)
+    except (TypeError, ValueError):
+        override = 0
     cpu = os.cpu_count() or 1
-    return max(1, min(4, cpu))
+    auto = max(1, min(4, cpu))
+    if override > 0:
+        return max(1, min(MAX_CHART_WORKERS, override))
+    return auto
 
 
 def matplotlib_is_available():
@@ -216,15 +245,22 @@ def charts_will_run(args, relay_set):
 def apply_chart_html_flags(relay_set, args):
     """Set ``charts_enabled`` / ``bandwidth_chart_fps`` before Jinja.
 
-    Called before ``generate_site()`` so ``--no-charts`` and ``auto``
-    without the extra omit the History ``<img>`` (no broken images).
+    Called before ``generate_site()`` so default-off, ``--no-charts``,
+    and ``auto`` without the extra omit the History ``<img>`` (no
+    ~7k broken images). Limit / fingerprint slices must match the
+    chart pass or skipped relays would still emit ``<img>``.
     Does not import matplotlib.
     """
     will_run = charts_will_run(args, relay_set)
     fps = frozenset()
     if will_run:
         bw_map = build_bandwidth_map(_bandwidth_data(relay_set))
-        fps = frozenset(chartable_fingerprints(_details_relays(relay_set), bw_map))
+        fps = frozenset(chartable_fingerprints(
+            _details_relays(relay_set),
+            bw_map,
+            fingerprints=getattr(args, "chart_fingerprints", None) if args else None,
+            limit=getattr(args, "charts_limit", 0) if args else 0,
+        ))
     if relay_set is not None:
         relay_set.charts_enabled = will_run
         relay_set.bandwidth_chart_fps = fps
@@ -261,7 +297,7 @@ def _render_chart_job(job):
         return {"ok": False, "fingerprint": fingerprint, "error": str(exc)}
 
 
-def _build_render_job(relay, payload, bands, family, role):
+def _build_render_job(relay, payload, bands, family, role, relays_published):
     return {
         "nickname": payload["nickname"],
         "operator": payload["operator"],
@@ -270,7 +306,7 @@ def _build_render_job(relay, payload, bands, family, role):
         "flags": payload["flags"],
         "role": payload["role"],
         "last_restarted": payload["last_restarted"],
-        "relays_published": payload["relays_published"],
+        "relays_published": relays_published,
         "overload_general_timestamp": relay.get("overload_general_timestamp"),
         "overload_ratelimits": payload["overload_ratelimits"],
         "overload_fd_exhausted": payload["overload_fd_exhausted"],
@@ -300,17 +336,21 @@ def run_chart_pass(relay_set, args, progress_logger=None):
     frozen = bands_frozen_from(catalog)
     overlays = precompute_overlays(details, bw_map)
     workers = default_chart_workers(getattr(args, "chart_workers", 0) if args else 0)
+    selected = frozenset(chartable_fingerprints(
+        details,
+        bw_map,
+        fingerprints=getattr(args, "chart_fingerprints", None) if args else None,
+        limit=getattr(args, "charts_limit", 0) if args else 0,
+    ))
 
     jobs = []
     hits = 0
     published_n = 0
     for relay in details:
         fp = relay.get("fingerprint")
-        if not fp or not str(fp).isalnum():
+        if fp not in selected:
             continue
         bw_relay = bw_map.get(fp)
-        if not has_1m_graph(bw_relay):
-            continue
         write_1m, read_1m = month_blocks(bw_relay)
         family, role_ov = overlays_for_relay(relay, write_1m, overlays)
         bands = bands_for_flags(relay.get("flags"), catalog)
@@ -338,7 +378,7 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             "fingerprint": fp,
             "key": key,
             "render": _build_render_job(
-                relay, payload, bands, family, role_ov,
+                relay, payload, bands, family, role_ov, published,
             ),
         })
 
@@ -350,12 +390,18 @@ def run_chart_pass(relay_set, args, progress_logger=None):
         # Always spawn — never import matplotlib in the HTML parent.
         ctx = multiprocessing.get_context("spawn")
         n_proc = max(1, min(workers, len(jobs)))
-        with ctx.Pool(
-            processes=n_proc, initializer=_init_chart_worker,
-        ) as pool:
-            results = list(
-                pool.imap_unordered(_render_chart_job, jobs, chunksize=1)
-            )
+        results = []
+        try:
+            with ctx.Pool(
+                processes=n_proc, initializer=_init_chart_worker,
+            ) as pool:
+                for row in pool.imap_unordered(
+                    _render_chart_job, jobs, chunksize=1,
+                ):
+                    results.append(row)
+        except Exception as exc:  # noqa: BLE001 — pool death must not fail HTML
+            failed += len(jobs) - len(results)
+            _emit("Charts: pool error ({})".format(exc), progress_logger)
         for row in results:
             if row and row.get("ok"):
                 rendered += 1
@@ -371,13 +417,19 @@ def run_chart_pass(relay_set, args, progress_logger=None):
     if failed:
         msg += ", {} failed".format(failed)
     _emit(msg, progress_logger)
+    reason = "rendered" if rendered or hits else "nothing_to_draw"
+    if failed and not (rendered or hits):
+        reason = "all_failed"
+    elif failed:
+        reason = "partial"
     return ChartRunResult(
-        status="ok",
-        reason="rendered" if rendered or hits else "nothing_to_draw",
-        charts_mode=resolve_charts_mode(args) if args else CHARTS_AUTO,
+        status="ok" if not failed else ("error" if reason == "all_failed" else "ok"),
+        reason=reason,
+        charts_mode=resolve_charts_mode(args) if args else CHARTS_OFF,
         rendered=rendered,
         cache_hits=hits,
         published=published_n,
+        failed=failed,
         elapsed_s=elapsed,
     )
 
@@ -425,4 +477,15 @@ def maybe_run_charts(relay_set, args, progress_logger=None):
             charts_mode=mode,
         )
 
-    return run_chart_pass(relay_set, args, progress_logger)
+    try:
+        return run_chart_pass(relay_set, args, progress_logger)
+    except Exception as exc:  # noqa: BLE001 — HTML already succeeded
+        _emit(
+            "Charts: failed ({}); HTML unchanged".format(exc),
+            progress_logger,
+        )
+        return ChartRunResult(
+            status="error",
+            reason="pass_failed",
+            charts_mode=mode,
+        )

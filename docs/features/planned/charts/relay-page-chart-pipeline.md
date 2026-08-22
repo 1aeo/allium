@@ -26,8 +26,8 @@ Ship charts as a **decoupled process-pool pass after HTML**, with a
 | Cache | SHA-256 of chart version + the fields that actually change the figure. Sidecar + PNG under `{output}/.chart-cache/`. |
 | Publish | After HTML, hardlink/copy cache PNG to `www/relay/<fp>/bandwidth-1m.png`. |
 | Deps | matplotlib is a **build extra** (`config/requirements-charts.txt`). Core generate stays Jinja2-only. |
-| CLI | `--charts {off,auto,on}` and `--no-charts`. **Default `off` until the renderer exists.** Then flip default to `auto`. |
-| HTML | No template change in the skeleton. Later: optional `<img src="bandwidth-1m.png">` in `#bandwidth`. Missing file → tables still work. |
+| CLI | `--charts {off,auto,on}` and `--no-charts`. **Default stays `off`.** `auto` is an explicit choice (do not flip the argparse default to `auto`). Ramp with `--charts-limit N` and repeatable `--fingerprint FP`. |
+| HTML | History `<img>` only when the chart pass will actually run **and** that fingerprint is in the sliced 1M set. Default-off generate must not emit ~7k broken images. |
 
 The 5-minute number stays the HTML number. Charts are a second, cacheable
 bill. Same-day rebuilds that only tick votes / uptime / `last_seen` must
@@ -241,19 +241,12 @@ Explained” currently lives under the flags block, not inside
      width="…" height="…">
 ```
 
-Missing PNG: browser shows a broken image unless the `<img>` is
-wrapped in a flag or omitted. Prefer omit (`{% if chart_png_exists %}`
-is the wrong check — that would re-stat 7k files during Jinja).
-Better: always emit the `<img>` once we generate, and only emit it for
-relays the chart pass marked as published (a small
-`relay["_charts"] = ("bandwidth-1m",)` set **after** the chart pass
-would require a **second** HTML pass — do not do that).
-
-Simplest honest HTML: always emit the `<img>`. Relays with no history
-get no PNG; the alt text is enough; tables remain. Or emit the `<img>`
-only when `relay_set.bandwidth_data` exists **and** that fingerprint
-has a 1M graph — a dict lookup, not a stat. Decide in the HTML PR.
-Either way, Jinja does not wait on bytes.
+Emit the History `<img>` only when charts will actually run **and**
+that fingerprint has a 1M graph (and survives `--charts-limit` /
+`--fingerprint`). That is an in-memory set set **before** Jinja
+(`charts_enabled` + `bandwidth_chart_fps`), not a 7k-file `stat`.
+Default-off generate must not emit ~7k broken images. Do not mark
+the set after the chart pass — that would need a second HTML pass.
 
 `page_ctx.path_prefix` for relay pages is `../../`. A same-directory
 `bandwidth-1m.png` does not use it.
@@ -272,15 +265,18 @@ maybe_run_charts(RELAY_SET, args, progress_logger)
 ### Flags
 
 ```
---charts {off,auto,on}     default: off   (skeleton / until renderer ships)
+--charts {off,auto,on}     default: off
 --charts                   const=on       (bare --charts means on)
 --no-charts                store off
---chart-workers N          default 0 → min(4, cpu_count), at least 1
+--charts-limit N           first N chartable relays (0 = no limit)
+--fingerprint FP           repeatable; only these fingerprints
+--chart-workers N          default 0 → min(4, cpu_count); hard cap 8
 ```
 
 **Do not reuse `--workers`.** HTML workers are often 8–16. Sixteen
 matplotlib processes on a 2.4 GB `Relays` object is a memory incident.
-Chart workers get their own cap.
+Chart workers get their own cap (max 8). First real chart run should
+be a slice: `--charts on --fingerprint …` or `--charts on --charts-limit N`.
 
 ### Mode behavior
 
@@ -290,9 +286,9 @@ Chart workers get their own cap.
 | `auto` | one line, skip | one line, skip | run pass |
 | `on` | one line + how to install extra; HTML still succeeds | one line “renderer not implemented”; HTML still succeeds | run pass |
 
-After the renderer exists, change the argparse default to `auto` so
-operators who installed the extra get charts without a flag, and CI
-that did not install the extra keeps the 5-minute path.
+Do **not** flip the argparse default to `auto`. Operators who
+installed the extra still opt in with `--charts auto` or `--charts on`.
+A surprise matplotlib pass on an ordinary generate is a footgun.
 
 `--apis details`: no `bandwidth_data` → one line, skip. Do not fail.
 
@@ -301,17 +297,18 @@ that did not install the extra keeps the 5-minute path.
 1. HTML generate has finished. `www/relay/<fp>/index.html` exists.
    `www/relay/` was just rebuilt from scratch.
 2. `build_bandwidth_map(relay_set.bandwidth_data)` once.
-3. Compute role-median and contact-group median write/read series
-   once in the parent (cheap: ~10k × ~30 daily points). Omit operator
-   overlay when the contact group has one relay.
-4. For each relay with a 1M graph, build the cache payload, hash it.
+3. Compute role-median **once** and family-median **once per
+   `effective_family`** in the parent. Omit the operator line when
+   that family has n&lt;2 chartable members. Workers receive overlay
+   blobs only — no contact-group walk, no per-job O(n) pass.
+4. For each selected relay with a 1M graph, build the cache payload, hash it.
 5. Parent-side skip if sidecar key matches and cache PNG exists.
-6. Remaining jobs → spawn pool, `min(4, cpu)` processes.
-   Each worker imports matplotlib **once** (initializer), renders,
-   writes cache PNG + sidecar, hardlinks into `relay/<fp>/`.
+6. Remaining jobs → spawn pool, `min(4, cpu, 8)` processes
+   (``--chart-workers`` hard-capped at 8). Each job is try/except:
+   one bad relay must not kill the pool. HTML already succeeded.
 7. Progress: `Charts: 1200/8340 rendered, 7100 cache hits (12.4s)`
-   via `log_without_increment`, every N jobs or 2 s. Section
-   start/end may increment later; not in the skeleton.
+   via `log_without_increment`. Non-zero failed count is printed on
+   the same summary line.
 
 ### Concurrency budget
 
@@ -347,11 +344,11 @@ Canonical JSON: `sort_keys=True`, `separators=(",", ":")`,
 
 | Field | Why |
 |-------|-----|
-| `schema_version` | Payload layout. Currently `1`. |
+| `schema_version` | Payload layout. Currently `2`. |
 | `chart_id` | `relay_bandwidth_1m` |
 | `renderer_version` | Bump when style 5 drawing changes. |
 | `fingerprint` | Path + identity |
-| `relays_published` | Overload 72h clock (not wall time) |
+| `currently_overloaded` | Derived from `current_overload_status()` at the published clock. **Not** raw `relays_published` — a details tick must not bust every figure. |
 | `bandwidth_units` | `bits` / `bytes` — advertised legend text |
 | `nickname` | Identity line |
 | `operator` | `url:` host or `""` |
@@ -372,8 +369,10 @@ Canonical JSON: `sort_keys=True`, `separators=(",", ":")`,
 
 Vote counts, `last_seen`, `observed_bandwidth` (the advertised line
 uses `advertised_bandwidth`), uptime percentages, consensus weight,
-AS name, raw contact dump, platform, country. Those tick every
-details refresh and would force a full redraw.
+AS name, raw contact dump, platform, country, and raw
+`relays_published`. Those tick every details refresh and would force
+a full redraw. The renderer still gets `relays_published` as the 72h
+clock; the key stores only the derived boolean.
 
 ### Hit / miss
 
@@ -398,7 +397,8 @@ for v1.
 `/bandwidth` is cached 12 hours. Details refresh more often (votes,
 uptime scalars). The key ignores those ticks. A generate that reuses
 the bandwidth cache and has the same advertised / flags / nickname /
-restart / overload / identity **skips matplotlib for that relay**.
+restart / derived overload boolean / identity **skips matplotlib for
+that relay**.
 
 When Onionoo publishes a new daily bucket, `write_1m` / `read_1m`
 change → miss → redraw. That is correct.
@@ -539,12 +539,14 @@ needs a guard, use in-memory “this fingerprint has a 1M graph” from
    tests. Default `--charts off`. No HTML. No matplotlib import in
    the generate process.
 2. **Renderer:** slim `render_relay_bandwidth_1m`. Mockup script may
-   call it. Still default off or `auto` with extra.
+   call it. Still default off; `auto` remains an explicit flag.
 3. **Pass:** spawn pool, cache hit/miss, publish into `relay/<fp>/`
-   after HTML. Measure cold vs warm.
-4. **HTML:** option C History `<img>`. Then `www_baseline` /
-   `www_after` + `compare_outputs.py` (every relay page will change).
-5. **Default `auto`.** Document the extra in the user guide.
+   after HTML. Measure cold vs warm. First run is a slice
+   (`--charts-limit` / `--fingerprint`).
+4. **HTML:** option C History `<img>` gated on charts actually running
+   and a 1M graph for that fingerprint.
+5. Keep default `off`. Do not flip to `auto` because the extra is
+   installed.
 6. **Next chart** via registry (uptime B, then sparks, then flags).
 
 ---
@@ -553,8 +555,9 @@ needs a guard, use in-memory “this fingerprint has a 1M graph” from
 
 - `allium/lib/charts/` — registry (`relay_bandwidth_1m`), cache key,
   identity (`url:` host), pipeline skip logic
-- `allium/allium.py` — `--charts` / `--no-charts` / `--chart-workers`;
-  `maybe_run_charts()` after HTML; default off is silent
+- `allium/allium.py` — `--charts` / `--no-charts` / `--charts-limit` /
+  `--fingerprint` / `--chart-workers`; `maybe_run_charts()` after
+  HTML; default off is silent
 - `config/requirements-charts.txt` — matplotlib extra, not a core dep
 - Tests: `tests/unit/charts/`
 
