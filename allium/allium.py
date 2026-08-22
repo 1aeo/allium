@@ -14,7 +14,11 @@ import os
 import sys
 import time
 import urllib.parse
-from lib.charts.pipeline import add_chart_arguments, maybe_run_charts
+from lib.charts.pipeline import (
+    add_chart_arguments,
+    apply_chart_html_flags,
+    maybe_run_charts,
+)
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
@@ -317,10 +321,14 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
+    # Template flags before Jinja so --no-charts / auto-without-extra omit
+    # the History <img>. Does not import matplotlib.
+    apply_chart_html_flags(RELAY_SET, args)
+
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
 
-    # Optional chart pass. Default --charts off is silent and does not
-    # import matplotlib. See docs/features/planned/charts/relay-page-chart-pipeline.md
+    # Chart pass after HTML. Default --charts auto is silent when the
+    # extra is missing. matplotlib never runs inside Jinja workers.
     maybe_run_charts(RELAY_SET, args, progress_logger)

@@ -10,9 +10,11 @@ from allium.lib.charts.cache import (
     cache_key,
     cached_png_path,
     history_block,
+    publish_png,
     published_png_path,
     sidecar_matches,
     sidecar_path,
+    write_sidecar,
 )
 from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
 
@@ -227,3 +229,24 @@ def test_corrupt_sidecar_is_a_miss(temp_dir):
     with open(side, "w", encoding="utf-8") as handle:
         handle.write("not-json")
     assert sidecar_matches(side, "abc") is False
+
+
+def test_write_sidecar_and_publish_png(temp_dir):
+    spec = RELAY_BANDWIDTH_1M
+    key = cache_key(_payload())
+    side = sidecar_path(temp_dir, spec, JEANGRAE)
+    write_sidecar(side, key, spec.chart_id, JEANGRAE)
+    assert sidecar_matches(side, key) is True
+    src = cached_png_path(temp_dir, spec, JEANGRAE)
+    os.makedirs(os.path.dirname(src), exist_ok=True)
+    with open(src, "wb") as handle:
+        handle.write(b"png-bytes")
+    dest = published_png_path(temp_dir, spec, JEANGRAE)
+    assert publish_png(src, dest) is True
+    assert os.path.isfile(dest)
+    with open(dest, "rb") as handle:
+        assert handle.read() == b"png-bytes"
+    # Second publish after rmtree-style delete.
+    os.remove(dest)
+    assert publish_png(src, dest) is True
+    assert os.path.isfile(dest)

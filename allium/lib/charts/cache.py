@@ -8,6 +8,7 @@ actually change pixels. See relay-page-chart-pipeline.md.
 import hashlib
 import json
 import os
+import shutil
 
 from .identity import operator_from_contact, role_from_flags
 from .registry import RELAY_BANDWIDTH_1M_ID
@@ -153,3 +154,41 @@ def cache_hit(output_dir, spec, fingerprint, key):
     if not sidecar_matches(sidecar_path(output_dir, spec, fingerprint), key):
         return False
     return os.path.isfile(cached_png_path(output_dir, spec, fingerprint))
+
+
+def write_sidecar(path, key, chart_id, fingerprint):
+    """Atomically write the cache sidecar."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "key": key,
+        "chart_id": chart_id,
+        "fingerprint": fingerprint,
+    }
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, separators=(",", ":"))
+        handle.write("\n")
+    os.replace(tmp, path)
+    return path
+
+
+def publish_png(src, dest):
+    """Hardlink cache PNG into the relay directory; copy if link fails.
+
+    ``write_relay_info()`` rmtree's ``www/relay/``, so this always runs
+    after HTML on a fresh directory.
+    """
+    if not src or not os.path.isfile(src):
+        return False
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    if os.path.exists(dest):
+        os.remove(dest)
+    try:
+        os.link(src, dest)
+    except OSError:
+        shutil.copy2(src, dest)
+    return True
