@@ -664,13 +664,19 @@ Copy rules:
 6. Investigate / off-band says `Outside the {role} band`, not
    “Left the … band.” Family and whole-role lines use the same
    outside/inside wording.
+7. Non-common citations include the date or date range. A spike is
+   `Write spiked 22–23 Jul · 99 Mbit/s (15% of advertised)`, not a
+   bare `Write spiked`. `Outside the {role} band` keeps its span
+   (or `all month` when the whole month is off-band with no tight
+   run). All-clear stays empty — do not invent dates. Uncommon-inside
+   does not force a date.
 
 Overload stays in the legend. Do not invent a subtitle just for
 overload. Restart stays a vertical line.
 
 Shipped C charts:
 
-- jeangrae (spike, this relay only):
+- jeangrae (spike, this relay only, dated C):
   [`relay_bandwidth_outcome_c_jeangrae.png`](mockups/relay_bandwidth_outcome_c_jeangrae.png)
 - F3Netze (all-clear, overload in the legend, empty subtitles):
   [`relay_bandwidth_outcome_c_f3.png`](mockups/relay_bandwidth_outcome_c_f3.png)
@@ -685,14 +691,14 @@ cells stay empty — no filler sentence.
 | Typical + currently overloaded | — | — |
 | Typical + restart in the window | — | — |
 | Uncommon month, no investigate day | `140 Mbit/s (22% of advertised)` | `Write/read 1.21 · inside the Guard band with other Guards` |
-| Investigate spike · this relay only | `Write spiked · 98 Mbit/s (15% of advertised)` | `Outside the Guard band 22–23 Jul · family and peers stayed` |
-| Investigate spike · family moved, role stayed | `Write spiked · 220 Mbit/s (31% of advertised)` | `Outside the Guard band with the family · other Guards stayed` |
-| Investigate spike · the whole role moved | `Write spiked · 90 Mbit/s (18% of advertised)` | `Outside the band with other Exits 8–9 Aug` |
-| Persistent investigate month | `60 Mbit/s (9% of advertised)` | `Outside the Guard band · family and peers stayed` |
+| Investigate spike · this relay only | `Write spiked 22–23 Jul · 98 Mbit/s (15% of advertised)` | `Outside the Guard band 22–23 Jul · family and peers stayed` |
+| Investigate spike · family moved, role stayed | `Write spiked 4 Aug · 220 Mbit/s (31% of advertised)` | `Outside the Guard band 4 Aug with the family · other Guards stayed` |
+| Investigate spike · the whole role moved | `Write spiked 8–9 Aug · 90 Mbit/s (18% of advertised)` | `Outside the band with other Exits 8–9 Aug` |
+| Persistent investigate month | `60 Mbit/s (9% of advertised)` | `Outside the Guard band all month · family and peers stayed` |
 | Read-heavy month | `80 Mbit/s (12% of advertised)` | `Write/read 0.71 · inside the Guard band with other Guards` |
-| Throughput crash | `Write and read both dropped · 18 Mbit/s (4% of advertised)` | — (ratio typical / inside) |
+| Throughput crash | `Write and read both dropped 3–5 Aug · 18 Mbit/s (4% of advertised)` | — (ratio typical / inside) |
 | Near advertised | — | — |
-| Overloaded + investigate spike | `Write spiked · 300 Mbit/s (37% of advertised)` | `Outside the Exit+Guard band 1 Aug · family and peers stayed` |
+| Overloaded + investigate spike | `Write spiked 1 Aug · 300 Mbit/s (37% of advertised)` | `Outside the Exit+Guard band 1 Aug · family and peers stayed` |
 
 Shipped C table (the spec · scenario · T · R):
 [`relay_bandwidth_outcome_c_table.png`](mockups/relay_bandwidth_outcome_c_table.png).
@@ -906,7 +912,8 @@ python3 docs/features/planned/charts/analyze_write_read_ratios.py \
 
 `--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
 `bandcopy`, `chrome`, `legends`, or `outcomes`. `outcomes` is the
-C-only table, live C charts on jeangrae and F3Netze, and a refresh of
+C-only table, live C charts on jeangrae, F3Netze, and one more dump
+subject when the series is cheap to classify, and a refresh of
 official style 5.
 
 Chart mockups need the Onionoo snapshots already used by

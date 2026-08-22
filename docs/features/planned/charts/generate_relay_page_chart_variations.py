@@ -1682,8 +1682,27 @@ def _format_day_span(dates):
         return dates[0].strftime("%-d %b")
     consec = all((dates[i] - dates[i - 1]).days == 1 for i in range(1, len(dates)))
     if consec:
-        return f"{dates[0].strftime('%-d')}–{dates[-1].strftime('%-d %b')}"
+        start, end = dates[0], dates[-1]
+        if start.month == end.month and start.year == end.year:
+            return f"{start.strftime('%-d')}–{end.strftime('%-d %b')}"
+        return f"{start.strftime('%-d %b')}–{end.strftime('%-d %b')}"
     return ", ".join(d.strftime("%-d %b") for d in dates)
+
+
+def _tight_span(span):
+    """One day or a consecutive run (``22–23 Jul``), not a comma list."""
+    return bool(span) and "," not in span
+
+
+def _outside_date_bit(outcome, span):
+    """`` 22–23 Jul`` or `` all month`` after Outside the band."""
+    if _tight_span(span):
+        return f" {span}"
+    if outcome.get("persistent"):
+        return " all month"
+    if span:
+        return f" {span}"
+    return ""
 
 
 def _overlay_left_typical(ts, series, bands, day_set):
@@ -1835,6 +1854,10 @@ def format_outcome_subtitle(outcome, which, style):
     Uncommon / no-investigate puts the live write/read mean on the same
     line as inside the {role} band with other {peers}. Quiet typical
     stays empty — do not invent “inside the band.”
+    Non-common citations (spiked / dropped / outside the band) include
+    the date or date range from investigate / off-scale days. All-clear
+    stays empty — do not invent dates. Uncommon-inside does not force
+    a date.
     Any advertised share is `N Mbit/s (P% of advertised)`.
     """
     if not outcome or not outcome.get("enough"):
@@ -1891,11 +1914,15 @@ def format_outcome_subtitle(outcome, which, style):
         if outcome["thru"] == "spike":
             kind = "Write" if outcome["spike"] == "write" else "Read"
             body = f"{kind} spiked"
+            if span:
+                body += f" {span}"
             if util_bit:
                 body += f" · {util_bit}"
             return body
         if outcome["thru"] == "crash":
             body = "Write and read both dropped"
+            drop_span = span or "all month"
+            body += f" {drop_span}"
             if util_bit:
                 body += f" · {util_bit}"
             return body
@@ -1936,19 +1963,18 @@ def format_outcome_subtitle(outcome, which, style):
     if outcome["who"] == "role":
         return (
             "Outside the band with other " + peers
-            + (f" {span}" if span else "")
+            + _outside_date_bit(outcome, span)
         )
     if outcome["who"] == "family":
         return (
-            f"Outside the {role} band with the family · "
-            f"other {peers} stayed"
+            f"Outside the {role} band"
+            + _outside_date_bit(outcome, span)
+            + f" with the family · other {peers} stayed"
         )
     if outcome["who"] == "relay" and (n_off or n_inv or outcome["persistent"]):
-        # Persistent is the whole month off-band — skip the date list.
-        date_bit = "" if outcome["persistent"] else (f" {span}" if span else "")
         return (
             f"Outside the {role} band"
-            + date_bit
+            + _outside_date_bit(outcome, span)
             + " · family and peers stayed"
         )
     if not outcome["invest"] and zone == "typical":
@@ -4779,7 +4805,7 @@ OUTCOME_SCENARIOS = (
         "id": "spike_relay",
         "name": "Investigate spike · this relay only",
         "who": (
-            "Write spiked · 98 Mbit/s (15% of advertised)",
+            "Write spiked 22–23 Jul · 98 Mbit/s (15% of advertised)",
             "Outside the Guard band 22–23 Jul · family and peers stayed",
         ),
     },
@@ -4787,15 +4813,15 @@ OUTCOME_SCENARIOS = (
         "id": "spike_family",
         "name": "Investigate spike · family moved, role stayed",
         "who": (
-            "Write spiked · 220 Mbit/s (31% of advertised)",
-            "Outside the Guard band with the family · other Guards stayed",
+            "Write spiked 4 Aug · 220 Mbit/s (31% of advertised)",
+            "Outside the Guard band 4 Aug with the family · other Guards stayed",
         ),
     },
     {
         "id": "spike_role",
         "name": "Investigate spike · the whole role moved",
         "who": (
-            "Write spiked · 90 Mbit/s (18% of advertised)",
+            "Write spiked 8–9 Aug · 90 Mbit/s (18% of advertised)",
             "Outside the band with other Exits 8–9 Aug",
         ),
     },
@@ -4804,7 +4830,7 @@ OUTCOME_SCENARIOS = (
         "name": "Persistent investigate month",
         "who": (
             "60 Mbit/s (9% of advertised)",
-            "Outside the Guard band · family and peers stayed",
+            "Outside the Guard band all month · family and peers stayed",
         ),
     },
     {
@@ -4819,7 +4845,7 @@ OUTCOME_SCENARIOS = (
         "id": "crash",
         "name": "Throughput crash",
         "who": (
-            "Write and read both dropped · 18 Mbit/s (4% of advertised)",
+            "Write and read both dropped 3–5 Aug · 18 Mbit/s (4% of advertised)",
             "",
         ),
     },
@@ -4832,7 +4858,7 @@ OUTCOME_SCENARIOS = (
         "id": "both",
         "name": "Overloaded + investigate spike",
         "who": (
-            "Write spiked · 300 Mbit/s (37% of advertised)",
+            "Write spiked 1 Aug · 300 Mbit/s (37% of advertised)",
             "Outside the Exit+Guard band 1 Aug · family and peers stayed",
         ),
     },
@@ -4862,8 +4888,9 @@ def plot_outcome_scenario_cards(out_paths):
     fig.text(
         0.03, 0.935,
         "Empty (—) when history is thin or the month is all-clear. "
-        "Spiked / dropped are bad. Uncommon months put write/read + "
-        "inside the role band with peers. Investigate says Outside the band. "
+        "Spiked / dropped / outside-the-band citations include the "
+        "date or date range. Uncommon-inside does not force a date. "
+        "Spiked / dropped are bad. Investigate says Outside the band. "
         "Overload stays in the legend. Restart is a vertical line.",
         fontsize=8.2, color=GRAY, va="top",
     )
@@ -4903,6 +4930,7 @@ def plot_outcome_scenario_cards(out_paths):
         0.03, 0.018,
         "T = throughput strip  ·  R = write/read strip  ·  "
         "Nickname and operator sit above Throughput, not in the subtitle. "
+        "Dates only on non-common citations. "
         "No “this relay” / “still with” / “moved” / “Left.”",
         fontsize=7.4, color=GRAY, va="bottom",
     )
@@ -4940,13 +4968,15 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
     <strong>Ship C · locked going forward</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). A write spike
-    says <code>Write spiked</code> (bad / investigate). Both-fell says
-    <code>Write and read both dropped</code>. Investigate / off-band
-    says <code>Outside the Guard band</code>, not “Left.” Uncommon
-    months put the write/read value on the same line as
-    <code>inside the Guard band with other Guards</code>. Overload
-    stays in the legend. Restart is a vertical line. Identity sits
-    above Throughput at 13 pt bold:
+    says <code>Write spiked 22–23 Jul</code> (bad / investigate, with
+    the date). Both-fell says
+    <code>Write and read both dropped 3–5 Aug</code>. Investigate /
+    off-band says <code>Outside the Guard band 22–23 Jul</code>, not
+    “Left.” All-clear stays empty — no invented dates. Uncommon months
+    put the write/read value on the same line as
+    <code>inside the Guard band with other Guards</code> and do not
+    force a date. Overload stays in the legend. Restart is a vertical
+    line. Identity sits above Throughput at 13 pt bold:
     <code>jeangrae · 1aeo.com</code> then
     <code>Throughput · last 30 days · Guard</code>.
     Any advertised share is raw throughput plus percent:
@@ -4954,8 +4984,9 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
   </div>
   <p class="relay-meta">
     Legends match at 8 pt, both in a shelf at the top of the panel.
-    Live subjects: <strong>jeangrae</strong> (spike, this relay only)
-    and <strong>F3Netze</strong> (all-clear, currently overloaded).
+    Live subjects: <strong>jeangrae</strong> (spike, dated C),
+    <strong>F3Netze</strong> (all-clear, empty C), and one more dump
+    relay when the series is cheap to classify.
   </p>
   <h3>Every story these two strips can conclude</h3>
   <div class="chart-wrap">
@@ -4977,10 +5008,111 @@ def write_outcome_html(path, published, cards, scenario_name, identity_cards=Non
     return path
 
 
+def _outcome_file_stub(nickname):
+    stub = re.sub(r"[^A-Za-z0-9]+", "_", nickname or "relay").strip("_")
+    return stub[:40] or "relay"
+
+
+def _cheap_month_outcome(relay, bw_relay):
+    """Classify a 1-month series without building family/role overlays."""
+    series = _one_month_series(relay, bw_relay)
+    if not series:
+        return None
+    bands = bands_for_flags(relay.get("flags"))
+    outcome = summarize_bandwidth_outcome(
+        series["ts"], series["write_m"], series["read_m"],
+        series["advertised_mbit"], series["events"],
+        {}, bands, None,
+    )
+    if not outcome.get("enough"):
+        return None
+    return series, bands, outcome
+
+
+def find_extra_outcome_live(det, bw_all, published):
+    """One more dump relay: uncommon-inside, another spike, or a crash."""
+    skip = {F3NETZE, JEANGRAE}
+    found = {"uncommon": None, "spike": None, "crash": None}
+    for fp, doc in bw_all.items():
+        if fp in skip:
+            continue
+        relay = det.get(fp)
+        if not relay or not (relay.get("nickname") or "").strip():
+            continue
+        parsed = _cheap_month_outcome(relay, doc)
+        if not parsed:
+            continue
+        series, bands, outcome = parsed
+        kind = None
+        if outcome["thru"] == "crash":
+            kind = "crash"
+        elif outcome["thru"] == "spike":
+            kind = "spike"
+        elif (
+            outcome["zone"] == "uncommon"
+            and not outcome["invest"]
+            and outcome["thru"] not in ("spike", "crash")
+        ):
+            kind = "uncommon"
+        if kind and found[kind] is None:
+            found[kind] = (fp, relay, series, bands, outcome)
+        if all(found.values()):
+            break
+    pick = found["uncommon"] or found["spike"] or found["crash"]
+    if not pick:
+        return None
+    fp, relay, _series, _bands, _outcome = pick
+    role = role_of(relay.get("flags"))
+    ctx = collect_band_copy_relay(
+        relay, bw_all[fp], list(det.values()), bw_all, published, role,
+    )
+    if not ctx:
+        return None
+    s = ctx["series"]
+    outcome = summarize_bandwidth_outcome(
+        s["ts"], s["write_m"], s["read_m"], s["advertised_mbit"],
+        s["events"], ctx["overlays"], ctx["overlays"].get("bands"),
+        ctx["ov"],
+    )
+    thru_sub = format_outcome_subtitle(
+        outcome, "throughput", SHIPPED_OUTCOME_STYLE,
+    )
+    ratio_sub = format_outcome_subtitle(outcome, "ratio", SHIPPED_OUTCOME_STYLE)
+    nick = ctx["nickname"]
+    op = operator_from_contact(relay.get("contact"))
+    stub = _outcome_file_stub(nick)
+    identity = chart_identity(nick, op)
+    bits = [bit for bit in (thru_sub, ratio_sub) if bit]
+    if bits:
+        blurb = (
+            ". ".join(bits)
+            + f". Identity sits above Throughput: {identity}."
+        )
+    else:
+        blurb = (
+            "All-clear month. Subtitles stay empty. "
+            f"Identity sits above Throughput: {identity}."
+        )
+    return {
+        "nick": nick,
+        "operator": op,
+        "files": (
+            f"relay_bandwidth_outcome_c_{stub}.png",
+            f"relay_bandwidth_outcome_who_{stub}.png",
+        ),
+        "ts": s["ts"], "read_m": s["read_m"], "write_m": s["write_m"],
+        "advertised_mbit": s["advertised_mbit"], "events": s["events"],
+        "overlays": ctx["overlays"], "ov": ctx["ov"],
+        "overload_mode": "legend" if ctx["ov"] else "title",
+        "name": f"{nick} · C",
+        "blurb": blurb,
+    }
+
+
 def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                                    f3_overlays, f3_ov, f3_ts, f3_read,
                                    f3_write, f3_adv, f3_events, out, art):
-    """Shipped C outcome table plus live C charts on jeangrae and F3Netze."""
+    """Shipped C outcome table plus live C charts on dump subjects."""
     jg = det.get(JEANGRAE)
     jg_doc = bw_all.get(JEANGRAE) if jg else None
     if not jg or not jg_doc:
@@ -5005,7 +5137,7 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
     )
     print("wrote", table_names[0])
 
-    live = (
+    live = [
         {
             "nick": "jeangrae",
             "operator": jg_op,
@@ -5019,9 +5151,9 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
             "overload_mode": "title",
             "name": "jeangrae · C",
             "blurb": (
-                "Write spiked. Outside the Guard band; family and peers "
-                "stayed. Identity sits above Throughput: jeangrae · 1aeo.com. "
-                "Throughput is raw plus percent of advertised."
+                "Write spiked 22–23 Jul · 99 Mbit/s (15% of advertised). "
+                "Outside the Guard band 22–23 Jul · family and peers "
+                "stayed. Identity sits above Throughput: jeangrae · 1aeo.com."
             ),
         },
         {
@@ -5043,7 +5175,13 @@ def write_outcome_subtitle_gallery(det, bw_all, published, f3, f3_bw,
                 "F3Netze · f3netze.de."
             ),
         },
-    )
+    ]
+    extra = find_extra_outcome_live(det, bw_all, published)
+    if extra:
+        live.append(extra)
+        print("extra outcome subject:", extra["nick"], extra["files"][0])
+    else:
+        print("no extra outcome subject in the dumps")
     cards = []
     for spec in live:
         paths = [dest / name for dest in (out, art) for name in spec["files"]]
