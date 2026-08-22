@@ -89,13 +89,15 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
     <strong>Ship C · locked going forward</strong>
     Empty when history is thin or the month is all-clear (typical
     write/read, no investigate day, no spike, no crash). A write spike
-    says <code>Write spiked</code> (bad / investigate). Both-fell says
-    <code>Write and read both dropped</code>. Investigate / off-band
-    says <code>Outside the Guard band</code>, not “Left.” Uncommon
-    months put the write/read value on the same line as
-    <code>inside the Guard band with other Guards</code>. Overload
-    stays in the legend. Restart is a vertical line. Identity sits
-    above Throughput at 13 pt bold:
+    says <code>Write spiked 22–23 Jul</code> (bad / investigate, with
+    the date). Both-fell says
+    <code>Write and read both dropped 3–5 Aug</code>. Investigate /
+    off-band says <code>Outside the Guard band 22–23 Jul</code>, not
+    “Left.” All-clear stays empty — no invented dates. Uncommon months
+    put the write/read value on the same line as
+    <code>inside the Guard band with other Guards</code> and do not
+    force a date. Overload stays in the legend. Restart is a vertical
+    line. Identity sits above Throughput at 13 pt bold:
     <code>jeangrae · 1aeo.com</code> then
     <code>Throughput · last 30 days · Guard</code>.
     Any advertised share is raw throughput plus percent:
@@ -103,8 +105,9 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   </div>
   <p class="relay-meta">
     Legends match at 8 pt, both in a shelf at the top of the panel.
-    Live subjects: <strong>jeangrae</strong> (spike, this relay only)
-    and <strong>F3Netze</strong> (all-clear, currently overloaded).
+    Live subjects: <strong>jeangrae</strong> (spike, dated C),
+    <strong>F3Netze</strong> (all-clear, empty C), and one more dump
+    relay when the series is cheap to classify.
   </p>
   <h3>Every story these two strips can conclude</h3>
   <div class="chart-wrap">
@@ -113,7 +116,7 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
   
   <section class="section-box recommend">
     <h4>jeangrae · C</h4>
-    <p class="relay-meta">Write spiked. Outside the Guard band; family and peers stayed. Identity sits above Throughput: jeangrae · 1aeo.com. Throughput is raw plus percent of advertised.</p>
+    <p class="relay-meta">Write spiked 22–23 Jul · 99 Mbit/s (15% of advertised). Outside the Guard band 22–23 Jul · family and peers stayed. Identity sits above Throughput: jeangrae · 1aeo.com.</p>
     <div class="chart-wrap">
       <img src="relay_bandwidth_outcome_c_jeangrae.png" alt="jeangrae · C">
     </div>
@@ -123,6 +126,13 @@ code { font-size:12px; background:#eee; padding:1px 4px; border-radius:3px; }
     <p class="relay-meta">All-clear month: typical write/read, no investigate day, no spike, no crash. Subtitles stay empty. Overload is the legend diamond. Identity sits above Throughput: F3Netze · f3netze.de.</p>
     <div class="chart-wrap">
       <img src="relay_bandwidth_outcome_c_f3.png" alt="F3Netze · C">
+    </div>
+  </section>
+  <section class="section-box recommend">
+    <h4>Digitalcourage4ipeb · C</h4>
+    <p class="relay-meta">63 Mbit/s (28% of advertised). Write/read 1.02 · inside the Exit band with other Exits. Identity sits above Throughput: Digitalcourage4ipeb  ·  digitalcourage.social.</p>
+    <div class="chart-wrap">
+      <img src="relay_bandwidth_outcome_c_Digitalcourage4ipeb.png" alt="Digitalcourage4ipeb · C">
     </div>
   </section>
   <h3>Where the name sits</h3>
