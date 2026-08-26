@@ -1,8 +1,4 @@
-"""Slim style-5 / option C renderer for ``relay_bandwidth_1m``.
-
-Extracted from the locked mockup look. Does not import matplotlib at
-module load — workers call ``_ensure_mpl()`` after ``matplotlib.use("Agg")``.
-"""
+"""Style-5 / option C renderer. Matplotlib is imported in ``_ensure_mpl()``."""
 
 from datetime import datetime, timezone
 
@@ -16,9 +12,15 @@ from .bands import (
     census_footnote,
     ratio_strip_data_hi,
 )
-from .identity import chart_identity
+from .identity import (
+    IDENTITY_EXTRA_FIG_H,
+    IDENTITY_FONTSIZE,
+    IDENTITY_TITLE_GAP_PT,
+    IDENTITY_TITLE_PAD_BOOST,
+    IDENTITY_TOP_SHIFT,
+    chart_identity,
+)
 from .outcome import (
-    SHIPPED_OUTCOME_STYLE,
     format_day,
     format_outcome_subtitle,
     summarize_bandwidth_outcome,
@@ -43,24 +45,10 @@ RESTART = NAVY
 OVERLOAD = BAD
 AMBER = ORANGE
 
-IDENTITY_FONTSIZE = 13
-IDENTITY_TITLE_GAP_PT = 12
-IDENTITY_EXTRA_FIG_H = 0.48
-IDENTITY_TOP_SHIFT = 0.075
-IDENTITY_TITLE_PAD_BOOST = 6
 THROUGHPUT_TITLE_PAD = 10
 SUBTITLE_TITLE_PAD = 22
-RATIO_TITLE_PAD = THROUGHPUT_TITLE_PAD
 LEGEND_FONTSIZE = 8.0
 
-CHROME = {
-    "spines": "left_bottom",
-    "grid": "y",
-    "title_loc": "left",
-    "weights": "hierarchy",
-    "subtitle": True,
-    "callout": True,
-}
 CHROME_WEIGHTS = {
     "write": 2.35,
     "read": 1.65,
@@ -743,10 +731,8 @@ def render_relay_bandwidth_1m(job, dest_path):
     outcome = summarize_bandwidth_outcome(
         ts, write_m, read_m, adv, events, overlays, bands, overload_status,
     )
-    thru_sub = format_outcome_subtitle(
-        outcome, "throughput", SHIPPED_OUTCOME_STYLE,
-    )
-    ratio_sub = format_outcome_subtitle(outcome, "ratio", SHIPPED_OUTCOME_STYLE)
+    thru_sub = format_outcome_subtitle(outcome, "throughput")
+    ratio_sub = format_outcome_subtitle(outcome, "ratio")
     subtitle_on = bool(thru_sub or ratio_sub)
 
     nickname = job.get("nickname") or ""

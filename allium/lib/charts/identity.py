@@ -1,29 +1,24 @@
-"""Chart identity helpers.
-
-Operator on the figure is the contact ``url:`` host when present — the
-same rule as the locked mockups. This is not ``relay['aroi_domain']``,
-which is only set for a complete AROI triple.
-"""
+"""Chart identity: contact ``url:`` host, not ``aroi_domain``."""
 
 import re
 
-# Same token shape as allium.lib.string_utils.URL_FIELD_TOKEN_RE, kept
-# local so this module stays import-light on the generate hot path.
+# Same token shape as allium.lib.string_utils.URL_FIELD_TOKEN_RE.
 _RE_URL_FIELD = re.compile(r"\burl:(?:https?://)?([^,\s/]+)", re.I)
 
-# Flag-set roles used by the write/read strip and the Throughput title.
 ROLE_EXIT_GUARD = "Exit+Guard"
 ROLE_EXIT = "Exit"
 ROLE_GUARD = "Guard"
 ROLE_MIDDLE = "Middle"
 
+IDENTITY_FONTSIZE = 13
+IDENTITY_TITLE_GAP_PT = 12
+IDENTITY_EXTRA_FIG_H = 0.48
+IDENTITY_TOP_SHIFT = 0.075
+IDENTITY_TITLE_PAD_BOOST = 6
+
 
 def operator_from_contact(contact):
-    """Short operator label for the chart identity line.
-
-    Returns the ``url:`` host (lowercase, ``www.`` stripped) or ``""``.
-    Does not dump the raw contact, an email, or ``as_name``.
-    """
+    """``url:`` host (lowercase, ``www.`` stripped), or ``""``."""
     if not contact:
         return ""
     match = _RE_URL_FIELD.search(contact)
@@ -48,7 +43,6 @@ def chart_identity(nickname, operator=None):
 
 
 def role_from_flags(flags):
-    """Frozen band role for this relay's current flag set."""
     flags = flags or []
     exit_f = "Exit" in flags
     guard_f = "Guard" in flags
@@ -62,7 +56,6 @@ def role_from_flags(flags):
 
 
 def peers_word(bands_or_role):
-    """Operator-facing plural for this flag set. Not 'flag set' or 'role'."""
     if isinstance(bands_or_role, dict):
         role = bands_or_role.get("role") or ""
     else:

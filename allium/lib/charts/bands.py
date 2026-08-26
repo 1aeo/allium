@@ -1,15 +1,9 @@
-"""Frozen write/read role bands.
-
-Do not recompute percentiles from the live Onionoo dump. A network-wide
-event would move live p10/p98 and hide itself. Rebuild
-``data/role_ratio_bands.json`` from a quiet snapshot when the role mix
-changes.
-"""
+"""Frozen write/read role bands. Do not recompute from the live dump."""
 
 import json
 import os
 
-from .identity import role_from_flags
+from .identity import peers_word, role_from_flags
 
 # Global fallbacks used only if a role is missing from the catalog.
 RATIO_LO = 0.90
@@ -129,8 +123,6 @@ def format_frozen_baseline(frozen_from):
 
 def census_footnote(bands, frozen_from=""):
     """``4,444 Guards · baseline 15 Aug 2026``."""
-    from .identity import peers_word
-
     peers = peers_word(bands)
     n = (bands or {}).get("n") or 0
     when = format_frozen_baseline(frozen_from) or "15 Aug 2026"

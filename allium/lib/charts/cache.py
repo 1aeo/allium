@@ -1,48 +1,37 @@
-"""Content-hash cache for chart PNGs.
-
-Daily rebuilds that only tick votes, uptime scalars, last_seen, or
-details ``relays_published`` must not redraw every figure. The key is
-the SHA-256 of the fields that actually change pixels. Overload uses
-derived ``currently_overloaded``, not the raw published clock.
-See relay-page-chart-pipeline.md.
-"""
+"""Content-hash cache for chart PNGs. Key is SHA-256 of drawn fields."""
 
 import hashlib
 import json
 import os
 import shutil
-from datetime import datetime, timezone
 
 from ..stability_utils import current_overload_status
 from .identity import operator_from_contact, role_from_flags
 from .registry import RELAY_BANDWIDTH_1M_ID
+from .series import history_block, is_relay_fingerprint, parse_onionoo_ts
 
-# Bump when the payload layout changes (added/removed/renamed fields).
-CACHE_SCHEMA_VERSION = 2
-
-# Onionoo graph-history keys that change the drawn series.
-_HISTORY_KEYS = ("first", "last", "interval", "factor", "values")
+# Bump when the payload layout changes.
+CACHE_SCHEMA_VERSION = 3
 
 
-def history_block(period_data):
-    """Normalize one Onionoo graph-history object for hashing.
-
-    Missing or empty history becomes None (thin history / unpublished
-    graph). None values inside ``values`` are kept — they are real
-    Onionoo holes, not skipped days.
-    """
-    if not period_data:
-        return None
-    values = period_data.get("values")
-    if not values:
-        return None
-    return {
-        "first": period_data.get("first"),
-        "last": period_data.get("last"),
-        "interval": period_data.get("interval"),
-        "factor": period_data.get("factor"),
-        "values": list(values),
-    }
+def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
+    """True when overload is active at the published clock (not wall time)."""
+    relay = relay or {}
+    bandwidth_relay = bandwidth_relay or {}
+    parsed = parse_onionoo_ts(relays_published)
+    clock = parsed.timestamp() if parsed else None
+    status = current_overload_status({
+        "overload_general_timestamp": relay.get("overload_general_timestamp"),
+        "overload_ratelimits": (
+            bandwidth_relay.get("overload_ratelimits")
+            or relay.get("overload_ratelimits")
+        ),
+        "overload_fd_exhausted": (
+            bandwidth_relay.get("overload_fd_exhausted")
+            or relay.get("overload_fd_exhausted")
+        ),
+    }, clock)
+    return bool(status)
 
 
 def _overload_ratelimits(raw):
@@ -61,59 +50,35 @@ def _overload_fd(raw):
     return {"timestamp": raw.get("timestamp")}
 
 
-def _published_clock(relays_published):
-    """Unix seconds for ``current_overload_status``. None if unparseable."""
-    if not relays_published:
+def bands_key_fields(bands):
+    """Numeric row that changes pixels. None if bands were not supplied."""
+    if not bands:
         return None
-    try:
-        parsed = datetime.strptime(str(relays_published), "%Y-%m-%d %H:%M:%S")
-    except (TypeError, ValueError):
-        return None
-    return parsed.replace(tzinfo=timezone.utc).timestamp()
-
-
-def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
-    """True when ``current_overload_status`` is active at the published clock.
-
-    ``relays_published`` is the 72h clock only. It is not stored in the
-    cache payload — a details tick that does not flip this boolean must
-    not bust every figure.
-    """
-    relay = relay or {}
-    bandwidth_relay = bandwidth_relay or {}
-    merged = {
-        "overload_general_timestamp": relay.get("overload_general_timestamp"),
-        "overload_ratelimits": (
-            bandwidth_relay.get("overload_ratelimits")
-            or relay.get("overload_ratelimits")
-        ),
-        "overload_fd_exhausted": (
-            bandwidth_relay.get("overload_fd_exhausted")
-            or relay.get("overload_fd_exhausted")
-        ),
+    return {
+        "role": bands.get("role") or "",
+        "typical_lo": bands.get("typical_lo"),
+        "typical_hi": bands.get("typical_hi"),
+        "invest_lo": bands.get("invest_lo"),
+        "invest_hi": bands.get("invest_hi"),
+        "n": bands.get("n") or 0,
     }
-    status = current_overload_status(merged, _published_clock(relays_published))
-    return bool(status)
 
 
 def build_relay_bandwidth_1m_payload(
     relay,
     bandwidth_relay=None,
     relays_published="",
-    bandwidth_units="bits",
     family_overlay=None,
     role_overlay=None,
+    bands=None,
     bands_frozen_from="",
     renderer_version="1",
 ):
     """Canonical payload for ``relay_bandwidth_1m``.
 
-    ``relay`` is a details-API dict (nickname, flags, advertised,
-    last_restarted, contact, overload_general_timestamp).
-    ``bandwidth_relay`` is the matching ``/bandwidth`` relay dict, or
-    None when that fingerprint has no bandwidth document.
-    ``relays_published`` is the overload 72h clock only; the payload
-    stores derived ``currently_overloaded``, not the raw timestamp.
+    ``relays_published`` is the 72h clock only; the payload stores
+    derived ``currently_overloaded``. Band numbers live in ``bands`` so
+    a census edit without a new ``frozen_from`` still misses.
     """
     relay = relay or {}
     bandwidth_relay = bandwidth_relay or {}
@@ -128,7 +93,6 @@ def build_relay_bandwidth_1m_payload(
         "currently_overloaded": currently_overloaded(
             relay, bandwidth_relay, relays_published,
         ),
-        "bandwidth_units": bandwidth_units or "bits",
         "nickname": relay.get("nickname") or "",
         "operator": operator_from_contact(relay.get("contact")),
         "advertised_bandwidth": relay.get("advertised_bandwidth") or 0,
@@ -148,12 +112,12 @@ def build_relay_bandwidth_1m_payload(
         "read_1m": history_block(read_history.get("1_month")),
         "family_overlay": family_overlay,
         "role_overlay": role_overlay,
+        "bands": bands_key_fields(bands),
         "bands_frozen_from": bands_frozen_from or "",
     }
 
 
 def cache_key(payload):
-    """Return a 64-char hex SHA-256 of the canonical payload JSON."""
     encoded = json.dumps(
         payload,
         sort_keys=True,
@@ -164,24 +128,30 @@ def cache_key(payload):
 
 
 def cache_dir(output_dir, spec):
-    """Durable cache directory that write_relay_info() does not rmtree."""
     return os.path.join(output_dir, ".chart-cache", spec.cache_subdir)
 
 
+def _fp_cache_path(output_dir, spec, fingerprint, suffix):
+    if not is_relay_fingerprint(fingerprint):
+        raise ValueError("invalid relay fingerprint")
+    return os.path.join(cache_dir(output_dir, spec), fingerprint + suffix)
+
+
 def sidecar_path(output_dir, spec, fingerprint):
-    return os.path.join(cache_dir(output_dir, spec), fingerprint + ".json")
+    return _fp_cache_path(output_dir, spec, fingerprint, ".json")
 
 
 def cached_png_path(output_dir, spec, fingerprint):
-    return os.path.join(cache_dir(output_dir, spec), fingerprint + ".png")
+    return _fp_cache_path(output_dir, spec, fingerprint, ".png")
 
 
 def published_png_path(output_dir, spec, fingerprint):
+    if not is_relay_fingerprint(fingerprint):
+        raise ValueError("invalid relay fingerprint")
     return os.path.join(output_dir, spec.output_path(fingerprint))
 
 
 def sidecar_matches(path, key):
-    """True when a sidecar exists and records this exact key."""
     if not path or not os.path.isfile(path):
         return False
     try:
@@ -193,36 +163,34 @@ def sidecar_matches(path, key):
 
 
 def cache_hit(output_dir, spec, fingerprint, key):
-    """True when sidecar key matches and the cached PNG is present."""
+    if not is_relay_fingerprint(fingerprint):
+        return False
     if not sidecar_matches(sidecar_path(output_dir, spec, fingerprint), key):
         return False
-    return os.path.isfile(cached_png_path(output_dir, spec, fingerprint))
+    png = cached_png_path(output_dir, spec, fingerprint)
+    try:
+        return os.path.isfile(png) and os.path.getsize(png) > 0
+    except OSError:
+        return False
 
 
 def write_sidecar(path, key, chart_id, fingerprint):
-    """Atomically write the cache sidecar."""
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    payload = {
-        "key": key,
-        "chart_id": chart_id,
-        "fingerprint": fingerprint,
-    }
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, separators=(",", ":"))
+        json.dump(
+            {"key": key, "chart_id": chart_id, "fingerprint": fingerprint},
+            handle, separators=(",", ":"),
+        )
         handle.write("\n")
     os.replace(tmp, path)
     return path
 
 
 def publish_png(src, dest):
-    """Hardlink cache PNG into the relay directory; copy if link fails.
-
-    ``write_relay_info()`` rmtree's ``www/relay/``, so this always runs
-    after HTML on a fresh directory.
-    """
+    """Hardlink cache PNG into the relay directory; copy if link fails."""
     if not src or not os.path.isfile(src):
         return False
     parent = os.path.dirname(dest)

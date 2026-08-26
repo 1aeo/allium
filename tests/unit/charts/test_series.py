@@ -11,6 +11,7 @@ from allium.lib.charts.series import (
     family_group_key,
     has_1m_graph,
     history_series,
+    is_relay_fingerprint,
     month_blocks,
     overlays_for_relay,
     precompute_overlays,
@@ -92,6 +93,15 @@ def test_chartable_limit_and_fingerprint_filter():
     assert chartable_fingerprints(
         relays, bw_map, fingerprints=[fp2, fp3], limit=1,
     ) == [fp2]
+
+
+def test_chartable_rejects_path_like_fingerprints():
+    assert is_relay_fingerprint("../etc/passwd") is False
+    assert is_relay_fingerprint("Α" * 40) is False
+    evil = "../" + ("A" * 37)
+    relays = [{"fingerprint": evil, "flags": ["Guard"]}]
+    bw_map = {evil: _bw(evil)}
+    assert chartable_fingerprints(relays, bw_map) == []
 
 
 def test_family_group_key_from_effective_family():
