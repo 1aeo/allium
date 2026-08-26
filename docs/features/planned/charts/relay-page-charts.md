@@ -851,84 +851,37 @@ period control (1M / 6M / 1Y / 5Y; omit unpublished). C stays 1-month-only.
 
 ---
 
-## Implementation notes (after encoding pick)
+## Implementation notes
 
-Pipeline (when, where, cache, extras):
+Build pipeline (when, cache, extras, CLI):
 [`relay-page-chart-pipeline.md`](relay-page-chart-pipeline.md).
-First chart is a matplotlib PNG after HTML, not an in-template draw.
-The notes below are encoding/data rules for the renderer.
 
-1. Keep every Onionoo-published uptime graph (`1_month` / `6_months` /
-   `1_year` / `5_years`) as `values` + `first` + `interval` + `factor`
-   on the relay. Same for per-flag uptime and read/write if those
-   periods exist. Do not invent a series when Onionoo omitted the key.
-   Do not treat Allium's `count < 30 → 0.0` scalar as a chartable 0%.
-   The chart pass reads raw `/bandwidth` / `/uptime` documents; do not
-   attach those arrays to every relay dict just for Jinja.
-2. Do **not** draw in the Jinja hot path and do **not** add Chart.js.
-   Build-time PNG via the chart registry (first: `relay_bandwidth_1m`).
-   SVG-via-Jinja is a later renderer option, not the first bandwidth
-   chart. One static Chart.js on 11k pages is the wrong default.
-3. Color: red only for problems this relay owns (local Running gap,
-   current overload title/legend cue, write/read beyond **this role’s
-   p98**, missing flags). A Guard at 1.20 is amber; an Exit at 1.20 is
-   red. Shared/network gaps are orange + gray, not red. Write is
-   purple, read is blue, advertised is orange, last-restarted is navy.
-   Typical / investigate are frozen **per flag set**
-   (`role_ratio_bands.json`), not live percentiles. Restart is an
-   `axvline` at `last_restarted`.
-   Overload is **not** on the time axis: if `current_overload_status`
-   (from `evaluate_overload`) says the relay is currently overloaded,
-   put a quiet cue in the title or legend; otherwise omit it. Do not
-   infer a 72h `axvspan`. History would need CollecTor
-   server-descriptors / extra-info, not consensus files. The throughput
-   legend is above the axes so it never covers data. When overload is
-   in the legend, wrap that item onto a second line — do not widen the
-   figure to keep a one-row legend. Do not print “progressive
-   enhancement” under the chart.
-4. At build time, from every relay's `uptime.1_month`, compute the
-   imperfect-Running share per 4-hour bucket. Median is ~3%. Mark
-   buckets ≥8% as network-wide gaps and reuse that series on every
-   relay chart. Same idea for 6M/1Y/5Y if we show those periods.
-5. `#uptime` info box (two clocks + Onionoo bucket table) plus `title=`
-   tooltips on the period pills and Overall Uptime. Do not put the
-   0/25/50/75/100 table on the SVG. At build time, keep per-relay
-   `1_month` write/read arrays and compute daily median write/read for
-   each flag-set and each AROI/contact group. Overlay those on the
-   imbalance strip. Omit the operator line when the group has one relay.
-6. Generate `www_baseline` / `www_after` and run `compare_outputs.py`
-   before merging — every relay HTML page will change.
+Renderer rules that are not restated in the pipeline doc:
+
+- Do not invent an Onionoo graph Onionoo omitted. Do not treat Allium's
+  `count < 30 → 0.0` scalar as a chartable 0%.
+- Color: red only for problems this relay owns (local Running gap,
+  current overload cue, write/read beyond **this role’s p98**, missing
+  flags). A Guard at 1.20 is amber; an Exit at 1.20 is red. Write
+  purple, read blue, advertised orange, restart navy. Overload is a
+  title/legend cue, not a 72h `axvspan`.
+- Family overlay uses `effective_family` (omit n&lt;2), not contact/AROI.
+  Role overlay is the flag-set median.
+- Frozen bands: [`allium/lib/charts/data/role_ratio_bands.json`](../../../../allium/lib/charts/data/role_ratio_bands.json).
+  Survey write-up: [`write-read-band.md`](write-read-band.md).
 
 ---
 
 ## How to regenerate
 
 ```bash
-python3 docs/features/planned/charts/generate_relay_page_chart_variations.py
-python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
-  --out docs/features/planned/charts/mockups \
-  --artifacts /tmp/chart_artifacts \
-  --only chrome
-python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
-  --out docs/features/planned/charts/mockups \
-  --artifacts /tmp/chart_artifacts \
-  --only legends
 python3 docs/features/planned/charts/generate_relay_page_chart_variations.py \
   --out docs/features/planned/charts/mockups \
   --artifacts /tmp/chart_artifacts \
   --only outcomes
-python3 docs/features/planned/charts/analyze_write_read_ratios.py \
-  --details /tmp/onionoo/details_flags.json
 ```
 
-`--only` limits a regen to `all`, `bandwidth`, `uptime`, `flags`,
-`bandcopy`, `chrome`, `legends`, or `outcomes`. `outcomes` is the
-C-only table, live C charts on jeangrae, F3Netze, and one more dump
-subject when the series is cheap to classify, and a refresh of
-official style 5.
-
-Chart mockups need the Onionoo snapshots already used by
-[`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py)
-(`/tmp/onionoo/details.json`, `uptime_examples.json`,
-`bandwidth_examples.json`). The write/read band survey needs a full
-`/bandwidth` dump — see [`write-read-band.md`](write-read-band.md).
+`--only`: `all`, `bandwidth`, `uptime`, `flags`, `bandcopy`, `chrome`,
+`legends`, or `outcomes`. Needs the Onionoo snapshots from
+[`generate_onionoo_chart_mockups.py`](generate_onionoo_chart_mockups.py).
+Band survey: [`write-read-band.md`](write-read-band.md).
