@@ -22,6 +22,41 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from allium.lib.stability_utils import current_overload_status  # noqa: E402
+from allium.lib.charts.bands import (  # noqa: E402
+    RATIO_HI,
+    RATIO_INVESTIGATE_HI,
+    RATIO_INVESTIGATE_LO,
+    RATIO_LEGEND_SHELF,
+    RATIO_LO,
+    RATIO_SCALE_HI,
+    RATIO_SCALE_LO,
+    bands_for_flags,
+    load_role_bands,
+    ratio_strip_data_hi,
+)
+from allium.lib.charts.identity import (  # noqa: E402
+    IDENTITY_EXTRA_FIG_H,
+    IDENTITY_FONTSIZE,
+    IDENTITY_TITLE_GAP_PT,
+    IDENTITY_TITLE_PAD_BOOST,
+    IDENTITY_TOP_SHIFT,
+    chart_identity,
+    operator_from_contact,
+    peers_word,
+    role_from_flags,
+)
+from allium.lib.charts.outcome import (  # noqa: E402
+    SHIPPED_OUTCOME_STYLE,
+    format_outcome_subtitle,
+    summarize_bandwidth_outcome,
+)
+from allium.lib.charts.series import (  # noqa: E402
+    bytes_to_mbit,
+    history_series,
+    parse_onionoo_ts,
+)
+
+role_of = role_from_flags
 
 import matplotlib
 
@@ -46,25 +81,7 @@ NAVY = "#1B3A4B"
 BAD = "#C0392B"
 RESTART = NAVY
 OVERLOAD = BAD
-# Global fallback only. The strip uses frozen per-role bands from
-# data/role_ratio_bands.json (this flag set's p10–p90 / beyond p98).
-# Do not recompute those from live Onionoo — a DoS that hits every Exit
-# would move a live percentile and hide the event.
-RATIO_LO = 0.90
-RATIO_HI = 1.15
-RATIO_INVESTIGATE_LO = 0.80
-RATIO_INVESTIGATE_HI = 1.50
-# Write/read strip scale. 1.70 is the default clip (jeangrae 4.45 stays
-# a triangle). The top Investigate band is always reserved: when this
-# role's p98 sits at or above the clip (Exit+Guard 1.71), raise the
-# data top so invest_hi → yhi is a real red shelf, not a hairline.
-RATIO_SCALE_LO = 0.50
-RATIO_SCALE_HI = 1.70
-RATIO_LEGEND_SHELF = 0.52
-MIN_TOP_INVESTIGATE = 0.12
-RAISED_TOP_INVESTIGATE = 0.18
 AMBER = ORANGE
-ROLE_BANDS_PATH = Path(__file__).resolve().parent / "data" / "role_ratio_bands.json"
 TH4R = "27A06581F1CE22D1BA4D160F6E7C7AABAC176242"
 F3NETZE = "3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7"
 PIRATE = "DD32947397C5E6A5FC0D6A6BBE5CD008DEC1A60B"
@@ -146,31 +163,6 @@ def style():
     })
 
 
-def parse_onionoo_ts(value):
-    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-
-
-def parse_ms(ms):
-    if not ms:
-        return None
-    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc)
-
-
-def history_series(block):
-    if not block or not block.get("values"):
-        return [], []
-    first = parse_onionoo_ts(block["first"])
-    interval = int(block.get("interval") or 0)
-    factor = float(block.get("factor") or 1)
-    ts, vals = [], []
-    for i, raw in enumerate(block["values"]):
-        if raw is None:
-            continue
-        ts.append(first + timedelta(seconds=i * interval))
-        vals.append(raw * factor)
-    return ts, vals
-
-
 def as_pct(vals):
     if not vals:
         return []
@@ -179,10 +171,6 @@ def as_pct(vals):
     if max(vals) > 20:
         return [v / 9.99 for v in vals]
     return list(vals)
-
-
-def bytes_to_mbit(vals):
-    return [v * 8.0 / 1_000_000.0 for v in vals]
 
 
 def by_fp(doc):
@@ -1186,41 +1174,6 @@ def throughput_ylim(ax, read_m, write_m, advertised_mbit, legend_rows=1,
     ax.set_ylim(0, ceiling * extra)
 
 
-def role_of(flags):
-    flags = flags or []
-    exit_f = "Exit" in flags
-    guard_f = "Guard" in flags
-    if exit_f and guard_f:
-        return "Exit+Guard"
-    if exit_f:
-        return "Exit"
-    if guard_f:
-        return "Guard"
-    return "Middle"
-
-
-def load_role_bands():
-    raw = json.loads(ROLE_BANDS_PATH.read_text())
-    return raw
-
-
-def bands_for_flags(flags, catalog=None):
-    """Frozen typical / uncommon / investigate for this relay's flag set."""
-    catalog = catalog or load_role_bands()
-    role = role_of(flags)
-    row = (catalog.get("roles") or {}).get(role)
-    if not row:
-        return {
-            "role": role,
-            "typical_lo": RATIO_LO,
-            "typical_hi": RATIO_HI,
-            "invest_lo": RATIO_INVESTIGATE_LO,
-            "invest_hi": RATIO_INVESTIGATE_HI,
-            "n": 0,
-        }
-    return {"role": role, **row}
-
-
 def ratio_zone_phrase(mean_ratio, bands=None):
     bands = bands or {
         "typical_lo": RATIO_LO, "typical_hi": RATIO_HI,
@@ -1333,52 +1286,6 @@ def with_role(title, bands):
     if not title or not role or role in title:
         return title
     return f"{title}  ·  {role}"
-
-
-
-# Contact `url:` host, optional scheme. Same token Allium uses for AROI.
-_RE_URL_FIELD = re.compile(r"\burl:(?:https?://)?([^,\s/]+)", re.I)
-
-
-def operator_from_contact(contact):
-    """Short operator label for the chart identity.
-
-    AROI / `url:` host only. Omit when missing — do not dump the raw
-    contact, an email, or `as_name` (that is usually the host, not the
-    operator).
-    """
-    if not contact:
-        return ""
-    match = _RE_URL_FIELD.search(contact)
-    if not match:
-        return ""
-    host = match.group(1).strip().lower()
-    if host.startswith("www."):
-        host = host[4:]
-    host = host.split("/")[0]
-    if "." not in host or host in ("none", "localhost"):
-        return ""
-    return host
-
-
-def chart_identity(nickname, operator=None):
-    """`jeangrae · 1aeo.com`, or just the nickname when there is no AROI."""
-    nick = (nickname or "").strip()
-    op = (operator or "").strip()
-    if op and nick and op.lower() != nick.lower():
-        return f"{nick}  ·  {op}"
-    return nick or op
-
-
-# Tied with axes.titlesize (13 pt bold). Largest type on the figure,
-# without overshooting the page h1.
-IDENTITY_FONTSIZE = 13
-# Clear air between the identity baseline box and the Throughput title.
-# The old 5 pt offset sat on top of the 13 pt title.
-IDENTITY_TITLE_GAP_PT = 12
-IDENTITY_EXTRA_FIG_H = 0.48
-IDENTITY_TOP_SHIFT = 0.075
-IDENTITY_TITLE_PAD_BOOST = 6
 
 
 def apply_chart_identity(ax, identity, loc="left", title_pad=None):
@@ -1602,17 +1509,6 @@ def ratio_method_subtitle(bands):
     )
 
 
-def peers_word(bands):
-    """Operator-facing plural for this flag set. Not 'flag set' or 'role'."""
-    role = bands_role(bands) or "relays"
-    return {
-        "Guard": "Guards",
-        "Exit": "Exits",
-        "Exit+Guard": "Exit+Guards",
-        "Middle": "middle relays",
-    }.get(role, role)
-
-
 def throughput_subtitle_text(period_key="1_month", style=None):
     """style: None/jargon | peers | plain | baseline | none."""
     if style in (None, "jargon"):
@@ -1648,342 +1544,8 @@ def ratio_subtitle_text(bands, style=None):
     return ""
 
 
-# C (style "who") is locked / shipped. dated and verdict are leftover
-# unused style branches, not live choices — still wired if someone
-# passes --only leftovers or an old style name.
-OUTCOME_STYLES = ("dated", "verdict", "who")
-SHIPPED_OUTCOME_STYLE = "who"
-
-
-def _role_article(role):
-    if not role:
-        return "a relay"
-    if role[0].lower() in "aeiou":
-        return f"an {role}"
-    return f"a {role}"
-
-
-def _n_day_runs(dates):
-    dates = sorted(dates)
-    if not dates:
-        return 0
-    n = 1
-    for i in range(1, len(dates)):
-        if (dates[i] - dates[i - 1]).days > 1:
-            n += 1
-    return n
-
-
-def _format_day_span(dates):
-    dates = sorted(dates)
-    if not dates:
-        return ""
-    if len(dates) == 1:
-        return dates[0].strftime("%-d %b")
-    consec = all((dates[i] - dates[i - 1]).days == 1 for i in range(1, len(dates)))
-    if consec:
-        start, end = dates[0], dates[-1]
-        if start.month == end.month and start.year == end.year:
-            return f"{start.strftime('%-d')}–{end.strftime('%-d %b')}"
-        return f"{start.strftime('%-d %b')}–{end.strftime('%-d %b')}"
-    return ", ".join(d.strftime("%-d %b") for d in dates)
-
-
-def _tight_span(span):
-    """One day or a consecutive run (``22–23 Jul``), not a comma list."""
-    return bool(span) and "," not in span
-
-
-def _outside_date_bit(outcome, span):
-    """`` 22–23 Jul`` or `` all month`` after Outside the band."""
-    if _tight_span(span):
-        return f" {span}"
-    if outcome.get("persistent"):
-        return " all month"
-    if span:
-        return f" {span}"
-    return ""
-
-
-def _overlay_left_typical(ts, series, bands, day_set):
-    """True if the overlay is outside typical on most of those days."""
-    if not series or not day_set:
-        return None
-    vals = overlay_values(ts, series)
-    if vals is None:
-        return None
-    tlo, thi = bands["typical_lo"], bands["typical_hi"]
-    hits = []
-    for t, v in zip(ts, vals):
-        if t.date() not in day_set:
-            continue
-        if v is None or (isinstance(v, float) and np.isnan(v)):
-            continue
-        hits.append(v < tlo or v > thi)
-    if not hits:
-        return None
-    return sum(hits) >= max(1, (len(hits) + 1) // 2)
-
-
-def summarize_bandwidth_outcome(ts, write_m, read_m, advertised_mbit, events,
-                                overlays, bands, overload_status):
-    """What the two strips conclude. Used by outcome subtitles."""
-    bands = bands or {}
-    overlays = overlays or {}
-    tlo = bands.get("typical_lo", RATIO_LO)
-    thi = bands.get("typical_hi", RATIO_HI)
-    ilo = bands.get("invest_lo", RATIO_INVESTIGATE_LO)
-    ihi = bands.get("invest_hi", RATIO_INVESTIGATE_HI)
-    role = bands_role(bands) or "relay"
-    rows = []
-    for t, w, r in zip(ts or [], write_m or [], read_m or []):
-        if not r:
-            continue
-        rows.append((t, w, r, w / r))
-    if len(rows) < 3:
-        return {
-            "enough": False, "role": role, "overloaded": bool(overload_status),
-        }
-    mean_ratio = float(np.mean([row[3] for row in rows]))
-    mean_write = float(np.mean([row[1] for row in rows]))
-    mean_read = float(np.mean([row[2] for row in rows]))
-    if tlo <= mean_ratio <= thi:
-        zone = "typical"
-    elif ilo <= mean_ratio <= ihi:
-        zone = "uncommon"
-    else:
-        zone = "investigate"
-    invest = [row for row in rows if row[3] < ilo or row[3] > ihi]
-    off = [row for row in rows if row[3] > 1.70]
-    write_heavy = [row for row in invest if row[3] > thi]
-    read_heavy = [row for row in invest if row[3] < tlo]
-    day_set = {row[0].date() for row in invest}
-    family_left = _overlay_left_typical(
-        ts, overlays.get("operator"), bands, day_set,
-    )
-    role_left = _overlay_left_typical(
-        ts, overlays.get("role"), bands, day_set,
-    )
-    if not invest:
-        who = "with_peers"
-    elif role_left:
-        who = "role"
-    elif family_left:
-        who = "family"
-    else:
-        who = "relay"
-    util = (100.0 * mean_write / advertised_mbit) if advertised_mbit else None
-    if write_heavy and len(write_heavy) >= len(read_heavy):
-        spike = "write"
-    elif read_heavy:
-        spike = "read"
-    else:
-        spike = None
-    persistent = zone == "investigate" and len(invest) >= max(5, len(rows) // 3)
-    ev = events_in_span(events, ts)
-    restarts = []
-    for item in ev:
-        if item.get("kind") == "restart":
-            restarts.extend(item.get("whens") or [])
-    if util is None:
-        thru = "unknown"
-    elif spike and not persistent:
-        thru = "spike"
-    elif mean_write < 20 and mean_read < 20:
-        thru = "crash"
-    elif util >= 70:
-        thru = "near"
-    elif util < 25:
-        thru = "low"
-    else:
-        thru = "steady"
-    return {
-        "enough": True,
-        "role": role,
-        "zone": zone,
-        "mean_ratio": mean_ratio,
-        "mean_write": mean_write,
-        "mean_read": mean_read,
-        "advertised": advertised_mbit,
-        "util": util,
-        "invest": invest,
-        "off": off,
-        "who": who,
-        "family_left": family_left,
-        "role_left": role_left,
-        "spike": spike,
-        "persistent": persistent,
-        "thru": thru,
-        "overloaded": bool(overload_status),
-        "restarts": restarts,
-    }
-
-
-def _util_clause(outcome):
-    """Raw write next to % of advertised. Never % alone."""
-    write = outcome.get("mean_write")
-    util = outcome.get("util")
-    if write is None:
-        return ""
-    if util is not None:
-        return f"{write:.0f} Mbit/s ({util:.0f}% of advertised)"
-    return f"{write:.0f} Mbit/s"
-
-
-def _is_all_clear(outcome):
-    """Nothing to say: typical strip, no spike, no crash."""
-    if not outcome or not outcome.get("enough"):
-        return False
-    return (
-        outcome["thru"] not in ("spike", "crash")
-        and not outcome["invest"]
-        and outcome["zone"] == "typical"
-    )
-
-
-def format_outcome_subtitle(outcome, which, style):
-    """which: throughput | ratio.
-
-    C (style ``who``) is locked / shipped, not one of three experiments.
-    dated and verdict are leftover unused style branches, not live choices.
-
-    Empty when history is thin or the month is all-clear.
-    No “this relay” — identity sits above Throughput. No “still with.”
-    No “moved” — a write/read spike says spiked (bad); both-fell says
-    dropped (bad). Investigate / off-band says Outside the band, not Left.
-    Uncommon / no-investigate puts the live write/read mean on the same
-    line as inside the {role} band with other {peers}. Quiet typical
-    stays empty — do not invent “inside the band.”
-    Non-common citations (spiked / dropped / outside the band) include
-    the date or date range from investigate / off-scale days. All-clear
-    stays empty — do not invent dates. Uncommon-inside does not force
-    a date.
-    Any advertised share is `N Mbit/s (P% of advertised)`.
-    """
-    if not outcome or not outcome.get("enough"):
-        return ""
-    if style == SHIPPED_OUTCOME_STYLE and _is_all_clear(outcome):
-        return ""
-    role = outcome["role"]
-    art = _role_article(role)
-    zone = outcome["zone"]
-    n_inv = len(outcome["invest"])
-    n_off = len(outcome["off"])
-    span = _format_day_span([row[0].date() for row in outcome["invest"]])
-    ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["off"][:3])
-    if not ratios and outcome["invest"]:
-        ratios = " / ".join(f"{row[3]:.2f}" for row in outcome["invest"][:3])
-    util = outcome.get("util")
-    write = outcome["mean_write"]
-    adv = outcome.get("advertised")
-    ov = outcome["overloaded"]
-    ov_bit = " · currently overloaded" if ov else ""
-    util_bit = _util_clause(outcome)
-
-    if which == "throughput":
-        if style == "dated":
-            if outcome["thru"] == "spike" and span:
-                kind = "Write" if outcome["spike"] == "write" else "Read"
-                body = f"{kind} jumped {span}"
-            elif outcome["thru"] == "crash":
-                body = "Write and read both dropped"
-            elif util_bit:
-                body = util_bit
-            else:
-                body = f"Month-mean write {write:.0f} Mbit/s"
-            if outcome["thru"] == "spike" and util_bit:
-                body += f" · {util_bit}"
-            return body + ov_bit
-        if style == "verdict":
-            if outcome["thru"] == "spike":
-                n = _n_day_runs([row[0].date() for row in outcome["invest"]]) or 1
-                kind = "write" if outcome["spike"] == "write" else "read"
-                body = f"{n} {kind} spike{'' if n == 1 else 's'} · the rest of the month is quiet"
-            elif outcome["thru"] == "crash":
-                body = "Throughput crashed · write and read both fell"
-            elif outcome["thru"] == "near":
-                body = "Delivering most of advertised"
-            elif outcome["thru"] == "low":
-                body = "Steady · well below advertised"
-            else:
-                body = "Steady throughput"
-            if util_bit and outcome["thru"] in ("near", "low", "steady", "crash"):
-                body += f" · {util_bit}"
-            return body + ov_bit
-        # shipped C
-        if outcome["thru"] == "spike":
-            kind = "Write" if outcome["spike"] == "write" else "Read"
-            body = f"{kind} spiked"
-            if span:
-                body += f" {span}"
-            if util_bit:
-                body += f" · {util_bit}"
-            return body
-        if outcome["thru"] == "crash":
-            body = "Write and read both dropped"
-            drop_span = span or "all month"
-            body += f" {drop_span}"
-            if util_bit:
-                body += f" · {util_bit}"
-            return body
-        return util_bit
-
-    # ratio
-    if style == "dated":
-        if n_off:
-            return (
-                f"{n_off} day{'s' if n_off != 1 else ''} off the 1.70 scale "
-                f"({ratios}) · month-mean {outcome['mean_ratio']:.2f}, "
-                f"{zone} for {art}"
-            )
-        if n_inv:
-            return (
-                f"{n_inv} investigate day{'s' if n_inv != 1 else ''} "
-                f"{span} · month-mean {outcome['mean_ratio']:.2f}, "
-                f"{zone} for {art}"
-            )
-        return (
-            f"Month-mean write/read {outcome['mean_ratio']:.2f} · "
-            f"{zone} for {art}"
-        )
-    if style == "verdict":
-        if n_off or n_inv:
-            n = n_off or n_inv
-            return (
-                f"{n} investigate day{'s' if n != 1 else ''} · "
-                f"the rest {('typical' if zone == 'typical' else zone)}"
-            )
-        if zone == "typical":
-            return "Typical all month"
-        if zone == "uncommon":
-            return f"Uncommon for {art} · no investigate day"
-        return f"Investigate for {art} · the whole month"
-    # shipped C
-    peers = peers_word({"role": role})
-    if outcome["who"] == "role":
-        return (
-            "Outside the band with other " + peers
-            + _outside_date_bit(outcome, span)
-        )
-    if outcome["who"] == "family":
-        return (
-            f"Outside the {role} band"
-            + _outside_date_bit(outcome, span)
-            + f" with the family · other {peers} stayed"
-        )
-    if outcome["who"] == "relay" and (n_off or n_inv or outcome["persistent"]):
-        return (
-            f"Outside the {role} band"
-            + _outside_date_bit(outcome, span)
-            + " · family and peers stayed"
-        )
-    if not outcome["invest"] and zone == "typical":
-        return ""
-    return (
-        f"Write/read {outcome['mean_ratio']:.2f} · "
-        f"inside the {role} band with other {peers}"
-    )
-
+# C subtitle copy lives in allium.lib.charts.outcome.
+OUTCOME_STYLES = (SHIPPED_OUTCOME_STYLE,)
 
 def auto_spike_callout(ax, ts, write_m, read_m, bands):
     """One annotation on the worst investigate day. Skip if none."""
@@ -2125,25 +1687,6 @@ def place_ratio_legend_below(ax, handles, gap_pt=16.0):
         **_ratio_legend_style(),
     )
 
-
-def ratio_strip_data_hi(invest_hi, invest_lo=None):
-    """Display-scale top of the write/read strip (below the legend shelf).
-
-    Always reserves a visible Investigate band above this role's p98.
-    Guard already has ~0.12 of red under the 1.70 clip (1.58–1.70) —
-    keep that clip. Exit+Guard p98 is 1.71, so the old clip left no
-    red at all; raise the data top so the new red shelf matches the
-    bottom investigate band (same visual weight, not a hairline).
-    """
-    ihi = float(invest_hi)
-    room = RATIO_SCALE_HI - ihi
-    if room + 1e-9 >= MIN_TOP_INVESTIGATE:
-        return RATIO_SCALE_HI
-    if invest_lo is None:
-        span = RAISED_TOP_INVESTIGATE
-    else:
-        span = max(float(invest_lo) - RATIO_SCALE_LO, RAISED_TOP_INVESTIGATE)
-    return ihi + span
 
 
 def place_ratio_legend_shelf(ax, handles):
@@ -2483,8 +2026,8 @@ def bandwidth_a_dual_line(ts, read_m, write_m, advertised_mbit, events, publishe
         overload_status,
     )
     if subtitle_style in OUTCOME_STYLES:
-        thru_sub = format_outcome_subtitle(outcome, "throughput", subtitle_style)
-        ratio_sub = format_outcome_subtitle(outcome, "ratio", subtitle_style)
+        thru_sub = format_outcome_subtitle(outcome, "throughput")
+        ratio_sub = format_outcome_subtitle(outcome, "ratio")
         subtitle_on = bool(thru_sub or ratio_sub)
     elif subtitle_style == "none":
         thru_sub = ratio_sub = ""
@@ -5074,10 +4617,8 @@ def find_extra_outcome_live(det, bw_all, published):
         s["events"], ctx["overlays"], ctx["overlays"].get("bands"),
         ctx["ov"],
     )
-    thru_sub = format_outcome_subtitle(
-        outcome, "throughput", SHIPPED_OUTCOME_STYLE,
-    )
-    ratio_sub = format_outcome_subtitle(outcome, "ratio", SHIPPED_OUTCOME_STYLE)
+    thru_sub = format_outcome_subtitle(outcome, "throughput")
+    ratio_sub = format_outcome_subtitle(outcome, "ratio")
     nick = ctx["nickname"]
     op = operator_from_contact(relay.get("contact"))
     stub = _outcome_file_stub(nick)
