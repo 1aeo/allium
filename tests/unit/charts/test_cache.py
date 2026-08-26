@@ -17,6 +17,7 @@ from allium.lib.charts.cache import (
     sidecar_path,
     write_sidecar,
 )
+from allium.lib.charts.series import is_relay_fingerprint
 from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
 
 JEANGRAE = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
@@ -59,7 +60,6 @@ def _payload(**overrides):
     bandwidth = dict(_BASE_BW)
     extra = {
         "relays_published": "2026-08-15 06:00:00",
-        "bandwidth_units": "bits",
         "bands_frozen_from": "2026-08-15 19:00:00",
     }
     if "relay" in overrides:
@@ -138,18 +138,19 @@ def test_identity_and_advertised_and_role_change_key():
     assert base != cache_key(_payload(relay={"overload_general_timestamp": 1}))
 
 
-def test_renderer_version_and_bands_and_units_change_key():
+def test_renderer_version_and_bands_change_key():
     base = cache_key(_payload())
     assert base != cache_key(_payload(renderer_version="2"))
     assert base != cache_key(_payload(bands_frozen_from="2030-01-01 00:00:00"))
-    other = build_relay_bandwidth_1m_payload(
-        _BASE_RELAY,
-        bandwidth_relay=_BASE_BW,
-        relays_published="2026-08-15 06:00:00",
-        bandwidth_units="bytes",
-        bands_frozen_from="2026-08-15 19:00:00",
+    assert "bandwidth_units" not in _payload()
+    guard = {
+        "role": "Guard", "typical_lo": 1.01, "typical_hi": 1.17,
+        "invest_lo": 0.99, "invest_hi": 1.58, "n": 4444,
+    }
+    assert base != cache_key(_payload(bands=guard))
+    assert cache_key(_payload(bands=guard)) != cache_key(
+        _payload(bands=dict(guard, typical_hi=1.18))
     )
-    assert base != cache_key(other)
 
 
 def test_vote_like_fields_are_not_in_payload():
@@ -163,6 +164,7 @@ def test_vote_like_fields_are_not_in_payload():
         "contact",
         "votes",
         "relays_published",
+        "bandwidth_units",
     ):
         assert leaked not in payload
     assert payload["schema_version"] == CACHE_SCHEMA_VERSION
@@ -280,6 +282,28 @@ def test_corrupt_sidecar_is_a_miss(temp_dir):
     with open(side, "w", encoding="utf-8") as handle:
         handle.write("not-json")
     assert sidecar_matches(side, "abc") is False
+
+
+def test_empty_cached_png_is_a_miss(temp_dir):
+    spec = RELAY_BANDWIDTH_1M
+    key = cache_key(_payload())
+    os.makedirs(cache_dir(temp_dir, spec))
+    write_sidecar(sidecar_path(temp_dir, spec, JEANGRAE), key, spec.chart_id, JEANGRAE)
+    with open(cached_png_path(temp_dir, spec, JEANGRAE), "wb"):
+        pass
+    assert cache_hit(temp_dir, spec, JEANGRAE, key) is False
+
+
+def test_path_join_rejects_non_hex_fingerprint(temp_dir):
+    spec = RELAY_BANDWIDTH_1M
+    for bad in ("../etc/passwd", "not-hex", "A" * 39, ""):
+        assert is_relay_fingerprint(bad) is False
+        try:
+            sidecar_path(temp_dir, spec, bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError for %r" % (bad,))
 
 
 def test_write_sidecar_and_publish_png(temp_dir):

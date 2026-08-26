@@ -785,7 +785,7 @@ Country: unknown
     </div>
     {% endif %}
 </div>
-{% if charts_enabled and has_bandwidth_chart %}
+{% if charts_enabled|default(false) and has_bandwidth_chart|default(false) %}
 <h5 class="subsection-header" style="margin-top: 16px;">History</h5>
 <div class="relay-bandwidth-history">
     <img src="bandwidth-1m.png"

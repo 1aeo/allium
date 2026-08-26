@@ -1,9 +1,4 @@
-"""Build-time relay-page charts.
-
-This package is imported by the HTML generate process. It must not import
-matplotlib at module load. Rendering is a separate optional pass; see
-docs/features/planned/charts/relay-page-chart-pipeline.md.
-"""
+"""Build-time relay-page charts. Must not import matplotlib at load."""
 
 from .registry import (
     RELAY_BANDWIDTH_1M_ID,

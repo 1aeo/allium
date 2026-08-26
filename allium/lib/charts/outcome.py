@@ -1,9 +1,4 @@
-"""Locked C (style 5 / option C) outcome subtitles.
-
-Empty when history is thin or the month is all-clear. Spiked / dropped
-include dates when non-common. Investigate / off-band says Outside the
-band, not Left. Uncommon-inside does not force a date.
-"""
+"""Locked C outcome subtitles. Empty on thin history or all-clear."""
 
 from .bands import (
     RATIO_HI,
@@ -15,14 +10,6 @@ from .bands import (
 from .identity import peers_word
 
 SHIPPED_OUTCOME_STYLE = "who"
-
-
-def _role_article(role):
-    if not role:
-        return "a relay"
-    if role[0].lower() in "aeiou":
-        return "an {}".format(role)
-    return "a {}".format(role)
 
 
 def format_day(dt):
@@ -191,11 +178,11 @@ def is_all_clear(outcome):
     )
 
 
-def format_outcome_subtitle(outcome, which, style=SHIPPED_OUTCOME_STYLE):
+def format_outcome_subtitle(outcome, which):
     """which: throughput | ratio. Locked C copy only."""
     if not outcome or not outcome.get("enough"):
         return ""
-    if style == SHIPPED_OUTCOME_STYLE and is_all_clear(outcome):
+    if is_all_clear(outcome):
         return ""
     role = outcome["role"]
     zone = outcome["zone"]

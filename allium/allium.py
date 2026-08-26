@@ -321,14 +321,6 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # Template flags before Jinja so default-off / --no-charts /
-    # auto-without-extra omit the History <img>. Does not import matplotlib.
     apply_chart_html_flags(RELAY_SET, args)
-
-    # Generate the complete static site
-    # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
-
-    # Chart pass after HTML. Default --charts off. matplotlib never
-    # runs inside Jinja workers.
     maybe_run_charts(RELAY_SET, args, progress_logger)

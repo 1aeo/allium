@@ -14,15 +14,11 @@ def test_relay_bandwidth_1m_is_registered():
     spec = get_chart(RELAY_BANDWIDTH_1M_ID)
     assert spec is RELAY_BANDWIDTH_1M
     assert spec.chart_id == "relay_bandwidth_1m"
-    assert spec.page_slot == "relay#bandwidth"
-    assert spec.onionoo_inputs == ("details", "bandwidth")
-    assert spec.period == "1_month"
     assert spec.output_path_pattern == "relay/{fingerprint}/bandwidth-1m.png"
     assert spec.cache_subdir == "relay_bandwidth_1m"
     assert spec.renderer_module == "allium.lib.charts.bandwidth"
     assert spec.renderer_name == "render_relay_bandwidth_1m"
     assert spec.renderer_version == "1"
-    assert spec.locked_style == "style5_option_c"
     assert spec.enabled is True
 
 
@@ -46,17 +42,12 @@ def test_enabled_charts_is_only_bandwidth_1m():
 def test_chart_spec_onionoo_inputs_are_a_tuple():
     spec = ChartSpec(
         chart_id="x",
-        page_slot="relay#x",
-        onionoo_inputs=["details"],
-        period="1_month",
         output_path_pattern="relay/{fingerprint}/x.png",
         cache_subdir="x",
         renderer_module="m",
         renderer_name="r",
         renderer_version=2,
-        locked_style="s",
         enabled=False,
     )
-    assert spec.onionoo_inputs == ("details",)
     assert spec.renderer_version == "2"
     assert spec.enabled is False

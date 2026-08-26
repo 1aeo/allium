@@ -15,7 +15,7 @@ def _history_snippet():
 
 def test_template_gates_history_img():
     snippet = _history_snippet()
-    assert "charts_enabled and has_bandwidth_chart" in snippet
+    assert "charts_enabled|default(false) and has_bandwidth_chart|default(false)" in snippet
     assert 'src="bandwidth-1m.png"' in snippet
     assert "Throughput and write/read, last 30 days" in snippet
     # History sits after Network Participation, still inside #bandwidth.
