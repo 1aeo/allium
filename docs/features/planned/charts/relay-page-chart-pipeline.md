@@ -1,6 +1,9 @@
 # Relay-page chart pipeline
 
-**Encoding** (identity, C copy, bands): [`relay-page-charts.md`](relay-page-charts.md).
+**Encoding** (identity, C copy, bands): locked in
+[`allium/lib/charts/outcome.py`](../../../../allium/lib/charts/outcome.py)
+(C copy), [`identity.py`](../../../../allium/lib/charts/identity.py), and
+[`bands.py`](../../../../allium/lib/charts/bands.py).
 **Shipped bands**: [`allium/lib/charts/data/role_ratio_bands.json`](../../../../allium/lib/charts/data/role_ratio_bands.json).
 
 How `relay_bandwidth_1m` is drawn after HTML without putting matplotlib on the Jinja path.
