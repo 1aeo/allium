@@ -298,7 +298,9 @@ def run_chart_pass(relay_set, args, progress_logger=None):
         fp = relay.get("fingerprint")
         if fp not in selected:
             continue
-        parsed = sel.series[fp]
+        parsed = sel.series.get(fp)
+        if not parsed:
+            continue
         family, role_ov = overlays_for_relay(relay, parsed["write_1m"], overlays)
         bands = bands_for_flags(relay.get("flags"), catalog)
         payload = build_relay_bandwidth_1m_payload(
