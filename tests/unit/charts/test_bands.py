@@ -57,3 +57,10 @@ def test_census_footnote_uses_frozen_date():
     assert "Guards" in text
     assert "15 Aug 2026" in text
     assert "4,444" in text
+
+
+def test_census_footnote_drops_baseline_without_date():
+    text = census_footnote(bands_for_flags(["Guard"]), "")
+    assert "baseline" not in text
+    assert "15 Aug 2026" not in text
+    assert "Guards" in text

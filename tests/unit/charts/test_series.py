@@ -15,6 +15,16 @@ from allium.lib.charts.series import (
     month_blocks,
     overlays_for_relay,
     precompute_overlays,
+    published_clock,
+    series_by_fp,
+)
+from tests.unit.charts.conftest import (
+    FP_A,
+    FP_B,
+    FP_C,
+    FP_JEANGRAE,
+    make_bw,
+    make_relay,
 )
 
 
@@ -34,12 +44,16 @@ _READ = {
 }
 
 
-def _bw(fp="A" * 40):
-    return {
-        "fingerprint": fp,
-        "write_history": {"1_month": dict(_WRITE)},
-        "read_history": {"1_month": dict(_READ)},
-    }
+def _bw(fp=FP_A):
+    return make_bw(
+        fp,
+        write_values=list(_WRITE["values"]),
+        read_values=list(_READ["values"]),
+        factor=_WRITE["factor"],
+        first=_WRITE["first"],
+        last=_WRITE["last"],
+        interval=_WRITE["interval"],
+    )
 
 
 def test_history_series_skips_nones():
@@ -68,7 +82,7 @@ def test_thin_or_missing_is_not_chartable():
 
 
 def test_build_bandwidth_map_and_chartable():
-    fp = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
+    fp = FP_JEANGRAE
     doc = {"relays": [_bw(fp)]}
     bw_map = build_bandwidth_map(doc)
     assert fp in bw_map
@@ -77,9 +91,7 @@ def test_build_bandwidth_map_and_chartable():
 
 
 def test_chartable_limit_and_fingerprint_filter():
-    fp1 = "A" * 40
-    fp2 = "B" * 40
-    fp3 = "C" * 40
+    fp1, fp2, fp3 = FP_A, FP_B, FP_C
     relays = [
         {"fingerprint": fp1, "flags": ["Guard"]},
         {"fingerprint": fp2, "flags": ["Guard"]},
@@ -104,9 +116,44 @@ def test_chartable_rejects_path_like_fingerprints():
     assert chartable_fingerprints(relays, bw_map) == []
 
 
+def test_published_clock_parses_onionoo_and_numbers():
+    assert published_clock("") is None
+    assert published_clock("not-a-date") is None
+    ts = published_clock("2026-08-15 06:00:00")
+    assert ts == datetime(2026, 8, 15, 6, 0, tzinfo=timezone.utc).timestamp()
+    assert published_clock(ts) == ts
+
+
+def test_series_by_fp_skips_thin_and_evil():
+    evil = "../" + ("A" * 37)
+    relays = [
+        make_relay(FP_A, flags=["Guard"]),
+        {"fingerprint": evil, "flags": ["Guard"]},
+        {"fingerprint": FP_B, "flags": ["Guard"]},
+    ]
+    bw_map = {
+        FP_A: _bw(FP_A),
+        evil: _bw(evil),
+        FP_B: {
+            "fingerprint": FP_B,
+            "write_history": {"1_month": {
+                "values": [1], "first": "2026-01-01 00:00:00",
+                "interval": 86400, "factor": 1,
+            }},
+            "read_history": {"1_month": {
+                "values": [1], "first": "2026-01-01 00:00:00",
+                "interval": 86400, "factor": 1,
+            }},
+        },
+    }
+    parsed = series_by_fp(relays, bw_map)
+    assert set(parsed) == {FP_A}
+    assert parsed[FP_A]["series"] is not None
+
+
 def test_family_group_key_from_effective_family():
-    fp1 = "A" * 40
-    fp2 = "B" * 40
+    fp1 = FP_A
+    fp2 = FP_B
     family = ["$" + fp1, "$" + fp2]
     key_a = family_group_key({
         "fingerprint": fp1, "effective_family": family, "contact_md5": "only-me",
@@ -122,9 +169,7 @@ def test_family_group_key_from_effective_family():
 
 
 def test_precompute_omits_singleton_family_overlay():
-    fp1 = "A" * 40
-    fp2 = "B" * 40
-    fp3 = "C" * 40
+    fp1, fp2, fp3 = FP_A, FP_B, FP_C
     family_bc = [fp2, fp3]
     relays = [
         {

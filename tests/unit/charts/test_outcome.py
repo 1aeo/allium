@@ -34,7 +34,7 @@ def test_all_clear_subtitles_are_empty():
     ts, write, read = _typical_guard_series()
     bands = bands_for_flags(["Guard"])
     outcome = summarize_bandwidth_outcome(
-        ts, write, read, 200.0, [], {}, bands, None,
+        ts, write, read, 200.0, {}, bands, None,
     )
     assert is_all_clear(outcome)
     assert format_outcome_subtitle(outcome, "throughput") == ""
@@ -52,7 +52,7 @@ def test_write_spiked_includes_dates():
     read[7] = 80.0
     bands = bands_for_flags(["Guard"])
     outcome = summarize_bandwidth_outcome(
-        ts, write, read, 650.0, [], {}, bands, None,
+        ts, write, read, 650.0, {}, bands, None,
     )
     thru = format_outcome_subtitle(outcome, "throughput")
     ratio = format_outcome_subtitle(outcome, "ratio")
@@ -71,7 +71,7 @@ def test_both_dropped_includes_dates():
     read = [5.0] * 6
     bands = bands_for_flags(["Guard"])
     outcome = summarize_bandwidth_outcome(
-        ts, write, read, 200.0, [], {}, bands, None,
+        ts, write, read, 200.0, {}, bands, None,
     )
     thru = format_outcome_subtitle(outcome, "throughput")
     assert thru.startswith("Write and read both dropped")
@@ -86,7 +86,7 @@ def test_uncommon_inside_has_no_forced_date():
     read = [100.0] * 10
     bands = bands_for_flags(["Guard"])
     outcome = summarize_bandwidth_outcome(
-        ts, write, read, 200.0, [], {}, bands, None,
+        ts, write, read, 200.0, {}, bands, None,
     )
     assert outcome["zone"] == "uncommon"
     assert not outcome["invest"]
@@ -99,7 +99,7 @@ def test_thin_history_is_empty():
     ts, write, read = _typical_guard_series(n=2)
     bands = bands_for_flags(["Guard"])
     outcome = summarize_bandwidth_outcome(
-        ts, write, read, 200.0, [], {}, bands, None,
+        ts, write, read, 200.0, {}, bands, None,
     )
     assert outcome["enough"] is False
     assert format_outcome_subtitle(outcome, "throughput") == ""
