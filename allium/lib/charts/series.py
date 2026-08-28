@@ -23,6 +23,19 @@ def parse_onionoo_ts(value):
     )
 
 
+def published_clock(value):
+    """Unix seconds for the Onionoo published clock, or None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        parsed = parse_onionoo_ts(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed.timestamp() if parsed else None
+
+
 def history_block(period_data):
     """Normalize one Onionoo graph-history object. Keep ``values`` holes."""
     if not period_data:
@@ -99,14 +112,32 @@ def aligned_1m_series(write_1m, read_1m):
     }
 
 
+def series_by_fp(details_relays, bandwidth_map):
+    """One walk: ``{fp: {write_1m, read_1m, series}}`` for drawable relays."""
+    out = {}
+    bandwidth_map = bandwidth_map or {}
+    for relay in details_relays or []:
+        fp = relay.get("fingerprint")
+        if not is_relay_fingerprint(fp):
+            continue
+        write_1m, read_1m = month_blocks(bandwidth_map.get(fp))
+        series = aligned_1m_series(write_1m, read_1m)
+        if series is None:
+            continue
+        out[fp] = {
+            "write_1m": write_1m,
+            "read_1m": read_1m,
+            "series": series,
+        }
+    return out
+
+
 def has_1m_graph(bandwidth_relay):
-    write_1m, read_1m = month_blocks(bandwidth_relay)
-    return aligned_1m_series(write_1m, read_1m) is not None
+    """Thin boolean for tests. Production uses ``series_by_fp``."""
+    return aligned_1m_series(*month_blocks(bandwidth_relay)) is not None
 
 
-def daily_ratios(bandwidth_relay, min_bps=MIN_THROUGHPUT_BPS):
-    """``{timestamp: write/read}`` for overlay medians. Skips thin days."""
-    series = aligned_1m_series(*month_blocks(bandwidth_relay))
+def _daily_ratios(series, min_bps=MIN_THROUGHPUT_BPS):
     if not series:
         return {}
     out = {}
@@ -114,6 +145,11 @@ def daily_ratios(bandwidth_relay, min_bps=MIN_THROUGHPUT_BPS):
         if r and (w + r) / 2.0 >= min_bps:
             out[t] = w / r
     return out
+
+
+def daily_ratios(bandwidth_relay, min_bps=MIN_THROUGHPUT_BPS):
+    """``{timestamp: write/read}`` for overlay medians. Skips thin days."""
+    return _daily_ratios(aligned_1m_series(*month_blocks(bandwidth_relay)), min_bps)
 
 
 def align_overlay_values(median_by_ts, write_1m):
@@ -170,8 +206,12 @@ def build_bandwidth_map(bandwidth_data):
     return out
 
 
-def chartable_fingerprints(details_relays, bandwidth_map, fingerprints=None, limit=0):
+def chartable_fingerprints(
+    details_relays, bandwidth_map, fingerprints=None, limit=0, series=None,
+):
     """Fingerprints with a drawable 1M graph. ``limit`` keeps the first N."""
+    if series is None:
+        series = series_by_fp(details_relays, bandwidth_map)
     wanted = None
     if fingerprints:
         wanted = frozenset(
@@ -184,14 +224,13 @@ def chartable_fingerprints(details_relays, bandwidth_map, fingerprints=None, lim
     fps = []
     for relay in details_relays or []:
         fp = relay.get("fingerprint")
-        if not is_relay_fingerprint(fp):
+        if fp not in series:
             continue
         if wanted is not None and normalize_fingerprint(fp) not in wanted:
             continue
-        if has_1m_graph(bandwidth_map.get(fp)):
-            fps.append(fp)
-            if cap > 0 and len(fps) >= cap:
-                break
+        fps.append(fp)
+        if cap > 0 and len(fps) >= cap:
+            break
     return fps
 
 
@@ -206,26 +245,28 @@ def _median(values):
     return (values[mid - 1] + values[mid]) / 2.0
 
 
-def precompute_overlays(details_relays, bandwidth_map):
+def _add_daily(bucket, n_map, key, daily):
+    n_map[key] = n_map.get(key, 0) + 1
+    dest = bucket.setdefault(key, {})
+    for ts, ratio in daily.items():
+        dest.setdefault(ts, []).append(ratio)
+
+
+def precompute_overlays(details_relays, bandwidth_map, series=None):
     """Role medians once, family medians once per ``effective_family``."""
+    if series is None:
+        series = series_by_fp(details_relays, bandwidth_map)
     role_days, role_n = {}, {}
     family_days, family_n = {}, {}
     for relay in details_relays or []:
-        daily = daily_ratios(bandwidth_map.get(relay.get("fingerprint")))
+        parsed = series.get(relay.get("fingerprint"))
+        daily = _daily_ratios(parsed["series"]) if parsed else None
         if not daily:
             continue
-        role = role_from_flags(relay.get("flags"))
-        role_n[role] = role_n.get(role, 0) + 1
-        bucket = role_days.setdefault(role, {})
-        for ts, ratio in daily.items():
-            bucket.setdefault(ts, []).append(ratio)
+        _add_daily(role_days, role_n, role_from_flags(relay.get("flags")), daily)
         key = family_group_key(relay)
-        if not key:
-            continue
-        family_n[key] = family_n.get(key, 0) + 1
-        fbucket = family_days.setdefault(key, {})
-        for ts, ratio in daily.items():
-            fbucket.setdefault(ts, []).append(ratio)
+        if key:
+            _add_daily(family_days, family_n, key, daily)
     return {
         "role_median": {
             role: {ts: _median(vals) for ts, vals in days.items()}

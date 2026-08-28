@@ -1,9 +1,6 @@
 """Chart identity: contact ``url:`` host, not ``aroi_domain``."""
 
-import re
-
-# Same token shape as allium.lib.string_utils.URL_FIELD_TOKEN_RE.
-_RE_URL_FIELD = re.compile(r"\burl:(?:https?://)?([^,\s/]+)", re.I)
+from ..string_utils import URL_FIELD_TOKEN_RE
 
 ROLE_EXIT_GUARD = "Exit+Guard"
 ROLE_EXIT = "Exit"
@@ -21,7 +18,7 @@ def operator_from_contact(contact):
     """``url:`` host (lowercase, ``www.`` stripped), or ``""``."""
     if not contact:
         return ""
-    match = _RE_URL_FIELD.search(contact)
+    match = URL_FIELD_TOKEN_RE.search(contact)
     if not match:
         return ""
     host = match.group(1).strip().lower()

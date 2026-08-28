@@ -8,30 +8,10 @@ import shutil
 from ..stability_utils import current_overload_status
 from .identity import operator_from_contact, role_from_flags
 from .registry import RELAY_BANDWIDTH_1M_ID
-from .series import history_block, is_relay_fingerprint, parse_onionoo_ts
+from .series import history_block, is_relay_fingerprint, published_clock
 
 # Bump when the payload layout changes.
 CACHE_SCHEMA_VERSION = 3
-
-
-def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
-    """True when overload is active at the published clock (not wall time)."""
-    relay = relay or {}
-    bandwidth_relay = bandwidth_relay or {}
-    parsed = parse_onionoo_ts(relays_published)
-    clock = parsed.timestamp() if parsed else None
-    status = current_overload_status({
-        "overload_general_timestamp": relay.get("overload_general_timestamp"),
-        "overload_ratelimits": (
-            bandwidth_relay.get("overload_ratelimits")
-            or relay.get("overload_ratelimits")
-        ),
-        "overload_fd_exhausted": (
-            bandwidth_relay.get("overload_fd_exhausted")
-            or relay.get("overload_fd_exhausted")
-        ),
-    }, clock)
-    return bool(status)
 
 
 def _overload_ratelimits(raw):
@@ -48,6 +28,31 @@ def _overload_fd(raw):
     if not raw:
         return None
     return {"timestamp": raw.get("timestamp")}
+
+
+def _overload_fields(relay, bandwidth_relay=None):
+    """The three Onionoo overload fields, bandwidth preferred over details."""
+    relay = relay or {}
+    bandwidth_relay = bandwidth_relay or {}
+    return {
+        "overload_general_timestamp": relay.get("overload_general_timestamp"),
+        "overload_ratelimits": _overload_ratelimits(
+            bandwidth_relay.get("overload_ratelimits")
+            or relay.get("overload_ratelimits")
+        ),
+        "overload_fd_exhausted": _overload_fd(
+            bandwidth_relay.get("overload_fd_exhausted")
+            or relay.get("overload_fd_exhausted")
+        ),
+    }
+
+
+def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
+    """True when overload is active at the published clock (not wall time)."""
+    return bool(current_overload_status(
+        _overload_fields(relay, bandwidth_relay),
+        published_clock(relays_published),
+    ))
 
 
 def bands_key_fields(bands):
@@ -73,6 +78,8 @@ def build_relay_bandwidth_1m_payload(
     bands=None,
     bands_frozen_from="",
     renderer_version="1",
+    write_1m=None,
+    read_1m=None,
 ):
     """Canonical payload for ``relay_bandwidth_1m``.
 
@@ -83,33 +90,34 @@ def build_relay_bandwidth_1m_payload(
     relay = relay or {}
     bandwidth_relay = bandwidth_relay or {}
     flags = list(relay.get("flags") or [])
-    write_history = bandwidth_relay.get("write_history") or {}
-    read_history = bandwidth_relay.get("read_history") or {}
+    fields = _overload_fields(relay, bandwidth_relay)
+    if write_1m is None:
+        write_1m = history_block(
+            (bandwidth_relay.get("write_history") or {}).get("1_month")
+        )
+    if read_1m is None:
+        read_1m = history_block(
+            (bandwidth_relay.get("read_history") or {}).get("1_month")
+        )
     return {
         "schema_version": CACHE_SCHEMA_VERSION,
         "chart_id": RELAY_BANDWIDTH_1M_ID,
         "renderer_version": str(renderer_version),
         "fingerprint": relay.get("fingerprint") or "",
-        "currently_overloaded": currently_overloaded(
-            relay, bandwidth_relay, relays_published,
-        ),
+        "currently_overloaded": bool(current_overload_status(
+            fields, published_clock(relays_published),
+        )),
         "nickname": relay.get("nickname") or "",
         "operator": operator_from_contact(relay.get("contact")),
         "advertised_bandwidth": relay.get("advertised_bandwidth") or 0,
         "flags": sorted(flags),
         "role": role_from_flags(flags),
         "last_restarted": relay.get("last_restarted") or "",
-        "overload_general_timestamp": relay.get("overload_general_timestamp"),
-        "overload_ratelimits": _overload_ratelimits(
-            bandwidth_relay.get("overload_ratelimits")
-            or relay.get("overload_ratelimits")
-        ),
-        "overload_fd_exhausted": _overload_fd(
-            bandwidth_relay.get("overload_fd_exhausted")
-            or relay.get("overload_fd_exhausted")
-        ),
-        "write_1m": history_block(write_history.get("1_month")),
-        "read_1m": history_block(read_history.get("1_month")),
+        "overload_general_timestamp": fields["overload_general_timestamp"],
+        "overload_ratelimits": fields["overload_ratelimits"],
+        "overload_fd_exhausted": fields["overload_fd_exhausted"],
+        "write_1m": write_1m,
+        "read_1m": read_1m,
         "family_overlay": family_overlay,
         "role_overlay": role_overlay,
         "bands": bands_key_fields(bands),

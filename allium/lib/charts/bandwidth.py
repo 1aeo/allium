@@ -1,11 +1,12 @@
 """Style-5 / option C renderer. Matplotlib is imported in ``_ensure_mpl()``."""
 
-from datetime import datetime, timezone
+from datetime import timedelta
 
 from ..stability_utils import current_overload_status
 from .bands import (
     RATIO_INVESTIGATE_HI,
     RATIO_LEGEND_SHELF,
+    RATIO_SCALE_HI,
     RATIO_SCALE_LO,
     band_legend_labels,
     bands_for_flags,
@@ -30,6 +31,7 @@ from .series import (
     aligned_1m_series,
     overlay_lookup,
     parse_onionoo_ts,
+    published_clock,
 )
 
 # Okabe–Ito. Red is reserved for problems.
@@ -157,19 +159,6 @@ def _sibling_ratio_title(throughput_title, bands):
     return _with_role("Write / read", bands)
 
 
-def overload_now_status(relay, published):
-    if isinstance(published, str):
-        try:
-            now_ts = parse_onionoo_ts(published).timestamp()
-        except (TypeError, ValueError, AttributeError):
-            now_ts = None
-    elif isinstance(published, datetime):
-        now_ts = published.timestamp()
-    else:
-        now_ts = published
-    return current_overload_status(relay, now_ts)
-
-
 def _overload_quiet_text(status):
     if not status:
         return None
@@ -286,26 +275,27 @@ def _throughput_legend_handles(advertised, events, overload_status, in_legend):
     return handles
 
 
-def _legend_style():
-    return dict(
+def _base_legend_style(**overrides):
+    style = dict(
         fontsize=LEGEND_FONTSIZE,
         frameon=True,
         fancybox=False,
         edgecolor="#eeeeee",
         facecolor="white",
         framealpha=0.96,
-        borderaxespad=0.25,
-        columnspacing=1.0,
         handlelength=1.6,
         handletextpad=0.4,
-        labelspacing=0.15,
     )
+    style.update(overrides)
+    return style
 
 
 def _place_legend_above(ax, handles, wrap_last=False):
     if not handles:
         return
-    style = _legend_style()
+    style = _base_legend_style(
+        borderaxespad=0.25, columnspacing=1.0, labelspacing=0.15,
+    )
     if wrap_last and len(handles) > 1:
         first = ax.legend(
             handles=handles[:-1], loc="upper left",
@@ -330,23 +320,6 @@ def _place_legend_above(ax, handles, wrap_last=False):
     ax.legend(handles=handles, loc="upper left", ncol=min(len(handles), 4), **style)
 
 
-def _ratio_legend_style():
-    return dict(
-        fontsize=LEGEND_FONTSIZE,
-        frameon=True,
-        fancybox=False,
-        edgecolor="#eeeeee",
-        facecolor="white",
-        framealpha=0.96,
-        borderaxespad=0.0,
-        borderpad=0.25,
-        columnspacing=0.85,
-        handlelength=1.6,
-        handletextpad=0.4,
-        labelspacing=0.18,
-    )
-
-
 def _row_major_ratio_handles(series, bands):
     n = max(len(series), len(bands), 1)
     out = []
@@ -367,7 +340,10 @@ def _place_ratio_legend_shelf(ax, handles):
         handles=_row_major_ratio_handles(series, bands),
         loc="upper left",
         ncol=max(len(series), 1),
-        **_ratio_legend_style(),
+        **_base_legend_style(
+            borderaxespad=0.0, borderpad=0.25,
+            columnspacing=0.85, labelspacing=0.18,
+        ),
     )
 
 
@@ -515,23 +491,16 @@ def _apply_ratio_yticks(axr, bands, ylo, yhi):
             tick.set_fontsize(7.5)
 
 
-def _auto_spike_callout(ax, ts, write_m, read_m, bands):
-    if not ts:
+def _auto_spike_callout(ax, ts, invest, bands):
+    if not ts or not invest:
         return False
     ihi = (bands or {}).get("invest_hi", RATIO_INVESTIGATE_HI)
-    rows = []
-    for t, w, r in zip(ts, write_m, read_m):
-        if not r:
-            continue
-        ratio = w / r
-        if ratio > ihi:
-            rows.append((ratio, t, w, r))
+    rows = [row for row in invest if row[3] > ihi]
     if not rows:
         return False
-    peak = max(rows, key=lambda row: row[0])
-    peak_t = peak[1]
-    from datetime import timedelta
-    by_day = {row[1].date(): row for row in rows}
+    peak = max(rows, key=lambda row: row[3])
+    peak_t, peak_w, _peak_r, peak_ratio = peak
+    by_day = {row[0].date(): row for row in rows}
     run = [peak]
     day = peak_t.date()
     prev = day - timedelta(days=1)
@@ -540,18 +509,20 @@ def _auto_spike_callout(ax, ts, write_m, read_m, bands):
         run.append(by_day[prev])
     if nxt in by_day:
         run.append(by_day[nxt])
-    run.sort(key=lambda row: row[1])
+    run.sort(key=lambda row: row[0])
     scale_bit = (
-        "off the 1.70 scale" if peak[0] > 1.70 else "beyond this role’s p98"
+        "off the {:.2f} scale".format(RATIO_SCALE_HI)
+        if peak_ratio > RATIO_SCALE_HI
+        else "beyond this role’s p98"
     )
     if len(run) == 1:
         label = "{} · write/read {:.2f} · {}".format(
-            format_day(peak_t), peak[0], scale_bit,
+            format_day(peak_t), peak_ratio, scale_bit,
         )
     else:
-        ratios = " / ".join("{:.2f}".format(row[0]) for row in run)
+        ratios = " / ".join("{:.2f}".format(row[3]) for row in run)
         label = "{}–{} · write/read {} · {}".format(
-            run[0][1].day, format_day(run[-1][1]), ratios, scale_bit,
+            run[0][0].day, format_day(run[-1][0]), ratios, scale_bit,
         )
     span = (ts[-1] - ts[0]).total_seconds()
     frac = ((peak_t - ts[0]).total_seconds() / span) if span else 0.0
@@ -561,7 +532,7 @@ def _auto_spike_callout(ax, ts, write_m, read_m, bands):
         xytext, ha = (14, 16), "left"
     ax.annotate(
         label,
-        xy=(peak_t, peak[2]),
+        xy=(peak_t, peak_w),
         xytext=xytext,
         textcoords="offset points",
         fontsize=8.0,
@@ -578,13 +549,11 @@ def _auto_spike_callout(ax, ts, write_m, read_m, bands):
     return True
 
 
-def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays, bands):
+def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands):
     overlays = overlays or {}
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
-    ratio = _np.array([
-        (w / r) if r else _np.nan for w, r in zip(write_m, read_m)
-    ])
+    ratio = _np.asarray(ratios, dtype=float)
     ylo = RATIO_SCALE_LO
     yhi = ratio_strip_data_hi(ihi, ilo)
     shelf = RATIO_LEGEND_SHELF
@@ -643,7 +612,6 @@ def _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays, bands):
 
 
 def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows):
-    ev = _events_in_span(events, ts)
     ax.plot(ts, write_m, color=WRITE, linewidth=CHROME_WEIGHTS["write"])
     ax.plot(ts, read_m, color=BLUE, linewidth=CHROME_WEIGHTS["read"])
     if advertised:
@@ -651,7 +619,7 @@ def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows):
             advertised, color=ORANGE, linestyle="--",
             linewidth=CHROME_WEIGHTS["advertised"],
         )
-    _draw_event_lines(ax, ev, lw=CHROME_WEIGHTS["restart"])
+    _draw_event_lines(ax, events, lw=CHROME_WEIGHTS["restart"])
     _apply_chrome_axes(ax)
     _pad_xlim(ax, ts)
     _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=legend_rows)
@@ -659,12 +627,13 @@ def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows):
     _date_axis(ax)
 
 
-def _relay_for_overload(job):
-    return {
-        "overload_general_timestamp": job.get("overload_general_timestamp"),
-        "overload_ratelimits": job.get("overload_ratelimits"),
-        "overload_fd_exhausted": job.get("overload_fd_exhausted"),
-    }
+def _bind_overlay(ts, write_1m, overlay):
+    if not overlay:
+        return None
+    values = overlay_lookup(ts, overlay, write_1m)
+    if values is None:
+        return None
+    return values, {t: v for t, v in zip(ts, values) if v is not None}
 
 
 def _plot_overlays(job, ts, write_1m):
@@ -679,23 +648,16 @@ def _plot_overlays(job, ts, write_1m):
         "operator_values": None,
         "role_values": None,
     }
-    if family and family.get("n", 0) >= 2:
-        values = overlay_lookup(ts, family, write_1m)
-        if values is not None:
-            overlays["operator_values"] = values
-            overlays["operator"] = {
-                t: v for t, v in zip(ts, values) if v is not None
-            }
+    if (family or {}).get("n", 0) >= 2:
+        bound = _bind_overlay(ts, write_1m, family)
+        if bound:
+            overlays["operator_values"], overlays["operator"] = bound
             overlays["operator_label"] = (
                 "Operator Family (median, n={})".format(family["n"])
             )
-    if role:
-        values = overlay_lookup(ts, role, write_1m)
-        if values is not None:
-            overlays["role_values"] = values
-            overlays["role"] = {
-                t: v for t, v in zip(ts, values) if v is not None
-            }
+    bound = _bind_overlay(ts, write_1m, role)
+    if bound:
+        overlays["role_values"], overlays["role"] = bound
     return overlays
 
 
@@ -719,17 +681,25 @@ def render_relay_bandwidth_1m(job, dest_path):
     write_m = series["write_m"]
     read_m = series["read_m"]
     adv = advertised_mbit(job.get("advertised_bandwidth"))
-    events = restart_events(job.get("last_restarted"))
+    rows = []
+    ratios = []
+    for t, w, r in zip(ts, write_m, read_m):
+        if r:
+            ratio = w / r
+            rows.append((t, w, r, ratio))
+            ratios.append(ratio)
+        else:
+            ratios.append(float("nan"))
+    events = _events_in_span(restart_events(job.get("last_restarted")), ts)
     bands = job.get("bands") or bands_for_flags(job.get("flags"))
     overlays = _plot_overlays(job, ts, write_1m)
-    overlays["bands"] = bands
-    overload_status = overload_now_status(
-        _relay_for_overload(job), job.get("relays_published"),
+    overload_status = current_overload_status(
+        job, published_clock(job.get("relays_published")),
     )
     overload_mode = "legend" if overload_status else "title"
     wrap_last = bool(overload_status)
     outcome = summarize_bandwidth_outcome(
-        ts, write_m, read_m, adv, events, overlays, bands, overload_status,
+        ts, write_m, read_m, adv, overlays, bands, overload_status, rows=rows,
     )
     thru_sub = format_outcome_subtitle(outcome, "throughput")
     ratio_sub = format_outcome_subtitle(outcome, "ratio")
@@ -769,14 +739,14 @@ def render_relay_bandwidth_1m(job, dest_path):
         _apply_chart_identity(ax, ident, loc=title_loc, title_pad=title_pad)
     if thru_sub:
         _apply_method_subtitle(ax, thru_sub)
-    _auto_spike_callout(ax, ts, write_m, read_m, bands)
+    _auto_spike_callout(ax, ts, outcome.get("invest") or [], bands)
     bw_handles = _throughput_legend_handles(
-        adv, _events_in_span(events, ts), overload_status,
+        adv, events, overload_status,
         in_legend=(overload_mode == "legend"),
     )
     _place_legend_above(ax, bw_handles, wrap_last=wrap_last)
 
-    _plot_ratio_strip(axr, ts, read_m, write_m, events, overlays, bands)
+    _plot_ratio_strip(axr, ts, ratios, events, overlays, bands)
     axr.set_title(
         _sibling_ratio_title(title, bands), loc=title_loc, pad=title_pad,
     )
