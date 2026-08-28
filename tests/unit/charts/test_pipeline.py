@@ -31,15 +31,15 @@ def _parser():
     return parser
 
 
-def test_cli_default_is_off():
+def test_cli_default_is_on():
     args = _parser().parse_args([])
-    assert args.charts == CHARTS_OFF
+    assert args.charts == CHARTS_ON
     assert args.chart_workers == 0
     assert args.charts_limit == 0
     assert args.chart_fingerprints is None
-    assert resolve_charts_mode(args) == CHARTS_OFF
+    assert resolve_charts_mode(args) == CHARTS_ON
     help_text = _parser().format_help()
-    assert "default: off" in help_text
+    assert "default: on" in help_text
     assert "--charts-limit" in help_text
     assert "--fingerprint" in help_text
 
@@ -230,15 +230,27 @@ def _fake_render(job, dest):
     return dest
 
 
-def test_default_off_does_not_enable_html_flags(temp_dir, monkeypatch):
+def test_default_on_enables_html_flags(temp_dir, monkeypatch):
     monkeypatch.setattr(
         "allium.lib.charts.pipeline.matplotlib_is_available",
         lambda: True,
     )
     relay_set = _relay_set(temp_dir)
     apply_chart_html_flags(relay_set, _parser().parse_args([]))
+    assert relay_set.charts_enabled is True
+    assert _FP in relay_set.bandwidth_chart_fps
+
+
+def test_default_on_without_matplotlib_omits_img(temp_dir, monkeypatch):
+    monkeypatch.setattr(
+        "allium.lib.charts.pipeline.matplotlib_is_available",
+        lambda: False,
+    )
+    relay_set = _relay_set(temp_dir)
+    apply_chart_html_flags(relay_set, _parser().parse_args([]))
     assert relay_set.charts_enabled is False
     assert relay_set.bandwidth_chart_fps == frozenset()
+    assert not charts_will_run(_parser().parse_args([]), relay_set)
 
 
 def test_apply_chart_html_flags_off_omits_img(temp_dir, monkeypatch):

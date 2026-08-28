@@ -77,8 +77,8 @@ def add_chart_arguments(parser):
         nargs="?",
         const=CHARTS_ON,
         choices=list(CHARTS_MODES),
-        default=CHARTS_OFF,
-        help="after HTML: off, auto, or on (default: off)",
+        default=CHARTS_ON,
+        help="after HTML: off, auto, or on (default: on)",
         required=False,
     )
     parser.add_argument(

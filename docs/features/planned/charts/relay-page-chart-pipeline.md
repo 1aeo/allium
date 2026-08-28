@@ -12,7 +12,7 @@ How `relay_bandwidth_1m` is drawn after HTML without putting matplotlib on the J
 | Cache | SHA-256 of fields that change pixels. `{output}/.chart-cache/`. |
 | Publish | Hardlink/copy to `www/relay/<fp>/bandwidth-1m.png` after HTML. |
 | Deps | matplotlib extra (`config/requirements-charts.txt`). Core generate is Jinja2-only. |
-| CLI | `--charts {off,auto,on}` **default `off`**. Ramp with `--charts-limit N` and `--fingerprint FP`. |
+| CLI | `--charts {off,auto,on}` **default `on`**. `--no-charts` turns it off. Ramp with `--charts-limit N` and `--fingerprint FP`. |
 | HTML | History `<img>` only when the pass will run **and** that fingerprint is in the sliced 1M set. |
 
 Same-day rebuilds that only tick votes / uptime / `last_seen` must not redraw ~7k figures.
@@ -40,7 +40,7 @@ One `ChartSpec` per type (`chart_id`, output pattern, cache subdir, renderer, ve
 ## CLI
 
 ```
---charts {off,auto,on}     default: off; bare --charts means on
+--charts {off,auto,on}     default: on; bare --charts means on
 --no-charts                store off
 --charts-limit N           first N chartable relays (0 = no limit)
 --fingerprint FP           repeatable
@@ -57,7 +57,7 @@ Do **not** reuse `--workers`. Do **not** flip the default to `auto`.
 
 `--apis details`: skip, do not fail.
 
-`apply_chart_html_flags()` runs **before** Jinja so default-off generate does not emit ~7k broken images. Limit / fingerprint slices match the later pass.
+`apply_chart_html_flags()` runs **before** Jinja so History `<img>` is omitted unless the later pass will run (matplotlib present, bandwidth data, that fingerprint selected). Limit / fingerprint slices match the later pass. `--charts on` without matplotlib: one log line, skip figures, omit the img.
 
 ## Pass
 
