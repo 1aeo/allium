@@ -14,35 +14,27 @@ from .series import history_block, is_relay_fingerprint, published_clock
 CACHE_SCHEMA_VERSION = 3
 
 
-def _overload_ratelimits(raw):
-    if not raw:
-        return None
-    return {
-        "timestamp": raw.get("timestamp"),
-        "write-count": raw.get("write-count"),
-        "read-count": raw.get("read-count"),
-    }
-
-
-def _overload_fd(raw):
-    if not raw:
-        return None
-    return {"timestamp": raw.get("timestamp")}
-
-
 def _overload_fields(relay, bandwidth_relay=None):
     """The three Onionoo overload fields, bandwidth preferred over details."""
     relay = relay or {}
     bandwidth_relay = bandwidth_relay or {}
+    rates = (
+        bandwidth_relay.get("overload_ratelimits")
+        or relay.get("overload_ratelimits")
+    )
+    fd = (
+        bandwidth_relay.get("overload_fd_exhausted")
+        or relay.get("overload_fd_exhausted")
+    )
     return {
         "overload_general_timestamp": relay.get("overload_general_timestamp"),
-        "overload_ratelimits": _overload_ratelimits(
-            bandwidth_relay.get("overload_ratelimits")
-            or relay.get("overload_ratelimits")
-        ),
-        "overload_fd_exhausted": _overload_fd(
-            bandwidth_relay.get("overload_fd_exhausted")
-            or relay.get("overload_fd_exhausted")
+        "overload_ratelimits": {
+            "timestamp": rates.get("timestamp"),
+            "write-count": rates.get("write-count"),
+            "read-count": rates.get("read-count"),
+        } if rates else None,
+        "overload_fd_exhausted": (
+            {"timestamp": fd.get("timestamp")} if fd else None
         ),
     }
 
