@@ -125,7 +125,8 @@ def census_footnote(bands, frozen_from=""):
     """``4,444 Guards · baseline 15 Aug 2026``."""
     peers = peers_word(bands)
     n = (bands or {}).get("n") or 0
-    when = format_frozen_baseline(frozen_from) or "15 Aug 2026"
-    if n:
-        return "{:,} {} · baseline {}".format(n, peers, when)
-    return "{} · baseline {}".format(peers, when)
+    head = "{:,} {}".format(n, peers) if n else peers
+    when = format_frozen_baseline(frozen_from)
+    if when:
+        return "{} · baseline {}".format(head, when)
+    return head

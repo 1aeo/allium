@@ -4,6 +4,7 @@ import importlib
 import importlib.util
 import os
 import time
+from collections import namedtuple
 
 from .cache import (
     build_relay_bandwidth_1m_payload,
@@ -20,9 +21,13 @@ from .series import (
     build_bandwidth_map,
     chartable_fingerprints,
     is_relay_fingerprint,
-    month_blocks,
     overlays_for_relay,
     precompute_overlays,
+    series_by_fp,
+)
+
+_Selection = namedtuple(
+    "_Selection", "details bw_map series selected bandwidth_data"
 )
 
 CHARTS_OFF = "off"
@@ -193,39 +198,48 @@ def _output_dir(relay_set, args):
 
 
 def _selection(relay_set, args):
-    """Shared details / bandwidth map / chartable fps for HTML flags and the pass."""
+    """Details, 1M series, and the --charts-limit / --fingerprint slice."""
     bandwidth_data = _bandwidth_data(relay_set)
     details = _details_relays(relay_set)
     bw_map = build_bandwidth_map(bandwidth_data)
-    fps = chartable_fingerprints(
+    series = series_by_fp(details, bw_map)
+    selected = chartable_fingerprints(
         details,
         bw_map,
         fingerprints=getattr(args, "chart_fingerprints", None) if args else None,
         limit=getattr(args, "charts_limit", 0) if args else 0,
+        series=series,
     )
-    return details, bw_map, fps, bandwidth_data
+    return _Selection(details, bw_map, series, selected, bandwidth_data)
+
+
+def _skip_reason(args, relay_set):
+    """Why the HTML gate and the pass both stay off. None means run."""
+    mode = resolve_charts_mode(args)
+    if mode == CHARTS_OFF:
+        return "off"
+    if not matplotlib_is_available():
+        return "matplotlib_missing" if mode == CHARTS_ON else "auto_unavailable"
+    if not any(renderer_is_ready(spec) for spec in enabled_charts()):
+        return "renderer_missing"
+    if not _bandwidth_data(relay_set):
+        return "no_bandwidth_data"
+    return None
 
 
 def charts_will_run(args, relay_set):
-    if resolve_charts_mode(args) == CHARTS_OFF:
-        return False
-    if not matplotlib_is_available():
-        return False
-    if not any(renderer_is_ready(spec) for spec in enabled_charts()):
-        return False
-    return bool(_bandwidth_data(relay_set))
+    return not _skip_reason(args, relay_set)
 
 
 def apply_chart_html_flags(relay_set, args):
     """Set ``charts_enabled`` / ``bandwidth_chart_fps`` before Jinja."""
-    will_run = charts_will_run(args, relay_set)
-    fps = frozenset()
-    if will_run:
-        _details, _bw_map, selected, _bw = _selection(relay_set, args)
-        fps = frozenset(selected)
+    will_run = not _skip_reason(args, relay_set)
+    sel = _selection(relay_set, args) if will_run else None
+    fps = frozenset(sel.selected) if sel else frozenset()
     if relay_set is not None:
         relay_set.charts_enabled = will_run
         relay_set.bandwidth_chart_fps = fps
+        relay_set._chart_selection = sel
     return will_run
 
 
@@ -265,35 +279,39 @@ def run_chart_pass(relay_set, args, progress_logger=None):
 
     started = time.monotonic()
     output_dir = _output_dir(relay_set, args)
-    details, bw_map, selected, bandwidth_data = _selection(relay_set, args)
-    selected = frozenset(selected)
-    published = _relays_published(relay_set, bandwidth_data)
+    sel = getattr(relay_set, "_chart_selection", None) if relay_set else None
+    if sel is None:
+        sel = _selection(relay_set, args)
+    selected = frozenset(sel.selected)
+    published = _relays_published(relay_set, sel.bandwidth_data)
     catalog = load_role_bands()
     frozen = bands_frozen_from(catalog)
-    overlays = precompute_overlays(details, bw_map)
+    # Full series population — not the --charts-limit slice — for overlay n≥2.
+    overlays = precompute_overlays(sel.details, sel.bw_map, series=sel.series)
     workers = default_chart_workers(getattr(args, "chart_workers", 0) if args else 0)
     spec = RELAY_BANDWIDTH_1M
 
     jobs = []
     hits = 0
     published_n = 0
-    for relay in details:
+    for relay in sel.details:
         fp = relay.get("fingerprint")
         if fp not in selected:
             continue
-        bw_relay = bw_map.get(fp)
-        write_1m, _read_1m = month_blocks(bw_relay)
-        family, role_ov = overlays_for_relay(relay, write_1m, overlays)
+        parsed = sel.series[fp]
+        family, role_ov = overlays_for_relay(relay, parsed["write_1m"], overlays)
         bands = bands_for_flags(relay.get("flags"), catalog)
         payload = build_relay_bandwidth_1m_payload(
             relay,
-            bandwidth_relay=bw_relay,
+            bandwidth_relay=sel.bw_map.get(fp),
             relays_published=published,
             family_overlay=family,
             role_overlay=role_ov,
             bands=bands,
             bands_frozen_from=frozen,
             renderer_version=spec.renderer_version,
+            write_1m=parsed["write_1m"],
+            read_1m=parsed["read_1m"],
         )
         key = cache_key(payload)
         if cache_hit(output_dir, spec, fp, key):
@@ -306,7 +324,6 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             continue
         render = dict(payload)
         render["relays_published"] = published
-        render["bands"] = bands
         jobs.append({
             "output_dir": output_dir,
             "fingerprint": fp,
@@ -367,31 +384,15 @@ def run_chart_pass(relay_set, args, progress_logger=None):
 
 def maybe_run_charts(relay_set, args, progress_logger=None):
     mode = resolve_charts_mode(args)
-    if mode == CHARTS_OFF:
-        return ChartRunResult(status="skipped", reason="off", charts_mode=mode)
-
-    if not matplotlib_is_available():
-        if mode == CHARTS_ON:
+    reason = _skip_reason(args, relay_set)
+    if reason:
+        if reason == "matplotlib_missing" and mode == CHARTS_ON:
             _emit(_INSTALL_HINT, progress_logger)
-            return ChartRunResult(
-                status="skipped", reason="matplotlib_missing", charts_mode=mode,
-            )
-        return ChartRunResult(
-            status="skipped", reason="auto_unavailable", charts_mode=mode,
-        )
-
-    if not any(renderer_is_ready(spec) for spec in enabled_charts()):
-        if mode == CHARTS_ON:
+        elif reason == "renderer_missing" and mode == CHARTS_ON:
             _emit(_RENDERER_HINT, progress_logger)
-        return ChartRunResult(
-            status="skipped", reason="renderer_missing", charts_mode=mode,
-        )
-
-    if not _bandwidth_data(relay_set):
-        _emit(_NO_BANDWIDTH_HINT, progress_logger)
-        return ChartRunResult(
-            status="skipped", reason="no_bandwidth_data", charts_mode=mode,
-        )
+        elif reason == "no_bandwidth_data":
+            _emit(_NO_BANDWIDTH_HINT, progress_logger)
+        return ChartRunResult(status="skipped", reason=reason, charts_mode=mode)
 
     try:
         return run_chart_pass(relay_set, args, progress_logger)

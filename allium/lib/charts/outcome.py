@@ -9,8 +9,6 @@ from .bands import (
 )
 from .identity import peers_word
 
-SHIPPED_OUTCOME_STYLE = "who"
-
 
 def format_day(dt):
     """``22 Jul`` without a leading zero. Portable (no ``%-d``)."""
@@ -66,8 +64,8 @@ def _overlay_left_typical(ts, series, bands, day_set):
 
 
 def summarize_bandwidth_outcome(
-    ts, write_m, read_m, advertised_mbit, events, overlays, bands,
-    overload_status,
+    ts, write_m, read_m, advertised_mbit, overlays, bands, overload_status,
+    rows=None,
 ):
     """What the two strips conclude. Used by C subtitles."""
     bands = bands or {}
@@ -77,16 +75,19 @@ def summarize_bandwidth_outcome(
     ilo = bands.get("invest_lo", RATIO_INVESTIGATE_LO)
     ihi = bands.get("invest_hi", RATIO_INVESTIGATE_HI)
     role = bands.get("role") or "relay"
-    rows = []
-    for t, w, r in zip(ts or [], write_m or [], read_m or []):
-        if not r:
-            continue
-        rows.append((t, w, r, w / r))
+    if rows is None:
+        rows = [
+            (t, w, r, w / r)
+            for t, w, r in zip(ts or [], write_m or [], read_m or [])
+            if r
+        ]
+    invest = [row for row in rows if row[3] < ilo or row[3] > ihi]
     if len(rows) < 3:
         return {
             "enough": False,
             "role": role,
             "overloaded": bool(overload_status),
+            "invest": invest,
         }
     mean_ratio = sum(row[3] for row in rows) / float(len(rows))
     mean_write = sum(row[1] for row in rows) / float(len(rows))
@@ -97,7 +98,6 @@ def summarize_bandwidth_outcome(
         zone = "uncommon"
     else:
         zone = "investigate"
-    invest = [row for row in rows if row[3] < ilo or row[3] > ihi]
     off = [row for row in rows if row[3] > RATIO_SCALE_HI]
     write_heavy = [row for row in invest if row[3] > thi]
     read_heavy = [row for row in invest if row[3] < tlo]
@@ -209,7 +209,7 @@ def format_outcome_subtitle(outcome, which):
             return body
         return util_bit
 
-    peers = peers_word({"role": role})
+    peers = peers_word(role)
     if outcome["who"] == "role":
         return "Outside the band with other " + peers + _outside_date_bit(
             outcome, span

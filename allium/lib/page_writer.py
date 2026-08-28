@@ -1622,7 +1622,7 @@ def write_relay_info(relay_set):
             ),
             page_number=1,
             charts_enabled=charts_enabled,
-            has_bandwidth_chart=charts_enabled and relay["fingerprint"] in bandwidth_chart_fps,
+            has_bandwidth_chart=relay["fingerprint"] in bandwidth_chart_fps,
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
