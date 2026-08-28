@@ -5,6 +5,8 @@ import os
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from allium.lib.charts.pipeline import (
     CHARTS_AUTO,
     CHARTS_OFF,
@@ -12,6 +14,7 @@ from allium.lib.charts.pipeline import (
     MAX_CHART_WORKERS,
     _INSTALL_HINT,
     _NO_BANDWIDTH_HINT,
+    _skip_reason,
     add_chart_arguments,
     apply_chart_html_flags,
     charts_will_run,
@@ -23,6 +26,17 @@ from allium.lib.charts.pipeline import (
     run_chart_pass,
 )
 from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
+from tests.unit.charts.conftest import (
+    FP_A,
+    FP_B,
+    FP_JEANGRAE,
+    fake_render,
+    make_bw,
+    make_relay,
+    make_relay_set,
+    on_args,
+    stub_chart_pool,
+)
 
 
 def _parser():
@@ -70,11 +84,12 @@ def test_cli_ramp_flags():
 
 
 def test_default_chart_workers_hard_caps_at_eight():
-    assert default_chart_workers(0) == max(1, min(4, __import__("os").cpu_count() or 1))
+    auto = max(1, min(4, os.cpu_count() or 1))
+    assert default_chart_workers(0) == auto
     assert default_chart_workers(2) == 2
     assert default_chart_workers(8) == 8
     assert default_chart_workers(16) == MAX_CHART_WORKERS
-    assert default_chart_workers(-1) == max(1, min(4, __import__("os").cpu_count() or 1))
+    assert default_chart_workers(-1) == auto
     assert MAX_CHART_WORKERS == 8
 
 
@@ -94,10 +109,7 @@ def test_maybe_run_charts_off_is_silent(capsys):
 
 
 def test_maybe_run_charts_on_without_matplotlib(capsys, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: False,
-    )
+    stub_chart_pool(monkeypatch, render=None, mpl=False)
     result = maybe_run_charts(None, SimpleNamespace(charts="on"))
     captured = capsys.readouterr()
     assert result.reason == "matplotlib_missing"
@@ -105,10 +117,7 @@ def test_maybe_run_charts_on_without_matplotlib(capsys, monkeypatch):
 
 
 def test_maybe_run_charts_auto_without_extra_is_silent(capsys, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: False,
-    )
+    stub_chart_pool(monkeypatch, render=None, mpl=False)
     result = maybe_run_charts(None, SimpleNamespace(charts="auto"))
     captured = capsys.readouterr()
     assert result.reason == "auto_unavailable"
@@ -116,10 +125,7 @@ def test_maybe_run_charts_auto_without_extra_is_silent(capsys, monkeypatch):
 
 
 def test_maybe_run_charts_on_without_bandwidth(capsys, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
+    stub_chart_pool(monkeypatch, render=None)
     result = maybe_run_charts(
         SimpleNamespace(bandwidth_data=None),
         SimpleNamespace(charts="on"),
@@ -147,172 +153,57 @@ def test_charts_package_import_does_not_load_matplotlib():
         assert "matplotlib.pyplot" not in sys.modules
 
 
-_FP = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
-
-
-def _relay_and_bw(fp=_FP, nickname="jeangrae", family=None):
-    relay = {
-        "fingerprint": fp,
-        "nickname": nickname,
-        "contact": "url:1aeo.com proof:uri-rsa ciissversion:2",
-        "contact_md5": "jg",
-        "flags": ["Fast", "Guard", "HSDir", "Running", "Stable", "V2Dir"],
-        "advertised_bandwidth": 82000000,
-        "last_restarted": "2025-10-01 00:00:00",
-        "overload_general_timestamp": None,
-        "effective_family": list(family or [fp]),
-    }
-    bw = {
-        "fingerprint": fp,
-        "write_history": {
-            "1_month": {
-                "first": "2026-07-16 12:00:00",
-                "last": "2026-07-19 12:00:00",
-                "interval": 86400,
-                "factor": 1000.0,
-                "values": [100, 110, 120, 115],
-            }
-        },
-        "read_history": {
-            "1_month": {
-                "first": "2026-07-16 12:00:00",
-                "last": "2026-07-19 12:00:00",
-                "interval": 86400,
-                "factor": 1000.0,
-                "values": [95, 105, 112, 110],
-            }
-        },
-    }
-    return relay, bw
-
-
-def _relay_set(temp_dir, extra_pairs=None):
-    pairs = [_relay_and_bw()] + list(extra_pairs or [])
-    return SimpleNamespace(
-        json={
-            "relays": [pair[0] for pair in pairs],
-            "relays_published": "2026-08-15 06:00:00",
-        },
-        bandwidth_data={
-            "relays": [pair[1] for pair in pairs],
-            "relays_published": "2026-08-15 06:00:00",
-        },
-        output_dir=temp_dir,
-        use_bits=True,
-    )
-
-
-class _DummyPool(object):
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def imap_unordered(self, func, jobs, chunksize=1):
-        return [func(job) for job in jobs]
-
-
-class _DummyCtx(object):
-    def Pool(self, **kwargs):
-        return _DummyPool()
-
-
-def _fake_render(job, dest):
-    parent = os.path.dirname(dest)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(dest, "wb") as handle:
-        handle.write(b"\x89PNG\r\n\x1a\n" + b"fake")
-    return dest
-
-
-def test_default_on_enables_html_flags(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    relay_set = _relay_set(temp_dir)
-    apply_chart_html_flags(relay_set, _parser().parse_args([]))
-    assert relay_set.charts_enabled is True
-    assert _FP in relay_set.bandwidth_chart_fps
-
-
-def test_default_on_without_matplotlib_omits_img(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: False,
-    )
-    relay_set = _relay_set(temp_dir)
-    apply_chart_html_flags(relay_set, _parser().parse_args([]))
+@pytest.mark.parametrize("args,mpl", [
+    (lambda: _parser().parse_args([]), False),
+    (lambda: SimpleNamespace(charts="off"), True),
+    (lambda: SimpleNamespace(charts="auto"), False),
+])
+def test_html_flags_omit_img_when_charts_will_not_run(
+    temp_dir, monkeypatch, args, mpl,
+):
+    stub_chart_pool(monkeypatch, render=None, mpl=mpl)
+    parsed = args()
+    relay_set = make_relay_set(temp_dir)
+    apply_chart_html_flags(relay_set, parsed)
     assert relay_set.charts_enabled is False
     assert relay_set.bandwidth_chart_fps == frozenset()
-    assert not charts_will_run(_parser().parse_args([]), relay_set)
-
-
-def test_apply_chart_html_flags_off_omits_img(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
+    assert not charts_will_run(parsed, relay_set)
+    assert _skip_reason(parsed, relay_set)
+    assert maybe_run_charts(relay_set, parsed).reason == _skip_reason(
+        parsed, relay_set,
     )
-    relay_set = _relay_set(temp_dir)
-    apply_chart_html_flags(relay_set, SimpleNamespace(charts="off"))
-    assert relay_set.charts_enabled is False
-    assert relay_set.bandwidth_chart_fps == frozenset()
 
 
-def test_apply_chart_html_flags_auto_without_extra_omits_img(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: False,
+@pytest.mark.parametrize("charts", [None, "auto"])
+def test_html_flags_mark_chartable_when_pass_will_run(
+    temp_dir, monkeypatch, charts,
+):
+    stub_chart_pool(monkeypatch, render=None)
+    args = _parser().parse_args([]) if charts is None else SimpleNamespace(
+        charts=charts,
     )
-    relay_set = _relay_set(temp_dir)
-    apply_chart_html_flags(relay_set, SimpleNamespace(charts="auto"))
-    assert relay_set.charts_enabled is False
-    assert not charts_will_run(SimpleNamespace(charts="auto"), relay_set)
-
-
-def test_apply_chart_html_flags_marks_chartable(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    relay_set = _relay_set(temp_dir)
-    apply_chart_html_flags(relay_set, SimpleNamespace(charts="auto"))
+    relay_set = make_relay_set(temp_dir)
+    apply_chart_html_flags(relay_set, args)
     assert relay_set.charts_enabled is True
-    assert _FP in relay_set.bandwidth_chart_fps
+    assert FP_JEANGRAE in relay_set.bandwidth_chart_fps
+    assert not _skip_reason(args, relay_set)
 
 
 def test_cache_miss_renders_and_publishes(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
-        _fake_render,
-    )
-    monkeypatch.setattr(
-        "multiprocessing.get_context",
-        lambda name: _DummyCtx(),
-    )
-    relay_set = _relay_set(temp_dir)
-    args = SimpleNamespace(charts="on", chart_workers=1, output_dir=temp_dir)
-    result = run_chart_pass(relay_set, args)
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(temp_dir)
+    result = run_chart_pass(relay_set, on_args(temp_dir))
     assert result.status == "ok"
     assert result.rendered == 1
     assert result.cache_hits == 0
-    published = os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png")
+    published = os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
     cached = os.path.join(
-        temp_dir, ".chart-cache", "relay_bandwidth_1m", _FP + ".png",
+        temp_dir, ".chart-cache", "relay_bandwidth_1m", FP_JEANGRAE + ".png",
     )
     assert os.path.isfile(published)
     assert os.path.isfile(cached)
     sidecar = os.path.join(
-        temp_dir, ".chart-cache", "relay_bandwidth_1m", _FP + ".json",
+        temp_dir, ".chart-cache", "relay_bandwidth_1m", FP_JEANGRAE + ".json",
     )
     assert os.path.isfile(sidecar)
 
@@ -320,14 +211,12 @@ def test_cache_miss_renders_and_publishes(temp_dir, monkeypatch):
 def test_real_spawn_pool_renders_synthetic(temp_dir):
     """Exercise spawn (not the DummyCtx). Requires matplotlib extra."""
     if not matplotlib_is_available():
-        import pytest
         pytest.skip("matplotlib extra not installed")
-    relay_set = _relay_set(temp_dir)
-    args = SimpleNamespace(charts="on", chart_workers=1, output_dir=temp_dir)
-    result = run_chart_pass(relay_set, args)
+    relay_set = make_relay_set(temp_dir)
+    result = run_chart_pass(relay_set, on_args(temp_dir))
     assert result.status == "ok"
     assert result.rendered == 1
-    published = os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png")
+    published = os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
     assert os.path.isfile(published)
     with open(published, "rb") as handle:
         assert handle.read(8) == b"\x89PNG\r\n\x1a\n"
@@ -338,28 +227,16 @@ def test_cache_hit_publishes_without_renderer(temp_dir, monkeypatch):
 
     def tracking_render(job, dest):
         calls.append(dest)
-        return _fake_render(job, dest)
+        return fake_render(job, dest)
 
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
-        tracking_render,
-    )
-    monkeypatch.setattr(
-        "multiprocessing.get_context",
-        lambda name: _DummyCtx(),
-    )
-    relay_set = _relay_set(temp_dir)
-    args = SimpleNamespace(charts="on", chart_workers=1, output_dir=temp_dir)
+    stub_chart_pool(monkeypatch, render=tracking_render)
+    relay_set = make_relay_set(temp_dir)
+    args = on_args(temp_dir)
     first = run_chart_pass(relay_set, args)
     assert first.rendered == 1
     assert calls
     calls[:] = []
-    # Wipe published tree the way write_relay_info rmtree's www/relay/.
-    published = os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png")
+    published = os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
     os.remove(published)
     second = run_chart_pass(relay_set, args)
     assert second.rendered == 0
@@ -368,77 +245,96 @@ def test_cache_hit_publishes_without_renderer(temp_dir, monkeypatch):
     assert os.path.isfile(published)
 
 
-_FP2 = "A" * 40
-_FP3 = "B" * 40
-
-
-def _on_args(temp_dir, **extra):
-    values = dict(charts="on", chart_workers=1, output_dir=temp_dir)
-    values.update(extra)
-    return SimpleNamespace(**values)
-
-
 def test_charts_limit_slices_html_and_pass(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
-        _fake_render,
-    )
-    monkeypatch.setattr(
-        "multiprocessing.get_context",
-        lambda name: _DummyCtx(),
-    )
+    stub_chart_pool(monkeypatch)
     extra = [
-        _relay_and_bw(_FP2, nickname="two"),
-        _relay_and_bw(_FP3, nickname="three"),
+        (make_relay(FP_A, nickname="two"), make_bw(FP_A)),
+        (make_relay(FP_B, nickname="three"), make_bw(FP_B)),
     ]
-    relay_set = _relay_set(temp_dir, extra)
-    args = _on_args(temp_dir, charts_limit=1)
+    relay_set = make_relay_set(
+        temp_dir, [(make_relay(), make_bw())] + extra,
+    )
+    args = on_args(temp_dir, charts_limit=1)
     apply_chart_html_flags(relay_set, args)
     assert relay_set.charts_enabled is True
-    assert relay_set.bandwidth_chart_fps == frozenset([_FP])
+    assert relay_set.bandwidth_chart_fps == frozenset([FP_JEANGRAE])
     result = run_chart_pass(relay_set, args)
     assert result.rendered == 1
-    assert os.path.isfile(os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png"))
-    assert not os.path.isfile(
-        os.path.join(temp_dir, "relay", _FP2, "bandwidth-1m.png")
+    assert os.path.isfile(
+        os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
     )
+    assert not os.path.isfile(
+        os.path.join(temp_dir, "relay", FP_A, "bandwidth-1m.png")
+    )
+
+
+def test_charts_limit_family_overlay_uses_full_population(temp_dir, monkeypatch):
+    jobs = []
+
+    def capture(job, dest):
+        jobs.append(job)
+        return fake_render(job, dest)
+
+    stub_chart_pool(monkeypatch, render=capture)
+    family = [FP_JEANGRAE, FP_A]
+    pairs = [
+        (make_relay(FP_JEANGRAE, family=family), make_bw(FP_JEANGRAE)),
+        (make_relay(FP_A, nickname="two", family=family), make_bw(FP_A)),
+    ]
+    relay_set = make_relay_set(temp_dir, pairs)
+    args = on_args(temp_dir, charts_limit=1)
+    apply_chart_html_flags(relay_set, args)
+    assert relay_set.bandwidth_chart_fps == frozenset([FP_JEANGRAE])
+    result = run_chart_pass(relay_set, args)
+    assert result.rendered == 1
+    overlay = jobs[0]["family_overlay"]
+    assert overlay is not None
+    assert overlay["n"] == 2
+    assert "series" not in jobs[0]
+    assert "ts" not in jobs[0]
+
+
+def test_apply_then_pass_parses_series_once(temp_dir, monkeypatch):
+    import allium.lib.charts.pipeline as pipeline_mod
+    import allium.lib.charts.series as series_mod
+
+    calls = []
+    real = series_mod.series_by_fp
+
+    def counting(*a, **k):
+        calls.append(1)
+        return real(*a, **k)
+
+    monkeypatch.setattr(series_mod, "series_by_fp", counting)
+    monkeypatch.setattr(pipeline_mod, "series_by_fp", counting)
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(temp_dir)
+    args = on_args(temp_dir)
+    apply_chart_html_flags(relay_set, args)
+    run_chart_pass(relay_set, args)
+    assert len(calls) == 1
 
 
 def test_fingerprint_flag_selects_one_relay(temp_dir, monkeypatch):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
-        _fake_render,
-    )
-    monkeypatch.setattr(
-        "multiprocessing.get_context",
-        lambda name: _DummyCtx(),
-    )
-    extra = [_relay_and_bw(_FP2, nickname="two")]
-    relay_set = _relay_set(temp_dir, extra)
-    args = _on_args(temp_dir, chart_fingerprints=["$" + _FP2.lower()])
+    stub_chart_pool(monkeypatch)
+    pairs = [
+        (make_relay(), make_bw()),
+        (make_relay(FP_A, nickname="two"), make_bw(FP_A)),
+    ]
+    relay_set = make_relay_set(temp_dir, pairs)
+    args = on_args(temp_dir, chart_fingerprints=["$" + FP_A.lower()])
     apply_chart_html_flags(relay_set, args)
-    assert relay_set.bandwidth_chart_fps == frozenset([_FP2])
+    assert relay_set.bandwidth_chart_fps == frozenset([FP_A])
     result = run_chart_pass(relay_set, args)
     assert result.rendered == 1
-    assert os.path.isfile(os.path.join(temp_dir, "relay", _FP2, "bandwidth-1m.png"))
+    assert os.path.isfile(os.path.join(temp_dir, "relay", FP_A, "bandwidth-1m.png"))
     assert not os.path.isfile(
-        os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png")
+        os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
     )
 
 
 def test_maybe_run_charts_pass_error_leaves_html(monkeypatch, capsys):
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
+    stub_chart_pool(monkeypatch, render=None)
     monkeypatch.setattr(
         "allium.lib.charts.pipeline.run_chart_pass",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("pool dead")),
@@ -454,29 +350,22 @@ def test_maybe_run_charts_pass_error_leaves_html(monkeypatch, capsys):
 
 def test_one_bad_relay_does_not_kill_the_pass(temp_dir, monkeypatch):
     def flaky_render(job, dest):
-        if job.get("fingerprint") == _FP2:
+        if job.get("fingerprint") == FP_A:
             raise RuntimeError("boom")
-        return _fake_render(job, dest)
+        return fake_render(job, dest)
 
-    monkeypatch.setattr(
-        "allium.lib.charts.pipeline.matplotlib_is_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
-        flaky_render,
-    )
-    monkeypatch.setattr(
-        "multiprocessing.get_context",
-        lambda name: _DummyCtx(),
-    )
-    extra = [_relay_and_bw(_FP2, nickname="two")]
-    relay_set = _relay_set(temp_dir, extra)
-    result = run_chart_pass(relay_set, _on_args(temp_dir))
+    stub_chart_pool(monkeypatch, render=flaky_render)
+    pairs = [
+        (make_relay(), make_bw()),
+        (make_relay(FP_A, nickname="two"), make_bw(FP_A)),
+    ]
+    result = run_chart_pass(make_relay_set(temp_dir, pairs), on_args(temp_dir))
     assert result.rendered == 1
     assert result.failed == 1
     assert result.reason == "partial"
-    assert os.path.isfile(os.path.join(temp_dir, "relay", _FP, "bandwidth-1m.png"))
+    assert os.path.isfile(
+        os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-1m.png")
+    )
     assert not os.path.isfile(
-        os.path.join(temp_dir, "relay", _FP2, "bandwidth-1m.png")
+        os.path.join(temp_dir, "relay", FP_A, "bandwidth-1m.png")
     )

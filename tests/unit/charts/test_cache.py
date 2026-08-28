@@ -231,6 +231,16 @@ def test_overlay_change_changes_key():
     )
 
 
+def test_payload_preparsed_blocks_match_extracted():
+    from allium.lib.charts.series import month_blocks
+
+    write_1m, read_1m = month_blocks(_BASE_BW)
+    assert cache_key(_payload()) == cache_key(
+        _payload(write_1m=write_1m, read_1m=read_1m)
+    )
+    assert _payload()["write_1m"] == write_1m
+
+
 def test_missing_1m_history_still_keys():
     payload = build_relay_bandwidth_1m_payload(
         _BASE_RELAY,
