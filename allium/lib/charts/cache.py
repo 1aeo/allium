@@ -8,7 +8,6 @@ import shutil
 from ..stability_utils import current_overload_status
 from ..time_utils import published_clock
 from .identity import operator_from_contact, role_from_flags
-from .registry import RELAY_BANDWIDTH_1M_ID
 from .series import history_block, is_relay_fingerprint
 
 # Bump when the payload layout changes.
@@ -106,10 +105,7 @@ def build_relay_bandwidth_1m_payload(
             read = read_1m
     payload = {
         "schema_version": CACHE_SCHEMA_VERSION,
-        "chart_id": (
-            RELAY_BANDWIDTH_1M_ID if suffix == "1m"
-            else "relay_bandwidth_{}".format(suffix)
-        ),
+        "chart_id": "relay_bandwidth_{}".format(suffix),
         "renderer_version": str(renderer_version),
         "fingerprint": relay.get("fingerprint") or "",
         "currently_overloaded": bool(current_overload_status(

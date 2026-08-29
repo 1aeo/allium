@@ -4,8 +4,9 @@ import importlib
 import importlib.util
 import os
 import time
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 
+from ..bandwidth_utils import build_bandwidth_map
 from .cache import (
     build_relay_bandwidth_1m_payload,
     cache_hit,
@@ -16,21 +17,85 @@ from .cache import (
     sidecar_path,
     write_sidecar,
 )
-from .registry import (
-    PERIOD_SPEC_BY_SUFFIX,
-    RELAY_BANDWIDTH_1M,
-    enabled_charts,
-    get_chart,
-)
-from ..bandwidth_utils import build_bandwidth_map
 from .series import (
+    PERIOD_KEYS,
     chartable_fingerprints,
     is_relay_fingerprint,
     overlays_for_relay,
     precompute_overlays,
     series_by_fp,
-    spark_suffixes,
 )
+
+RELAY_BANDWIDTH_1M_ID = "relay_bandwidth_1m"
+
+
+class ChartSpec(object):
+    __slots__ = (
+        "chart_id",
+        "output_path_pattern",
+        "cache_subdir",
+        "renderer_module",
+        "renderer_name",
+        "renderer_version",
+        "enabled",
+    )
+
+    def __init__(
+        self,
+        chart_id,
+        output_path_pattern,
+        cache_subdir,
+        renderer_module,
+        renderer_name,
+        renderer_version,
+        enabled=True,
+    ):
+        self.chart_id = chart_id
+        self.output_path_pattern = output_path_pattern
+        self.cache_subdir = cache_subdir
+        self.renderer_module = renderer_module
+        self.renderer_name = renderer_name
+        self.renderer_version = str(renderer_version)
+        self.enabled = bool(enabled)
+
+    def output_path(self, fingerprint):
+        return self.output_path_pattern.format(fingerprint=fingerprint)
+
+
+def _bandwidth_spec(suffix):
+    return ChartSpec(
+        chart_id="relay_bandwidth_%s" % suffix,
+        output_path_pattern="relay/{fingerprint}/bandwidth-%s.png" % suffix,
+        cache_subdir="relay_bandwidth_%s" % suffix,
+        renderer_module="allium.lib.charts.bandwidth",
+        renderer_name="render_relay_bandwidth_1m",
+        renderer_version="1",
+        enabled=True,
+    )
+
+
+PERIOD_SPEC_BY_SUFFIX = OrderedDict(
+    (suffix, _bandwidth_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
+)
+RELAY_BANDWIDTH_1M = PERIOD_SPEC_BY_SUFFIX["1m"]
+RELAY_BANDWIDTH_PERIODS = tuple(PERIOD_SPEC_BY_SUFFIX.values())
+
+_REGISTRY = OrderedDict(
+    (spec.chart_id, spec) for spec in RELAY_BANDWIDTH_PERIODS
+)
+
+
+def get_chart(chart_id):
+    return _REGISTRY.get(chart_id)
+
+
+def registered_chart_ids():
+    return tuple(_REGISTRY.keys())
+
+
+def enabled_charts():
+    return tuple(spec for spec in _REGISTRY.values() if spec.enabled)
+
 
 _Selection = namedtuple(
     "_Selection", "details bw_map series selected bandwidth_data"
@@ -238,19 +303,9 @@ def charts_will_run(args, relay_set):
 
 
 def apply_chart_html_flags(relay_set, args):
-    """Set ``charts_enabled`` / ``bandwidth_chart_fps`` before Jinja."""
-    will_run = not _skip_reason(args, relay_set)
-    sel = _selection(relay_set, args) if will_run else None
-    fps = frozenset(sel.selected) if sel else frozenset()
-    sparks = {
-        fp: spark_suffixes(sel.series.get(fp)) for fp in fps
-    } if sel else {}
-    if relay_set is not None:
-        relay_set.charts_enabled = will_run
-        relay_set.bandwidth_chart_fps = fps
-        relay_set.bandwidth_spark_periods = sparks
-        relay_set._chart_selection = sel
-    return will_run
+    """Re-export: flag ownership lives on Relays next to other HTML gates."""
+    from ..relays import apply_chart_html_flags as apply_flags
+    return apply_flags(relay_set, args)
 
 
 def _init_chart_worker():

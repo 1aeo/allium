@@ -16,11 +16,11 @@ import time
 import urllib.parse
 from lib.charts.pipeline import (
     add_chart_arguments,
-    apply_chart_html_flags,
     maybe_run_charts,
 )
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
+from lib.relays import apply_chart_html_flags
 from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))

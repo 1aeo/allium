@@ -5,8 +5,11 @@ import sys
 
 import pytest
 
-from allium.lib.charts.registry import PERIOD_SPEC_BY_SUFFIX, RELAY_BANDWIDTH_1M
-from allium.lib.charts.pipeline import renderer_is_ready
+from allium.lib.charts.pipeline import (
+    PERIOD_SPEC_BY_SUFFIX,
+    RELAY_BANDWIDTH_1M,
+    renderer_is_ready,
+)
 from tests.unit.charts.conftest import make_job
 
 
