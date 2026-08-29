@@ -3,6 +3,8 @@
 from allium.lib.charts.registry import (
     RELAY_BANDWIDTH_1M,
     RELAY_BANDWIDTH_1M_ID,
+    RELAY_BANDWIDTH_SPARKS,
+    SPARK_SPEC_BY_SUFFIX,
     ChartSpec,
     enabled_charts,
     get_chart,
@@ -33,10 +35,23 @@ def test_unknown_chart_id_returns_none():
     assert get_chart("not_a_chart") is None
 
 
-def test_enabled_charts_is_only_bandwidth_1m():
+def test_enabled_charts_starts_with_1m_then_sparks():
     charts = enabled_charts()
-    assert [spec.chart_id for spec in charts] == [RELAY_BANDWIDTH_1M_ID]
-    assert registered_chart_ids() == (RELAY_BANDWIDTH_1M_ID,)
+    assert charts[0] is RELAY_BANDWIDTH_1M
+    assert [spec.chart_id for spec in charts[1:]] == [
+        spec.chart_id for spec in RELAY_BANDWIDTH_SPARKS
+    ]
+    assert registered_chart_ids()[0] == RELAY_BANDWIDTH_1M_ID
+
+
+def test_sparks_are_registered():
+    assert list(SPARK_SPEC_BY_SUFFIX) == ["6m", "1y", "5y"]
+    for suffix, spec in SPARK_SPEC_BY_SUFFIX.items():
+        assert get_chart("relay_bandwidth_%s" % suffix) is spec
+        assert spec.renderer_name == "render_relay_bandwidth_spark"
+        assert spec.output_path("AB" * 20) == (
+            "relay/%s/bandwidth-%s.png" % ("AB" * 20, suffix)
+        )
 
 
 def test_chart_spec_onionoo_inputs_are_a_tuple():

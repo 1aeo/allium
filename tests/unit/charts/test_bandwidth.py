@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
+from allium.lib.charts.registry import RELAY_BANDWIDTH_1M, SPARK_SPEC_BY_SUFFIX
 from allium.lib.charts.pipeline import renderer_is_ready
 from tests.unit.charts.conftest import make_job
 
@@ -53,3 +53,32 @@ def test_renderer_rejects_thin_history(temp_dir):
     dest = os.path.join(temp_dir, "missing.png")
     with pytest.raises(ValueError):
         render_relay_bandwidth_1m(job, dest)
+
+
+def test_spark_renderer_is_ready():
+    spec = SPARK_SPEC_BY_SUFFIX["6m"]
+    assert renderer_is_ready(spec) is True
+    from allium.lib.charts.bandwidth import render_relay_bandwidth_spark
+
+    assert callable(render_relay_bandwidth_spark)
+
+
+def test_spark_renderer_writes_png(temp_dir):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg", force=True)
+    from allium.lib.charts.bandwidth import render_relay_bandwidth_spark
+
+    hero = make_job()
+    dest = os.path.join(temp_dir, "bandwidth-6m.png")
+    out = render_relay_bandwidth_spark({
+        "write": hero["write_1m"],
+        "read": hero["read_1m"],
+        "advertised_bandwidth": hero["advertised_bandwidth"],
+        "last_restarted": hero["last_restarted"],
+        "period": "6m",
+        "ylim": 400.0,
+    }, dest)
+    assert out == dest
+    with open(dest, "rb") as handle:
+        assert handle.read(8) == b"\x89PNG\r\n\x1a\n"
+    assert os.path.getsize(dest) > 800

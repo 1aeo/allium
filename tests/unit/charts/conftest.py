@@ -38,6 +38,7 @@ def make_bw(
     interval=86400,
     **extra
 ):
+    extra_periods = extra.pop("extra_periods", ())
     write_values = (
         list(write_values) if write_values is not None else [100, 110, 120, 115]
     )
@@ -57,6 +58,9 @@ def make_bw(
         "write_history": {"1_month": month},
         "read_history": {"1_month": read_month},
     }
+    for key in extra_periods:
+        bw["write_history"][key] = dict(month)
+        bw["read_history"][key] = dict(read_month)
     bw.update(extra)
     return bw
 
@@ -153,6 +157,10 @@ def stub_chart_pool(monkeypatch, render=fake_render, mpl=True):
     if render is not None:
         monkeypatch.setattr(
             "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
+            render,
+        )
+        monkeypatch.setattr(
+            "allium.lib.charts.bandwidth.render_relay_bandwidth_spark",
             render,
         )
         monkeypatch.setattr(

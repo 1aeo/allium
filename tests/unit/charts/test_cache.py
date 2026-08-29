@@ -5,6 +5,7 @@ import os
 from allium.lib.charts.cache import (
     CACHE_SCHEMA_VERSION,
     build_relay_bandwidth_1m_payload,
+    build_relay_bandwidth_spark_payload,
     cache_dir,
     cache_hit,
     cache_key,
@@ -239,6 +240,22 @@ def test_payload_preparsed_blocks_match_extracted():
         _payload(write_1m=write_1m, read_1m=read_1m)
     )
     assert _payload()["write_1m"] == write_1m
+
+
+def test_spark_cache_key_differs_by_period():
+    write = history_block(_BASE_BW["write_history"]["1_month"])
+    read = history_block(_BASE_BW["read_history"]["1_month"])
+    six = build_relay_bandwidth_spark_payload(
+        _BASE_RELAY, "6m", write=write, read=read,
+    )
+    year = build_relay_bandwidth_spark_payload(
+        _BASE_RELAY, "1y", write=write, read=read,
+    )
+    assert six["chart_id"] == "relay_bandwidth_6m"
+    assert "family_overlay" not in six
+    assert "bands" not in six
+    assert cache_key(six) != cache_key(year)
+    assert cache_key(six) != cache_key(_payload())
 
 
 def test_missing_1m_history_still_keys():
