@@ -31,6 +31,8 @@ from .series import (
     aligned_1m_series,
     overlay_lookup,
     parse_onionoo_ts,
+    period_axis_caption,
+    period_title_span,
     published_clock,
 )
 
@@ -407,9 +409,19 @@ def _pad_xlim(ax, ts):
     ax.set_xlim(xmin, xmax + pad)
 
 
-def _date_axis(ax):
-    ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b %d"))
-    ax.xaxis.set_major_locator(_mdates.WeekdayLocator(interval=1))
+def _date_axis(ax, period="1m"):
+    if period == "5y":
+        ax.xaxis.set_major_locator(_mdates.YearLocator())
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%Y"))
+    elif period == "1y":
+        ax.xaxis.set_major_locator(_mdates.MonthLocator(interval=2))
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
+    elif period == "6m":
+        ax.xaxis.set_major_locator(_mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
+    else:
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b %d"))
+        ax.xaxis.set_major_locator(_mdates.WeekdayLocator(interval=1))
 
 
 def _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=1):
@@ -549,7 +561,8 @@ def _auto_spike_callout(ax, ts, invest, bands):
     return True
 
 
-def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands):
+def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
+                      axis_caption=None):
     overlays = overlays or {}
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
@@ -606,12 +619,15 @@ def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands):
     axr.set_ylabel("Write / read")
     axr.set_ylim(ylo, yhi + shelf)
     _apply_ratio_yticks(axr, bands, ylo, yhi)
-    _date_axis(axr)
+    _date_axis(axr, period)
+    if axis_caption:
+        axr.set_xlabel(axis_caption)
     handles = _ratio_legend_handles(overlays, bands)
     _place_ratio_legend_shelf(axr, handles)
 
 
-def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows):
+def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows,
+                     period="1m"):
     ax.plot(ts, write_m, color=WRITE, linewidth=CHROME_WEIGHTS["write"])
     ax.plot(ts, read_m, color=BLUE, linewidth=CHROME_WEIGHTS["read"])
     if advertised:
@@ -624,7 +640,7 @@ def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows):
     _pad_xlim(ax, ts)
     _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=legend_rows)
     ax.set_ylabel("Throughput (Mbit/s)")
-    _date_axis(ax)
+    _date_axis(ax, period)
 
 
 def _bind_overlay(ts, write_1m, overlay):
@@ -664,18 +680,20 @@ def _plot_overlays(job, ts, write_1m):
 def render_relay_bandwidth_1m(job, dest_path):
     """Draw the locked dual-line + write/read figure and write ``dest_path``.
 
-    ``job`` is a slim picklable dict (details fields + raw 1M history +
-    aligned overlays). Returns ``dest_path``. Raises ``ValueError`` when
-    history is too thin to draw.
+    ``job`` is a slim picklable dict (details fields + raw history +
+    aligned overlays for 1M). Returns ``dest_path``. Raises ``ValueError``
+    when history is too thin to draw. Longer periods omit family/peer
+    overlay lines (those series are 1M-aligned only).
     """
     plt = _ensure_mpl()
     _apply_style(plt)
 
-    write_1m = job.get("write_1m")
-    read_1m = job.get("read_1m")
+    period = job.get("period") or "1m"
+    write_1m = job.get("write") or job.get("write_1m")
+    read_1m = job.get("read") or job.get("read_1m")
     series = aligned_1m_series(write_1m, read_1m)
     if not series:
-        raise ValueError("thin or missing 1M write/read history")
+        raise ValueError("thin or missing write/read history")
 
     ts = series["ts"]
     write_m = series["write_m"]
@@ -692,7 +710,7 @@ def render_relay_bandwidth_1m(job, dest_path):
             ratios.append(float("nan"))
     events = _events_in_span(restart_events(job.get("last_restarted")), ts)
     bands = job.get("bands") or bands_for_flags(job.get("flags"))
-    overlays = _plot_overlays(job, ts, write_1m)
+    overlays = _plot_overlays(job, ts, write_1m) if period == "1m" else {}
     overload_status = current_overload_status(
         job, published_clock(job.get("relays_published")),
     )
@@ -726,8 +744,9 @@ def render_relay_bandwidth_1m(job, dest_path):
     _draw_throughput(
         ax, ts, read_m, write_m, adv, events,
         legend_rows=2 if wrap_last else 1,
+        period=period,
     )
-    title = _with_role("Throughput · last 30 days", bands)
+    title = _with_role("Throughput · {}".format(period_title_span(period)), bands)
     title_loc = "left"
     title_pad = SUBTITLE_TITLE_PAD if subtitle_on else THROUGHPUT_TITLE_PAD
     if identity_on:
@@ -746,7 +765,11 @@ def render_relay_bandwidth_1m(job, dest_path):
     )
     _place_legend_above(ax, bw_handles, wrap_last=wrap_last)
 
-    _plot_ratio_strip(axr, ts, ratios, events, overlays, bands)
+    axis_caption = None if period == "1m" else period_axis_caption(period, write_1m)
+    _plot_ratio_strip(
+        axr, ts, ratios, events, overlays, bands,
+        period=period, axis_caption=axis_caption,
+    )
     axr.set_title(
         _sibling_ratio_title(title, bands), loc=title_loc, pad=title_pad,
     )
@@ -756,44 +779,5 @@ def render_relay_bandwidth_1m(job, dest_path):
     if footnote:
         fig.text(0.01, 0.012, footnote, fontsize=7.5, color=GRAY, va="bottom")
 
-    _save_trimmed(fig, dest_path)
-    return dest_path
-
-
-_SPARK_LABELS = {"6m": "6 months", "1y": "1 year", "5y": "5 years"}
-
-
-def _spark_date_axis(ax, period):
-    if period == "5y":
-        ax.xaxis.set_major_locator(_mdates.YearLocator())
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%Y"))
-    elif period == "1y":
-        ax.xaxis.set_major_locator(_mdates.MonthLocator(interval=2))
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
-    else:
-        ax.xaxis.set_major_locator(_mdates.MonthLocator())
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
-
-
-def render_relay_bandwidth_spark(job, dest_path):
-    """Write/read/advertised spark for 6M, 1Y, or 5Y. No strip, C, or overlays."""
-    plt = _ensure_mpl()
-    _apply_style(plt)
-    series = aligned_1m_series(job.get("write"), job.get("read"))
-    if not series:
-        raise ValueError("thin or missing spark write/read history")
-    ts, write_m, read_m = series["ts"], series["write_m"], series["read_m"]
-    adv = advertised_mbit(job.get("advertised_bandwidth"))
-    events = _events_in_span(restart_events(job.get("last_restarted")), ts)
-    period = job.get("period") or ""
-    fig, ax = plt.subplots(1, 1, figsize=(3.55, 2.05))
-    fig.subplots_adjust(top=0.78, bottom=0.22, left=0.16, right=0.98)
-    _draw_throughput(ax, ts, read_m, write_m, adv, events, legend_rows=1)
-    if job.get("ylim"):
-        ax.set_ylim(0, job["ylim"] * 1.12)
-    _spark_date_axis(ax, period)
-    ax.set_title(_SPARK_LABELS.get(period, period), loc="left", fontsize=10, pad=6)
-    ax.set_ylabel("Mbit/s")
-    ax.tick_params(labelsize=7)
     _save_trimmed(fig, dest_path)
     return dest_path

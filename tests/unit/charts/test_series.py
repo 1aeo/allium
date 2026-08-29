@@ -20,6 +20,10 @@ from allium.lib.charts.series import (
     series_by_fp,
     spark_shared_ylim,
     spark_suffixes,
+    period_axis_caption,
+    period_html_name,
+    period_title_span,
+    period_views,
 )
 from tests.unit.charts.conftest import (
     FP_A,
@@ -152,7 +156,7 @@ def test_series_by_fp_skips_thin_and_evil():
     parsed = series_by_fp(relays, bw_map)
     assert set(parsed) == {FP_A}
     assert parsed[FP_A]["series"] is not None
-    assert parsed[FP_A]["periods"] == {}
+    assert set(parsed[FP_A]["periods"]) == {"1m"}
     assert spark_suffixes(parsed[FP_A]) == ()
 
 
@@ -232,9 +236,26 @@ def test_series_by_fp_collects_spark_periods_in_one_walk():
     )
     parsed = series_by_fp([make_relay(FP_A, flags=["Guard"])], {FP_A: bw})
     assert spark_suffixes(parsed[FP_A]) == ("6m", "1y")
+    assert "1m" in parsed[FP_A]["periods"]
     assert "5y" not in parsed[FP_A]["periods"]
     write_6m, read_6m = period_blocks(bw, "6_months")
     assert parsed[FP_A]["periods"]["6m"]["write"] == write_6m
     assert parsed[FP_A]["periods"]["6m"]["read"] == read_6m
-    ylim = spark_shared_ylim(parsed[FP_A]["periods"], 0)
+    ylim = spark_shared_ylim(
+        {k: v for k, v in parsed[FP_A]["periods"].items() if k != "1m"}, 0,
+    )
     assert ylim == max(parsed[FP_A]["periods"]["6m"]["series"]["write_m"])
+
+
+def test_period_views_and_captions():
+    assert period_html_name("1m") == "index.html"
+    assert period_html_name("6m") == "6m.html"
+    assert period_title_span("6m") == "last 6 months"
+    assert period_axis_caption("6m", {"interval": 86400}) == "6M · 1-day"
+    assert period_axis_caption("5y", {"interval": 604800}) == "5Y · 1-week"
+    views = period_views(("1m", "6m", "1y"))
+    by_hero = {hero: (name, sparks) for name, hero, sparks in views}
+    assert by_hero["1m"] == ("index.html", ("6m", "1y"))
+    assert by_hero["6m"] == ("6m.html", ("1m", "1y"))
+    assert "5y" not in by_hero
+    assert period_views(()) == ()

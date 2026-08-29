@@ -207,6 +207,10 @@ def test_cache_miss_renders_and_publishes(temp_dir, monkeypatch):
         temp_dir, ".chart-cache", "relay_bandwidth_1m", FP_JEANGRAE + ".json",
     )
     assert os.path.isfile(sidecar)
+    base = os.path.join(temp_dir, "relay", FP_JEANGRAE)
+    assert not os.path.isfile(os.path.join(base, "bandwidth-6m.png"))
+    assert not os.path.isfile(os.path.join(base, "bandwidth-1y.png"))
+    assert not os.path.isfile(os.path.join(base, "bandwidth-5y.png"))
 
 
 def test_real_spawn_pool_renders_synthetic(temp_dir):
@@ -416,3 +420,24 @@ def test_no_charts_omits_spark_flags(temp_dir, monkeypatch):
     apply_chart_html_flags(relay_set, SimpleNamespace(charts="off"))
     assert relay_set.charts_enabled is False
     assert relay_set.bandwidth_spark_periods == {}
+
+
+def test_cache_hit_is_per_period(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months",)),
+    )])
+    args = on_args(temp_dir)
+    first = run_chart_pass(relay_set, args)
+    assert first.rendered == 2
+    six_side = os.path.join(
+        temp_dir, ".chart-cache", "relay_bandwidth_6m", FP_JEANGRAE + ".json",
+    )
+    os.remove(six_side)
+    second = run_chart_pass(relay_set, args)
+    assert second.cache_hits == 1
+    assert second.rendered == 1
+    assert os.path.isfile(
+        os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-6m.png")
+    )

@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 
-from .series import SPARK_ONIONOO
+from .series import PERIOD_KEYS
 
 RELAY_BANDWIDTH_1M_ID = "relay_bandwidth_1m"
 
@@ -40,35 +40,26 @@ class ChartSpec(object):
         return self.output_path_pattern.format(fingerprint=fingerprint)
 
 
-RELAY_BANDWIDTH_1M = ChartSpec(
-    chart_id=RELAY_BANDWIDTH_1M_ID,
-    output_path_pattern="relay/{fingerprint}/bandwidth-1m.png",
-    cache_subdir="relay_bandwidth_1m",
-    renderer_module="allium.lib.charts.bandwidth",
-    renderer_name="render_relay_bandwidth_1m",
-    renderer_version="1",
-    enabled=True,
-)
-
-RELAY_BANDWIDTH_SPARKS = tuple(
-    ChartSpec(
+def _bandwidth_spec(suffix):
+    return ChartSpec(
         chart_id="relay_bandwidth_%s" % suffix,
         output_path_pattern="relay/{fingerprint}/bandwidth-%s.png" % suffix,
         cache_subdir="relay_bandwidth_%s" % suffix,
         renderer_module="allium.lib.charts.bandwidth",
-        renderer_name="render_relay_bandwidth_spark",
+        renderer_name="render_relay_bandwidth_1m",
         renderer_version="1",
+        enabled=True,
     )
-    for _onionoo, suffix in SPARK_ONIONOO
+
+
+PERIOD_SPEC_BY_SUFFIX = OrderedDict(
+    (suffix, _bandwidth_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
 )
-SPARK_SPEC_BY_SUFFIX = OrderedDict(zip(
-    (suffix for _onionoo, suffix in SPARK_ONIONOO),
-    RELAY_BANDWIDTH_SPARKS,
-))
+RELAY_BANDWIDTH_1M = PERIOD_SPEC_BY_SUFFIX["1m"]
+RELAY_BANDWIDTH_PERIODS = tuple(PERIOD_SPEC_BY_SUFFIX.values())
 
 _REGISTRY = OrderedDict(
-    (spec.chart_id, spec)
-    for spec in (RELAY_BANDWIDTH_1M,) + RELAY_BANDWIDTH_SPARKS
+    (spec.chart_id, spec) for spec in RELAY_BANDWIDTH_PERIODS
 )
 
 
