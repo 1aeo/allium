@@ -3,8 +3,7 @@
 import re
 from datetime import timedelta
 
-from ..bandwidth_utils import build_bandwidth_map
-from ..time_utils import parse_onionoo_timestamp, published_clock
+from ..time_utils import parse_onionoo_timestamp
 from .identity import role_from_flags
 
 MIN_THROUGHPUT_BPS = 50000
