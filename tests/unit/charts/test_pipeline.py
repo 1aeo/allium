@@ -167,6 +167,7 @@ def test_html_flags_omit_img_when_charts_will_not_run(
     apply_chart_html_flags(relay_set, parsed)
     assert relay_set.charts_enabled is False
     assert relay_set.bandwidth_chart_fps == frozenset()
+    assert relay_set.bandwidth_spark_periods == {}
     assert not charts_will_run(parsed, relay_set)
     assert _skip_reason(parsed, relay_set)
     assert maybe_run_charts(relay_set, parsed).reason == _skip_reason(
@@ -369,3 +370,49 @@ def test_one_bad_relay_does_not_kill_the_pass(temp_dir, monkeypatch):
     assert not os.path.isfile(
         os.path.join(temp_dir, "relay", FP_A, "bandwidth-1m.png")
     )
+
+
+def test_sparks_publish_and_omit_missing_5y(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months", "1_year")),
+    )])
+    args = on_args(temp_dir)
+    apply_chart_html_flags(relay_set, args)
+    assert relay_set.bandwidth_spark_periods[FP_JEANGRAE] == ("6m", "1y")
+    result = run_chart_pass(relay_set, args)
+    assert result.rendered == 3
+    base = os.path.join(temp_dir, "relay", FP_JEANGRAE)
+    assert os.path.isfile(os.path.join(base, "bandwidth-1m.png"))
+    assert os.path.isfile(os.path.join(base, "bandwidth-6m.png"))
+    assert os.path.isfile(os.path.join(base, "bandwidth-1y.png"))
+    assert not os.path.isfile(os.path.join(base, "bandwidth-5y.png"))
+
+
+def test_1m_cache_hit_still_publishes_sparks(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months",)),
+    )])
+    args = on_args(temp_dir)
+    first = run_chart_pass(relay_set, args)
+    assert first.rendered == 2
+    spark = os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-6m.png")
+    os.remove(spark)
+    second = run_chart_pass(relay_set, args)
+    assert second.rendered == 0
+    assert second.cache_hits == 2
+    assert os.path.isfile(spark)
+
+
+def test_no_charts_omits_spark_flags(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch, render=None, mpl=True)
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months", "1_year", "5_years")),
+    )])
+    apply_chart_html_flags(relay_set, SimpleNamespace(charts="off"))
+    assert relay_set.charts_enabled is False
+    assert relay_set.bandwidth_spark_periods == {}

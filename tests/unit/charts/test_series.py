@@ -14,9 +14,12 @@ from allium.lib.charts.series import (
     is_relay_fingerprint,
     month_blocks,
     overlays_for_relay,
+    period_blocks,
     precompute_overlays,
     published_clock,
     series_by_fp,
+    spark_shared_ylim,
+    spark_suffixes,
 )
 from tests.unit.charts.conftest import (
     FP_A,
@@ -149,6 +152,8 @@ def test_series_by_fp_skips_thin_and_evil():
     parsed = series_by_fp(relays, bw_map)
     assert set(parsed) == {FP_A}
     assert parsed[FP_A]["series"] is not None
+    assert parsed[FP_A]["periods"] == {}
+    assert spark_suffixes(parsed[FP_A]) == ()
 
 
 def test_family_group_key_from_effective_family():
@@ -218,3 +223,18 @@ def test_daily_ratios_skip_below_cut():
     }
     assert daily_ratios(tiny) == {}
     assert daily_ratios(_bw())
+
+
+def test_series_by_fp_collects_spark_periods_in_one_walk():
+    bw = make_bw(
+        FP_A,
+        extra_periods=("6_months", "1_year"),
+    )
+    parsed = series_by_fp([make_relay(FP_A, flags=["Guard"])], {FP_A: bw})
+    assert spark_suffixes(parsed[FP_A]) == ("6m", "1y")
+    assert "5y" not in parsed[FP_A]["periods"]
+    write_6m, read_6m = period_blocks(bw, "6_months")
+    assert parsed[FP_A]["periods"]["6m"]["write"] == write_6m
+    assert parsed[FP_A]["periods"]["6m"]["read"] == read_6m
+    ylim = spark_shared_ylim(parsed[FP_A]["periods"], 0)
+    assert ylim == max(parsed[FP_A]["periods"]["6m"]["series"]["write_m"])
