@@ -29,7 +29,8 @@ def test_template_gates_history_img():
     assert 'include "relay-bandwidth-history.html"' in page
     assert "charts_enabled|default(false) and has_bandwidth_chart|default(false)" in snippet
     assert 'src="bandwidth-{{ _hero }}.png"' in snippet
-    assert "Throughput and write/read, last 30 days" in snippet
+    assert "Throughput and write/read," in snippet
+    assert "'1m': 'last 30 days'" in snippet
     assert "bandwidth_spark_periods" in snippet
     assert 'src="bandwidth-{{ period }}.png"' in snippet
     assert 'href="{{ _period_href.get(period, period + \'.html\') }}"' in snippet
