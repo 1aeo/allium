@@ -44,6 +44,7 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href
+from .charts.series import period_views
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1559,6 +1560,29 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         
         write_pages_by_key(relay_set, k)
 
+def write_relay_period_files(
+    template, relay_dir, render_kwargs, views, base_url, fingerprint,
+):
+    """Write index.html plus any drawable period views in ``relay_dir``."""
+    if not views:
+        views = (("index.html", "1m", ()),)
+    os.makedirs(relay_dir, exist_ok=True)
+    for filename, hero, sparks in views:
+        ctx = dict(render_kwargs)
+        ctx.update(
+            hero_period=hero,
+            bandwidth_spark_periods=sparks,
+            canonical_url=canonical_url_for_output(
+                base_url, "relay/{}/{}".format(fingerprint, filename),
+            ),
+        )
+        rendered = template.render(**ctx)
+        with open(
+            os.path.join(relay_dir, filename), "w", encoding="utf8",
+        ) as html:
+            html.write(rendered)
+
+
 def write_relay_info(relay_set):
     """
     Render and write per-relay HTML info documents to disk
@@ -1588,6 +1612,10 @@ def write_relay_info(relay_set):
     fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
     family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
 
+    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
+    bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
+    spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
+
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
             continue
@@ -1607,26 +1635,29 @@ def write_relay_info(relay_set):
         
         # Partition family lists by family-cert status for template display
         _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps)
-        
-        rendered = template.render(
-            relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
+
+        fingerprint = relay["fingerprint"]
+        has_chart = charts_enabled and fingerprint in bandwidth_chart_fps
+        sparks = spark_by_fp.get(fingerprint) or ()
+        views = period_views(("1m",) + tuple(sparks)) if has_chart else (
+            ("index.html", "1m", ()),
+        )
+        render_kwargs = dict(
+            relay=relay, page_ctx=page_ctx, relays=relay_set,
+            contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
             aroi_validation_timestamp=aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
             base_url=base_url,
-            canonical_url=canonical_url_for_output(
-                base_url, f"relay/{relay['fingerprint']}/index.html"
-            ),
             page_number=1,
+            charts_enabled=charts_enabled,
+            has_bandwidth_chart=has_chart,
         )
-        
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
-        
-        with open(
-            os.path.join(relay_dir, "index.html"),
-            "w",
-            encoding="utf8",
-        ) as html:
-            html.write(rendered)
+        write_relay_period_files(
+            template,
+            os.path.join(output_path, fingerprint),
+            render_kwargs,
+            views,
+            base_url,
+            fingerprint,
+        )

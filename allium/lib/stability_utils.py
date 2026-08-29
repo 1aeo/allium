@@ -113,6 +113,59 @@ def evaluate_overload(relay, now_timestamp=None):
     return facts
 
 
+def current_overload_status(relay, now_timestamp=None):
+    """Current-only overload indicator. Onionoo has no history series.
+
+    Returns None if the relay is not currently overloaded. Otherwise a dict:
+      - reasons: subset of 'general', 'rate-limit', 'fd'
+      - last_report: datetime (UTC) of the newest current timestamp, or None
+      - label: short badge text
+
+    Uses the same 72-hour general window as evaluate_overload (proposal 328).
+    Rate-limit hits and any truthy FD exhaustion count as current, matching
+    compute_relay_stability. Do not turn this into a time-axis range — Onionoo
+    does not give incident start/stop, and consensus files do not carry overload.
+    """
+    facts = evaluate_overload(relay, now_timestamp)
+    reasons = []
+    if facts['general_active']:
+        reasons.append('general')
+    if facts['ratelimit_hit']:
+        reasons.append('rate-limit')
+    if facts['fd_exhausted']:
+        reasons.append('fd')
+    if not reasons:
+        return None
+
+    last_report = None
+    if facts['general_ts'] and facts['general_active']:
+        last_report = datetime.fromtimestamp(
+            facts['general_ts'] / 1000, tz=timezone.utc)
+    if facts['ratelimits'] and facts['ratelimits'].get('timestamp'):
+        rts = datetime.fromtimestamp(
+            facts['ratelimits']['timestamp'] / 1000, tz=timezone.utc)
+        if last_report is None or rts > last_report:
+            last_report = rts
+    if facts['fd_timestamp']:
+        fts = datetime.fromtimestamp(
+            facts['fd_timestamp'] / 1000, tz=timezone.utc)
+        if last_report is None or fts > last_report:
+            last_report = fts
+
+    if last_report:
+        when_s = last_report.strftime('%-d %b %H:%M') + ' UTC'
+        label = f'OVERLOADED NOW  ·  last report {when_s}'
+    else:
+        label = 'OVERLOADED NOW'
+
+    return {
+        'active': True,
+        'reasons': reasons,
+        'last_report': last_report,
+        'label': label,
+    }
+
+
 def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None):
     """
     Compute stability status from a relay's overload indicators.

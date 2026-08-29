@@ -1270,3 +1270,22 @@ class Relays:
         metadata = validation_data.get('metadata', {})
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
+
+
+def apply_chart_html_flags(relay_set, args):
+    """Set ``charts_enabled`` / ``bandwidth_chart_fps`` before Jinja."""
+    from .charts.pipeline import _selection, _skip_reason
+    from .charts.series import spark_suffixes
+
+    will_run = not _skip_reason(args, relay_set)
+    sel = _selection(relay_set, args) if will_run else None
+    fps = frozenset(sel.selected) if sel else frozenset()
+    sparks = {
+        fp: spark_suffixes(sel.series.get(fp)) for fp in fps
+    } if sel else {}
+    if relay_set is not None:
+        relay_set.charts_enabled = will_run
+        relay_set.bandwidth_chart_fps = fps
+        relay_set.bandwidth_spark_periods = sparks
+        relay_set._chart_selection = sel
+    return will_run

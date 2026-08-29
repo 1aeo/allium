@@ -1,0 +1,810 @@
+"""Style-5 / option C renderer. Matplotlib is imported in ``_ensure_mpl()``."""
+
+from datetime import timedelta
+
+from ..stability_utils import current_overload_status
+from .bands import (
+    RATIO_INVESTIGATE_HI,
+    RATIO_LEGEND_SHELF,
+    RATIO_SCALE_HI,
+    RATIO_SCALE_LO,
+    band_legend_labels,
+    bands_for_flags,
+    census_footnote,
+    ratio_strip_data_hi,
+)
+from .identity import (
+    IDENTITY_EXTRA_FIG_H,
+    IDENTITY_FONTSIZE,
+    IDENTITY_TITLE_GAP_PT,
+    IDENTITY_TITLE_PAD_BOOST,
+    IDENTITY_TOP_SHIFT,
+    chart_identity,
+)
+from .outcome import (
+    format_day,
+    format_day_span,
+    format_day_time,
+    format_outcome_subtitle,
+    rows_in_span,
+    summarize_bandwidth_outcome,
+)
+from ..time_utils import parse_onionoo_timestamp, published_clock
+from .series import (
+    PERIOD_TITLE_SPAN,
+    advertised_mbit,
+    aligned_1m_series,
+    overlay_lookup,
+    period_axis_caption,
+)
+
+# Okabe–Ito. Red is reserved for problems.
+BLUE = "#0072B2"
+WRITE = "#6A3D9A"
+GREEN = "#009E73"
+SKY = "#56B4E9"
+ORANGE = "#E69F00"
+GRAY = "#666666"
+NAVY = "#1B3A4B"
+BAD = "#C0392B"
+RESTART = NAVY
+OVERLOAD = BAD
+AMBER = ORANGE
+
+THROUGHPUT_TITLE_PAD = 10
+SUBTITLE_TITLE_PAD = 22
+TITLE_FONTSIZE = 12.0
+AXIS_FONTSIZE = 10.0
+TICK_FONTSIZE = 11.0
+SUBTITLE_FONTSIZE = 8.0
+LEGEND_FONTSIZE = 8.5
+
+CHROME_WEIGHTS = {
+    "write": 2.35,
+    "read": 1.65,
+    "advertised": 1.15,
+    "restart": 1.25,
+    "relay": 2.15,
+    "family": 1.25,
+    "peers": 1.25,
+    "investigate": 2.3,
+}
+
+_plt = None
+_np = None
+_mdates = None
+_Line2D = None
+_Patch = None
+_ScaledTranslation = None
+
+
+def _ensure_mpl():
+    """Import pyplot once per process. Caller must have set Agg."""
+    global _plt, _np, _mdates, _Line2D, _Patch, _ScaledTranslation
+    if _plt is not None:
+        return _plt
+    import matplotlib
+
+    if matplotlib.get_backend().lower() != "agg":
+        matplotlib.use("Agg", force=True)
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from matplotlib.transforms import ScaledTranslation
+
+    _plt = plt
+    _np = np
+    _mdates = mdates
+    _Line2D = Line2D
+    _Patch = Patch
+    _ScaledTranslation = ScaledTranslation
+    return _plt
+
+
+def _apply_style(plt):
+    plt.rcParams.update({
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.edgecolor": "#cccccc",
+        "axes.grid": True,
+        "grid.color": "#eeeeee",
+        "grid.linewidth": 0.8,
+        "font.size": 10,
+        "axes.titlesize": TITLE_FONTSIZE,
+        "axes.titleweight": "bold",
+        "axes.labelsize": AXIS_FONTSIZE,
+        "xtick.labelsize": TICK_FONTSIZE,
+        "ytick.labelsize": TICK_FONTSIZE,
+        "legend.frameon": False,
+        "figure.dpi": 140,
+        "savefig.dpi": 140,
+    })
+
+
+def _trim_rgba(rgba, pad_px=12, white=250):
+    """Crop outer white. Do not use savefig(bbox='tight') for this figure.
+
+    Compare channels on the RGBA view. ``rgb.min(axis=2)`` on a strided
+    ``[:,:,:3]`` slice is ~10× slower and yields the same mask.
+    """
+    ink = rgba[:, :, 0] < white
+    ink |= rgba[:, :, 1] < white
+    ink |= rgba[:, :, 2] < white
+    rows = _np.flatnonzero(ink.any(axis=1))
+    cols = _np.flatnonzero(ink.any(axis=0))
+    if rows.size == 0 or cols.size == 0:
+        return rgba
+    y0 = max(0, int(rows[0]) - pad_px)
+    y1 = min(ink.shape[0], int(rows[-1]) + pad_px + 1)
+    x0 = max(0, int(cols[0]) - pad_px)
+    x1 = min(ink.shape[1], int(cols[-1]) + pad_px + 1)
+    return rgba[y0:y1, x0:x1]
+
+
+def _save_trimmed(fig, dest_path):
+    import os
+
+    fig.canvas.draw()
+    rgba = _np.asarray(fig.canvas.buffer_rgba(), copy=False)
+    parent = os.path.dirname(dest_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    tmp = dest_path + ".tmp.png"
+    _plt.imsave(tmp, _trim_rgba(rgba))
+    os.replace(tmp, dest_path)
+    _plt.close(fig)
+
+
+def _with_role(title, bands):
+    role = (bands or {}).get("role") or ""
+    if not title or not role or role in title:
+        return title
+    return "{}  ·  {}".format(title, role)
+
+
+def _sibling_ratio_title(throughput_title, bands):
+    if not throughput_title:
+        return _with_role("Write / read", bands)
+    metric = throughput_title.split("\n")[-1]
+    idx = metric.find("Throughput")
+    if idx >= 0:
+        return "Write / read" + metric[idx + len("Throughput"):]
+    return _with_role("Write / read", bands)
+
+
+def _overload_quiet_text(status):
+    if not status:
+        return None
+    last = status.get("last_report")
+    if last:
+        return "currently overloaded · last report {}".format(format_day_time(last))
+    return "currently overloaded"
+
+
+def _event_whens(ev):
+    if ev.get("whens"):
+        return list(ev["whens"])
+    if ev.get("when") is not None:
+        return [ev["when"]]
+    return []
+
+
+def _restart_legend_label(whens):
+    dates = ", ".join(
+        format_day(w) for w in sorted(set(whens), reverse=True)
+    )
+    return "Last restarted  {}".format(dates) if dates else "Last restarted"
+
+
+def restart_events(last_restarted):
+    when = parse_onionoo_timestamp(last_restarted)
+    if when is None:
+        return []
+    return [{
+        "kind": "restart",
+        "when": when,
+        "whens": [when],
+        "color": RESTART,
+        "ls": "-.",
+        "legend": _restart_legend_label([when]),
+    }]
+
+
+def _events_in_span(events, ts):
+    if not ts:
+        return []
+    lo, hi = ts[0], ts[-1]
+    out = []
+    for ev in events or []:
+        if ev.get("kind") == "overload":
+            continue
+        whens = [w for w in _event_whens(ev) if lo <= w <= hi]
+        if not whens:
+            continue
+        clipped = dict(ev)
+        clipped["whens"] = whens
+        clipped["when"] = whens[0]
+        if ev.get("kind") == "restart":
+            clipped["legend"] = _restart_legend_label(whens)
+        out.append(clipped)
+    return out
+
+
+def _draw_event_lines(ax, events, lw=1.8):
+    for ev in events or []:
+        if ev.get("kind") == "overload":
+            continue
+        for when in _event_whens(ev):
+            ax.axvline(
+                when, color=ev.get("color", RESTART),
+                linestyle=ev.get("ls", "-."), linewidth=lw,
+                alpha=0.95, zorder=3,
+            )
+
+
+def _event_legend_handles(events):
+    handles = []
+    restart_whens = []
+    restart_style = None
+    for ev in events or []:
+        if ev.get("kind") == "overload":
+            continue
+        if ev.get("kind") == "restart":
+            restart_whens.extend(_event_whens(ev))
+            restart_style = ev
+            continue
+        handles.append(_Line2D(
+            [0], [0], color=ev["color"], linestyle=ev["ls"], linewidth=1.8,
+            label=ev["legend"],
+        ))
+    if restart_whens and restart_style:
+        handles.append(_Line2D(
+            [0], [0], color=restart_style["color"],
+            linestyle=restart_style["ls"], linewidth=1.8,
+            label=_restart_legend_label(restart_whens),
+        ))
+    return handles
+
+
+def _throughput_legend_handles(advertised, events, overload_status, in_legend):
+    handles = [
+        _Line2D([0], [0], color=WRITE, linewidth=1.8, label="Write (outbound)"),
+        _Line2D([0], [0], color=BLUE, linewidth=1.8, label="Read (inbound)"),
+    ]
+    if advertised:
+        handles.append(_Line2D(
+            [0], [0], color=ORANGE, linestyle="--", linewidth=1.4,
+            label="Advertised  {:.0f} Mbit/s".format(advertised),
+        ))
+    handles.extend(_event_legend_handles(events))
+    if in_legend and overload_status:
+        handles.append(_Line2D(
+            [0], [0], color=OVERLOAD, marker="D", linestyle="None",
+            markersize=6, label=_overload_quiet_text(overload_status),
+        ))
+    return handles
+
+
+def _base_legend_style(**overrides):
+    style = dict(
+        fontsize=LEGEND_FONTSIZE,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#eeeeee",
+        facecolor="white",
+        framealpha=0.96,
+        handlelength=1.6,
+        handletextpad=0.4,
+    )
+    style.update(overrides)
+    return style
+
+
+def _place_legend_above(ax, handles, wrap_last=False):
+    if not handles:
+        return
+    style = _base_legend_style(
+        borderaxespad=0.25, columnspacing=1.0, labelspacing=0.15,
+    )
+    if wrap_last and len(handles) > 1:
+        first = ax.legend(
+            handles=handles[:-1], loc="upper left",
+            ncol=len(handles) - 1, **style,
+        )
+        ax.add_artist(first)
+        # Text metrics only — a full canvas.draw() matches this bbox.
+        bbox = first.get_window_extent(ax.figure.canvas.get_renderer())
+        (x0, y0), _ = ax.transAxes.inverted().transform(
+            [[bbox.x0, bbox.y0], [bbox.x1, bbox.y1]]
+        )
+        second = dict(style)
+        second["frameon"] = False
+        second["borderaxespad"] = 0.0
+        ax.legend(
+            handles=handles[-1:], loc="upper left",
+            bbox_to_anchor=(x0, y0 - 0.006), bbox_transform=ax.transAxes,
+            **second,
+        )
+        return
+    ax.legend(handles=handles, loc="upper left", ncol=min(len(handles), 4), **style)
+
+
+def _row_major_ratio_handles(series, bands):
+    n = max(len(series), len(bands), 1)
+    out = []
+    for i in range(n):
+        if i < len(series):
+            out.append(series[i])
+        if i < len(bands):
+            out.append(bands[i])
+    return out
+
+
+def _place_ratio_legend_shelf(ax, handles):
+    if not handles:
+        return None
+    series = [h for h in handles if not isinstance(h, _Patch)]
+    bands = [h for h in handles if isinstance(h, _Patch)]
+    return ax.legend(
+        handles=_row_major_ratio_handles(series, bands),
+        loc="upper left",
+        ncol=max(len(series), 1),
+        **_base_legend_style(
+            borderaxespad=0.0, borderpad=0.25,
+            columnspacing=0.85, labelspacing=0.18,
+        ),
+    )
+
+
+def _apply_chrome_axes(ax):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#bbbbbb")
+    ax.spines["bottom"].set_color("#bbbbbb")
+    ax.grid(True, axis="y")
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    ax.tick_params(colors="#555555", labelsize=TICK_FONTSIZE)
+
+
+def _apply_method_subtitle(ax, text):
+    if not text:
+        return
+    ax.text(
+        0.0, 1.028, text, transform=ax.transAxes, ha="left", va="bottom",
+        fontsize=SUBTITLE_FONTSIZE, color="#6B7280",
+    )
+
+
+def _apply_chart_identity(ax, identity, loc="left", title_pad=None):
+    if not identity:
+        return
+    pad = THROUGHPUT_TITLE_PAD if title_pad is None else title_pad
+    ha = "left" if loc == "left" else "center"
+    x = 0.0 if loc == "left" else 0.5
+    fig = ax.figure
+    # loc=left leaves ax.title empty, so the pad/fontsize fallback is what
+    # we actually use. Measure via get_renderer when a center title exists;
+    # do not canvas.draw() just to read an extent.
+    title = ax.title
+    if title is not None and title.get_text():
+        title_top_px = title.get_window_extent(fig.canvas.get_renderer()).y1
+        axes_top_px = ax.transAxes.transform((0.0, 1.0))[1]
+        offset_in = (
+            (title_top_px - axes_top_px) / fig.dpi
+            + IDENTITY_TITLE_GAP_PT / 72.0
+        )
+    else:
+        offset_in = (
+            pad + IDENTITY_FONTSIZE + IDENTITY_TITLE_GAP_PT
+        ) / 72.0
+    ax.text(
+        x, 1.0, identity,
+        transform=ax.transAxes + _ScaledTranslation(
+            0, offset_in, fig.dpi_scale_trans,
+        ),
+        ha=ha, va="bottom",
+        fontsize=IDENTITY_FONTSIZE, fontweight="bold", color=NAVY,
+        clip_on=False,
+    )
+
+
+def _pad_xlim(ax, ts):
+    if not ts:
+        return
+    xmin, xmax = ts[0], ts[-1]
+    pad = (xmax - xmin) * 0.03
+    ax.set_xlim(xmin, xmax + pad)
+
+
+def series_crosses_calendar_year(ts):
+    return bool(ts) and ts[0].year != ts[-1].year
+
+
+def date_axis_strftime(period, ts=None):
+    """Tick format for the shared date axis. 5Y stays ``%Y``."""
+    if period == "5y":
+        return "%Y"
+    if period in ("1y", "6m"):
+        return "%b '%y" if series_crosses_calendar_year(ts) else "%b"
+    return "%b %d"
+
+
+def _date_axis(ax, period="1m", ts=None):
+    fmt = date_axis_strftime(period, ts)
+    if period == "5y":
+        ax.xaxis.set_major_locator(_mdates.YearLocator())
+    elif period == "1y":
+        ax.xaxis.set_major_locator(_mdates.MonthLocator(interval=2))
+    elif period == "6m":
+        ax.xaxis.set_major_locator(_mdates.MonthLocator())
+    else:
+        ax.xaxis.set_major_locator(_mdates.WeekdayLocator(interval=1))
+    ax.xaxis.set_major_formatter(_mdates.DateFormatter(fmt))
+
+
+def _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=1):
+    data_max = max(list(write_m) + list(read_m) + [0.0])
+    ceiling = max(advertised or 0.0, data_max) or 1.0
+    extra = 1.28 if legend_rows >= 2 else 1.26
+    ax.set_ylim(0, ceiling * extra)
+
+
+def _apply_throughput_title(ax, title, overload_status, overload_mode, loc, pad):
+    if not title:
+        return
+    if loc == "left":
+        ax.set_title(title, loc="left", pad=pad, fontsize=TITLE_FONTSIZE)
+        if overload_mode == "title" and overload_status:
+            ax.set_title(
+                _overload_quiet_text(overload_status),
+                loc="right", pad=pad, color=OVERLOAD,
+                fontsize=9, fontweight="normal",
+            )
+        return
+    ax.set_title(title, pad=pad, fontsize=TITLE_FONTSIZE)
+
+
+def _ratio_legend_handles(overlays, bands, events=None):
+    overlays = overlays or {}
+    copy = band_legend_labels(bands)
+    op_n = overlays.get("family_n") or 0
+    handles = [
+        _Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay"),
+    ]
+    if overlays.get("operator"):
+        handles.append(_Line2D(
+            [0], [0], color=GRAY, linestyle=":", linewidth=1.6,
+            label=overlays.get("operator_label")
+            or "Operator Family (median, n={})".format(op_n),
+        ))
+    if overlays.get("role"):
+        handles.append(_Line2D(
+            [0], [0], color=SKY, linestyle="--", linewidth=1.4,
+            label=overlays.get("role_label") or "Peers (network median)",
+        ))
+    handles.extend([
+        _Patch(facecolor=GREEN, alpha=0.22, edgecolor=GREEN, label=copy["typical"]),
+        _Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER, label=copy["uncommon"]),
+        _Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD, label=copy["investigate"]),
+    ])
+    handles.extend(_event_legend_handles(events))
+    return handles
+
+
+def _apply_ratio_yticks(axr, bands, ylo, yhi):
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ihi = bands["invest_hi"]
+    typical_mid = (tlo + thi) / 2.0
+    ticks = [ylo, 1.0, 1.5]
+    labels = ["{:.1f}".format(ylo), "1.0", "1.5"]
+    colors = [GRAY, GRAY, GRAY]
+    if abs(typical_mid - 1.0) < 0.10:
+        labels[1] = "1.0   p10–p90"
+        colors[1] = GREEN
+    else:
+        ticks.insert(2 if typical_mid > 1.0 else 1, typical_mid)
+        labels.insert(2 if typical_mid > 1.0 else 1, "p10–p90")
+        colors.insert(2 if typical_mid > 1.0 else 1, GREEN)
+    p98_y = min(yhi - 0.06, max(ihi + 0.05, (ihi + yhi) / 2.0))
+    if 1.5 >= ihi or abs(p98_y - 1.5) <= 0.12:
+        labels[ticks.index(1.5)] = "1.5   >p98"
+        colors[ticks.index(1.5)] = BAD
+    elif p98_y > 1.5:
+        ticks.append(p98_y)
+        labels.append(">p98")
+        colors.append(BAD)
+    axr.set_yticks(ticks)
+    axr.set_yticklabels(labels)
+    for tick, color in zip(axr.get_yticklabels(), colors):
+        tick.set_color(color)
+        if color != GRAY:
+            tick.set_fontweight("bold")
+            tick.set_fontsize(9.0)
+
+
+def _auto_spike_callout(ax, ts, invest, bands):
+    invest = rows_in_span(invest, ts)
+    if not ts or not invest:
+        return False
+    ihi = (bands or {}).get("invest_hi", RATIO_INVESTIGATE_HI)
+    rows = [row for row in invest if row[3] > ihi]
+    if not rows:
+        return False
+    peak = max(rows, key=lambda row: row[3])
+    peak_t, peak_w, _peak_r, peak_ratio = peak
+    by_day = {row[0].date(): row for row in rows}
+    run = [peak]
+    day = peak_t.date()
+    prev = day - timedelta(days=1)
+    nxt = day + timedelta(days=1)
+    if prev in by_day:
+        run.append(by_day[prev])
+    if nxt in by_day:
+        run.append(by_day[nxt])
+    run.sort(key=lambda row: row[0])
+    scale_bit = (
+        "off the {:.2f} scale".format(RATIO_SCALE_HI)
+        if peak_ratio > RATIO_SCALE_HI
+        else "beyond this role’s p98"
+    )
+    when = format_day_span([row[0].date() for row in run])
+    if len(run) == 1:
+        label = "{} · write/read {:.2f} · {}".format(
+            when, peak_ratio, scale_bit,
+        )
+    else:
+        ratios = " / ".join("{:.2f}".format(row[3]) for row in run)
+        label = "{} · write/read {} · {}".format(
+            when, ratios, scale_bit,
+        )
+    span = (ts[-1] - ts[0]).total_seconds()
+    frac = ((peak_t - ts[0]).total_seconds() / span) if span else 0.0
+    if frac > 0.62:
+        xytext, ha = (-14, 16), "right"
+    else:
+        xytext, ha = (14, 16), "left"
+    ax.annotate(
+        label,
+        xy=(peak_t, peak_w),
+        xytext=xytext,
+        textcoords="offset points",
+        fontsize=8.0,
+        color=NAVY,
+        fontweight="bold",
+        ha=ha,
+        va="bottom",
+        arrowprops=dict(arrowstyle="-", color=GRAY, lw=0.8),
+        bbox=dict(
+            boxstyle="round,pad=0.28", fc="white", ec="#dddddd", alpha=0.94,
+        ),
+        zorder=6,
+    )
+    return True
+
+
+def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
+                      axis_caption=None):
+    overlays = overlays or {}
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    ilo, ihi = bands["invest_lo"], bands["invest_hi"]
+    ratio = _np.asarray(ratios, dtype=float)
+    ylo = RATIO_SCALE_LO
+    yhi = ratio_strip_data_hi(ihi, ilo)
+    shelf = RATIO_LEGEND_SHELF
+    axr.axhspan(0.45, ilo, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(ilo, tlo, color=AMBER, alpha=0.10, zorder=0)
+    axr.axhspan(tlo, thi, color=GREEN, alpha=0.16, zorder=0)
+    axr.axhspan(thi, ihi, color=AMBER, alpha=0.10, zorder=0)
+    # Always-on top Investigate: invest_hi → data top is a real red shelf.
+    axr.axhspan(ihi, yhi, color=BAD, alpha=0.10, zorder=0)
+    axr.axhspan(yhi, yhi + shelf + 0.02, color="white", zorder=0)
+    axr.axhline(1.0, color=GREEN, linestyle="--", linewidth=1.0, zorder=1)
+    role_vals = overlays.get("role_values")
+    if role_vals is not None:
+        axr.plot(
+            ts, [_np.nan if v is None else v for v in role_vals],
+            color=SKY, linestyle="--", linewidth=CHROME_WEIGHTS["peers"],
+            zorder=2,
+        )
+    op_vals = overlays.get("operator_values")
+    if op_vals is not None:
+        axr.plot(
+            ts, [_np.nan if v is None else v for v in op_vals],
+            color=GRAY, linestyle=":", linewidth=CHROME_WEIGHTS["family"],
+            zorder=2,
+        )
+    y_plot = _np.clip(ratio, ylo, yhi)
+    investigate = (ratio < ilo) | (ratio > ihi)
+    axr.plot(ts, y_plot, color=NAVY, linewidth=CHROME_WEIGHTS["relay"], zorder=3)
+    if investigate.any():
+        axr.plot(
+            ts, _np.ma.masked_where(~investigate, y_plot),
+            color=BAD, linewidth=CHROME_WEIGHTS["investigate"], zorder=4,
+        )
+    off_hi = _np.isfinite(ratio) & (ratio > yhi)
+    off_lo = _np.isfinite(ratio) & (ratio < ylo)
+    ts_arr = _np.array(ts)
+    if off_hi.any():
+        axr.scatter(
+            ts_arr[off_hi], _np.full(int(off_hi.sum()), yhi),
+            marker="^", color=BAD, s=32, zorder=5, clip_on=False,
+        )
+    if off_lo.any():
+        axr.scatter(
+            ts_arr[off_lo], _np.full(int(off_lo.sum()), ylo),
+            marker="v", color=BAD, s=32, zorder=5, clip_on=False,
+        )
+    _draw_event_lines(axr, events, lw=CHROME_WEIGHTS["restart"])
+    _apply_chrome_axes(axr)
+    _pad_xlim(axr, ts)
+    axr.set_ylabel("Write / read", fontsize=AXIS_FONTSIZE)
+    axr.set_ylim(ylo, yhi + shelf)
+    _apply_ratio_yticks(axr, bands, ylo, yhi)
+    _date_axis(axr, period, ts)
+    if axis_caption:
+        axr.set_xlabel(axis_caption, fontsize=AXIS_FONTSIZE)
+    handles = _ratio_legend_handles(overlays, bands, events)
+    _place_ratio_legend_shelf(axr, handles)
+
+
+def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows,
+                     period="1m"):
+    ax.plot(ts, write_m, color=WRITE, linewidth=CHROME_WEIGHTS["write"])
+    ax.plot(ts, read_m, color=BLUE, linewidth=CHROME_WEIGHTS["read"])
+    if advertised:
+        ax.axhline(
+            advertised, color=ORANGE, linestyle="--",
+            linewidth=CHROME_WEIGHTS["advertised"],
+        )
+    _draw_event_lines(ax, events, lw=CHROME_WEIGHTS["restart"])
+    _apply_chrome_axes(ax)
+    _pad_xlim(ax, ts)
+    _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=legend_rows)
+    ax.set_ylabel("Throughput (Mbit/s)", fontsize=AXIS_FONTSIZE)
+    _date_axis(ax, period, ts)
+
+
+def _bind_overlay(ts, write_1m, overlay):
+    if not overlay:
+        return None
+    values = overlay_lookup(ts, overlay, write_1m)
+    if values is None:
+        return None
+    return values, {t: v for t, v in zip(ts, values) if v is not None}
+
+
+def _plot_overlays(job, ts, write_1m):
+    family = job.get("family_overlay")
+    role = job.get("role_overlay")
+    overlays = {
+        "family_n": (family or {}).get("n") or 0,
+        "operator_label": None,
+        "role_label": "Peers (network median)",
+        "operator": {},
+        "role": {},
+        "operator_values": None,
+        "role_values": None,
+    }
+    if (family or {}).get("n", 0) >= 2:
+        bound = _bind_overlay(ts, write_1m, family)
+        if bound:
+            overlays["operator_values"], overlays["operator"] = bound
+            overlays["operator_label"] = (
+                "Operator Family (median, n={})".format(family["n"])
+            )
+    bound = _bind_overlay(ts, write_1m, role)
+    if bound:
+        overlays["role_values"], overlays["role"] = bound
+    return overlays
+
+
+def render_relay_bandwidth_1m(job, dest_path):
+    """Draw the locked dual-line + write/read figure and write ``dest_path``.
+
+    ``job`` is a slim picklable dict (details fields + raw history +
+    aligned overlays for 1M). Returns ``dest_path``. Raises ``ValueError``
+    when history is too thin to draw. Longer periods omit family/peer
+    overlay lines (those series are 1M-aligned only).
+    """
+    plt = _ensure_mpl()
+    _apply_style(plt)
+
+    period = job.get("period") or "1m"
+    write_1m = job.get("write") or job.get("write_1m")
+    read_1m = job.get("read") or job.get("read_1m")
+    series = aligned_1m_series(write_1m, read_1m)
+    if not series:
+        raise ValueError("thin or missing write/read history")
+
+    ts = series["ts"]
+    write_m = series["write_m"]
+    read_m = series["read_m"]
+    adv = advertised_mbit(job.get("advertised_bandwidth"))
+    rows = []
+    ratios = []
+    for t, w, r in zip(ts, write_m, read_m):
+        if r:
+            ratio = w / r
+            rows.append((t, w, r, ratio))
+            ratios.append(ratio)
+        else:
+            ratios.append(float("nan"))
+    events = _events_in_span(restart_events(job.get("last_restarted")), ts)
+    bands = job.get("bands") or bands_for_flags(job.get("flags"))
+    overlays = _plot_overlays(job, ts, write_1m) if period == "1m" else {}
+    overload_status = current_overload_status(
+        job, published_clock(job.get("relays_published")),
+    )
+    overload_mode = "legend" if overload_status else "title"
+    wrap_last = bool(overload_status)
+    outcome = summarize_bandwidth_outcome(
+        ts, write_m, read_m, adv, overlays, bands, overload_status, rows=rows,
+    )
+    thru_sub = format_outcome_subtitle(outcome, "throughput")
+    ratio_sub = format_outcome_subtitle(outcome, "ratio")
+    subtitle_on = bool(thru_sub or ratio_sub)
+
+    nickname = job.get("nickname") or ""
+    operator = job.get("operator") or ""
+    ident = chart_identity(nickname, operator)
+    identity_on = bool(ident)
+
+    hspace = 0.34 if subtitle_on else 0.24
+    fig_h = 7.6 if subtitle_on else 7.4
+    top = 0.86 if subtitle_on else 0.91
+    if identity_on:
+        fig_h += IDENTITY_EXTRA_FIG_H
+        top = max(0.70, top - IDENTITY_TOP_SHIFT)
+    fig, (ax, axr) = plt.subplots(
+        2, 1, figsize=(10.8, fig_h), sharex=True,
+        gridspec_kw={"height_ratios": [3.2, 1.75], "hspace": hspace},
+    )
+    fig.subplots_adjust(top=top, bottom=0.16)
+    plt.setp(ax.get_xticklabels(), visible=False)
+
+    _draw_throughput(
+        ax, ts, read_m, write_m, adv, events,
+        legend_rows=2 if wrap_last else 1,
+        period=period,
+    )
+    title = _with_role(
+        "Throughput · {}".format(PERIOD_TITLE_SPAN.get(period) or period), bands,
+    )
+    title_loc = "left"
+    title_pad = SUBTITLE_TITLE_PAD if subtitle_on else THROUGHPUT_TITLE_PAD
+    if identity_on:
+        title_pad += IDENTITY_TITLE_PAD_BOOST
+    _apply_throughput_title(
+        ax, title, overload_status, overload_mode, title_loc, title_pad,
+    )
+    if identity_on:
+        _apply_chart_identity(ax, ident, loc=title_loc, title_pad=title_pad)
+    if thru_sub:
+        _apply_method_subtitle(ax, thru_sub)
+    _auto_spike_callout(ax, ts, outcome.get("invest") or [], bands)
+    bw_handles = _throughput_legend_handles(
+        adv, events, overload_status,
+        in_legend=(overload_mode == "legend"),
+    )
+    _place_legend_above(ax, bw_handles, wrap_last=wrap_last)
+
+    axis_caption = None if period == "1m" else period_axis_caption(period, write_1m)
+    _plot_ratio_strip(
+        axr, ts, ratios, events, overlays, bands,
+        period=period, axis_caption=axis_caption,
+    )
+    axr.set_title(
+        _sibling_ratio_title(title, bands), loc=title_loc, pad=title_pad,
+        fontsize=TITLE_FONTSIZE,
+    )
+    if ratio_sub:
+        _apply_method_subtitle(axr, ratio_sub)
+    footnote = census_footnote(bands, job.get("bands_frozen_from") or "")
+    if footnote:
+        fig.text(0.01, 0.012, footnote, fontsize=7.5, color=GRAY, va="bottom")
+
+    _save_trimmed(fig, dest_path)
+    return dest_path

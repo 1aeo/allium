@@ -219,7 +219,7 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
             period_data = relay_bandwidth['read_history'].get(period, {})
             if period_data.get('last'):
                 try:
-                    from .relays import parse_onionoo_timestamp
+                    from .time_utils import parse_onionoo_timestamp
                     data_end = parse_onionoo_timestamp(period_data['last'])
                     break
                 except:
