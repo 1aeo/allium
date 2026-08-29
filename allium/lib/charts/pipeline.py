@@ -9,7 +9,6 @@ from collections import OrderedDict, namedtuple
 from ..bandwidth_utils import build_bandwidth_map
 from .cache import (
     build_relay_bandwidth_1m_payload,
-    build_relay_bandwidth_spark_payload,
     cache_hit,
     cache_key,
     cached_png_path,
@@ -19,13 +18,12 @@ from .cache import (
     write_sidecar,
 )
 from .series import (
-    SPARK_ONIONOO,
+    PERIOD_KEYS,
     chartable_fingerprints,
     is_relay_fingerprint,
     overlays_for_relay,
     precompute_overlays,
     series_by_fp,
-    spark_shared_ylim,
 )
 
 RELAY_BANDWIDTH_1M_ID = "relay_bandwidth_1m"
@@ -64,30 +62,23 @@ class ChartSpec(object):
         return self.output_path_pattern.format(fingerprint=fingerprint)
 
 
-def _bandwidth_spec(suffix, renderer_name):
+def _bandwidth_spec(suffix):
     return ChartSpec(
         chart_id="relay_bandwidth_%s" % suffix,
         output_path_pattern="relay/{fingerprint}/bandwidth-%s.png" % suffix,
         cache_subdir="relay_bandwidth_%s" % suffix,
         renderer_module="allium.lib.charts.bandwidth",
-        renderer_name=renderer_name,
+        renderer_name="render_relay_bandwidth_1m",
         renderer_version="1",
         enabled=True,
     )
 
 
-PERIOD_SPEC_BY_SUFFIX = OrderedDict()
-PERIOD_SPEC_BY_SUFFIX["1m"] = _bandwidth_spec("1m", "render_relay_bandwidth_1m")
-for _onionoo, suffix in SPARK_ONIONOO:
-    PERIOD_SPEC_BY_SUFFIX[suffix] = _bandwidth_spec(
-        suffix, "render_relay_bandwidth_spark",
-    )
+PERIOD_SPEC_BY_SUFFIX = OrderedDict(
+    (suffix, _bandwidth_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
+)
 RELAY_BANDWIDTH_1M = PERIOD_SPEC_BY_SUFFIX["1m"]
 RELAY_BANDWIDTH_PERIODS = tuple(PERIOD_SPEC_BY_SUFFIX.values())
-SPARK_SPEC_BY_SUFFIX = OrderedDict(
-    (suffix, spec) for suffix, spec in PERIOD_SPEC_BY_SUFFIX.items()
-    if suffix != "1m"
-)
 
 _REGISTRY = OrderedDict(
     (spec.chart_id, spec) for spec in RELAY_BANDWIDTH_PERIODS
@@ -399,44 +390,28 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             continue
         family, role_ov = overlays_for_relay(relay, parsed["write_1m"], overlays)
         bands = bands_for_flags(relay.get("flags"), catalog)
-        spec = RELAY_BANDWIDTH_1M
-        payload = build_relay_bandwidth_1m_payload(
-            relay,
-            bandwidth_relay=sel.bw_map.get(fp),
-            relays_published=published,
-            family_overlay=family,
-            role_overlay=role_ov,
-            bands=bands,
-            bands_frozen_from=frozen,
-            renderer_version=spec.renderer_version,
-            write_1m=parsed["write_1m"],
-            read_1m=parsed["read_1m"],
-        )
-        queued = _queue_or_publish(
-            jobs, output_dir, spec, fp, payload,
-            extra_render={"relays_published": published},
-        )
-        if queued == "hit":
-            hits += 1
-            published_n += 1
-        spark_blocks = {
-            k: v for k, v in (parsed.get("periods") or {}).items() if k != "1m"
-        }
-        ylim = spark_shared_ylim(spark_blocks, relay.get("advertised_bandwidth"))
-        for suffix, spark_spec in SPARK_SPEC_BY_SUFFIX.items():
-            block = spark_blocks.get(suffix)
+        periods = parsed.get("periods") or {}
+        for suffix, spec in PERIOD_SPEC_BY_SUFFIX.items():
+            block = periods.get(suffix)
             if not block:
                 continue
-            spark_payload = build_relay_bandwidth_spark_payload(
+            is_hero_1m = suffix == "1m"
+            payload = build_relay_bandwidth_1m_payload(
                 relay,
+                bandwidth_relay=sel.bw_map.get(fp),
+                relays_published=published,
+                family_overlay=family if is_hero_1m else None,
+                role_overlay=role_ov if is_hero_1m else None,
+                bands=bands,
+                bands_frozen_from=frozen,
+                renderer_version=spec.renderer_version,
                 period=suffix,
                 write=block["write"],
                 read=block["read"],
-                renderer_version=spark_spec.renderer_version,
-                ylim=ylim,
             )
             queued = _queue_or_publish(
-                jobs, output_dir, spark_spec, fp, spark_payload,
+                jobs, output_dir, spec, fp, payload,
+                extra_render={"relays_published": published, "period": suffix},
             )
             if queued == "hit":
                 hits += 1
