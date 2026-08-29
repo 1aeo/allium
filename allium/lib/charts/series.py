@@ -1,39 +1,15 @@
 """Onionoo bandwidth series helpers. No matplotlib."""
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
+from ..bandwidth_utils import build_bandwidth_map
+from ..time_utils import parse_onionoo_timestamp, published_clock
 from .identity import role_from_flags
 
 MIN_THROUGHPUT_BPS = 50000
 MIN_ALIGNED_POINTS = 2
 _FP_RE = re.compile(r"^[0-9A-Fa-f]{40}$")
-
-
-def parse_onionoo_ts(value):
-    """Parse Onionoo ``YYYY-MM-DD HH:MM:SS`` as UTC."""
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value
-    if not value:
-        return None
-    return datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S").replace(
-        tzinfo=timezone.utc
-    )
-
-
-def published_clock(value):
-    """Unix seconds for the Onionoo published clock, or None."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    try:
-        parsed = parse_onionoo_ts(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed.timestamp() if parsed else None
 
 
 def history_block(period_data):
@@ -56,7 +32,7 @@ def timestamps_for_block(block):
     """One timestamp per Onionoo values slot, including holes."""
     if not block or not block.get("values"):
         return []
-    first = parse_onionoo_ts(block.get("first"))
+    first = parse_onionoo_timestamp(block.get("first"))
     if first is None:
         return []
     interval = int(block.get("interval") or 0)
@@ -290,17 +266,6 @@ def family_group_key(relay):
     if not members:
         return ""
     return "fam:" + ",".join(sorted(set(members)))
-
-
-def build_bandwidth_map(bandwidth_data):
-    out = {}
-    if not bandwidth_data:
-        return out
-    for row in bandwidth_data.get("relays") or []:
-        fp = row.get("fingerprint")
-        if fp:
-            out[fp] = row
-    return out
 
 
 def chartable_fingerprints(

@@ -6,9 +6,10 @@ import os
 import shutil
 
 from ..stability_utils import current_overload_status
+from ..time_utils import published_clock
 from .identity import operator_from_contact, role_from_flags
 from .registry import RELAY_BANDWIDTH_1M_ID
-from .series import history_block, is_relay_fingerprint, published_clock
+from .series import history_block, is_relay_fingerprint
 
 # Bump when the payload layout changes.
 CACHE_SCHEMA_VERSION = 3

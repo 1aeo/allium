@@ -26,14 +26,13 @@ from .outcome import (
     format_outcome_subtitle,
     summarize_bandwidth_outcome,
 )
+from ..time_utils import parse_onionoo_timestamp, published_clock
 from .series import (
     advertised_mbit,
     aligned_1m_series,
     overlay_lookup,
-    parse_onionoo_ts,
     period_axis_caption,
     period_title_span,
-    published_clock,
 )
 
 # Okabe–Ito. Red is reserved for problems.
@@ -189,7 +188,7 @@ def _restart_legend_label(whens):
 
 
 def restart_events(last_restarted):
-    when = parse_onionoo_ts(last_restarted)
+    when = parse_onionoo_timestamp(last_restarted)
     if when is None:
         return []
     return [{
