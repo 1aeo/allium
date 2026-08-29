@@ -1,6 +1,6 @@
 """Build-time relay-page charts. Must not import matplotlib at load."""
 
-from .registry import (
+from .pipeline import (
     RELAY_BANDWIDTH_1M_ID,
     ChartSpec,
     enabled_charts,

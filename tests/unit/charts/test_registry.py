@@ -1,6 +1,6 @@
-"""Tests for the chart type registry."""
+"""Tests for ChartSpec and the period-hero registry in pipeline."""
 
-from allium.lib.charts.registry import (
+from allium.lib.charts.pipeline import (
     PERIOD_SPEC_BY_SUFFIX,
     RELAY_BANDWIDTH_1M,
     RELAY_BANDWIDTH_1M_ID,

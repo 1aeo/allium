@@ -12,6 +12,7 @@ from allium.lib.charts.pipeline import (
     CHARTS_OFF,
     CHARTS_ON,
     MAX_CHART_WORKERS,
+    RELAY_BANDWIDTH_1M,
     _INSTALL_HINT,
     _NO_BANDWIDTH_HINT,
     _skip_reason,
@@ -25,7 +26,6 @@ from allium.lib.charts.pipeline import (
     resolve_charts_mode,
     run_chart_pass,
 )
-from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
 from tests.unit.charts.conftest import (
     FP_A,
     FP_B,
@@ -188,6 +188,17 @@ def test_html_flags_mark_chartable_when_pass_will_run(
     assert relay_set.charts_enabled is True
     assert FP_JEANGRAE in relay_set.bandwidth_chart_fps
     assert not _skip_reason(args, relay_set)
+
+
+def test_html_flags_are_owned_by_relays(temp_dir, monkeypatch):
+    from allium.lib.relays import apply_chart_html_flags as apply_flags
+
+    stub_chart_pool(monkeypatch, render=None, mpl=False)
+    relay_set = make_relay_set(temp_dir)
+    apply_flags(relay_set, SimpleNamespace(charts="on"))
+    assert relay_set.charts_enabled is False
+    assert relay_set.bandwidth_chart_fps == frozenset()
+    assert relay_set.bandwidth_spark_periods == {}
 
 
 def test_cache_miss_renders_and_publishes(temp_dir, monkeypatch):

@@ -25,7 +25,7 @@ Same-day rebuilds that only tick votes / uptime / `last_seen` must not redraw ~7
 - Group pages use a **fork** pool (`--workers`, often 8–16). Those workers stay Jinja-only.
 - `write_relay_info()` is sequential and **`rmtree`s `www/relay/`** each run. A PNG written before that, or left from yesterday, is gone. Charts publish **after** HTML.
 - `--apis details` has no `/bandwidth`. Charts skip with one line; HTML still succeeds.
-- `process_all_bandwidth_data_consolidated()` keeps averages, not `1_month` arrays. Charts read `relay_set.bandwidth_data` via `build_bandwidth_map()`. Do not attach 1M arrays to every relay dict for Jinja.
+- `process_all_bandwidth_data_consolidated()` keeps averages, not `1_month` arrays. Charts read `relay_set.bandwidth_data` via `allium.lib.bandwidth_utils.build_bandwidth_map()`. Do not attach 1M arrays to every relay dict for Jinja. Onionoo timestamps and `published_clock` live in `allium.lib.time_utils`.
 - `1_month` write/read is daily (`interval` 86400). A warm 12-hour bandwidth cache is the main cache hit.
 
 | Role | Path |
@@ -38,7 +38,12 @@ Fingerprint path segments are 40-char hex only.
 
 ## Registry
 
-One `ChartSpec` per type (`chart_id`, output pattern, cache subdir, renderer, version). First id: `relay_bandwidth_1m`. Later ids (uptime, sparks, flags, contact) register the same way — no new CLI flags.
+`ChartSpec` and the registered period heroes live in
+[`pipeline.py`](../../../../allium/lib/charts/pipeline.py)
+(`chart_id`, output pattern, cache subdir, renderer, version). First id:
+`relay_bandwidth_1m`. Later ids (uptime, sparks, flags, contact) register the
+same way — no new CLI flags. `1m` / `6m` / `1y` / `5y` share the bandwidth
+renderer.
 
 ## CLI
 
@@ -60,7 +65,13 @@ Do **not** reuse `--workers`. Do **not** flip the default to `auto`.
 
 `--apis details`: skip, do not fail.
 
-`apply_chart_html_flags()` runs **before** Jinja so History `<img>` is omitted unless the later pass will run (matplotlib present, bandwidth data, that fingerprint selected). Limit / fingerprint slices match the later pass. `--charts on` without matplotlib: one log line, skip figures, omit the img.
+`apply_chart_html_flags()` lives in
+[`relays.py`](../../../../allium/lib/relays.py)
+(next to other `relay_set` HTML gates) and runs **before** Jinja so History
+`<img>` is omitted unless the later pass will run (matplotlib present, bandwidth
+data, that fingerprint selected). Limit / fingerprint slices match the later
+pass. `--charts on` without matplotlib: one log line, skip figures, omit the
+img. The chart pass may re-export the function.
 
 ## Pass
 

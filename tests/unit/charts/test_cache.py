@@ -18,7 +18,7 @@ from allium.lib.charts.cache import (
     write_sidecar,
 )
 from allium.lib.charts.series import is_relay_fingerprint
-from allium.lib.charts.registry import RELAY_BANDWIDTH_1M
+from allium.lib.charts.pipeline import RELAY_BANDWIDTH_1M
 
 JEANGRAE = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
 
