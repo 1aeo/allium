@@ -23,11 +23,6 @@ _BANDS_PATH = os.path.join(_DATA_DIR, "role_ratio_bands.json")
 _CATALOG = None
 
 
-def role_bands_path():
-    """Path to the shipped frozen census file."""
-    return _BANDS_PATH
-
-
 def load_role_bands(path=None):
     """Load the frozen catalog. Cached after the first successful read."""
     global _CATALOG

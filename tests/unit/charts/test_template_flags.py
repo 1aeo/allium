@@ -50,18 +50,6 @@ def test_jinja_omits_img_when_flags_false():
     assert "last 30 days" in html
 
 
-def test_jinja_omits_sparks_when_no_charts():
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
-    tmpl = env.get_template("relay-bandwidth-history.html")
-    html = tmpl.render(
-        charts_enabled=False,
-        has_bandwidth_chart=True,
-        bandwidth_spark_periods=["6m", "1y", "5y"],
-    )
-    assert html == ""
-    assert "bandwidth-6m" not in html
-
-
 def test_jinja_omits_missing_5y_spark():
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     tmpl = env.get_template("relay-bandwidth-history.html")

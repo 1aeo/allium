@@ -26,8 +26,6 @@ from .series import (
     series_by_fp,
 )
 
-RELAY_BANDWIDTH_1M_ID = "relay_bandwidth_1m"
-
 
 class ChartSpec(object):
     __slots__ = (
@@ -37,7 +35,6 @@ class ChartSpec(object):
         "renderer_module",
         "renderer_name",
         "renderer_version",
-        "enabled",
     )
 
     def __init__(
@@ -48,7 +45,6 @@ class ChartSpec(object):
         renderer_module,
         renderer_name,
         renderer_version,
-        enabled=True,
     ):
         self.chart_id = chart_id
         self.output_path_pattern = output_path_pattern
@@ -56,7 +52,6 @@ class ChartSpec(object):
         self.renderer_module = renderer_module
         self.renderer_name = renderer_name
         self.renderer_version = str(renderer_version)
-        self.enabled = bool(enabled)
 
     def output_path(self, fingerprint):
         return self.output_path_pattern.format(fingerprint=fingerprint)
@@ -70,7 +65,6 @@ def _bandwidth_spec(suffix):
         renderer_module="allium.lib.charts.bandwidth",
         renderer_name="render_relay_bandwidth_1m",
         renderer_version="1",
-        enabled=True,
     )
 
 
@@ -89,14 +83,6 @@ def get_chart(chart_id):
     return _REGISTRY.get(chart_id)
 
 
-def registered_chart_ids():
-    return tuple(_REGISTRY.keys())
-
-
-def enabled_charts():
-    return tuple(spec for spec in _REGISTRY.values() if spec.enabled)
-
-
 _Selection = namedtuple(
     "_Selection", "details bw_map series selected bandwidth_data"
 )
@@ -106,6 +92,12 @@ CHARTS_AUTO = "auto"
 CHARTS_ON = "on"
 CHARTS_MODES = (CHARTS_OFF, CHARTS_AUTO, CHARTS_ON)
 MAX_CHART_WORKERS = 8
+ChartRunResult = namedtuple(
+    "ChartRunResult",
+    ("status", "reason", "charts_mode", "rendered", "cache_hits",
+     "published", "failed", "elapsed_s"),
+)
+ChartRunResult.__new__.__defaults__ = (CHARTS_OFF, 0, 0, 0, 0, 0.0)
 
 _INSTALL_HINT = (
     "Charts: skipped (matplotlib not installed; "
@@ -113,37 +105,6 @@ _INSTALL_HINT = (
 )
 _RENDERER_HINT = "Charts: skipped (renderer not implemented; HTML unchanged)"
 _NO_BANDWIDTH_HINT = "Charts: skipped (no bandwidth data; use --apis all)"
-
-
-class ChartRunResult(object):
-    def __init__(
-        self,
-        status,
-        reason,
-        charts_mode=CHARTS_OFF,
-        rendered=0,
-        cache_hits=0,
-        published=0,
-        failed=0,
-        elapsed_s=0.0,
-    ):
-        self.status = status
-        self.reason = reason
-        self.charts_mode = charts_mode
-        self.rendered = rendered
-        self.cache_hits = cache_hits
-        self.published = published
-        self.failed = failed
-        self.elapsed_s = elapsed_s
-
-    def __repr__(self):
-        return (
-            "ChartRunResult(status={!r}, reason={!r}, charts_mode={!r}, "
-            "rendered={!r}, cache_hits={!r}, failed={!r})"
-        ).format(
-            self.status, self.reason, self.charts_mode,
-            self.rendered, self.cache_hits, self.failed,
-        )
 
 
 def add_chart_arguments(parser):
@@ -291,21 +252,11 @@ def _skip_reason(args, relay_set):
         return "off"
     if not matplotlib_is_available():
         return "matplotlib_missing" if mode == CHARTS_ON else "auto_unavailable"
-    if not any(renderer_is_ready(spec) for spec in enabled_charts()):
+    if not any(renderer_is_ready(spec) for spec in RELAY_BANDWIDTH_PERIODS):
         return "renderer_missing"
     if not _bandwidth_data(relay_set):
         return "no_bandwidth_data"
     return None
-
-
-def charts_will_run(args, relay_set):
-    return not _skip_reason(args, relay_set)
-
-
-def apply_chart_html_flags(relay_set, args):
-    """Re-export: flag ownership lives on Relays next to other HTML gates."""
-    from ..relays import apply_chart_html_flags as apply_flags
-    return apply_flags(relay_set, args)
 
 
 def _init_chart_worker():

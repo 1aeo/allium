@@ -28,11 +28,11 @@ from .outcome import (
 )
 from ..time_utils import parse_onionoo_timestamp, published_clock
 from .series import (
+    PERIOD_TITLE_SPAN,
     advertised_mbit,
     aligned_1m_series,
     overlay_lookup,
     period_axis_caption,
-    period_title_span,
 )
 
 # Okabe–Ito. Red is reserved for problems.
@@ -745,7 +745,9 @@ def render_relay_bandwidth_1m(job, dest_path):
         legend_rows=2 if wrap_last else 1,
         period=period,
     )
-    title = _with_role("Throughput · {}".format(period_title_span(period)), bands)
+    title = _with_role(
+        "Throughput · {}".format(PERIOD_TITLE_SPAN.get(period) or period), bands,
+    )
     title_loc = "left"
     title_pad = SUBTITLE_TITLE_PAD if subtitle_on else THROUGHPUT_TITLE_PAD
     if identity_on:

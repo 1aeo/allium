@@ -39,14 +39,6 @@ def _overload_fields(relay, bandwidth_relay=None):
     }
 
 
-def currently_overloaded(relay, bandwidth_relay=None, relays_published=""):
-    """True when overload is active at the published clock (not wall time)."""
-    return bool(current_overload_status(
-        _overload_fields(relay, bandwidth_relay),
-        published_clock(relays_published),
-    ))
-
-
 def bands_key_fields(bands):
     """Numeric row that changes pixels. None if bands were not supplied."""
     if not bands:

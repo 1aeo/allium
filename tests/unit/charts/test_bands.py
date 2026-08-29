@@ -8,7 +8,6 @@ from allium.lib.charts.bands import (
     format_frozen_baseline,
     load_role_bands,
     ratio_strip_data_hi,
-    role_bands_path,
 )
 
 
@@ -18,7 +17,6 @@ def test_shipped_catalog_is_frozen_not_live():
     assert catalog["period"] == "1_month"
     assert set(catalog["roles"]) == {"Guard", "Exit+Guard", "Exit", "Middle"}
     assert bands_frozen_from(catalog) == "2026-08-15 19:00:00"
-    assert role_bands_path().endswith("role_ratio_bands.json")
 
 
 def test_bands_for_flags_uses_frozen_row():
