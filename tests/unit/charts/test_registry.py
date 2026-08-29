@@ -1,11 +1,10 @@
-"""Tests for ChartSpec and the 1M-hero + spark registry in pipeline."""
+"""Tests for ChartSpec and the period-hero registry in pipeline."""
 
 from allium.lib.charts.pipeline import (
     PERIOD_SPEC_BY_SUFFIX,
     RELAY_BANDWIDTH_1M,
     RELAY_BANDWIDTH_1M_ID,
     RELAY_BANDWIDTH_PERIODS,
-    SPARK_SPEC_BY_SUFFIX,
     ChartSpec,
     enabled_charts,
     get_chart,
@@ -36,9 +35,8 @@ def test_unknown_chart_id_returns_none():
     assert get_chart("not_a_chart") is None
 
 
-def test_1m_hero_and_sparks_are_registered():
+def test_four_period_heroes_are_registered():
     assert list(PERIOD_SPEC_BY_SUFFIX) == ["1m", "6m", "1y", "5y"]
-    assert list(SPARK_SPEC_BY_SUFFIX) == ["6m", "1y", "5y"]
     assert registered_chart_ids() == (
         "relay_bandwidth_1m",
         "relay_bandwidth_6m",
@@ -47,10 +45,9 @@ def test_1m_hero_and_sparks_are_registered():
     )
     assert enabled_charts() == RELAY_BANDWIDTH_PERIODS
     assert RELAY_BANDWIDTH_PERIODS[0] is RELAY_BANDWIDTH_1M
-    assert RELAY_BANDWIDTH_1M.renderer_name == "render_relay_bandwidth_1m"
-    for suffix, spec in SPARK_SPEC_BY_SUFFIX.items():
+    for suffix, spec in PERIOD_SPEC_BY_SUFFIX.items():
         assert get_chart("relay_bandwidth_%s" % suffix) is spec
-        assert spec.renderer_name == "render_relay_bandwidth_spark"
+        assert spec.renderer_name == "render_relay_bandwidth_1m"
         assert spec.output_path("AB" * 20) == (
             "relay/%s/bandwidth-%s.png" % ("AB" * 20, suffix)
         )
