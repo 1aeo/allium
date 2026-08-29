@@ -44,7 +44,6 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href
-from .charts.series import period_views
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1639,9 +1638,6 @@ def write_relay_info(relay_set):
         fingerprint = relay["fingerprint"]
         has_chart = charts_enabled and fingerprint in bandwidth_chart_fps
         sparks = spark_by_fp.get(fingerprint) or ()
-        views = period_views(("1m",) + tuple(sparks)) if has_chart else (
-            ("index.html", "1m", ()),
-        )
         render_kwargs = dict(
             relay=relay, page_ctx=page_ctx, relays=relay_set,
             contact_display_data=contact_display_data,
@@ -1652,12 +1648,13 @@ def write_relay_info(relay_set):
             page_number=1,
             charts_enabled=charts_enabled,
             has_bandwidth_chart=has_chart,
+            bandwidth_spark_periods=sparks,
         )
         write_relay_period_files(
             template,
             os.path.join(output_path, fingerprint),
             render_kwargs,
-            views,
+            (("index.html", "1m", sparks),),
             base_url,
             fingerprint,
         )

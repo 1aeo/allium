@@ -135,6 +135,31 @@ def build_relay_bandwidth_1m_payload(
     return payload
 
 
+def build_relay_bandwidth_spark_payload(
+    relay,
+    period,
+    write=None,
+    read=None,
+    renderer_version="1",
+    ylim=None,
+):
+    """Slim 6M/1Y/5Y spark key. Period + write/read + advertised; no overlays."""
+    relay = relay or {}
+    suffix = period or ""
+    return {
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "chart_id": "relay_bandwidth_{}".format(suffix),
+        "period": suffix,
+        "renderer_version": str(renderer_version),
+        "fingerprint": relay.get("fingerprint") or "",
+        "advertised_bandwidth": relay.get("advertised_bandwidth") or 0,
+        "last_restarted": relay.get("last_restarted") or "",
+        "write": write,
+        "read": read,
+        "ylim": ylim,
+    }
+
+
 def cache_key(payload):
     encoded = json.dumps(
         payload,

@@ -160,6 +160,10 @@ def stub_chart_pool(monkeypatch, render=fake_render, mpl=True):
             render,
         )
         monkeypatch.setattr(
+            "allium.lib.charts.bandwidth.render_relay_bandwidth_spark",
+            render,
+        )
+        monkeypatch.setattr(
             "multiprocessing.get_context",
             lambda name: _DummyCtx(),
         )

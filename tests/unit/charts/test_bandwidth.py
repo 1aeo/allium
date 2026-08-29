@@ -6,8 +6,8 @@ import sys
 import pytest
 
 from allium.lib.charts.pipeline import (
-    PERIOD_SPEC_BY_SUFFIX,
     RELAY_BANDWIDTH_1M,
+    SPARK_SPEC_BY_SUFFIX,
     renderer_is_ready,
 )
 from tests.unit.charts.conftest import make_job
@@ -58,32 +58,30 @@ def test_renderer_rejects_thin_history(temp_dir):
         render_relay_bandwidth_1m(job, dest)
 
 
-def test_period_hero_renderers_are_ready():
-    for suffix, spec in PERIOD_SPEC_BY_SUFFIX.items():
-        assert renderer_is_ready(spec) is True, suffix
-        assert spec.renderer_name == "render_relay_bandwidth_1m"
+def test_spark_renderer_is_ready():
+    spec = SPARK_SPEC_BY_SUFFIX["6m"]
+    assert renderer_is_ready(spec) is True
+    from allium.lib.charts.bandwidth import render_relay_bandwidth_spark
+
+    assert callable(render_relay_bandwidth_spark)
 
 
-def test_period_hero_renderer_writes_png(temp_dir):
+def test_spark_renderer_writes_png(temp_dir):
     matplotlib = pytest.importorskip("matplotlib")
     matplotlib.use("Agg", force=True)
-    from allium.lib.charts.bandwidth import render_relay_bandwidth_1m
+    from allium.lib.charts.bandwidth import render_relay_bandwidth_spark
 
     hero = make_job()
     dest = os.path.join(temp_dir, "bandwidth-6m.png")
-    out = render_relay_bandwidth_1m({
-        "nickname": hero["nickname"],
-        "operator": hero["operator"],
+    out = render_relay_bandwidth_spark({
         "write": hero["write_1m"],
         "read": hero["read_1m"],
         "advertised_bandwidth": hero["advertised_bandwidth"],
         "last_restarted": hero["last_restarted"],
-        "flags": hero["flags"],
         "period": "6m",
-        "family_overlay": None,
-        "role_overlay": None,
+        "ylim": 400.0,
     }, dest)
     assert out == dest
     with open(dest, "rb") as handle:
         assert handle.read(8) == b"\x89PNG\r\n\x1a\n"
-    assert os.path.getsize(dest) > 2000
+    assert os.path.getsize(dest) > 800
