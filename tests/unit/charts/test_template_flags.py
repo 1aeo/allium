@@ -18,8 +18,8 @@ def _history_snippet():
 
 def _page_snippet():
     text = (TEMPLATE_DIR / "relay-info.html").read_text(encoding="utf-8")
-    start = text.index("Network Participation")
-    end = text.index("</section>", start)
+    start = text.index('id="bandwidth"')
+    end = text.index("</section>", text.index("Network Participation"))
     return text[start:end]
 
 
@@ -33,9 +33,11 @@ def test_template_gates_history_img():
     assert "'1m': 'last 30 days'" in snippet
     assert "bandwidth_spark_periods" in snippet
     assert 'src="bandwidth-{{ period }}.png"' in snippet
-    assert 'href="{{ _period_href.get(period, period + \'.html\') }}"' in snippet
+    assert 'href="{{ _period_href.get(period, period + \'.html\') }}#bandwidth"' in snippet
     assert snippet.index("History") < snippet.index("bandwidth-{{ _hero }}.png")
     assert snippet.index("bandwidth-{{ _hero }}.png") < snippet.index("relay-bandwidth-sparks")
+    assert 'id="bandwidth"' in page
+    assert page.index('id="bandwidth"') < page.index("relay-bandwidth-history.html")
     assert page.index("Network Participation") < page.index("relay-bandwidth-history.html")
 
 
@@ -60,9 +62,9 @@ def test_jinja_omits_missing_5y_spark():
         bandwidth_spark_periods=["6m", "1y"],
     )
     assert 'src="bandwidth-1m.png"' in html
-    assert 'href="6m.html"' in html
+    assert 'href="6m.html#bandwidth"' in html
     assert 'src="bandwidth-6m.png"' in html
-    assert 'href="1y.html"' in html
+    assert 'href="1y.html#bandwidth"' in html
     assert 'src="bandwidth-1y.png"' in html
     assert "bandwidth-5y.png" not in html
     assert "5y.html" not in html
@@ -79,10 +81,34 @@ def test_jinja_6m_hero_links_back_to_index():
     )
     assert 'src="bandwidth-6m.png"' in html
     assert html.index('src="bandwidth-6m.png"') < html.index("relay-bandwidth-sparks")
-    assert 'href="index.html"' in html
+    assert 'href="index.html#bandwidth"' in html
     assert 'src="bandwidth-1m.png"' in html
-    assert 'href="1y.html"' in html
+    assert 'href="1y.html#bandwidth"' in html
     assert 'href="6m.html"' not in html
+
+
+def test_spark_hrefs_include_history_fragment():
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
+    tmpl = env.get_template("relay-bandwidth-history.html")
+    index = tmpl.render(
+        charts_enabled=True,
+        has_bandwidth_chart=True,
+        hero_period="1m",
+        bandwidth_spark_periods=["6m", "1y", "5y"],
+    )
+    six = tmpl.render(
+        charts_enabled=True,
+        has_bandwidth_chart=True,
+        hero_period="6m",
+        bandwidth_spark_periods=["1m", "1y", "5y"],
+    )
+    assert 'href="6m.html#bandwidth"' in index
+    assert 'href="1y.html#bandwidth"' in index
+    assert 'href="5y.html#bandwidth"' in index
+    assert 'href="index.html#bandwidth"' in six
+    assert 'href="1y.html#bandwidth"' in six
+    assert 'href="5y.html#bandwidth"' in six
+    assert 'href="6m.html' not in six
 
 
 def test_write_relay_period_files_emits_6m_html(temp_dir):
