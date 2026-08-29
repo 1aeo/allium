@@ -140,6 +140,15 @@ class _DummyPool(object):
     def __exit__(self, *args):
         return False
 
+    def close(self):
+        return None
+
+    def terminate(self):
+        return None
+
+    def join(self):
+        return None
+
     def imap_unordered(self, func, jobs, chunksize=1):
         return [func(job) for job in jobs]
 

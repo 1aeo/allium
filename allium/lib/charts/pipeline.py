@@ -91,7 +91,16 @@ CHARTS_OFF = "off"
 CHARTS_AUTO = "auto"
 CHARTS_ON = "on"
 CHARTS_MODES = (CHARTS_OFF, CHARTS_AUTO, CHARTS_ON)
-MAX_CHART_WORKERS = 8
+# Memory-safe ceiling and auto default: min(CPU, 16). Spawn+Agg is ~0.4–0.6 GiB
+# per worker; the parent still holds onionoo (~4–6 GiB). Last 4-worker generate
+# peaked ~8.3 GiB. 16 workers add ~6–8 GiB. Never start 4 isolated pools of N
+# (that would be 4×N processes). --chart-workers overrides, still clamped here.
+# Do not reuse --workers (HTML fork pool).
+MAX_CHART_WORKERS = 16
+# Cache-key fields the Agg renderer does not read — drop them before pickle.
+_RENDER_SKIP_KEYS = frozenset((
+    "schema_version", "chart_id", "renderer_version",
+))
 ChartRunResult = namedtuple(
     "ChartRunResult",
     ("status", "reason", "charts_mode", "rendered", "cache_hits",
@@ -149,9 +158,10 @@ def add_chart_arguments(parser):
         dest="chart_workers",
         type=int,
         default=0,
-        help="chart process-pool size (0 = min(4, CPU); cap {})".format(
-            MAX_CHART_WORKERS
-        ),
+        help=(
+            "chart process-pool size (0 = min(CPU, {cap}); cap {cap}; "
+            "split across 1M/6M/1Y/5Y period runners)"
+        ).format(cap=MAX_CHART_WORKERS),
         required=False,
     )
 
@@ -168,10 +178,70 @@ def default_chart_workers(override=0):
         override = int(override or 0)
     except (TypeError, ValueError):
         override = 0
-    auto = max(1, min(4, os.cpu_count() or 1))
+    auto = max(1, min(MAX_CHART_WORKERS, os.cpu_count() or 1))
     if override > 0:
         return max(1, min(MAX_CHART_WORKERS, override))
     return auto
+
+
+def job_period(job):
+    """Date-range suffix for a queued spawn job (``1m`` / ``6m`` / ``1y`` / ``5y``)."""
+    period = job.get("period") if job else None
+    if period:
+        return period
+    chart_id = (job or {}).get("chart_id") or ""
+    prefix = "relay_bandwidth_"
+    if chart_id.startswith(prefix) and chart_id[len(prefix):]:
+        return chart_id[len(prefix):]
+    return ((job or {}).get("render") or {}).get("period") or "1m"
+
+
+def partition_jobs_by_period(jobs):
+    """Group jobs so each date range can run in its own spawn pool."""
+    buckets = OrderedDict((suffix, []) for suffix in PERIOD_SPEC_BY_SUFFIX)
+    extra = OrderedDict()
+    for job in jobs or ():
+        period = job_period(job)
+        if period in buckets:
+            buckets[period].append(job)
+        else:
+            extra.setdefault(period, []).append(job)
+    groups = [(period, group) for period, group in buckets.items() if group]
+    groups.extend(extra.items())
+    return groups
+
+
+def allocate_period_workers(total_workers, n_groups):
+    """Split one process budget across period pools. ``None`` = one shared pool.
+
+    Never returns 4×N. Remainder goes to earlier periods (1M is heaviest).
+    """
+    try:
+        total_workers = int(total_workers)
+        n_groups = int(n_groups)
+    except (TypeError, ValueError):
+        return None
+    if total_workers < 1 or n_groups < 1:
+        return None
+    if total_workers < n_groups:
+        return None
+    base = total_workers // n_groups
+    rem = total_workers % n_groups
+    return [base + (1 if i < rem else 0) for i in range(n_groups)]
+
+
+def chart_imap_chunksize(n_jobs, n_proc):
+    """Batch spawn IPC. Cap 32 so a period pool stays busy."""
+    try:
+        n_jobs = int(n_jobs)
+        n_proc = int(n_proc)
+    except (TypeError, ValueError):
+        return 1
+    if n_jobs <= 1:
+        return 1
+    n_proc = max(1, n_proc)
+    raw = n_jobs // (n_proc * 4)
+    return max(1, min(32, raw if raw else 1))
 
 
 def matplotlib_is_available():
@@ -276,15 +346,20 @@ def _queue_or_publish(jobs, output_dir, spec, fp, payload, extra_render=None):
         ):
             return "hit"
         return None
-    render = dict(payload)
+    render = {
+        key_name: value
+        for key_name, value in payload.items()
+        if key_name not in _RENDER_SKIP_KEYS
+    }
     if extra_render:
         render.update(extra_render)
+    period = render.get("period") or payload.get("period") or "1m"
     jobs.append({
         "output_dir": output_dir,
         "fingerprint": fp,
         "key": key,
         "chart_id": spec.chart_id,
-        "period": payload.get("period"),
+        "period": period,
         "render": render,
     })
     return "job"
@@ -311,6 +386,103 @@ def _render_chart_job(job):
         return {"ok": True, "fingerprint": fingerprint, "error": None}
     except Exception as exc:  # noqa: BLE001 — one bad relay must not kill the pool
         return {"ok": False, "fingerprint": fingerprint, "error": str(exc)}
+
+
+def _drain_pool(pool, jobs, n_proc):
+    """imap_unordered one pool. Returns ``(rows, error_or_None, unstarted)``."""
+    results = []
+    try:
+        for row in pool.imap_unordered(
+            _render_chart_job, jobs,
+            chunksize=chart_imap_chunksize(len(jobs), n_proc),
+        ):
+            results.append(row)
+    except Exception as exc:  # noqa: BLE001 — pool death must not fail HTML
+        return results, exc, len(jobs) - len(results)
+    return results, None, 0
+
+
+def _run_spawn_pool(jobs, n_proc):
+    """One spawn+Agg pool on the calling thread."""
+    import multiprocessing
+
+    if not jobs:
+        return [], None, 0
+    ctx = multiprocessing.get_context("spawn")
+    n_proc = max(1, min(int(n_proc), len(jobs)))
+    with ctx.Pool(processes=n_proc, initializer=_init_chart_worker) as pool:
+        return _drain_pool(pool, jobs, n_proc)
+
+
+def _run_period_pools(groups, alloc, progress_logger=None):
+    """One spawn pool per date range. Pools start on this thread (not daemons)."""
+    import multiprocessing
+    import threading
+    from contextlib import ExitStack
+
+    ctx = multiprocessing.get_context("spawn")
+    collected = []
+    leftover = [0]
+    errors = []
+    lock = threading.Lock()
+
+    def worker(period, group_jobs, n_proc, pool):
+        rows, exc, fail_n = _drain_pool(pool, group_jobs, n_proc)
+        with lock:
+            collected.extend(rows)
+            leftover[0] += fail_n
+            if exc is not None:
+                errors.append((period, exc))
+
+    with ExitStack() as stack:
+        opened = []
+        for (period, group_jobs), n_proc in zip(groups, alloc):
+            n_proc = max(1, min(int(n_proc), len(group_jobs)))
+            pool = stack.enter_context(
+                ctx.Pool(processes=n_proc, initializer=_init_chart_worker),
+            )
+            opened.append((period, group_jobs, n_proc, pool))
+        threads = []
+        for period, group_jobs, n_proc, pool in opened:
+            thread = threading.Thread(
+                target=worker,
+                args=(period, group_jobs, n_proc, pool),
+                name="chart-%s" % period,
+            )
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+
+    for period, exc in errors:
+        _emit("Charts: {} pool error ({})".format(period, exc), progress_logger)
+    return collected, leftover[0]
+
+
+def _run_chart_jobs(jobs, workers, progress_logger=None):
+    """Period-parallel spawn pools sharing one process budget, or one pool."""
+    groups = partition_jobs_by_period(jobs)
+    alloc = allocate_period_workers(workers, len(groups))
+    if alloc is None or len(groups) <= 1:
+        _emit(
+            "Charts: {} jobs, 1 pool, {} workers".format(len(jobs), workers),
+            progress_logger,
+        )
+        results, exc, leftover = _run_spawn_pool(jobs, workers)
+        if exc:
+            _emit("Charts: pool error ({})".format(exc), progress_logger)
+        return results, leftover
+
+    _emit(
+        "Charts: {} jobs, {} period runners ({}), {} workers".format(
+            len(jobs),
+            len(groups),
+            "/".join(period for period, _group in groups),
+            sum(alloc),
+        ),
+        progress_logger,
+    )
+    return _run_period_pools(groups, alloc, progress_logger)
 
 
 def run_chart_pass(relay_set, args, progress_logger=None):
@@ -371,22 +543,8 @@ def run_chart_pass(relay_set, args, progress_logger=None):
     rendered = 0
     failed = 0
     if jobs:
-        import multiprocessing
-
-        ctx = multiprocessing.get_context("spawn")
-        n_proc = max(1, min(workers, len(jobs)))
-        results = []
-        try:
-            with ctx.Pool(
-                processes=n_proc, initializer=_init_chart_worker,
-            ) as pool:
-                for row in pool.imap_unordered(
-                    _render_chart_job, jobs, chunksize=1,
-                ):
-                    results.append(row)
-        except Exception as exc:  # noqa: BLE001 — pool death must not fail HTML
-            failed += len(jobs) - len(results)
-            _emit("Charts: pool error ({})".format(exc), progress_logger)
+        results, leftover = _run_chart_jobs(jobs, workers, progress_logger)
+        failed += leftover
         for row in results:
             if row and row.get("ok"):
                 rendered += 1

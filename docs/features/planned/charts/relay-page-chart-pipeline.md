@@ -8,7 +8,7 @@ from the live dump).
 ## Constraints
 
 - After `generate_site()`. `write_relay_info()` `rmtree`s `www/relay/` — publish after HTML.
-- Spawn pool (`--chart-workers`, default `min(4, cpu)`, cap 8). Do not reuse `--workers`.
+- Spawn pools after HTML (`--chart-workers`, default `min(cpu, 16)`, cap 16). Four date-range runners (1M / 6M / 1Y / 5Y) share that single process budget — never 4×N. Do not reuse `--workers` (HTML fork pool). Matplotlib Agg initializer; matplotlib must not enter Jinja.
 - `--charts` default `on`; `--no-charts`; slice with `--charts-limit` / `--fingerprint`.
 - `--apis details` has no `/bandwidth`: skip, HTML succeeds.
 - Read history via `build_bandwidth_map` + `series_by_fp`. Do not attach 1M arrays to every relay dict.
