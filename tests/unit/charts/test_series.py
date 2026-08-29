@@ -2,10 +2,10 @@
 
 from datetime import datetime, timezone
 
+from allium.lib.bandwidth_utils import build_bandwidth_map
 from allium.lib.charts.series import (
     advertised_mbit,
     aligned_1m_series,
-    build_bandwidth_map,
     chartable_fingerprints,
     daily_ratios,
     family_group_key,
@@ -16,7 +16,6 @@ from allium.lib.charts.series import (
     overlays_for_relay,
     period_blocks,
     precompute_overlays,
-    published_clock,
     series_by_fp,
     spark_shared_ylim,
     spark_suffixes,
@@ -25,6 +24,7 @@ from allium.lib.charts.series import (
     period_title_span,
     period_views,
 )
+from allium.lib.time_utils import published_clock
 from tests.unit.charts.conftest import (
     FP_A,
     FP_B,
