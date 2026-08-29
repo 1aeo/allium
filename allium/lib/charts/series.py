@@ -83,11 +83,24 @@ def advertised_mbit(advertised_bandwidth):
     return (advertised_bandwidth or 0) * 8.0 / 1000000.0
 
 
-def month_blocks(bandwidth_relay):
+# Onionoo /bandwidth graph keys → published PNG suffix. 1M is the hero.
+SPARK_ONIONOO = (
+    ("6_months", "6m"),
+    ("1_year", "1y"),
+    ("5_years", "5y"),
+)
+PERIOD_KEYS = (("1_month", "1m"),) + SPARK_ONIONOO
+
+
+def period_blocks(bandwidth_relay, onionoo_key):
     bandwidth_relay = bandwidth_relay or {}
-    write = history_block((bandwidth_relay.get("write_history") or {}).get("1_month"))
-    read = history_block((bandwidth_relay.get("read_history") or {}).get("1_month"))
+    write = history_block((bandwidth_relay.get("write_history") or {}).get(onionoo_key))
+    read = history_block((bandwidth_relay.get("read_history") or {}).get(onionoo_key))
     return write, read
+
+
+def month_blocks(bandwidth_relay):
+    return period_blocks(bandwidth_relay, "1_month")
 
 
 def aligned_1m_series(write_1m, read_1m):
@@ -113,23 +126,48 @@ def aligned_1m_series(write_1m, read_1m):
 
 
 def series_by_fp(details_relays, bandwidth_map):
-    """One walk: ``{fp: {write_1m, read_1m, series}}`` for drawable relays."""
+    """One walk: hero 1M plus any drawable 6M/1Y/5Y blocks."""
     out = {}
     bandwidth_map = bandwidth_map or {}
     for relay in details_relays or []:
         fp = relay.get("fingerprint")
         if not is_relay_fingerprint(fp):
             continue
-        write_1m, read_1m = month_blocks(bandwidth_map.get(fp))
-        series = aligned_1m_series(write_1m, read_1m)
-        if series is None:
+        bw = bandwidth_map.get(fp)
+        by_period = {}
+        for onionoo_key, suffix in PERIOD_KEYS:
+            write, read = period_blocks(bw, onionoo_key)
+            aligned = aligned_1m_series(write, read)
+            if aligned is None:
+                continue
+            by_period[suffix] = {"write": write, "read": read, "series": aligned}
+        hero = by_period.get("1m")
+        if not hero:
             continue
         out[fp] = {
-            "write_1m": write_1m,
-            "read_1m": read_1m,
-            "series": series,
+            "write_1m": hero["write"],
+            "read_1m": hero["read"],
+            "series": hero["series"],
+            "periods": {k: v for k, v in by_period.items() if k != "1m"},
         }
     return out
+
+
+def spark_suffixes(parsed):
+    """Ordered spark ids that have a drawable graph."""
+    periods = (parsed or {}).get("periods") or {}
+    return tuple(suffix for _key, suffix in SPARK_ONIONOO if suffix in periods)
+
+
+def spark_shared_ylim(periods, advertised_bandwidth=0):
+    """Shared Mbit ceiling for one relay's sparks, or None."""
+    ceiling = advertised_mbit(advertised_bandwidth)
+    for parsed in (periods or {}).values():
+        series = parsed.get("series")
+        if not series:
+            continue
+        ceiling = max(ceiling, max(series["write_m"] + series["read_m"] + [0.0]))
+    return ceiling or None
 
 
 def has_1m_graph(bandwidth_relay):
