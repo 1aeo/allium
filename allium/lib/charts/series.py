@@ -83,13 +83,26 @@ def advertised_mbit(advertised_bandwidth):
     return (advertised_bandwidth or 0) * 8.0 / 1000000.0
 
 
-# Onionoo /bandwidth graph keys → published PNG suffix. 1M is the hero.
+# Onionoo /bandwidth graph keys → published PNG suffix. 1M is the default hero.
 SPARK_ONIONOO = (
     ("6_months", "6m"),
     ("1_year", "1y"),
     ("5_years", "5y"),
 )
 PERIOD_KEYS = (("1_month", "1m"),) + SPARK_ONIONOO
+PERIOD_HTML_NAME = {
+    "1m": "index.html",
+    "6m": "6m.html",
+    "1y": "1y.html",
+    "5y": "5y.html",
+}
+PERIOD_TITLE_SPAN = {
+    "1m": "last 30 days",
+    "6m": "last 6 months",
+    "1y": "last year",
+    "5y": "last 5 years",
+}
+PERIOD_SHORT = {"1m": "1M", "6m": "6M", "1y": "1Y", "5y": "5Y"}
 
 
 def period_blocks(bandwidth_relay, onionoo_key):
@@ -148,15 +161,61 @@ def series_by_fp(details_relays, bandwidth_map):
             "write_1m": hero["write"],
             "read_1m": hero["read"],
             "series": hero["series"],
-            "periods": {k: v for k, v in by_period.items() if k != "1m"},
+            "periods": by_period,
         }
     return out
 
 
 def spark_suffixes(parsed):
-    """Ordered spark ids that have a drawable graph."""
+    """Ordered non-1M period ids that have a drawable graph."""
     periods = (parsed or {}).get("periods") or {}
     return tuple(suffix for _key, suffix in SPARK_ONIONOO if suffix in periods)
+
+
+def period_title_span(suffix):
+    return PERIOD_TITLE_SPAN.get(suffix) or suffix
+
+
+def period_interval_label(block):
+    """Onionoo ``interval`` seconds → ``1-day`` / ``1-week`` / ``1-hour``."""
+    if isinstance(block, dict):
+        raw = block.get("interval")
+    else:
+        raw = block
+    try:
+        seconds = int(raw or 0)
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    for unit_s, name in ((604800, "week"), (86400, "day"), (3600, "hour")):
+        if seconds % unit_s == 0:
+            n = seconds // unit_s
+            return "1-{}".format(name) if n == 1 else "{}-{}".format(n, name)
+    return ""
+
+
+def period_axis_caption(suffix, block=None):
+    """Date-axis caption such as ``6M · 1-day``."""
+    short = PERIOD_SHORT.get(suffix) or suffix
+    bin_label = period_interval_label(block)
+    if bin_label:
+        return "{} · {}".format(short, bin_label)
+    return short
+
+
+def period_html_name(suffix):
+    return PERIOD_HTML_NAME.get(suffix) or "%s.html" % suffix
+
+
+def period_views(drawable_periods):
+    """``(filename, hero, sparks)`` for each drawable period as the hero."""
+    wanted = set(drawable_periods or ())
+    ordered = tuple(suffix for _key, suffix in PERIOD_KEYS if suffix in wanted)
+    return tuple(
+        (PERIOD_HTML_NAME[hero], hero, tuple(p for p in ordered if p != hero))
+        for hero in ordered
+    )
 
 
 def spark_shared_ylim(periods, advertised_bandwidth=0):

@@ -72,28 +72,43 @@ def build_relay_bandwidth_1m_payload(
     renderer_version="1",
     write_1m=None,
     read_1m=None,
+    period="1m",
+    write=None,
+    read=None,
 ):
-    """Canonical payload for ``relay_bandwidth_1m``.
+    """Canonical payload for a period hero (``relay_bandwidth_1m`` … ``_5y``).
 
     ``relays_published`` is the 72h clock only; the payload stores
     derived ``currently_overloaded``. Band numbers live in ``bands`` so
     a census edit without a new ``frozen_from`` still misses.
+    1M keeps ``write_1m`` / ``read_1m`` and overlay fields. Longer
+    periods use ``write`` / ``read`` and omit 1M-aligned overlays.
     """
     relay = relay or {}
     bandwidth_relay = bandwidth_relay or {}
     flags = list(relay.get("flags") or [])
     fields = _overload_fields(relay, bandwidth_relay)
-    if write_1m is None:
-        write_1m = history_block(
-            (bandwidth_relay.get("write_history") or {}).get("1_month")
-        )
-    if read_1m is None:
-        read_1m = history_block(
-            (bandwidth_relay.get("read_history") or {}).get("1_month")
-        )
-    return {
+    suffix = period or "1m"
+    if suffix == "1m":
+        if write_1m is None:
+            write_1m = write if write is not None else history_block(
+                (bandwidth_relay.get("write_history") or {}).get("1_month")
+            )
+        if read_1m is None:
+            read_1m = read if read is not None else history_block(
+                (bandwidth_relay.get("read_history") or {}).get("1_month")
+            )
+    else:
+        if write is None:
+            write = write_1m
+        if read is None:
+            read = read_1m
+    payload = {
         "schema_version": CACHE_SCHEMA_VERSION,
-        "chart_id": RELAY_BANDWIDTH_1M_ID,
+        "chart_id": (
+            RELAY_BANDWIDTH_1M_ID if suffix == "1m"
+            else "relay_bandwidth_{}".format(suffix)
+        ),
         "renderer_version": str(renderer_version),
         "fingerprint": relay.get("fingerprint") or "",
         "currently_overloaded": bool(current_overload_status(
@@ -108,38 +123,19 @@ def build_relay_bandwidth_1m_payload(
         "overload_general_timestamp": fields["overload_general_timestamp"],
         "overload_ratelimits": fields["overload_ratelimits"],
         "overload_fd_exhausted": fields["overload_fd_exhausted"],
-        "write_1m": write_1m,
-        "read_1m": read_1m,
-        "family_overlay": family_overlay,
-        "role_overlay": role_overlay,
         "bands": bands_key_fields(bands),
         "bands_frozen_from": bands_frozen_from or "",
     }
-
-
-def build_relay_bandwidth_spark_payload(
-    relay,
-    period,
-    write=None,
-    read=None,
-    renderer_version="1",
-    ylim=None,
-):
-    """Slim payload for a 6M/1Y/5Y spark. No overlays, bands, or identity."""
-    relay = relay or {}
-    suffix = period or ""
-    return {
-        "schema_version": CACHE_SCHEMA_VERSION,
-        "chart_id": "relay_bandwidth_{}".format(suffix),
-        "period": suffix,
-        "renderer_version": str(renderer_version),
-        "fingerprint": relay.get("fingerprint") or "",
-        "advertised_bandwidth": relay.get("advertised_bandwidth") or 0,
-        "last_restarted": relay.get("last_restarted") or "",
-        "write": write,
-        "read": read,
-        "ylim": ylim,
-    }
+    if suffix == "1m":
+        payload["write_1m"] = write_1m
+        payload["read_1m"] = read_1m
+        payload["family_overlay"] = family_overlay
+        payload["role_overlay"] = role_overlay
+        return payload
+    payload["period"] = suffix
+    payload["write"] = write
+    payload["read"] = read
+    return payload
 
 
 def cache_key(payload):

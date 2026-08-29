@@ -1,12 +1,22 @@
 """History <img> is gated by charts_enabled / has_bandwidth_chart."""
 
+import os
+
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
+
+from allium.lib.charts.series import period_views
+from allium.lib.page_writer import write_relay_period_files
+from tests.unit.charts.conftest import FP_JEANGRAE
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "allium" / "templates"
 
 
 def _history_snippet():
+    return (TEMPLATE_DIR / "relay-bandwidth-history.html").read_text(encoding="utf-8")
+
+
+def _page_snippet():
     text = (TEMPLATE_DIR / "relay-info.html").read_text(encoding="utf-8")
     start = text.index("Network Participation")
     end = text.index("</section>", start)
@@ -14,46 +24,34 @@ def _history_snippet():
 
 
 def test_template_gates_history_img():
+    page = _page_snippet()
     snippet = _history_snippet()
+    assert 'include "relay-bandwidth-history.html"' in page
     assert "charts_enabled|default(false) and has_bandwidth_chart|default(false)" in snippet
-    assert 'src="bandwidth-1m.png"' in snippet
+    assert 'src="bandwidth-{{ _hero }}.png"' in snippet
     assert "Throughput and write/read, last 30 days" in snippet
     assert "bandwidth_spark_periods" in snippet
     assert 'src="bandwidth-{{ period }}.png"' in snippet
-    # History sits after Network Participation, still inside #bandwidth.
-    assert snippet.index("Network Participation") < snippet.index("History")
-    assert snippet.index("History") < snippet.index("bandwidth-1m.png")
-    assert snippet.index("bandwidth-1m.png") < snippet.index("relay-bandwidth-sparks")
+    assert 'href="{{ _period_href.get(period, period + \'.html\') }}"' in snippet
+    assert snippet.index("History") < snippet.index("bandwidth-{{ _hero }}.png")
+    assert snippet.index("bandwidth-{{ _hero }}.png") < snippet.index("relay-bandwidth-sparks")
+    assert page.index("Network Participation") < page.index("relay-bandwidth-history.html")
 
 
 def test_jinja_omits_img_when_flags_false():
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
-    # Render just the condition the way the page does.
-    tmpl = env.from_string(
-        "{% if charts_enabled and has_bandwidth_chart %}"
-        "<img src=\"bandwidth-1m.png\" alt=\"Throughput and write/read, last 30 days\">"
-        "{% endif %}"
-    )
+    tmpl = env.get_template("relay-bandwidth-history.html")
     assert tmpl.render(charts_enabled=False, has_bandwidth_chart=True) == ""
     assert tmpl.render(charts_enabled=True, has_bandwidth_chart=False) == ""
     assert tmpl.render(charts_enabled=False, has_bandwidth_chart=False) == ""
     html = tmpl.render(charts_enabled=True, has_bandwidth_chart=True)
     assert 'src="bandwidth-1m.png"' in html
-
-
-_SPARK_TMPL = (
-    "{% if charts_enabled|default(false) and has_bandwidth_chart|default(false) %}"
-    "<img src=\"bandwidth-1m.png\">"
-    "{% for period in bandwidth_spark_periods|default([]) %}"
-    "<img src=\"bandwidth-{{ period }}.png\">"
-    "{% endfor %}"
-    "{% endif %}"
-)
+    assert "last 30 days" in html
 
 
 def test_jinja_omits_sparks_when_no_charts():
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
-    tmpl = env.from_string(_SPARK_TMPL)
+    tmpl = env.get_template("relay-bandwidth-history.html")
     html = tmpl.render(
         charts_enabled=False,
         has_bandwidth_chart=True,
@@ -65,13 +63,63 @@ def test_jinja_omits_sparks_when_no_charts():
 
 def test_jinja_omits_missing_5y_spark():
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
-    tmpl = env.from_string(_SPARK_TMPL)
+    tmpl = env.get_template("relay-bandwidth-history.html")
     html = tmpl.render(
         charts_enabled=True,
         has_bandwidth_chart=True,
+        hero_period="1m",
         bandwidth_spark_periods=["6m", "1y"],
     )
     assert 'src="bandwidth-1m.png"' in html
+    assert 'href="6m.html"' in html
     assert 'src="bandwidth-6m.png"' in html
+    assert 'href="1y.html"' in html
     assert 'src="bandwidth-1y.png"' in html
     assert "bandwidth-5y.png" not in html
+    assert "5y.html" not in html
+
+
+def test_jinja_6m_hero_links_back_to_index():
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
+    tmpl = env.get_template("relay-bandwidth-history.html")
+    html = tmpl.render(
+        charts_enabled=True,
+        has_bandwidth_chart=True,
+        hero_period="6m",
+        bandwidth_spark_periods=["1m", "1y", "5y"],
+    )
+    assert 'src="bandwidth-6m.png"' in html
+    assert html.index('src="bandwidth-6m.png"') < html.index("relay-bandwidth-sparks")
+    assert 'href="index.html"' in html
+    assert 'src="bandwidth-1m.png"' in html
+    assert 'href="1y.html"' in html
+    assert 'href="6m.html"' not in html
+
+
+def test_write_relay_period_files_emits_6m_html(temp_dir):
+    env = Environment(autoescape=True)
+    tmpl = env.from_string(
+        "hero={{ hero_period }};"
+        "{% for p in bandwidth_spark_periods %}"
+        "<a href=\"{{ 'index.html' if p == '1m' else p + '.html' }}\">{{ p }}</a>"
+        "{% endfor %}"
+    )
+    relay_dir = os.path.join(temp_dir, "relay", FP_JEANGRAE)
+    write_relay_period_files(
+        tmpl,
+        relay_dir,
+        {},
+        period_views(("1m", "6m", "1y")),
+        "",
+        FP_JEANGRAE,
+    )
+    index = open(os.path.join(relay_dir, "index.html"), encoding="utf-8").read()
+    six = open(os.path.join(relay_dir, "6m.html"), encoding="utf-8").read()
+    year = open(os.path.join(relay_dir, "1y.html"), encoding="utf-8").read()
+    assert index.startswith("hero=1m")
+    assert 'href="6m.html"' in index
+    assert six.startswith("hero=6m")
+    assert 'href="index.html"' in six
+    assert 'href="1y.html"' in six
+    assert year.startswith("hero=1y")
+    assert not os.path.isfile(os.path.join(relay_dir, "5y.html"))
