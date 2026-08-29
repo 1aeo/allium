@@ -758,3 +758,42 @@ def render_relay_bandwidth_1m(job, dest_path):
 
     _save_trimmed(fig, dest_path)
     return dest_path
+
+
+_SPARK_LABELS = {"6m": "6 months", "1y": "1 year", "5y": "5 years"}
+
+
+def _spark_date_axis(ax, period):
+    if period == "5y":
+        ax.xaxis.set_major_locator(_mdates.YearLocator())
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%Y"))
+    elif period == "1y":
+        ax.xaxis.set_major_locator(_mdates.MonthLocator(interval=2))
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
+    else:
+        ax.xaxis.set_major_locator(_mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
+
+
+def render_relay_bandwidth_spark(job, dest_path):
+    """Write/read/advertised spark for 6M, 1Y, or 5Y. No strip, C, or overlays."""
+    plt = _ensure_mpl()
+    _apply_style(plt)
+    series = aligned_1m_series(job.get("write"), job.get("read"))
+    if not series:
+        raise ValueError("thin or missing spark write/read history")
+    ts, write_m, read_m = series["ts"], series["write_m"], series["read_m"]
+    adv = advertised_mbit(job.get("advertised_bandwidth"))
+    events = _events_in_span(restart_events(job.get("last_restarted")), ts)
+    period = job.get("period") or ""
+    fig, ax = plt.subplots(1, 1, figsize=(3.55, 2.05))
+    fig.subplots_adjust(top=0.78, bottom=0.22, left=0.16, right=0.98)
+    _draw_throughput(ax, ts, read_m, write_m, adv, events, legend_rows=1)
+    if job.get("ylim"):
+        ax.set_ylim(0, job["ylim"] * 1.12)
+    _spark_date_axis(ax, period)
+    ax.set_title(_SPARK_LABELS.get(period, period), loc="left", fontsize=10, pad=6)
+    ax.set_ylabel("Mbit/s")
+    ax.tick_params(labelsize=7)
+    _save_trimmed(fig, dest_path)
+    return dest_path

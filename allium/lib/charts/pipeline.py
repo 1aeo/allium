@@ -8,6 +8,7 @@ from collections import namedtuple
 
 from .cache import (
     build_relay_bandwidth_1m_payload,
+    build_relay_bandwidth_spark_payload,
     cache_hit,
     cache_key,
     cached_png_path,
@@ -16,7 +17,12 @@ from .cache import (
     sidecar_path,
     write_sidecar,
 )
-from .registry import RELAY_BANDWIDTH_1M, enabled_charts
+from .registry import (
+    RELAY_BANDWIDTH_1M,
+    SPARK_SPEC_BY_SUFFIX,
+    enabled_charts,
+    get_chart,
+)
 from .series import (
     build_bandwidth_map,
     chartable_fingerprints,
@@ -24,6 +30,8 @@ from .series import (
     overlays_for_relay,
     precompute_overlays,
     series_by_fp,
+    spark_shared_ylim,
+    spark_suffixes,
 )
 
 _Selection = namedtuple(
@@ -236,9 +244,13 @@ def apply_chart_html_flags(relay_set, args):
     will_run = not _skip_reason(args, relay_set)
     sel = _selection(relay_set, args) if will_run else None
     fps = frozenset(sel.selected) if sel else frozenset()
+    sparks = {
+        fp: spark_suffixes(sel.series.get(fp)) for fp in fps
+    } if sel else {}
     if relay_set is not None:
         relay_set.charts_enabled = will_run
         relay_set.bandwidth_chart_fps = fps
+        relay_set.bandwidth_spark_periods = sparks
         relay_set._chart_selection = sel
     return will_run
 
@@ -250,10 +262,32 @@ def _init_chart_worker():
     import matplotlib.pyplot  # noqa: F401
 
 
-def _render_chart_job(job):
-    from .bandwidth import render_relay_bandwidth_1m
+def _queue_or_publish(jobs, output_dir, spec, fp, payload, extra_render=None):
+    """Cache-hit → publish; miss → one slim spawn job. Returns ``hit`` or ``job``."""
+    key = cache_key(payload)
+    if cache_hit(output_dir, spec, fp, key):
+        if publish_png(
+            cached_png_path(output_dir, spec, fp),
+            published_png_path(output_dir, spec, fp),
+        ):
+            return "hit"
+        return None
+    render = dict(payload)
+    if extra_render:
+        render.update(extra_render)
+    jobs.append({
+        "output_dir": output_dir,
+        "fingerprint": fp,
+        "key": key,
+        "chart_id": spec.chart_id,
+        "period": payload.get("period"),
+        "render": render,
+    })
+    return "job"
 
-    spec = RELAY_BANDWIDTH_1M
+
+def _render_chart_job(job):
+    spec = get_chart(job.get("chart_id")) or RELAY_BANDWIDTH_1M
     output_dir = job["output_dir"]
     fingerprint = job["fingerprint"]
     if not is_relay_fingerprint(fingerprint):
@@ -263,7 +297,8 @@ def _render_chart_job(job):
     key = job["key"]
     cache_png = cached_png_path(output_dir, spec, fingerprint)
     try:
-        render_relay_bandwidth_1m(job["render"], cache_png)
+        module = _import_renderer_module(spec)
+        getattr(module, spec.renderer_name)(job["render"], cache_png)
         write_sidecar(
             sidecar_path(output_dir, spec, fingerprint),
             key, spec.chart_id, fingerprint,
@@ -315,23 +350,33 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             write_1m=parsed["write_1m"],
             read_1m=parsed["read_1m"],
         )
-        key = cache_key(payload)
-        if cache_hit(output_dir, spec, fp, key):
-            if publish_png(
-                cached_png_path(output_dir, spec, fp),
-                published_png_path(output_dir, spec, fp),
-            ):
+        queued = _queue_or_publish(
+            jobs, output_dir, spec, fp, payload,
+            extra_render={"relays_published": published},
+        )
+        if queued == "hit":
+            hits += 1
+            published_n += 1
+        periods = parsed.get("periods") or {}
+        ylim = spark_shared_ylim(periods, relay.get("advertised_bandwidth"))
+        for suffix, spark_spec in SPARK_SPEC_BY_SUFFIX.items():
+            block = periods.get(suffix)
+            if not block:
+                continue
+            spark_payload = build_relay_bandwidth_spark_payload(
+                relay,
+                period=suffix,
+                write=block["write"],
+                read=block["read"],
+                renderer_version=spark_spec.renderer_version,
+                ylim=ylim,
+            )
+            queued = _queue_or_publish(
+                jobs, output_dir, spark_spec, fp, spark_payload,
+            )
+            if queued == "hit":
                 hits += 1
                 published_n += 1
-            continue
-        render = dict(payload)
-        render["relays_published"] = published
-        jobs.append({
-            "output_dir": output_dir,
-            "fingerprint": fp,
-            "key": key,
-            "render": render,
-        })
 
     rendered = 0
     failed = 0
