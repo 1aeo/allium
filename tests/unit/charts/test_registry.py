@@ -19,7 +19,7 @@ def test_period_heroes_registered():
         assert spec is get_chart("relay_bandwidth_%s" % suffix)
         assert spec.renderer_name == "render_relay_bandwidth_1m"
         assert spec.renderer_module == "allium.lib.charts.bandwidth"
-        assert spec.renderer_version == "1"
+        assert spec.renderer_version == "2"
         assert spec.cache_subdir == "relay_bandwidth_%s" % suffix
         assert spec.output_path(fp) == "relay/%s/bandwidth-%s.png" % (fp, suffix)
     spec = ChartSpec("x", "relay/{fingerprint}/x.png", "x", "m", "r", 2)

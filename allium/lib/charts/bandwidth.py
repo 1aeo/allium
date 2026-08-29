@@ -50,7 +50,11 @@ AMBER = ORANGE
 
 THROUGHPUT_TITLE_PAD = 10
 SUBTITLE_TITLE_PAD = 22
-LEGEND_FONTSIZE = 8.0
+TITLE_FONTSIZE = 12.0
+AXIS_FONTSIZE = 10.0
+TICK_FONTSIZE = 11.0
+SUBTITLE_FONTSIZE = 8.0
+LEGEND_FONTSIZE = 8.5
 
 CHROME_WEIGHTS = {
     "write": 2.35,
@@ -105,9 +109,11 @@ def _apply_style(plt):
         "grid.color": "#eeeeee",
         "grid.linewidth": 0.8,
         "font.size": 10,
-        "axes.titlesize": 13,
+        "axes.titlesize": TITLE_FONTSIZE,
         "axes.titleweight": "bold",
-        "axes.labelsize": 10,
+        "axes.labelsize": AXIS_FONTSIZE,
+        "xtick.labelsize": TICK_FONTSIZE,
+        "ytick.labelsize": TICK_FONTSIZE,
         "legend.frameon": False,
         "figure.dpi": 140,
         "savefig.dpi": 140,
@@ -356,7 +362,7 @@ def _apply_chrome_axes(ax):
     ax.grid(True, axis="y")
     ax.xaxis.grid(False)
     ax.set_axisbelow(True)
-    ax.tick_params(colors="#555555")
+    ax.tick_params(colors="#555555", labelsize=TICK_FONTSIZE)
 
 
 def _apply_method_subtitle(ax, text):
@@ -364,7 +370,7 @@ def _apply_method_subtitle(ax, text):
         return
     ax.text(
         0.0, 1.028, text, transform=ax.transAxes, ha="left", va="bottom",
-        fontsize=8.0, color="#6B7280",
+        fontsize=SUBTITLE_FONTSIZE, color="#6B7280",
     )
 
 
@@ -434,7 +440,7 @@ def _apply_throughput_title(ax, title, overload_status, overload_mode, loc, pad)
     if not title:
         return
     if loc == "left":
-        ax.set_title(title, loc="left", pad=pad)
+        ax.set_title(title, loc="left", pad=pad, fontsize=TITLE_FONTSIZE)
         if overload_mode == "title" and overload_status:
             ax.set_title(
                 _overload_quiet_text(overload_status),
@@ -442,10 +448,10 @@ def _apply_throughput_title(ax, title, overload_status, overload_mode, loc, pad)
                 fontsize=9, fontweight="normal",
             )
         return
-    ax.set_title(title, pad=pad)
+    ax.set_title(title, pad=pad, fontsize=TITLE_FONTSIZE)
 
 
-def _ratio_legend_handles(overlays, bands):
+def _ratio_legend_handles(overlays, bands, events=None):
     overlays = overlays or {}
     copy = band_legend_labels(bands)
     op_n = overlays.get("family_n") or 0
@@ -468,6 +474,7 @@ def _ratio_legend_handles(overlays, bands):
         _Patch(facecolor=AMBER, alpha=0.16, edgecolor=AMBER, label=copy["uncommon"]),
         _Patch(facecolor=BAD, alpha=0.16, edgecolor=BAD, label=copy["investigate"]),
     ])
+    handles.extend(_event_legend_handles(events))
     return handles
 
 
@@ -499,7 +506,7 @@ def _apply_ratio_yticks(axr, bands, ylo, yhi):
         tick.set_color(color)
         if color != GRAY:
             tick.set_fontweight("bold")
-            tick.set_fontsize(7.5)
+            tick.set_fontsize(9.0)
 
 
 def _auto_spike_callout(ax, ts, invest, bands):
@@ -615,13 +622,13 @@ def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
     _draw_event_lines(axr, events, lw=CHROME_WEIGHTS["restart"])
     _apply_chrome_axes(axr)
     _pad_xlim(axr, ts)
-    axr.set_ylabel("Write / read")
+    axr.set_ylabel("Write / read", fontsize=AXIS_FONTSIZE)
     axr.set_ylim(ylo, yhi + shelf)
     _apply_ratio_yticks(axr, bands, ylo, yhi)
     _date_axis(axr, period)
     if axis_caption:
-        axr.set_xlabel(axis_caption)
-    handles = _ratio_legend_handles(overlays, bands)
+        axr.set_xlabel(axis_caption, fontsize=AXIS_FONTSIZE)
+    handles = _ratio_legend_handles(overlays, bands, events)
     _place_ratio_legend_shelf(axr, handles)
 
 
@@ -638,7 +645,7 @@ def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows,
     _apply_chrome_axes(ax)
     _pad_xlim(ax, ts)
     _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=legend_rows)
-    ax.set_ylabel("Throughput (Mbit/s)")
+    ax.set_ylabel("Throughput (Mbit/s)", fontsize=AXIS_FONTSIZE)
     _date_axis(ax, period)
 
 
@@ -773,6 +780,7 @@ def render_relay_bandwidth_1m(job, dest_path):
     )
     axr.set_title(
         _sibling_ratio_title(title, bands), loc=title_loc, pad=title_pad,
+        fontsize=TITLE_FONTSIZE,
     )
     if ratio_sub:
         _apply_method_subtitle(axr, ratio_sub)

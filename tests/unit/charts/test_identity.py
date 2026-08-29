@@ -1,6 +1,7 @@
 """Tests for chart identity and flag-set role."""
 
 from allium.lib.charts.identity import (
+    IDENTITY_FONTSIZE,
     ROLE_EXIT,
     ROLE_EXIT_GUARD,
     ROLE_GUARD,
@@ -22,6 +23,10 @@ def test_operator_from_contact_uses_url_host():
     assert operator_from_contact("url:digitalcourage.social") == "digitalcourage.social"
     for junk in ("", None, "just an email <a@b.com>", "url:none", "url:localhost", "url:notadomain"):
         assert operator_from_contact(junk) == ""
+
+
+def test_identity_fontsize_matches_page_body():
+    assert IDENTITY_FONTSIZE == 11
 
 
 def test_chart_identity_joins_nickname_and_operator():
