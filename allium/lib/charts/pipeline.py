@@ -64,7 +64,7 @@ def _bandwidth_spec(suffix):
         cache_subdir="relay_bandwidth_%s" % suffix,
         renderer_module="allium.lib.charts.bandwidth",
         renderer_name="render_relay_bandwidth_1m",
-        renderer_version="2",
+        renderer_version="3",
     )
 
 

@@ -11,8 +11,13 @@ from .identity import peers_word
 
 
 def format_day(dt):
-    """``22 Jul`` without a leading zero. Portable (no ``%-d``)."""
-    return "{} {}".format(dt.day, dt.strftime("%b"))
+    """``Jul 22`` without a leading zero. Portable (no ``%-d``)."""
+    return "{} {}".format(dt.strftime("%b"), dt.day)
+
+
+def format_day_time(dt):
+    """``Aug 28, 22:00 UTC``."""
+    return "{}, {} UTC".format(format_day(dt), dt.strftime("%H:%M"))
 
 
 def format_day_span(dates):
@@ -25,9 +30,19 @@ def format_day_span(dates):
     if consec:
         start, end = dates[0], dates[-1]
         if start.month == end.month and start.year == end.year:
-            return "{}–{}".format(start.day, format_day(end))
+            return "{} {}–{}".format(start.strftime("%b"), start.day, end.day)
         return "{}–{}".format(format_day(start), format_day(end))
     return ", ".join(format_day(d) for d in dates)
+
+
+def rows_in_span(rows, ts):
+    """Keep rows whose timestamp is on the drawn x-span ``[ts[0], ts[-1]]``."""
+    if not rows:
+        return []
+    if not ts:
+        return list(rows)
+    lo, hi = ts[0], ts[-1]
+    return [row for row in rows if lo <= row[0] <= hi]
 
 
 def _tight_span(span):
@@ -35,7 +50,7 @@ def _tight_span(span):
 
 
 def _outside_date_bit(outcome, span):
-    """`` 22–23 Jul`` or `` all month`` after Outside the band."""
+    """`` Jul 22–23`` or `` all month`` after Outside the band."""
     if _tight_span(span):
         return " {}".format(span)
     if outcome.get("persistent"):
@@ -81,6 +96,7 @@ def summarize_bandwidth_outcome(
             for t, w, r in zip(ts or [], write_m or [], read_m or [])
             if r
         ]
+    rows = rows_in_span(rows, ts)
     invest = [row for row in rows if row[3] < ilo or row[3] > ihi]
     if len(rows) < 3:
         return {
@@ -88,6 +104,7 @@ def summarize_bandwidth_outcome(
             "role": role,
             "overloaded": bool(overload_status),
             "invest": invest,
+            "ts": ts,
         }
     mean_ratio = sum(row[3] for row in rows) / float(len(rows))
     mean_write = sum(row[1] for row in rows) / float(len(rows))
@@ -152,6 +169,7 @@ def summarize_bandwidth_outcome(
         "persistent": persistent,
         "thru": thru,
         "overloaded": bool(overload_status),
+        "ts": ts,
     }
 
 
@@ -183,9 +201,10 @@ def format_outcome_subtitle(outcome, which):
         return ""
     role = outcome["role"]
     zone = outcome["zone"]
-    n_inv = len(outcome["invest"])
+    invest = rows_in_span(outcome["invest"], outcome.get("ts"))
+    n_inv = len(invest)
     n_off = len(outcome["off"])
-    span = format_day_span([row[0].date() for row in outcome["invest"]])
+    span = format_day_span([row[0].date() for row in invest])
     util_bit = _util_clause(outcome)
 
     if which == "throughput":

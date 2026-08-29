@@ -4,9 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from allium.lib.charts.bands import bands_for_flags
 from allium.lib.charts.outcome import (
+    format_day,
     format_day_span,
+    format_day_time,
     format_outcome_subtitle,
     is_all_clear,
+    rows_in_span,
     summarize_bandwidth_outcome,
 )
 
@@ -26,8 +29,13 @@ def _typical_guard_series(n=10):
 
 def test_format_day_span_consecutive_and_single():
     ts = _days(2, datetime(2026, 7, 22, 12, tzinfo=timezone.utc))
-    assert format_day_span([ts[0].date()]) == "22 Jul"
-    assert format_day_span([t.date() for t in ts]) == "22–23 Jul"
+    assert format_day(ts[0]) == "Jul 22"
+    assert format_day_span([ts[0].date()]) == "Jul 22"
+    assert format_day_span([t.date() for t in ts]) == "Jul 22–23"
+    cross = _days(2, datetime(2026, 7, 31, 12, tzinfo=timezone.utc))
+    assert format_day_span([t.date() for t in cross]) == "Jul 31–Aug 1"
+    noon = datetime(2026, 8, 28, 22, 0, tzinfo=timezone.utc)
+    assert format_day_time(noon) == "Aug 28, 22:00 UTC"
 
 
 def test_all_clear_subtitles_are_empty():
@@ -57,11 +65,11 @@ def test_write_spiked_includes_dates():
     thru = format_outcome_subtitle(outcome, "throughput")
     ratio = format_outcome_subtitle(outcome, "ratio")
     assert thru.startswith("Write spiked")
-    assert "22–23 Jul" in thru
+    assert "Jul 22–23" in thru
     assert "Mbit/s" in thru
     assert "of advertised" in thru
     assert "Outside the Guard band" in ratio
-    assert "22–23 Jul" in ratio
+    assert "Jul 22–23" in ratio
     assert "family and peers stayed" in ratio
 
 
@@ -93,6 +101,34 @@ def test_uncommon_inside_has_no_forced_date():
     ratio = format_outcome_subtitle(outcome, "ratio")
     assert "inside the Guard band" in ratio
     assert "Jul" not in ratio
+
+
+def test_spike_outside_series_span_is_not_cited():
+    ts = _days(8)
+    write = [80.0] * 8
+    read = [76.0] * 8
+    write[6] = 400.0
+    write[7] = 350.0
+    read[6] = 80.0
+    read[7] = 80.0
+    outside = datetime(2025, 9, 28, 12, tzinfo=timezone.utc)
+    rows = [(t, w, r, w / r) for t, w, r in zip(ts, write, read) if r]
+    rows.append((outside, 500.0, 80.0, 500.0 / 80.0))
+    assert not rows_in_span([rows[-1]], ts)
+    bands = bands_for_flags(["Guard"])
+    outcome = summarize_bandwidth_outcome(
+        ts, write, read, 650.0, {}, bands, None, rows=rows,
+    )
+    thru = format_outcome_subtitle(outcome, "throughput")
+    ratio = format_outcome_subtitle(outcome, "ratio")
+    assert "Sep 28" not in thru
+    assert "Sep" not in thru
+    assert "Jul 22–23" in thru
+    assert "Sep 28" not in ratio
+    assert "Jul 22–23" in ratio
+    stuffed = dict(outcome)
+    stuffed["invest"] = list(outcome["invest"]) + [rows[-1]]
+    assert "Sep 28" not in format_outcome_subtitle(stuffed, "throughput")
 
 
 def test_thin_history_is_empty():

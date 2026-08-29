@@ -23,7 +23,10 @@ from .identity import (
 )
 from .outcome import (
     format_day,
+    format_day_span,
+    format_day_time,
     format_outcome_subtitle,
+    rows_in_span,
     summarize_bandwidth_outcome,
 )
 from ..time_utils import parse_onionoo_timestamp, published_clock
@@ -171,10 +174,7 @@ def _overload_quiet_text(status):
         return None
     last = status.get("last_report")
     if last:
-        when = "{} {} UTC".format(
-            format_day(last), last.strftime("%H:%M"),
-        )
-        return "currently overloaded · last report {}".format(when)
+        return "currently overloaded · last report {}".format(format_day_time(last))
     return "currently overloaded"
 
 
@@ -414,19 +414,30 @@ def _pad_xlim(ax, ts):
     ax.set_xlim(xmin, xmax + pad)
 
 
-def _date_axis(ax, period="1m"):
+def series_crosses_calendar_year(ts):
+    return bool(ts) and ts[0].year != ts[-1].year
+
+
+def date_axis_strftime(period, ts=None):
+    """Tick format for the shared date axis. 5Y stays ``%Y``."""
+    if period == "5y":
+        return "%Y"
+    if period in ("1y", "6m"):
+        return "%b '%y" if series_crosses_calendar_year(ts) else "%b"
+    return "%b %d"
+
+
+def _date_axis(ax, period="1m", ts=None):
+    fmt = date_axis_strftime(period, ts)
     if period == "5y":
         ax.xaxis.set_major_locator(_mdates.YearLocator())
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%Y"))
     elif period == "1y":
         ax.xaxis.set_major_locator(_mdates.MonthLocator(interval=2))
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
     elif period == "6m":
         ax.xaxis.set_major_locator(_mdates.MonthLocator())
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b"))
     else:
-        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%b %d"))
         ax.xaxis.set_major_locator(_mdates.WeekdayLocator(interval=1))
+    ax.xaxis.set_major_formatter(_mdates.DateFormatter(fmt))
 
 
 def _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=1):
@@ -510,6 +521,7 @@ def _apply_ratio_yticks(axr, bands, ylo, yhi):
 
 
 def _auto_spike_callout(ax, ts, invest, bands):
+    invest = rows_in_span(invest, ts)
     if not ts or not invest:
         return False
     ihi = (bands or {}).get("invest_hi", RATIO_INVESTIGATE_HI)
@@ -533,14 +545,15 @@ def _auto_spike_callout(ax, ts, invest, bands):
         if peak_ratio > RATIO_SCALE_HI
         else "beyond this role’s p98"
     )
+    when = format_day_span([row[0].date() for row in run])
     if len(run) == 1:
         label = "{} · write/read {:.2f} · {}".format(
-            format_day(peak_t), peak_ratio, scale_bit,
+            when, peak_ratio, scale_bit,
         )
     else:
         ratios = " / ".join("{:.2f}".format(row[3]) for row in run)
-        label = "{}–{} · write/read {} · {}".format(
-            run[0][0].day, format_day(run[-1][0]), ratios, scale_bit,
+        label = "{} · write/read {} · {}".format(
+            when, ratios, scale_bit,
         )
     span = (ts[-1] - ts[0]).total_seconds()
     frac = ((peak_t - ts[0]).total_seconds() / span) if span else 0.0
@@ -625,7 +638,7 @@ def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
     axr.set_ylabel("Write / read", fontsize=AXIS_FONTSIZE)
     axr.set_ylim(ylo, yhi + shelf)
     _apply_ratio_yticks(axr, bands, ylo, yhi)
-    _date_axis(axr, period)
+    _date_axis(axr, period, ts)
     if axis_caption:
         axr.set_xlabel(axis_caption, fontsize=AXIS_FONTSIZE)
     handles = _ratio_legend_handles(overlays, bands, events)
@@ -646,7 +659,7 @@ def _draw_throughput(ax, ts, read_m, write_m, advertised, events, legend_rows,
     _pad_xlim(ax, ts)
     _throughput_ylim(ax, read_m, write_m, advertised, legend_rows=legend_rows)
     ax.set_ylabel("Throughput (Mbit/s)", fontsize=AXIS_FONTSIZE)
-    _date_axis(ax, period)
+    _date_axis(ax, period, ts)
 
 
 def _bind_overlay(ts, write_1m, overlay):
