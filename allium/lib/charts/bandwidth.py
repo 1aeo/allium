@@ -124,17 +124,22 @@ def _apply_style(plt):
 
 
 def _trim_rgba(rgba, pad_px=12, white=250):
-    """Crop outer white. Do not use savefig(bbox='tight') for this figure."""
-    rgb = rgba[:, :, :3]
-    ink = rgb.min(axis=2) < white
-    rows = _np.where(ink.any(axis=1))[0]
-    cols = _np.where(ink.any(axis=0))[0]
-    if len(rows) == 0 or len(cols) == 0:
+    """Crop outer white. Do not use savefig(bbox='tight') for this figure.
+
+    Compare channels on the RGBA view. ``rgb.min(axis=2)`` on a strided
+    ``[:,:,:3]`` slice is ~10× slower and yields the same mask.
+    """
+    ink = rgba[:, :, 0] < white
+    ink |= rgba[:, :, 1] < white
+    ink |= rgba[:, :, 2] < white
+    rows = _np.flatnonzero(ink.any(axis=1))
+    cols = _np.flatnonzero(ink.any(axis=0))
+    if rows.size == 0 or cols.size == 0:
         return rgba
     y0 = max(0, int(rows[0]) - pad_px)
-    y1 = min(rgb.shape[0], int(rows[-1]) + pad_px + 1)
+    y1 = min(ink.shape[0], int(rows[-1]) + pad_px + 1)
     x0 = max(0, int(cols[0]) - pad_px)
-    x1 = min(rgb.shape[1], int(cols[-1]) + pad_px + 1)
+    x1 = min(ink.shape[1], int(cols[-1]) + pad_px + 1)
     return rgba[y0:y1, x0:x1]
 
 
@@ -142,7 +147,7 @@ def _save_trimmed(fig, dest_path):
     import os
 
     fig.canvas.draw()
-    rgba = _np.asarray(fig.canvas.buffer_rgba())
+    rgba = _np.asarray(fig.canvas.buffer_rgba(), copy=False)
     parent = os.path.dirname(dest_path)
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -309,9 +314,8 @@ def _place_legend_above(ax, handles, wrap_last=False):
             ncol=len(handles) - 1, **style,
         )
         ax.add_artist(first)
-        fig = ax.figure
-        fig.canvas.draw()
-        bbox = first.get_window_extent(fig.canvas.get_renderer())
+        # Text metrics only — a full canvas.draw() matches this bbox.
+        bbox = first.get_window_extent(ax.figure.canvas.get_renderer())
         (x0, y0), _ = ax.transAxes.inverted().transform(
             [[bbox.x0, bbox.y0], [bbox.x1, bbox.y1]]
         )
@@ -381,11 +385,12 @@ def _apply_chart_identity(ax, identity, loc="left", title_pad=None):
     ha = "left" if loc == "left" else "center"
     x = 0.0 if loc == "left" else 0.5
     fig = ax.figure
-    fig.canvas.draw()
+    # loc=left leaves ax.title empty, so the pad/fontsize fallback is what
+    # we actually use. Measure via get_renderer when a center title exists;
+    # do not canvas.draw() just to read an extent.
     title = ax.title
     if title is not None and title.get_text():
-        renderer = fig.canvas.get_renderer()
-        title_top_px = title.get_window_extent(renderer).y1
+        title_top_px = title.get_window_extent(fig.canvas.get_renderer()).y1
         axes_top_px = ax.transAxes.transform((0.0, 1.0))[1]
         offset_in = (
             (title_top_px - axes_top_px) / fig.dpi

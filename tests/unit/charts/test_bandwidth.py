@@ -102,6 +102,32 @@ def test_ratio_legend_includes_restart_handle_when_in_span():
     assert not any(label.startswith("Last restarted") for label in omitted)
 
 
+def test_trim_rgba_matches_strided_min_mask():
+    """Channel-or trim must match rgb.min(axis=2) < white on a strided RGBA view."""
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg", force=True)
+    import numpy as np
+
+    from allium.lib.charts.bandwidth import _ensure_mpl, _trim_rgba
+
+    _ensure_mpl()
+    rgba = np.full((40, 50, 4), 255, dtype=np.uint8)
+    rgba[8:30, 6:44, :3] = 10
+    rgba[12, 3, :3] = (200, 200, 200)
+    got = _trim_rgba(rgba, pad_px=2, white=250)
+    ink = rgba[:, :, :3].min(axis=2) < 250
+    rows = np.where(ink.any(axis=1))[0]
+    cols = np.where(ink.any(axis=0))[0]
+    expect = rgba[
+        max(0, int(rows[0]) - 2):min(40, int(rows[-1]) + 3),
+        max(0, int(cols[0]) - 2):min(50, int(cols[-1]) + 3),
+    ]
+    assert got.shape == expect.shape
+    assert np.array_equal(got, expect)
+    blank = np.full((8, 8, 4), 255, dtype=np.uint8)
+    assert _trim_rgba(blank, pad_px=2, white=250) is blank
+
+
 def test_date_axis_year_when_series_crosses_dec_jan():
     from datetime import datetime, timezone
 
