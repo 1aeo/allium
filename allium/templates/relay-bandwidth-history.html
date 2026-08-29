@@ -20,7 +20,7 @@
     <div class="relay-bandwidth-sparks">
         {%- for period in bandwidth_spark_periods %}
         <a class="relay-bandwidth-spark"
-           href="{{ _period_href.get(period, period + '.html') }}">
+           href="{{ _period_href.get(period, period + '.html') }}#bandwidth">
             <img src="bandwidth-{{ period }}.png"
                  alt="Throughput and write/read, {{ _period_alt.get(period, period) }}">
         </a>
