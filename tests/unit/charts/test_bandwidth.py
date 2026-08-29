@@ -69,3 +69,34 @@ def test_period_hero_renderer_writes_png(temp_dir):
     with open(dest, "rb") as handle:
         assert handle.read(8) == b"\x89PNG\r\n\x1a\n"
     assert os.path.getsize(dest) > 2000
+
+
+def _ratio_labels(overlays, bands, events):
+    from allium.lib.charts.bandwidth import _ensure_mpl, _ratio_legend_handles
+
+    _ensure_mpl()
+    return [handle.get_label() for handle in _ratio_legend_handles(overlays, bands, events)]
+
+
+def test_ratio_legend_includes_restart_handle_when_in_span():
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg", force=True)
+    from datetime import datetime, timezone
+
+    from allium.lib.charts.bands import bands_for_flags
+    from allium.lib.charts.bandwidth import _events_in_span, restart_events
+
+    ts = [
+        datetime(2026, 7, 16, tzinfo=timezone.utc),
+        datetime(2026, 7, 25, tzinfo=timezone.utc),
+    ]
+    in_span = _events_in_span(restart_events("2026-07-20 00:00:00"), ts)
+    assert in_span
+    labels = _ratio_labels({}, bands_for_flags(["Guard"]), in_span)
+    restart_labels = [label for label in labels if label.startswith("Last restarted")]
+    assert restart_labels
+    assert restart_labels[0] == "Last restarted  20 Jul"
+
+    out_of_span = _events_in_span(restart_events("2025-10-01 00:00:00"), ts)
+    omitted = _ratio_labels({}, bands_for_flags(["Guard"]), out_of_span)
+    assert not any(label.startswith("Last restarted") for label in omitted)
