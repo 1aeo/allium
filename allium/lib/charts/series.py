@@ -87,10 +87,6 @@ def period_blocks(bandwidth_relay, onionoo_key):
     return write, read
 
 
-def month_blocks(bandwidth_relay):
-    return period_blocks(bandwidth_relay, "1_month")
-
-
 def aligned_1m_series(write_1m, read_1m):
     """Intersect write/read 1M points. None when thinner than two dots."""
     w_ts, w_vals = history_series(write_1m)
@@ -147,10 +143,6 @@ def spark_suffixes(parsed):
     return tuple(suffix for _key, suffix in SPARK_ONIONOO if suffix in periods)
 
 
-def period_title_span(suffix):
-    return PERIOD_TITLE_SPAN.get(suffix) or suffix
-
-
 def period_interval_label(block):
     """Onionoo ``interval`` seconds → ``1-day`` / ``1-week`` / ``1-hour``."""
     if isinstance(block, dict):
@@ -179,10 +171,6 @@ def period_axis_caption(suffix, block=None):
     return short
 
 
-def period_html_name(suffix):
-    return PERIOD_HTML_NAME.get(suffix) or "%s.html" % suffix
-
-
 def period_views(drawable_periods):
     """``(filename, hero, sparks)`` for each drawable period as the hero."""
     wanted = set(drawable_periods or ())
@@ -193,22 +181,6 @@ def period_views(drawable_periods):
     )
 
 
-def spark_shared_ylim(periods, advertised_bandwidth=0):
-    """Shared Mbit ceiling for one relay's sparks, or None."""
-    ceiling = advertised_mbit(advertised_bandwidth)
-    for parsed in (periods or {}).values():
-        series = parsed.get("series")
-        if not series:
-            continue
-        ceiling = max(ceiling, max(series["write_m"] + series["read_m"] + [0.0]))
-    return ceiling or None
-
-
-def has_1m_graph(bandwidth_relay):
-    """Thin boolean for tests. Production uses ``series_by_fp``."""
-    return aligned_1m_series(*month_blocks(bandwidth_relay)) is not None
-
-
 def _daily_ratios(series, min_bps=MIN_THROUGHPUT_BPS):
     if not series:
         return {}
@@ -217,11 +189,6 @@ def _daily_ratios(series, min_bps=MIN_THROUGHPUT_BPS):
         if r and (w + r) / 2.0 >= min_bps:
             out[t] = w / r
     return out
-
-
-def daily_ratios(bandwidth_relay, min_bps=MIN_THROUGHPUT_BPS):
-    """``{timestamp: write/read}`` for overlay medians. Skips thin days."""
-    return _daily_ratios(aligned_1m_series(*month_blocks(bandwidth_relay)), min_bps)
 
 
 def align_overlay_values(median_by_ts, write_1m):

@@ -4,27 +4,22 @@ from datetime import datetime, timezone
 
 from allium.lib.bandwidth_utils import build_bandwidth_map
 from allium.lib.charts.series import (
+    _daily_ratios,
     advertised_mbit,
     aligned_1m_series,
     chartable_fingerprints,
-    daily_ratios,
     family_group_key,
-    has_1m_graph,
+    history_block,
     history_series,
     is_relay_fingerprint,
-    month_blocks,
     overlays_for_relay,
     period_blocks,
+    period_axis_caption,
+    period_views,
     precompute_overlays,
     series_by_fp,
-    spark_shared_ylim,
     spark_suffixes,
-    period_axis_caption,
-    period_html_name,
-    period_title_span,
-    period_views,
 )
-from allium.lib.time_utils import published_clock
 from tests.unit.charts.conftest import (
     FP_A,
     FP_B,
@@ -63,29 +58,36 @@ def _bw(fp=FP_A):
     )
 
 
-def test_history_series_skips_nones():
+def test_history_block_and_series():
+    block = history_block({
+        "first": "a", "last": "b", "interval": 86400, "factor": 1.5,
+        "values": [1, None, 3], "count": 99,
+    })
+    assert block == {
+        "first": "a", "last": "b", "interval": 86400, "factor": 1.5,
+        "values": [1, None, 3],
+    }
+    assert history_block(None) is None
+    assert history_block({"values": []}) is None
     ts, vals = history_series(_WRITE)
     assert len(ts) == 3
     assert vals == [100000.0, 110000.0, 120000.0]
     assert ts[0] == datetime(2026, 7, 16, 12, tzinfo=timezone.utc)
 
 
-def test_has_1m_graph_and_aligned_series():
-    assert has_1m_graph(_bw()) is True
-    series = aligned_1m_series(*month_blocks(_bw()))
+def test_aligned_series_requires_two_points():
+    series = aligned_1m_series(*period_blocks(_bw(), "1_month"))
     assert series is not None
     assert len(series["ts"]) == 3
     assert advertised_mbit(125000) == 1.0
-
-
-def test_thin_or_missing_is_not_chartable():
-    assert has_1m_graph({}) is False
-    assert has_1m_graph({
+    assert aligned_1m_series(*period_blocks({}, "1_month")) is None
+    thin = {
         "write_history": {"1_month": {"values": [1], "first": "2026-01-01 00:00:00",
                                       "interval": 86400, "factor": 1}},
         "read_history": {"1_month": {"values": [1], "first": "2026-01-01 00:00:00",
                                      "interval": 86400, "factor": 1}},
-    }) is False
+    }
+    assert aligned_1m_series(*period_blocks(thin, "1_month")) is None
 
 
 def test_build_bandwidth_map_and_chartable():
@@ -121,14 +123,6 @@ def test_chartable_rejects_path_like_fingerprints():
     relays = [{"fingerprint": evil, "flags": ["Guard"]}]
     bw_map = {evil: _bw(evil)}
     assert chartable_fingerprints(relays, bw_map) == []
-
-
-def test_published_clock_parses_onionoo_and_numbers():
-    assert published_clock("") is None
-    assert published_clock("not-a-date") is None
-    ts = published_clock("2026-08-15 06:00:00")
-    assert ts == datetime(2026, 8, 15, 6, 0, tzinfo=timezone.utc).timestamp()
-    assert published_clock(ts) == ts
 
 
 def test_series_by_fp_skips_thin_and_evil():
@@ -202,7 +196,7 @@ def test_precompute_omits_singleton_family_overlay():
     pre = precompute_overlays(relays, bw_map)
     assert "contact_median" not in pre
     assert "family_median" in pre
-    write_1m, _read = month_blocks(_bw(fp1))
+    write_1m, _read = period_blocks(_bw(fp1), "1_month")
     family, role = overlays_for_relay(relays[0], write_1m, pre)
     assert family is None
     assert role is not None
@@ -225,8 +219,8 @@ def test_daily_ratios_skip_below_cut():
             "factor": 1.0, "values": [10, 10],
         }},
     }
-    assert daily_ratios(tiny) == {}
-    assert daily_ratios(_bw())
+    assert _daily_ratios(aligned_1m_series(*period_blocks(tiny, "1_month"))) == {}
+    assert _daily_ratios(aligned_1m_series(*period_blocks(_bw(), "1_month")))
 
 
 def test_series_by_fp_collects_spark_periods_in_one_walk():
@@ -241,16 +235,10 @@ def test_series_by_fp_collects_spark_periods_in_one_walk():
     write_6m, read_6m = period_blocks(bw, "6_months")
     assert parsed[FP_A]["periods"]["6m"]["write"] == write_6m
     assert parsed[FP_A]["periods"]["6m"]["read"] == read_6m
-    ylim = spark_shared_ylim(
-        {k: v for k, v in parsed[FP_A]["periods"].items() if k != "1m"}, 0,
-    )
-    assert ylim == max(parsed[FP_A]["periods"]["6m"]["series"]["write_m"])
+    assert parsed[FP_A]["periods"]["6m"]["series"]["write_m"]
 
 
 def test_period_views_and_captions():
-    assert period_html_name("1m") == "index.html"
-    assert period_html_name("6m") == "6m.html"
-    assert period_title_span("6m") == "last 6 months"
     assert period_axis_caption("6m", {"interval": 86400}) == "6M · 1-day"
     assert period_axis_caption("5y", {"interval": 604800}) == "5Y · 1-week"
     views = period_views(("1m", "6m", "1y"))

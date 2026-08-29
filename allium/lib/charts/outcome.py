@@ -148,13 +148,10 @@ def summarize_bandwidth_outcome(
         "invest": invest,
         "off": off,
         "who": who,
-        "family_left": family_left,
-        "role_left": role_left,
         "spike": spike,
         "persistent": persistent,
         "thru": thru,
         "overloaded": bool(overload_status),
-        "restarts": [],
     }
 
 
