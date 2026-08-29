@@ -790,6 +790,15 @@ Country: unknown
 <div class="relay-bandwidth-history">
     <img src="bandwidth-1m.png"
          alt="Throughput and write/read, last 30 days">
+    {% if bandwidth_spark_periods|default([]) %}
+    {% set _spark_alt = {'6m': '6 months', '1y': '1 year', '5y': '5 years'} %}
+    <div class="relay-bandwidth-sparks">
+        {% for period in bandwidth_spark_periods %}
+        <img src="bandwidth-{{ period }}.png"
+             alt="Write, read, and advertised, {{ _spark_alt.get(period, period) }}">
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 </section>

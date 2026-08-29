@@ -125,3 +125,16 @@ dt:target {
     height: auto;
     display: block;
 }
+.relay-bandwidth-sparks {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+.relay-bandwidth-history .relay-bandwidth-sparks img {
+    width: calc((100% - 16px) / 3);
+    flex: 0 0 calc((100% - 16px) / 3);
+    height: auto;
+    display: block;
+}

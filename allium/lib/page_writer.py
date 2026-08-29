@@ -1590,6 +1590,7 @@ def write_relay_info(relay_set):
 
     charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
     bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
+    spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1623,6 +1624,7 @@ def write_relay_info(relay_set):
             page_number=1,
             charts_enabled=charts_enabled,
             has_bandwidth_chart=relay["fingerprint"] in bandwidth_chart_fps,
+            bandwidth_spark_periods=spark_by_fp.get(relay["fingerprint"]) or (),
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
