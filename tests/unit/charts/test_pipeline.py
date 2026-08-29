@@ -14,11 +14,16 @@ from allium.lib.charts.pipeline import (
     MAX_CHART_WORKERS,
     _INSTALL_HINT,
     _NO_BANDWIDTH_HINT,
+    _RENDER_SKIP_KEYS,
     _skip_reason,
     add_chart_arguments,
+    allocate_period_workers,
+    chart_imap_chunksize,
     default_chart_workers,
+    job_period,
     matplotlib_is_available,
     maybe_run_charts,
+    partition_jobs_by_period,
     resolve_charts_mode,
     run_chart_pass,
 )
@@ -62,12 +67,17 @@ def test_cli_charts_flags():
     ])
     assert ramp.charts_limit == 3
     assert ramp.chart_fingerprints == ["AA", "$bb"]
-    auto = max(1, min(4, os.cpu_count() or 1))
+    auto = max(1, min(MAX_CHART_WORKERS, os.cpu_count() or 1))
+    assert MAX_CHART_WORKERS == 16
     assert default_chart_workers(0) == auto
     assert default_chart_workers(2) == 2
     assert default_chart_workers(8) == 8
     assert default_chart_workers(16) == MAX_CHART_WORKERS
+    assert default_chart_workers(32) == MAX_CHART_WORKERS
     assert default_chart_workers(-1) == auto
+    help_text = _parser().format_help()
+    assert "min(CPU, 16)" in help_text
+    assert "1M/6M/1Y/5Y" in help_text
 
 
 @pytest.mark.parametrize("args,mpl,reason,hint", [
@@ -347,3 +357,152 @@ def test_cache_hit_is_per_period(temp_dir, monkeypatch):
     assert os.path.isfile(
         os.path.join(temp_dir, "relay", FP_JEANGRAE, "bandwidth-6m.png")
     )
+
+
+def test_job_period_reads_wrapper_chart_id_and_render():
+    assert job_period({"period": "6m", "chart_id": "relay_bandwidth_1m"}) == "6m"
+    assert job_period({"chart_id": "relay_bandwidth_5y"}) == "5y"
+    assert job_period({"render": {"period": "1y"}}) == "1y"
+    assert job_period({}) == "1m"
+
+
+def test_partition_jobs_by_period_keeps_known_order():
+    jobs = [
+        {"period": "1m", "fingerprint": "a"},
+        {"period": "6m", "fingerprint": "a"},
+        {"period": "1y", "fingerprint": "a"},
+        {"period": "5y", "fingerprint": "a"},
+        {"period": "1m", "fingerprint": "b"},
+        {"chart_id": "relay_bandwidth_6m", "fingerprint": "b"},
+    ]
+    groups = partition_jobs_by_period(jobs)
+    assert [period for period, _group in groups] == ["1m", "6m", "1y", "5y"]
+    assert [len(group) for _period, group in groups] == [2, 2, 1, 1]
+
+
+@pytest.mark.parametrize("workers,n_groups,expected", [
+    (16, 4, [4, 4, 4, 4]),
+    (8, 4, [2, 2, 2, 2]),
+    (5, 4, [2, 1, 1, 1]),
+    (4, 4, [1, 1, 1, 1]),
+    (7, 3, [3, 2, 2]),
+])
+def test_allocate_period_workers_splits_one_budget(workers, n_groups, expected):
+    alloc = allocate_period_workers(workers, n_groups)
+    assert alloc == expected
+    assert sum(alloc) == workers
+    assert all(count >= 1 for count in alloc)
+
+
+def test_allocate_period_workers_falls_back_when_fewer_than_periods():
+    assert allocate_period_workers(3, 4) is None
+    assert allocate_period_workers(0, 4) is None
+    assert allocate_period_workers("x", 4) is None
+
+
+def test_chart_imap_chunksize_batches_without_huge_chunks():
+    assert chart_imap_chunksize(1, 4) == 1
+    assert chart_imap_chunksize(8000, 4) == 32
+    assert chart_imap_chunksize(8000, 1) == 32
+    assert chart_imap_chunksize(10, 2) == 1
+    assert 1 <= chart_imap_chunksize(100, 4) <= 32
+
+
+def test_four_periods_use_one_runner_each(temp_dir, monkeypatch):
+    pool_calls = []
+    imap_periods = []
+
+    class TrackingPool(object):
+        def __init__(self, **kwargs):
+            pool_calls.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def imap_unordered(self, func, jobs, chunksize=1):
+            imap_periods.append([job.get("period") for job in jobs])
+            return [func(job) for job in jobs]
+
+    class TrackingCtx(object):
+        def Pool(self, **kwargs):
+            return TrackingPool(**kwargs)
+
+    monkeypatch.setattr(
+        "allium.lib.charts.pipeline.matplotlib_is_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
+        fake_render,
+    )
+    monkeypatch.setattr("multiprocessing.get_context", lambda name: TrackingCtx())
+
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months", "1_year", "5_years")),
+    )])
+    result = run_chart_pass(relay_set, on_args(temp_dir, chart_workers=4))
+    assert result.rendered == 4
+    assert len(pool_calls) == 4
+    assert [call.get("processes") for call in pool_calls] == [1, 1, 1, 1]
+    assert [set(group) for group in imap_periods] == [
+        {"1m"}, {"6m"}, {"1y"}, {"5y"},
+    ]
+
+
+def test_one_worker_does_not_open_four_pools(temp_dir, monkeypatch):
+    pool_calls = []
+
+    class TrackingPool(object):
+        def __init__(self, **kwargs):
+            pool_calls.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def imap_unordered(self, func, jobs, chunksize=1):
+            return [func(job) for job in jobs]
+
+    class TrackingCtx(object):
+        def Pool(self, **kwargs):
+            return TrackingPool(**kwargs)
+
+    monkeypatch.setattr(
+        "allium.lib.charts.pipeline.matplotlib_is_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
+        fake_render,
+    )
+    monkeypatch.setattr("multiprocessing.get_context", lambda name: TrackingCtx())
+
+    relay_set = make_relay_set(temp_dir, [(
+        make_relay(),
+        make_bw(extra_periods=("6_months", "1_year", "5_years")),
+    )])
+    result = run_chart_pass(relay_set, on_args(temp_dir, chart_workers=1))
+    assert result.rendered == 4
+    assert len(pool_calls) == 1
+
+
+def test_queued_render_omits_cache_only_fields(temp_dir, monkeypatch):
+    seen = []
+
+    def capture(job, dest):
+        seen.append(job)
+        return fake_render(job, dest)
+
+    stub_chart_pool(monkeypatch, render=capture)
+    run_chart_pass(make_relay_set(temp_dir), on_args(temp_dir))
+    assert seen
+    for key in _RENDER_SKIP_KEYS:
+        assert key not in seen[0]
+    assert seen[0].get("period") == "1m"
+    assert "write_1m" in seen[0]
