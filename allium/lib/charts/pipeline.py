@@ -22,8 +22,8 @@ from .registry import (
     enabled_charts,
     get_chart,
 )
+from ..bandwidth_utils import build_bandwidth_map
 from .series import (
-    build_bandwidth_map,
     chartable_fingerprints,
     is_relay_fingerprint,
     overlays_for_relay,
