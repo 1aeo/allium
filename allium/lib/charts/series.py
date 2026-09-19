@@ -1,13 +1,16 @@
-"""Onionoo bandwidth series helpers. No matplotlib."""
+"""Onionoo bandwidth and uptime series helpers. No matplotlib."""
 
 import re
 from datetime import timedelta
 
 from ..time_utils import parse_onionoo_timestamp
+from ..uptime_utils import build_uptime_map
 from .identity import role_from_flags
 
 MIN_THROUGHPUT_BPS = 50000
 MIN_ALIGNED_POINTS = 2
+# Match ``uptime_utils._compute_uptime_percentage_and_datapoints`` (0–999 → %).
+UPTIME_PERCENT_SCALE = 100.0 / 999.0
 _FP_RE = re.compile(r"^[0-9A-Fa-f]{40}$")
 
 
@@ -143,6 +146,54 @@ def spark_suffixes(parsed):
     return tuple(suffix for _key, suffix in SPARK_ONIONOO if suffix in periods)
 
 
+def drawable_suffixes(parsed):
+    """Ordered period ids (including 1M) that have a drawable graph."""
+    periods = (parsed or {}).get("periods") or {}
+    return tuple(suffix for _key, suffix in PERIOD_KEYS if suffix in periods)
+
+
+def uptime_percent_series(block):
+    """``(timestamps, percent)`` from an Onionoo uptime block.
+
+    ``None`` is a hole (skipped). ``0`` is a real 0% observation. Does not
+    use ``history_series`` (that multiplies by bandwidth ``factor``).
+    """
+    ts, pct = [], []
+    if not block:
+        return ts, pct
+    values = block.get("values") or []
+    for t, raw in zip(timestamps_for_block(block), values):
+        if raw is None:
+            continue
+        if isinstance(raw, (int, float)) and 0 <= raw <= 999:
+            ts.append(t)
+            pct.append(raw * UPTIME_PERCENT_SCALE)
+    return ts, pct
+
+
+def uptime_by_fp(uptime_data):
+    """One walk of ``uptime_data['relays']`` → drawable uptime periods.
+
+    Does not require a bandwidth 1M series. Relays with only longer
+    periods still chart. Fingerprints must be 40-hex.
+    """
+    out = {}
+    for fp, row in build_uptime_map(uptime_data).items():
+        if not is_relay_fingerprint(fp):
+            continue
+        periods_obj = row.get("uptime") or {}
+        by_period = {}
+        for onionoo_key, suffix in PERIOD_KEYS:
+            block = history_block(periods_obj.get(onionoo_key))
+            ts, _pct = uptime_percent_series(block)
+            if len(ts) < MIN_ALIGNED_POINTS:
+                continue
+            by_period[suffix] = block
+        if by_period:
+            out[fp] = {"periods": by_period}
+    return out
+
+
 def period_interval_label(block):
     """Onionoo ``interval`` seconds → ``1-day`` / ``1-week`` / ``1-hour``."""
     if isinstance(block, dict):
@@ -179,6 +230,42 @@ def period_views(drawable_periods):
         (PERIOD_HTML_NAME[hero], hero, tuple(p for p in ordered if p != hero))
         for hero in ordered
     )
+
+
+def merged_period_views(bw_periods, up_periods):
+    """Same period HTML files for bandwidth + uptime. Not a second file family.
+
+    Each row is ``(filename, hero, bw_sparks, extra)`` where ``extra`` sets
+    per-page uptime flags. Bandwidth sparks stay bandwidth-only.
+    """
+    bw_wanted = set(bw_periods or ())
+    up_wanted = set(up_periods or ())
+    bw_ordered = tuple(s for _k, s in PERIOD_KEYS if s in bw_wanted)
+    up_ordered = tuple(s for _k, s in PERIOD_KEYS if s in up_wanted)
+    heroes = tuple(s for _k, s in PERIOD_KEYS if s in bw_wanted or s in up_wanted)
+    rows = []
+    if "1m" not in heroes:
+        rows.append((
+            "index.html",
+            "1m",
+            tuple(bw_ordered),
+            {
+                "has_bandwidth_chart": False,
+                "uptime_show_hero": False,
+                "uptime_spark_periods": tuple(up_ordered),
+            },
+        ))
+    for hero in heroes:
+        extra = {
+            "has_bandwidth_chart": hero in bw_wanted,
+            "uptime_show_hero": hero in up_wanted,
+            "uptime_spark_periods": tuple(p for p in up_ordered if p != hero),
+        }
+        bw_sparks = (
+            tuple(p for p in bw_ordered if p != hero) if hero in bw_wanted else ()
+        )
+        rows.append((PERIOD_HTML_NAME[hero], hero, bw_sparks, extra))
+    return tuple(rows)
 
 
 def _daily_ratios(series, min_bps=MIN_THROUGHPUT_BPS):
@@ -236,10 +323,17 @@ def family_group_key(relay):
 
 def chartable_fingerprints(
     details_relays, bandwidth_map, fingerprints=None, limit=0, series=None,
+    also=None,
 ):
-    """Fingerprints with a drawable 1M graph. ``limit`` keeps the first N."""
+    """Fingerprints with a drawable graph. ``limit`` keeps the first N.
+
+    ``series`` is the bandwidth map (1M required there). ``also`` is an
+    optional sibling map (uptime periods) so a relay without bandwidth 1M
+    can still be sliced by ``--charts-limit`` / ``--fingerprint``.
+    """
     if series is None:
         series = series_by_fp(details_relays, bandwidth_map)
+    extra = also or {}
     wanted = None
     if fingerprints:
         wanted = frozenset(
@@ -252,7 +346,7 @@ def chartable_fingerprints(
     fps = []
     for relay in details_relays or []:
         fp = relay.get("fingerprint")
-        if fp not in series:
+        if fp not in series and fp not in extra:
             continue
         if wanted is not None and normalize_fingerprint(fp) not in wanted:
             continue

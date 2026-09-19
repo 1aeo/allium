@@ -102,7 +102,30 @@ def make_job(**overrides):
     return job
 
 
-def make_relay_set(output_dir, pairs=None, **extra):
+def make_uptime(
+    fp=FP_JEANGRAE,
+    values=None,
+    factor=1,
+    first=_FIRST,
+    last="2026-07-19 12:00:00",
+    interval=86400,
+    extra_periods=(),
+):
+    values = list(values) if values is not None else [999, 990, 0, 980]
+    month = {
+        "first": first,
+        "last": last,
+        "interval": interval,
+        "factor": factor,
+        "values": values,
+    }
+    uptime = {"1_month": dict(month)}
+    for key in extra_periods:
+        uptime[key] = dict(month)
+    return {"fingerprint": fp, "uptime": uptime}
+
+
+def make_relay_set(output_dir, pairs=None, uptime_relays=None, **extra):
     pairs = list(pairs or [(make_relay(), make_bw())])
     ns = SimpleNamespace(
         json={
@@ -116,6 +139,11 @@ def make_relay_set(output_dir, pairs=None, **extra):
         output_dir=output_dir,
         use_bits=True,
     )
+    if uptime_relays is not None:
+        ns.uptime_data = {
+            "relays": list(uptime_relays),
+            "relays_published": _PUBLISHED,
+        }
     for key, value in extra.items():
         setattr(ns, key, value)
     return ns
@@ -166,6 +194,10 @@ def stub_chart_pool(monkeypatch, render=fake_render, mpl=True):
     if render is not None:
         monkeypatch.setattr(
             "allium.lib.charts.bandwidth.render_relay_bandwidth_1m",
+            render,
+        )
+        monkeypatch.setattr(
+            "allium.lib.charts.uptime.render_relay_uptime",
             render,
         )
         monkeypatch.setattr(

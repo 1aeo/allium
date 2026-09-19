@@ -113,26 +113,30 @@ dt:target {
 }
 
 /* Period hero + CSS-scaled spark row (same 4 PNGs), next to index.html */
-.relay-bandwidth-history {
+.relay-bandwidth-history,
+.relay-uptime-history {
     margin: 12px 0 0;
     background: #ffffff;
     border-radius: 6px;
     padding: 8px 8px 4px;
     border: 1px solid var(--color-border-subtle, #e9ecef);
 }
-.relay-bandwidth-history > img {
+.relay-bandwidth-history > img,
+.relay-uptime-history > img {
     width: 100%;
     height: auto;
     display: block;
 }
-.relay-bandwidth-sparks {
+.relay-bandwidth-sparks,
+.relay-uptime-sparks {
     display: flex;
     gap: 8px;
     margin-top: 8px;
     justify-content: flex-start;
     align-items: flex-start;
 }
-.relay-bandwidth-spark {
+.relay-bandwidth-spark,
+.relay-uptime-spark {
     flex: 0 0 calc((100% - 16px) / 3);
     width: calc((100% - 16px) / 3);
     display: block;
@@ -141,10 +145,13 @@ dt:target {
     outline: 1px solid transparent;
 }
 .relay-bandwidth-spark:hover,
-.relay-bandwidth-spark:focus {
+.relay-bandwidth-spark:focus,
+.relay-uptime-spark:hover,
+.relay-uptime-spark:focus {
     outline: 1px solid #337ab7;
 }
-.relay-bandwidth-history .relay-bandwidth-sparks img {
+.relay-bandwidth-history .relay-bandwidth-sparks img,
+.relay-uptime-history .relay-uptime-sparks img {
     width: 100%;
     height: auto;
     display: block;

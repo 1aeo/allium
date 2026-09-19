@@ -14,6 +14,7 @@ from allium.lib.charts.pipeline import (
     MAX_CHART_WORKERS,
     _INSTALL_HINT,
     _NO_BANDWIDTH_HINT,
+    _NO_UPTIME_HINT,
     _RENDER_SKIP_KEYS,
     _skip_reason,
     add_chart_arguments,
@@ -26,6 +27,7 @@ from allium.lib.charts.pipeline import (
     partition_jobs_by_period,
     resolve_charts_mode,
     run_chart_pass,
+    _render_chart_job,
 )
 from allium.lib.relays import apply_chart_html_flags
 from tests.unit.charts.conftest import (
@@ -36,6 +38,7 @@ from tests.unit.charts.conftest import (
     make_bw,
     make_relay,
     make_relay_set,
+    make_uptime,
     on_args,
     stub_chart_pool,
 )
@@ -108,6 +111,27 @@ def test_maybe_run_charts_on_without_bandwidth(capsys, monkeypatch):
     assert _NO_BANDWIDTH_HINT in capsys.readouterr().out
 
 
+def test_maybe_run_charts_details_skips_uptime_without_http(capsys, monkeypatch):
+    calls = []
+
+    def boom(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError("must not fetch onionoo /uptime")
+
+    monkeypatch.setattr("allium.lib.workers.fetch_onionoo_uptime", boom)
+    stub_chart_pool(monkeypatch, render=None)
+    result = maybe_run_charts(
+        SimpleNamespace(bandwidth_data=None, uptime_data=None),
+        SimpleNamespace(charts="on"),
+    )
+    assert result.status == "skipped"
+    assert result.reason == "no_bandwidth_data"
+    assert calls == []
+    out = capsys.readouterr().out
+    assert _NO_BANDWIDTH_HINT in out
+    assert _NO_UPTIME_HINT in out
+
+
 def test_resolve_unknown_mode_is_off():
     assert resolve_charts_mode(SimpleNamespace(charts="maybe")) == CHARTS_OFF
     assert resolve_charts_mode(SimpleNamespace()) == CHARTS_OFF
@@ -118,6 +142,7 @@ def test_charts_package_import_does_not_load_matplotlib():
     import allium.lib.charts  # noqa: F401
     import allium.lib.charts.cache  # noqa: F401
     import allium.lib.charts.pipeline  # noqa: F401
+    import allium.lib.charts.uptime  # noqa: F401
     if not already:
         assert "matplotlib" not in sys.modules
         assert "matplotlib.pyplot" not in sys.modules
@@ -141,6 +166,8 @@ def test_html_flags_omit_img_when_charts_will_not_run(
     assert relay_set.charts_enabled is False
     assert relay_set.bandwidth_chart_fps == frozenset()
     assert relay_set.bandwidth_spark_periods == {}
+    assert relay_set.uptime_chart_fps == frozenset()
+    assert relay_set.uptime_spark_periods == {}
     assert _skip_reason(parsed, relay_set)
     assert maybe_run_charts(relay_set, parsed).reason == _skip_reason(
         parsed, relay_set,
@@ -362,6 +389,7 @@ def test_cache_hit_is_per_period(temp_dir, monkeypatch):
 def test_job_period_reads_wrapper_chart_id_and_render():
     assert job_period({"period": "6m", "chart_id": "relay_bandwidth_1m"}) == "6m"
     assert job_period({"chart_id": "relay_bandwidth_5y"}) == "5y"
+    assert job_period({"chart_id": "relay_uptime_6m"}) == "6m"
     assert job_period({"render": {"period": "1y"}}) == "1y"
     assert job_period({}) == "1m"
 
@@ -506,3 +534,134 @@ def test_queued_render_omits_cache_only_fields(temp_dir, monkeypatch):
         assert key not in seen[0]
     assert seen[0].get("period") == "1m"
     assert "write_1m" in seen[0]
+
+
+def test_uptime_charts_without_bandwidth_1m(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    relay_set = make_relay_set(
+        temp_dir,
+        pairs=[(make_relay(), {"fingerprint": FP_JEANGRAE})],
+        uptime_relays=[make_uptime(extra_periods=("6_months",))],
+    )
+    relay_set.bandwidth_data = None
+    args = on_args(temp_dir)
+    apply_chart_html_flags(relay_set, args)
+    assert relay_set.charts_enabled is True
+    assert relay_set.bandwidth_chart_fps == frozenset()
+    assert FP_JEANGRAE in relay_set.uptime_chart_fps
+    assert relay_set.uptime_spark_periods[FP_JEANGRAE] == ("6m",)
+    result = run_chart_pass(relay_set, args)
+    assert result.rendered == 2
+    base = os.path.join(temp_dir, "relay", FP_JEANGRAE)
+    assert os.path.isfile(os.path.join(base, "uptime-1m.png"))
+    assert os.path.isfile(os.path.join(base, "uptime-6m.png"))
+    assert not os.path.isfile(os.path.join(base, "bandwidth-1m.png"))
+
+
+def test_missing_uptime_skips_uptime_only(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    result = run_chart_pass(make_relay_set(temp_dir), on_args(temp_dir))
+    assert result.rendered == 1
+    base = os.path.join(temp_dir, "relay", FP_JEANGRAE)
+    assert os.path.isfile(os.path.join(base, "bandwidth-1m.png"))
+    assert not os.path.isfile(os.path.join(base, "uptime-1m.png"))
+
+
+def test_uptime_cache_hit_and_limit(temp_dir, monkeypatch):
+    calls = []
+
+    def tracking_render(job, dest):
+        calls.append("uptime" if "uptime" in job else "bandwidth")
+        return fake_render(job, dest)
+
+    stub_chart_pool(monkeypatch, render=tracking_render)
+    pairs = [
+        (make_relay(), make_bw()),
+        (make_relay(FP_A, nickname="two"), make_bw(FP_A)),
+    ]
+    relay_set = make_relay_set(
+        temp_dir, pairs,
+        uptime_relays=[make_uptime(), make_uptime(FP_A)],
+    )
+    args = on_args(temp_dir, charts_limit=1)
+    apply_chart_html_flags(relay_set, args)
+    assert relay_set.bandwidth_chart_fps == frozenset([FP_JEANGRAE])
+    assert relay_set.uptime_chart_fps == frozenset([FP_JEANGRAE])
+    first = run_chart_pass(relay_set, args)
+    assert first.rendered == 2
+    assert "uptime" in calls
+    assert not os.path.isfile(os.path.join(temp_dir, "relay", FP_A, "uptime-1m.png"))
+    calls[:] = []
+    png = os.path.join(temp_dir, "relay", FP_JEANGRAE, "uptime-1m.png")
+    os.remove(png)
+    second = run_chart_pass(relay_set, args)
+    assert second.rendered == 0
+    assert second.cache_hits == 2
+    assert calls == []
+    assert os.path.isfile(png)
+
+
+def test_fingerprint_flag_selects_uptime_relay(temp_dir, monkeypatch):
+    stub_chart_pool(monkeypatch)
+    pairs = [
+        (make_relay(), make_bw()),
+        (make_relay(FP_A, nickname="two"), make_bw(FP_A)),
+    ]
+    relay_set = make_relay_set(
+        temp_dir, pairs, uptime_relays=[make_uptime(), make_uptime(FP_A)],
+    )
+    args = on_args(temp_dir, chart_fingerprints=["$" + FP_A.lower()])
+    apply_chart_html_flags(relay_set, args)
+    assert relay_set.uptime_chart_fps == frozenset([FP_A])
+    result = run_chart_pass(relay_set, args)
+    assert result.rendered == 2
+    assert os.path.isfile(os.path.join(temp_dir, "relay", FP_A, "uptime-1m.png"))
+    assert not os.path.isfile(
+        os.path.join(temp_dir, "relay", FP_JEANGRAE, "uptime-1m.png")
+    )
+
+
+def test_invalid_fingerprint_job_is_rejected():
+    result = _render_chart_job({
+        "chart_id": "relay_uptime_1m",
+        "fingerprint": "../etc/passwd",
+        "output_dir": "/tmp",
+        "key": "x",
+        "render": {},
+    })
+    assert result["ok"] is False
+    assert "invalid" in result["error"]
+
+
+def test_apply_then_pass_parses_uptime_once(temp_dir, monkeypatch):
+    import allium.lib.charts.pipeline as pipeline_mod
+    import allium.lib.charts.series as series_mod
+
+    calls = []
+    real = series_mod.uptime_by_fp
+
+    def counting(*a, **k):
+        calls.append(1)
+        return real(*a, **k)
+
+    monkeypatch.setattr(series_mod, "uptime_by_fp", counting)
+    monkeypatch.setattr(pipeline_mod, "uptime_by_fp", counting)
+    stub_chart_pool(monkeypatch)
+    args = on_args(temp_dir)
+    relay_set = make_relay_set(temp_dir, uptime_relays=[make_uptime()])
+    apply_chart_html_flags(relay_set, args)
+    run_chart_pass(relay_set, args)
+    assert len(calls) == 1
+
+
+def test_pass_without_uptime_does_not_fetch_http(temp_dir, monkeypatch):
+    calls = []
+
+    def boom(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError("must not fetch onionoo /uptime")
+
+    monkeypatch.setattr("allium.lib.workers.fetch_onionoo_uptime", boom)
+    stub_chart_pool(monkeypatch)
+    run_chart_pass(make_relay_set(temp_dir), on_args(temp_dir))
+    assert calls == []

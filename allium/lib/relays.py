@@ -1273,19 +1273,32 @@ class Relays:
 
 
 def apply_chart_html_flags(relay_set, args):
-    """Set ``charts_enabled`` / ``bandwidth_chart_fps`` before Jinja."""
+    """Set chart HTML flags before Jinja. Bandwidth flags stay bandwidth-only."""
     from .charts.pipeline import _selection, _skip_reason
-    from .charts.series import spark_suffixes
+    from .charts.series import drawable_suffixes, spark_suffixes
 
     will_run = not _skip_reason(args, relay_set)
     sel = _selection(relay_set, args) if will_run else None
     fps = frozenset(sel.selected) if sel else frozenset()
+    bw_series = sel.series if sel else {}
+    up_series = sel.uptime_series if sel else {}
+    bw_fps = frozenset(fp for fp in fps if fp in bw_series)
+    up_fps = frozenset(fp for fp in fps if fp in up_series)
     sparks = {
-        fp: spark_suffixes(sel.series.get(fp)) for fp in fps
-    } if sel else {}
+        fp: spark_suffixes(bw_series.get(fp)) for fp in bw_fps
+    }
+    up_sparks = {
+        fp: spark_suffixes(up_series.get(fp)) for fp in up_fps
+    }
+    up_periods = {
+        fp: drawable_suffixes(up_series.get(fp)) for fp in up_fps
+    }
     if relay_set is not None:
         relay_set.charts_enabled = will_run
-        relay_set.bandwidth_chart_fps = fps
+        relay_set.bandwidth_chart_fps = bw_fps
         relay_set.bandwidth_spark_periods = sparks
+        relay_set.uptime_chart_fps = up_fps
+        relay_set.uptime_spark_periods = up_sparks
+        relay_set.uptime_chart_periods = up_periods
         relay_set._chart_selection = sel
     return will_run

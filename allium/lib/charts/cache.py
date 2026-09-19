@@ -127,6 +127,35 @@ def build_relay_bandwidth_1m_payload(
     return payload
 
 
+def build_relay_uptime_payload(
+    relay,
+    uptime_block=None,
+    period="1m",
+    renderer_version="1",
+):
+    """Canonical payload for a period uptime hero (``relay_uptime_1m`` … ``_5y``).
+
+    Uptime arrays live here only — never on the bandwidth payload. Drawn
+    fields: identity, last restarted, period, and the Onionoo history block.
+    """
+    relay = relay or {}
+    flags = list(relay.get("flags") or [])
+    suffix = period or "1m"
+    return {
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "chart_id": "relay_uptime_{}".format(suffix),
+        "renderer_version": str(renderer_version),
+        "fingerprint": relay.get("fingerprint") or "",
+        "nickname": relay.get("nickname") or "",
+        "operator": operator_from_contact(relay.get("contact")),
+        "flags": sorted(flags),
+        "role": role_from_flags(flags),
+        "last_restarted": relay.get("last_restarted") or "",
+        "period": suffix,
+        "uptime": uptime_block,
+    }
+
+
 def cache_key(payload):
     encoded = json.dumps(
         payload,

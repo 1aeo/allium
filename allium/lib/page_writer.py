@@ -44,7 +44,7 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href
-from .charts.series import period_views
+from .charts.series import merged_period_views, period_views
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1567,7 +1567,12 @@ def write_relay_period_files(
     if not views:
         views = (("index.html", "1m", ()),)
     os.makedirs(relay_dir, exist_ok=True)
-    for filename, hero, sparks in views:
+    for row in views:
+        extra = {}
+        if len(row) == 4:
+            filename, hero, sparks, extra = row
+        else:
+            filename, hero, sparks = row
         ctx = dict(render_kwargs)
         ctx.update(
             hero_period=hero,
@@ -1576,6 +1581,8 @@ def write_relay_period_files(
                 base_url, "relay/{}/{}".format(fingerprint, filename),
             ),
         )
+        if extra:
+            ctx.update(extra)
         rendered = template.render(**ctx)
         with open(
             os.path.join(relay_dir, filename), "w", encoding="utf8",
@@ -1615,6 +1622,8 @@ def write_relay_info(relay_set):
     charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
     bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
     spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
+    uptime_chart_fps = getattr(relay_set, "uptime_chart_fps", None) or frozenset()
+    uptime_periods_by_fp = getattr(relay_set, "uptime_chart_periods", None) or {}
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1638,10 +1647,16 @@ def write_relay_info(relay_set):
 
         fingerprint = relay["fingerprint"]
         has_chart = charts_enabled and fingerprint in bandwidth_chart_fps
+        has_up = charts_enabled and fingerprint in uptime_chart_fps
         sparks = spark_by_fp.get(fingerprint) or ()
-        views = period_views(("1m",) + tuple(sparks)) if has_chart else (
-            ("index.html", "1m", ()),
-        )
+        up_periods = tuple(uptime_periods_by_fp.get(fingerprint) or ())
+        if has_up:
+            bw_periods = (("1m",) + tuple(sparks)) if has_chart else ()
+            views = merged_period_views(bw_periods, up_periods)
+        else:
+            views = period_views(("1m",) + tuple(sparks)) if has_chart else (
+                ("index.html", "1m", ()),
+            )
         render_kwargs = dict(
             relay=relay, page_ctx=page_ctx, relays=relay_set,
             contact_display_data=contact_display_data,
@@ -1652,6 +1667,7 @@ def write_relay_info(relay_set):
             page_number=1,
             charts_enabled=charts_enabled,
             has_bandwidth_chart=has_chart,
+            has_uptime_chart=has_up,
         )
         write_relay_period_files(
             template,

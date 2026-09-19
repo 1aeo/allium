@@ -8,10 +8,12 @@ from allium.lib.charts.series import (
     advertised_mbit,
     aligned_1m_series,
     chartable_fingerprints,
+    drawable_suffixes,
     family_group_key,
     history_block,
     history_series,
     is_relay_fingerprint,
+    merged_period_views,
     overlays_for_relay,
     period_blocks,
     period_axis_caption,
@@ -19,6 +21,8 @@ from allium.lib.charts.series import (
     precompute_overlays,
     series_by_fp,
     spark_suffixes,
+    uptime_by_fp,
+    uptime_percent_series,
 )
 from tests.unit.charts.conftest import (
     FP_A,
@@ -27,6 +31,7 @@ from tests.unit.charts.conftest import (
     FP_JEANGRAE,
     make_bw,
     make_relay,
+    make_uptime,
 )
 
 
@@ -247,3 +252,65 @@ def test_period_views_and_captions():
     assert by_hero["6m"] == ("6m.html", ("1m", "1y"))
     assert "5y" not in by_hero
     assert period_views(()) == ()
+
+
+def test_uptime_percent_series_skips_none_keeps_zero():
+    block = history_block({
+        "first": "2026-07-16 12:00:00",
+        "last": "2026-07-19 12:00:00",
+        "interval": 86400,
+        "factor": 0.001,
+        "values": [999, None, 0, 980],
+    })
+    ts, pct = uptime_percent_series(block)
+    assert len(ts) == 3
+    assert pct[0] == 999 * (100.0 / 999.0)
+    assert pct[1] == 0.0
+    assert history_series(block)[1] != pct
+
+
+def test_uptime_by_fp_one_walk_does_not_need_bandwidth():
+    data = {
+        "relays": [
+            make_uptime(FP_A, extra_periods=("6_months", "1_year")),
+            make_uptime("not-a-fingerprint"),
+            {"fingerprint": FP_B, "uptime": {"1_month": {"values": [999]}}},
+        ]
+    }
+    parsed = uptime_by_fp(data)
+    assert FP_A in parsed
+    assert spark_suffixes(parsed[FP_A]) == ("6m", "1y")
+    assert drawable_suffixes(parsed[FP_A]) == ("1m", "6m", "1y")
+    assert FP_B not in parsed
+    assert "not-a-fingerprint" not in parsed
+    assert uptime_by_fp(None) == {}
+
+
+def test_chartable_includes_uptime_only_via_also():
+    relays = [make_relay(FP_A), make_relay(FP_B, nickname="two")]
+    bw_map = {FP_A: _bw(FP_A)}
+    up = uptime_by_fp({"relays": [make_uptime(FP_B)]})
+    assert chartable_fingerprints(relays, bw_map) == [FP_A]
+    assert chartable_fingerprints(relays, bw_map, also=up) == [FP_A, FP_B]
+    assert chartable_fingerprints(relays, {}, also=up, limit=1) == [FP_B]
+
+
+def test_merged_period_views_keep_bandwidth_sparks_separate():
+    rows = merged_period_views(("1m", "6m"), ("1m", "5y"))
+    by_hero = {hero: row for row in rows for hero in (row[1],)}
+    index = by_hero["1m"]
+    assert index[0] == "index.html"
+    assert index[2] == ("6m",)
+    assert index[3]["has_bandwidth_chart"] is True
+    assert index[3]["uptime_show_hero"] is True
+    assert index[3]["uptime_spark_periods"] == ("5y",)
+    six = by_hero["6m"]
+    assert six[2] == ("1m",)
+    assert six[3]["has_bandwidth_chart"] is True
+    assert six[3]["uptime_show_hero"] is False
+    five = by_hero["5y"]
+    assert five[0] == "5y.html"
+    assert five[2] == ()
+    assert five[3]["has_bandwidth_chart"] is False
+    assert five[3]["uptime_show_hero"] is True
+    assert five[3]["uptime_spark_periods"] == ("1m",)

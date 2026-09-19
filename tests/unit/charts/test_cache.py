@@ -5,6 +5,7 @@ import os
 from allium.lib.charts.cache import (
     CACHE_SCHEMA_VERSION,
     build_relay_bandwidth_1m_payload,
+    build_relay_uptime_payload,
     cache_dir,
     cache_hit,
     cache_key,
@@ -15,9 +16,9 @@ from allium.lib.charts.cache import (
     sidecar_path,
     write_sidecar,
 )
-from allium.lib.charts.pipeline import RELAY_BANDWIDTH_1M
+from allium.lib.charts.pipeline import RELAY_BANDWIDTH_1M, RELAY_UPTIME_1M
 from allium.lib.charts.series import history_block, is_relay_fingerprint
-from tests.unit.charts.conftest import FP_JEANGRAE, make_bw, make_relay
+from tests.unit.charts.conftest import FP_JEANGRAE, make_bw, make_relay, make_uptime
 
 _F3_TS_MS = 1786597200000
 
@@ -188,3 +189,39 @@ def test_cache_paths_sidecar_and_publish(temp_dir):
     os.remove(dest)
     assert publish_png(png, dest) is True
     assert os.path.isfile(dest)
+
+
+def test_uptime_payload_is_separate_from_bandwidth():
+    block = history_block(make_uptime()["uptime"]["1_month"])
+    up = build_relay_uptime_payload(make_relay(), uptime_block=block, period="1m")
+    bw = _payload()
+    assert up["chart_id"] == "relay_uptime_1m"
+    assert up["period"] == "1m"
+    assert up["uptime"]["values"][2] == 0
+    assert "write_1m" not in up
+    assert "read_1m" not in up
+    assert "bands" not in up
+    assert "uptime" not in bw
+    assert cache_key(up) != cache_key(bw)
+    six = build_relay_uptime_payload(make_relay(), uptime_block=block, period="6m")
+    assert six["chart_id"] == "relay_uptime_6m"
+    assert cache_key(six) != cache_key(up)
+    other = dict(block, values=[999, 991, 0, 980])
+    assert cache_key(build_relay_uptime_payload(
+        make_relay(), uptime_block=other, period="1m",
+    )) != cache_key(up)
+
+
+def test_uptime_cache_paths_reject_invalid_fp(temp_dir):
+    spec = RELAY_UPTIME_1M
+    assert cache_dir("/tmp/www", spec) == "/tmp/www/.chart-cache/relay_uptime_1m"
+    assert published_png_path("/tmp/www", spec, FP_JEANGRAE).endswith(
+        "/relay/{}/uptime-1m.png".format(FP_JEANGRAE)
+    )
+    for bad in ("../etc/passwd", "not-hex", "A" * 39, ""):
+        try:
+            sidecar_path(temp_dir, spec, bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError for %r" % (bad,))
