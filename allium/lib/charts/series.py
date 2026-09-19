@@ -1,10 +1,14 @@
-"""Onionoo bandwidth series helpers. No matplotlib."""
+"""Onionoo bandwidth and flag-history series helpers. No matplotlib."""
 
 import re
 from datetime import timedelta
 
+from ..flag_analysis import FLAG_PRIORITY
 from ..time_utils import parse_onionoo_timestamp
 from .identity import role_from_flags
+
+# Onionoo graph-history raw scale → percent, same as uptime HTML (100/999).
+UPTIME_PERCENT_SCALE = 100.0 / 999.0
 
 MIN_THROUGHPUT_BPS = 50000
 MIN_ALIGNED_POINTS = 2
@@ -217,6 +221,94 @@ def normalize_fingerprint(value):
 def is_relay_fingerprint(value):
     """True for a 40-char hex fingerprint (optional leading ``$``)."""
     return bool(_FP_RE.match(str(value or "").lstrip("$")))
+
+
+def flag_percent_series(block):
+    """``(timestamps, percent)`` from 0–999 Onionoo flag graph-history."""
+    ts, perc = [], []
+    for t, raw in zip(timestamps_for_block(block), (block or {}).get("values") or []):
+        if raw is None:
+            continue
+        perc.append(raw * UPTIME_PERCENT_SCALE)
+        ts.append(t)
+    return ts, perc
+
+
+def priority_flag(details_flags, flags_history):
+    """Exit > Guard > Fast > Running among snapshot flags with a history object."""
+    if not isinstance(flags_history, dict) or not flags_history:
+        return None
+    present = set(details_flags or [])
+    selected = None
+    best = float("inf")
+    for name in flags_history:
+        if name in FLAG_PRIORITY and name in present and FLAG_PRIORITY[name] < best:
+            selected = name
+            best = FLAG_PRIORITY[name]
+    return selected
+
+
+def flag_series_by_fp(details_relays, uptime_map):
+    """One walk: ``{fp: {flag, periods: {suffix: history_block}}}``. No family overlay."""
+    out = {}
+    uptime_map = uptime_map or {}
+    for relay in details_relays or []:
+        fp = relay.get("fingerprint")
+        if not is_relay_fingerprint(fp):
+            continue
+        flags_history = (uptime_map.get(fp) or {}).get("flags")
+        if not isinstance(flags_history, dict) or not flags_history:
+            continue
+        flag = priority_flag(relay.get("flags"), flags_history)
+        if not flag:
+            continue
+        hist = flags_history.get(flag) or {}
+        periods = {}
+        for onionoo_key, suffix in PERIOD_KEYS:
+            block = history_block(hist.get(onionoo_key))
+            if not block:
+                continue
+            ts, _perc = flag_percent_series(block)
+            if len(ts) < MIN_ALIGNED_POINTS:
+                continue
+            periods[suffix] = block
+        if not periods:
+            continue
+        out[fp] = {"flag": flag, "periods": periods}
+    return out
+
+
+def flag_chartable_fingerprints(
+    details_relays, flag_series, fingerprints=None, limit=0,
+):
+    """Fingerprints with a drawable flag-history. ``limit`` keeps the first N."""
+    flag_series = flag_series or {}
+    wanted = None
+    if fingerprints:
+        wanted = frozenset(
+            normalize_fingerprint(fp) for fp in fingerprints if fp
+        )
+    try:
+        cap = int(limit or 0)
+    except (TypeError, ValueError):
+        cap = 0
+    fps = []
+    for relay in details_relays or []:
+        fp = relay.get("fingerprint")
+        if fp not in flag_series:
+            continue
+        if wanted is not None and normalize_fingerprint(fp) not in wanted:
+            continue
+        fps.append(fp)
+        if cap > 0 and len(fps) >= cap:
+            break
+    return fps
+
+
+def flag_spark_suffixes(parsed):
+    """Ordered period ids that have a drawable flag graph."""
+    periods = (parsed or {}).get("periods") or {}
+    return tuple(suffix for _key, suffix in PERIOD_KEYS if suffix in periods)
 
 
 def family_group_key(relay):

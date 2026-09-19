@@ -1615,6 +1615,9 @@ def write_relay_info(relay_set):
     charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
     bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
     spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
+    flag_chart_fps = getattr(relay_set, "flag_chart_fps", None) or frozenset()
+    flag_periods_by_fp = getattr(relay_set, "flag_chart_periods", None) or {}
+    flag_labels_by_fp = getattr(relay_set, "flag_chart_labels", None) or {}
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1652,6 +1655,9 @@ def write_relay_info(relay_set):
             page_number=1,
             charts_enabled=charts_enabled,
             has_bandwidth_chart=has_chart,
+            has_flag_chart=charts_enabled and fingerprint in flag_chart_fps,
+            flag_chart_periods=flag_periods_by_fp.get(fingerprint) or (),
+            flag_chart_label=flag_labels_by_fp.get(fingerprint) or "Flag",
         )
         write_relay_period_files(
             template,

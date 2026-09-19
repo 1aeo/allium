@@ -149,3 +149,16 @@ dt:target {
     height: auto;
     display: block;
 }
+
+.relay-flag-uptime {
+    margin: 8px 0 12px;
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 8px 8px 4px;
+    border: 1px solid var(--color-border-subtle, #e9ecef);
+}
+.relay-flag-uptime > img {
+    width: 100%;
+    height: auto;
+    display: block;
+}

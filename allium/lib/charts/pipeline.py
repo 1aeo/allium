@@ -7,8 +7,10 @@ import time
 from collections import OrderedDict, namedtuple
 
 from ..bandwidth_utils import build_bandwidth_map
+from ..uptime_utils import build_uptime_map
 from .cache import (
     build_relay_bandwidth_1m_payload,
+    build_relay_flags_payload,
     cache_hit,
     cache_key,
     cached_png_path,
@@ -20,6 +22,8 @@ from .cache import (
 from .series import (
     PERIOD_KEYS,
     chartable_fingerprints,
+    flag_chartable_fingerprints,
+    flag_series_by_fp,
     is_relay_fingerprint,
     overlays_for_relay,
     precompute_overlays,
@@ -68,14 +72,30 @@ def _bandwidth_spec(suffix):
     )
 
 
+def _flags_spec(suffix):
+    return ChartSpec(
+        chart_id="relay_flags_%s" % suffix,
+        output_path_pattern="relay/{fingerprint}/flags-%s.png" % suffix,
+        cache_subdir="relay_flags_%s" % suffix,
+        renderer_module="allium.lib.charts.flags",
+        renderer_name="render_relay_flags",
+        renderer_version="1",
+    )
+
+
 PERIOD_SPEC_BY_SUFFIX = OrderedDict(
     (suffix, _bandwidth_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
 )
 RELAY_BANDWIDTH_1M = PERIOD_SPEC_BY_SUFFIX["1m"]
 RELAY_BANDWIDTH_PERIODS = tuple(PERIOD_SPEC_BY_SUFFIX.values())
+FLAG_PERIOD_SPEC_BY_SUFFIX = OrderedDict(
+    (suffix, _flags_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
+)
+RELAY_FLAGS_PERIODS = tuple(FLAG_PERIOD_SPEC_BY_SUFFIX.values())
 
 _REGISTRY = OrderedDict(
-    (spec.chart_id, spec) for spec in RELAY_BANDWIDTH_PERIODS
+    (spec.chart_id, spec)
+    for spec in RELAY_BANDWIDTH_PERIODS + RELAY_FLAGS_PERIODS
 )
 
 
@@ -84,7 +104,9 @@ def get_chart(chart_id):
 
 
 _Selection = namedtuple(
-    "_Selection", "details bw_map series selected bandwidth_data"
+    "_Selection",
+    "details bw_map series selected bandwidth_data "
+    "flag_series flag_selected uptime_data",
 )
 
 CHARTS_OFF = "off"
@@ -193,6 +215,9 @@ def job_period(job):
     prefix = "relay_bandwidth_"
     if chart_id.startswith(prefix) and chart_id[len(prefix):]:
         return chart_id[len(prefix):]
+    flags_prefix = "relay_flags_"
+    if chart_id.startswith(flags_prefix) and chart_id[len(flags_prefix):]:
+        return chart_id[len(flags_prefix):]
     return ((job or {}).get("render") or {}).get("period") or "1m"
 
 
@@ -284,6 +309,10 @@ def _bandwidth_data(relay_set):
     return getattr(relay_set, "bandwidth_data", None) if relay_set else None
 
 
+def _uptime_data(relay_set):
+    return getattr(relay_set, "uptime_data", None) if relay_set else None
+
+
 def _relays_published(relay_set, bandwidth_data):
     if bandwidth_data and bandwidth_data.get("relays_published"):
         return bandwidth_data.get("relays_published")
@@ -300,19 +329,29 @@ def _output_dir(relay_set, args):
 
 
 def _selection(relay_set, args):
-    """Details, 1M series, and the --charts-limit / --fingerprint slice."""
+    """Details, series, and the --charts-limit / --fingerprint slice."""
     bandwidth_data = _bandwidth_data(relay_set)
     details = _details_relays(relay_set)
     bw_map = build_bandwidth_map(bandwidth_data)
     series = series_by_fp(details, bw_map)
+    fps = getattr(args, "chart_fingerprints", None) if args else None
+    limit = getattr(args, "charts_limit", 0) if args else 0
     selected = chartable_fingerprints(
         details,
         bw_map,
-        fingerprints=getattr(args, "chart_fingerprints", None) if args else None,
-        limit=getattr(args, "charts_limit", 0) if args else 0,
+        fingerprints=fps,
+        limit=limit,
         series=series,
     )
-    return _Selection(details, bw_map, series, selected, bandwidth_data)
+    uptime_data = _uptime_data(relay_set)
+    flag_series = flag_series_by_fp(details, build_uptime_map(uptime_data))
+    flag_selected = flag_chartable_fingerprints(
+        details, flag_series, fingerprints=fps, limit=limit,
+    )
+    return _Selection(
+        details, bw_map, series, selected, bandwidth_data,
+        flag_series, flag_selected, uptime_data,
+    )
 
 
 def _skip_reason(args, relay_set):
@@ -322,11 +361,17 @@ def _skip_reason(args, relay_set):
         return "off"
     if not matplotlib_is_available():
         return "matplotlib_missing" if mode == CHARTS_ON else "auto_unavailable"
-    if not any(renderer_is_ready(spec) for spec in RELAY_BANDWIDTH_PERIODS):
+    bw_ready = any(renderer_is_ready(spec) for spec in RELAY_BANDWIDTH_PERIODS)
+    flag_ready = any(renderer_is_ready(spec) for spec in RELAY_FLAGS_PERIODS)
+    if not bw_ready and not flag_ready:
         return "renderer_missing"
-    if not _bandwidth_data(relay_set):
+    has_bw = bool(_bandwidth_data(relay_set))
+    has_uptime = bool(_uptime_data(relay_set))
+    if (bw_ready and has_bw) or (flag_ready and has_uptime):
+        return None
+    if not has_bw:
         return "no_bandwidth_data"
-    return None
+    return "renderer_missing"
 
 
 def _init_chart_worker():
@@ -493,12 +538,16 @@ def run_chart_pass(relay_set, args, progress_logger=None):
     sel = getattr(relay_set, "_chart_selection", None) if relay_set else None
     if sel is None:
         sel = _selection(relay_set, args)
-    selected = frozenset(sel.selected)
+    selected = frozenset(sel.selected or ())
     published = _relays_published(relay_set, sel.bandwidth_data)
-    catalog = load_role_bands()
-    frozen = bands_frozen_from(catalog)
-    # Full series population — not the --charts-limit slice — for overlay n≥2.
-    overlays = precompute_overlays(sel.details, sel.bw_map, series=sel.series)
+    catalog = None
+    frozen = ""
+    overlays = {"role_median": {}, "role_n": {}, "family_median": {}, "family_n": {}}
+    if selected:
+        catalog = load_role_bands()
+        frozen = bands_frozen_from(catalog)
+        # Full series population — not the --charts-limit slice — for overlay n≥2.
+        overlays = precompute_overlays(sel.details, sel.bw_map, series=sel.series)
     workers = default_chart_workers(getattr(args, "chart_workers", 0) if args else 0)
 
     jobs = []
@@ -535,6 +584,44 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             queued = _queue_or_publish(
                 jobs, output_dir, spec, fp, payload,
                 extra_render={"relays_published": published, "period": suffix},
+            )
+            if queued == "hit":
+                hits += 1
+                published_n += 1
+
+    flag_series = getattr(sel, "flag_series", None)
+    flag_selected = frozenset(getattr(sel, "flag_selected", None) or ())
+    if flag_series is None:
+        flag_series = flag_series_by_fp(
+            sel.details, build_uptime_map(_uptime_data(relay_set)),
+        )
+        flag_selected = frozenset(flag_chartable_fingerprints(
+            sel.details,
+            flag_series,
+            fingerprints=getattr(args, "chart_fingerprints", None) if args else None,
+            limit=getattr(args, "charts_limit", 0) if args else 0,
+        ))
+    for relay in sel.details:
+        fp = relay.get("fingerprint")
+        if fp not in flag_selected:
+            continue
+        parsed = flag_series.get(fp) or {}
+        flag = parsed.get("flag")
+        periods = parsed.get("periods") or {}
+        for suffix, spec in FLAG_PERIOD_SPEC_BY_SUFFIX.items():
+            block = periods.get(suffix)
+            if not block:
+                continue
+            payload = build_relay_flags_payload(
+                relay,
+                flag=flag,
+                period=suffix,
+                history=block,
+                renderer_version=spec.renderer_version,
+            )
+            queued = _queue_or_publish(
+                jobs, output_dir, spec, fp, payload,
+                extra_render={"period": suffix, "flag": flag},
             )
             if queued == "hit":
                 hits += 1

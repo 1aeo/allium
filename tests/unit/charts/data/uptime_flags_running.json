@@ -1,0 +1,21 @@
+{
+  "version": "10.0",
+  "relays_published": "2026-09-19 00:00:00",
+  "relays": [
+    {
+      "fingerprint": "00045153816F644E78AD61BD2EDEFC7DA28587A4",
+      "flags": {
+        "Running": {
+          "1_month": {
+            "first": "2026-08-19 22:00:00",
+            "last": "2026-09-19 18:00:00",
+            "interval": 14400,
+            "factor": 0.001001001001001001,
+            "count": 4,
+            "values": [249, 999, 499, 0]
+          }
+        }
+      }
+    }
+  ]
+}

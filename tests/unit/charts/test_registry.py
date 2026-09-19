@@ -25,3 +25,18 @@ def test_period_heroes_registered():
     spec = ChartSpec("x", "relay/{fingerprint}/x.png", "x", "m", "r", 2)
     assert spec.renderer_version == "2"
     assert spec.output_path(fp) == "relay/%s/x.png" % fp
+
+
+def test_flag_period_specs_registered():
+    from allium.lib.charts.pipeline import FLAG_PERIOD_SPEC_BY_SUFFIX, get_chart
+
+    assert list(FLAG_PERIOD_SPEC_BY_SUFFIX) == ["1m", "6m", "1y", "5y"]
+    fp = "AB" * 20
+    for suffix, spec in FLAG_PERIOD_SPEC_BY_SUFFIX.items():
+        assert spec is get_chart("relay_flags_%s" % suffix)
+        assert spec.renderer_name == "render_relay_flags"
+        assert spec.renderer_module == "allium.lib.charts.flags"
+        assert spec.renderer_version == "1"
+        assert spec.cache_subdir == "relay_flags_%s" % suffix
+        assert spec.output_path(fp) == "relay/%s/flags-%s.png" % (fp, suffix)
+        assert spec.renderer_name != "render_relay_bandwidth_1m"

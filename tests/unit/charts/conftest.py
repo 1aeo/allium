@@ -158,7 +158,7 @@ class _DummyCtx(object):
         return _DummyPool()
 
 
-def stub_chart_pool(monkeypatch, render=fake_render, mpl=True):
+def stub_chart_pool(monkeypatch, render=fake_render, mpl=True, flag_render=None):
     monkeypatch.setattr(
         "allium.lib.charts.pipeline.matplotlib_is_available",
         lambda: mpl,
@@ -172,6 +172,55 @@ def stub_chart_pool(monkeypatch, render=fake_render, mpl=True):
             "multiprocessing.get_context",
             lambda name: _DummyCtx(),
         )
+    if flag_render is None:
+        flag_render = render
+    if flag_render is not None:
+        monkeypatch.setattr(
+            "allium.lib.charts.flags.render_relay_flags",
+            flag_render,
+        )
+
+
+def make_uptime_history(
+    fp=FP_JEANGRAE,
+    flag_names=None,
+    extra_periods=(),
+    values=None,
+    flags_object=True,
+):
+    """Onionoo /uptime relay with ``flags.Running.1_month.values`` graph history."""
+    values = list(values) if values is not None else [999, 980, 960, 940]
+    block = {
+        "first": _FIRST,
+        "last": "2026-07-19 12:00:00",
+        "interval": 14400,
+        "factor": 0.001001001001001001,
+        "count": len(values),
+        "values": values,
+    }
+    flag_hist = {}
+    if flags_object:
+        for name in (flag_names if flag_names is not None else ("Running", "Guard", "Fast")):
+            periods = {"1_month": dict(block)}
+            for key in extra_periods:
+                periods[key] = dict(block)
+            flag_hist[name] = periods
+    doc = {
+        "fingerprint": fp,
+        "uptime": {"1_month": dict(block)},
+    }
+    if flags_object:
+        doc["flags"] = flag_hist
+    return doc
+
+
+def make_uptime_data(relays=None):
+    relays = list(relays or [make_uptime_history()])
+    return {
+        "version": "10.0",
+        "relays_published": _PUBLISHED,
+        "relays": relays,
+    }
 
 
 def on_args(output_dir, **extra):

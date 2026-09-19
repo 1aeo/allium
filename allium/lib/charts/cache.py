@@ -127,6 +127,29 @@ def build_relay_bandwidth_1m_payload(
     return payload
 
 
+def build_relay_flags_payload(
+    relay,
+    flag,
+    period,
+    history,
+    renderer_version="1",
+):
+    """Canonical payload for ``relay_flags_1m`` … ``_5y``. No family overlay."""
+    relay = relay or {}
+    suffix = period or "1m"
+    return {
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "chart_id": "relay_flags_{}".format(suffix),
+        "renderer_version": str(renderer_version),
+        "fingerprint": relay.get("fingerprint") or "",
+        "nickname": relay.get("nickname") or "",
+        "operator": operator_from_contact(relay.get("contact")),
+        "flag": flag or "",
+        "period": suffix,
+        "history": history,
+    }
+
+
 def cache_key(payload):
     encoded = json.dumps(
         payload,

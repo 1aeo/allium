@@ -138,3 +138,48 @@ def test_write_relay_period_files_emits_6m_html(temp_dir):
     assert 'href="1y.html"' in six
     assert year.startswith("hero=1y")
     assert not os.path.isfile(os.path.join(relay_dir, "5y.html"))
+
+
+def _flag_uptime_page_snippet():
+    text = (TEMPLATE_DIR / "relay-info.html").read_text(encoding="utf-8")
+    start = text.index('id="flag-uptime"')
+    end = text.index("Hibernating", start)
+    return text[start:end]
+
+
+def test_bandwidth_markup_unchanged_and_flag_include_is_sibling():
+    history = _history_snippet()
+    page = (TEMPLATE_DIR / "relay-info.html").read_text(encoding="utf-8")
+    flag_block = _flag_uptime_page_snippet()
+    assert 'include "relay-flag-uptime.html"' not in history
+    assert "has_flag_chart" not in history
+    assert "flags-" not in history
+    assert 'id="flag-uptime"' in flag_block
+    assert flag_block.index("</dd>") < flag_block.index('include "relay-flag-uptime.html"')
+    assert page.index("relay-bandwidth-history.html") < page.index('id="flag-uptime"')
+    assert page.index('id="flag-uptime"') < page.index("relay-flag-uptime.html")
+
+
+def test_jinja_flag_uptime_img_gated():
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
+    tmpl = env.get_template("relay-flag-uptime.html")
+    assert tmpl.render(charts_enabled=False, has_flag_chart=True) == ""
+    assert tmpl.render(charts_enabled=True, has_flag_chart=False) == ""
+    html = tmpl.render(
+        charts_enabled=True,
+        has_flag_chart=True,
+        hero_period="1m",
+        flag_chart_periods=["1m", "6m"],
+        flag_chart_label="Exit Node",
+    )
+    assert 'src="flags-1m.png"' in html
+    assert "Exit Node flag presence" in html
+    assert "last 30 days" in html
+    six = tmpl.render(
+        charts_enabled=True,
+        has_flag_chart=True,
+        hero_period="6m",
+        flag_chart_periods=["1m"],
+        flag_chart_label="Exit Node",
+    )
+    assert six == ""

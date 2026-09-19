@@ -118,6 +118,8 @@ def test_charts_package_import_does_not_load_matplotlib():
     import allium.lib.charts  # noqa: F401
     import allium.lib.charts.cache  # noqa: F401
     import allium.lib.charts.pipeline  # noqa: F401
+    import allium.lib.charts.flags  # noqa: F401
+    import allium.lib.charts.chrome  # noqa: F401
     if not already:
         assert "matplotlib" not in sys.modules
         assert "matplotlib.pyplot" not in sys.modules
@@ -362,6 +364,7 @@ def test_cache_hit_is_per_period(temp_dir, monkeypatch):
 def test_job_period_reads_wrapper_chart_id_and_render():
     assert job_period({"period": "6m", "chart_id": "relay_bandwidth_1m"}) == "6m"
     assert job_period({"chart_id": "relay_bandwidth_5y"}) == "5y"
+    assert job_period({"chart_id": "relay_flags_6m"}) == "6m"
     assert job_period({"render": {"period": "1y"}}) == "1y"
     assert job_period({}) == "1m"
 
