@@ -467,12 +467,15 @@ def _apply_throughput_title(ax, title, overload_status, overload_mode, loc, pad)
     ax.set_title(title, pad=pad, fontsize=TITLE_FONTSIZE)
 
 
-def _ratio_legend_handles(overlays, bands, events=None):
+def _ratio_legend_handles(overlays, bands, events=None, series_label=None):
     overlays = overlays or {}
     copy = band_legend_labels(bands)
     op_n = overlays.get("family_n") or 0
     handles = [
-        _Line2D([0], [0], color=NAVY, linewidth=1.6, label="This relay"),
+        _Line2D(
+            [0], [0], color=NAVY, linewidth=1.6,
+            label=series_label or "This relay",
+        ),
     ]
     if overlays.get("operator"):
         handles.append(_Line2D(
@@ -586,7 +589,7 @@ def _auto_spike_callout(ax, ts, invest, bands):
 
 
 def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
-                      axis_caption=None):
+                      axis_caption=None, series_label=None):
     overlays = overlays or {}
     tlo, thi = bands["typical_lo"], bands["typical_hi"]
     ilo, ihi = bands["invest_lo"], bands["invest_hi"]
@@ -646,7 +649,9 @@ def _plot_ratio_strip(axr, ts, ratios, events, overlays, bands, period="1m",
     _date_axis(axr, period, ts)
     if axis_caption:
         axr.set_xlabel(axis_caption, fontsize=AXIS_FONTSIZE)
-    handles = _ratio_legend_handles(overlays, bands, events)
+    handles = _ratio_legend_handles(
+        overlays, bands, events, series_label=series_label,
+    )
     _place_ratio_legend_shelf(axr, handles)
 
 
@@ -734,7 +739,11 @@ def render_relay_bandwidth_1m(job, dest_path):
             ratios.append(float("nan"))
     events = _events_in_span(restart_events(job.get("last_restarted")), ts)
     bands = job.get("bands") or bands_for_flags(job.get("flags"))
-    overlays = _plot_overlays(job, ts, write_1m) if period == "1m" else {}
+    overlays = (
+        _plot_overlays(job, ts, write_1m)
+        if period == "1m" and job.get("scope") != "operator"
+        else {}
+    )
     overload_status = current_overload_status(
         job, published_clock(job.get("relays_published")),
     )
@@ -792,9 +801,12 @@ def render_relay_bandwidth_1m(job, dest_path):
     _place_legend_above(ax, bw_handles, wrap_last=wrap_last)
 
     axis_caption = None if period == "1m" else period_axis_caption(period, write_1m)
+    series_label = (
+        "This operator" if job.get("scope") == "operator" else "This relay"
+    )
     _plot_ratio_strip(
         axr, ts, ratios, events, overlays, bands,
-        period=period, axis_caption=axis_caption,
+        period=period, axis_caption=axis_caption, series_label=series_label,
     )
     axr.set_title(
         _sibling_ratio_title(title, bands), loc=title_loc, pad=title_pad,

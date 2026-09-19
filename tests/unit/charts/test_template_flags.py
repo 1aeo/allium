@@ -6,8 +6,9 @@ from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
 from allium.lib.charts.series import merged_period_views, period_views
+from allium.lib.contact_sorting import adjust_vanity_paths
 from allium.lib.page_writer import write_relay_period_files
-from tests.unit.charts.conftest import FP_JEANGRAE
+from tests.unit.charts.conftest import CONTACT_A, FP_JEANGRAE
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "allium" / "templates"
 
@@ -229,3 +230,24 @@ def test_write_relay_period_files_merges_uptime_only_page(temp_dir):
     assert five.startswith("hero=5y;bw=False;up=True;show=True:")
     assert "1m," in five
     assert not os.path.isfile(os.path.join(relay_dir, "6m.html"))
+
+
+def test_contact_history_src_uses_path_prefix_and_value():
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
+    tmpl = env.get_template("contact-bandwidth-history.html")
+    snippet = (TEMPLATE_DIR / "contact-bandwidth-history.html").read_text(
+        encoding="utf-8",
+    )
+    page = (TEMPLATE_DIR / "contact.html").read_text(encoding="utf-8")
+    assert 'include "contact-bandwidth-history.html"' in page
+    assert 'src="{{ page_ctx.path_prefix }}contact/{{ value }}/' in snippet
+    html = tmpl.render(
+        charts_enabled=True,
+        has_contact_chart=True,
+        value=CONTACT_A,
+        page_ctx={"path_prefix": "../../"},
+    )
+    assert 'src="../../contact/%s/bandwidth-1m.png"' % CONTACT_A in html
+    assert adjust_vanity_paths(html).count(
+        'src="../contact/%s/bandwidth-1m.png"' % CONTACT_A,
+    ) == 1

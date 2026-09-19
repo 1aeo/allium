@@ -286,6 +286,11 @@ def calculate_bandwidth_reliability_metrics(
 def extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, time_period, bandwidth_map=None):
     """
     Calculate daily total bandwidth for an operator.
+
+    Index-aligned averages for reliability copy. Chart x-axis series walk
+    member fingerprints and sum ``history_block`` values at shared
+    ``timestamps_for_block`` instants — see
+    ``allium.lib.charts.series.aggregate_operator_bandwidth``.
     
     OPTIMIZATION: Accepts pre-built bandwidth_map for batch processing. When processing
     multiple operators, build the map once with build_bandwidth_map() and pass it to

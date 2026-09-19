@@ -8,6 +8,7 @@ from collections import OrderedDict, namedtuple
 
 from ..bandwidth_utils import build_bandwidth_map
 from .cache import (
+    build_contact_bandwidth_payload,
     build_relay_bandwidth_1m_payload,
     build_relay_uptime_payload,
     cache_hit,
@@ -20,8 +21,13 @@ from .cache import (
 )
 from .series import (
     PERIOD_KEYS,
+    aggregate_operator_bandwidth,
     chartable_fingerprints,
+    contacts_from_relay_slice,
+    is_contact_chart,
+    is_contact_hash,
     is_relay_fingerprint,
+    member_fingerprints_for_contact,
     overlays_for_relay,
     precompute_overlays,
     series_by_fp,
@@ -55,8 +61,11 @@ class ChartSpec(object):
         self.renderer_name = renderer_name
         self.renderer_version = str(renderer_version)
 
-    def output_path(self, fingerprint):
-        return self.output_path_pattern.format(fingerprint=fingerprint)
+    def output_path(self, entity_id):
+        """Relay specs use ``{fingerprint}``; contact specs use ``{contact_md5}``."""
+        return self.output_path_pattern.format(
+            fingerprint=entity_id, contact_md5=entity_id,
+        )
 
 
 def _bandwidth_spec(suffix):
@@ -92,9 +101,29 @@ UPTIME_SPEC_BY_SUFFIX = OrderedDict(
 RELAY_UPTIME_1M = UPTIME_SPEC_BY_SUFFIX["1m"]
 RELAY_UPTIME_PERIODS = tuple(UPTIME_SPEC_BY_SUFFIX.values())
 
+
+def _contact_bandwidth_spec(suffix):
+    return ChartSpec(
+        chart_id="contact_bandwidth_%s" % suffix,
+        output_path_pattern="contact/{contact_md5}/bandwidth-%s.png" % suffix,
+        cache_subdir="contact_bandwidth_%s" % suffix,
+        renderer_module="allium.lib.charts.bandwidth",
+        renderer_name="render_relay_bandwidth_1m",
+        renderer_version="3",
+    )
+
+
+CONTACT_PERIOD_SPEC_BY_SUFFIX = OrderedDict(
+    (suffix, _contact_bandwidth_spec(suffix)) for _onionoo, suffix in PERIOD_KEYS
+)
+CONTACT_BANDWIDTH_1M = CONTACT_PERIOD_SPEC_BY_SUFFIX["1m"]
+CONTACT_BANDWIDTH_PERIODS = tuple(CONTACT_PERIOD_SPEC_BY_SUFFIX.values())
+
 _REGISTRY = OrderedDict(
     (spec.chart_id, spec)
-    for spec in RELAY_BANDWIDTH_PERIODS + RELAY_UPTIME_PERIODS
+    for spec in (
+        RELAY_BANDWIDTH_PERIODS + RELAY_UPTIME_PERIODS + CONTACT_BANDWIDTH_PERIODS
+    )
 )
 
 
@@ -211,7 +240,7 @@ def job_period(job):
     if period:
         return period
     chart_id = (job or {}).get("chart_id") or ""
-    for prefix in ("relay_bandwidth_", "relay_uptime_"):
+    for prefix in ("relay_bandwidth_", "relay_uptime_", "contact_bandwidth_"):
         if chart_id.startswith(prefix) and chart_id[len(prefix):]:
             return chart_id[len(prefix):]
     return ((job or {}).get("render") or {}).get("period") or "1m"
@@ -350,6 +379,43 @@ def _family_renderer_ready(specs):
     return any(renderer_is_ready(spec) for spec in specs)
 
 
+def _contact_groups(relay_set):
+    json_doc = getattr(relay_set, "json", None) or {}
+    return (json_doc.get("sorted") or {}).get("contact") or {}
+
+
+def _relays_by_fp(details):
+    out = {}
+    for relay in details or []:
+        fp = relay.get("fingerprint")
+        if is_relay_fingerprint(fp):
+            out[fp] = relay
+    return out
+
+
+def contact_period_blocks(relay_set, sel):
+    """Drawable contact aggregates for operators that include the relay slice.
+
+    Per-family skip: a period is omitted when no member has that Onionoo
+    history_block. Does not invent ``1m`` from other periods.
+    """
+    if sel is None:
+        return {}
+    hashes = contacts_from_relay_slice(sel.details, sel.selected)
+    groups = _contact_groups(relay_set)
+    out = {}
+    for hid in hashes:
+        members = member_fingerprints_for_contact(hid, sel.details, groups)
+        by_period = {}
+        for onionoo_key, suffix in PERIOD_KEYS:
+            agg = aggregate_operator_bandwidth(members, sel.bw_map, onionoo_key)
+            if agg:
+                by_period[suffix] = agg
+        if by_period:
+            out[hid] = by_period
+    return out
+
+
 def _skip_reason(args, relay_set):
     """Why the HTML gate and the pass both stay off. None means run.
 
@@ -382,13 +448,20 @@ def _init_chart_worker():
     import matplotlib.pyplot  # noqa: F401
 
 
-def _queue_or_publish(jobs, output_dir, spec, fp, payload, extra_render=None):
+def _job_entity_id(job, spec):
+    """Relay jobs use ``fingerprint``; contact jobs use ``contact_md5``."""
+    if is_contact_chart(spec):
+        return job.get("contact_md5") or ""
+    return job.get("fingerprint") or ""
+
+
+def _queue_or_publish(jobs, output_dir, spec, entity_id, payload, extra_render=None):
     """Cache-hit → publish; miss → one slim spawn job. Returns ``hit`` or ``job``."""
     key = cache_key(payload)
-    if cache_hit(output_dir, spec, fp, key):
+    if cache_hit(output_dir, spec, entity_id, key):
         if publish_png(
-            cached_png_path(output_dir, spec, fp),
-            published_png_path(output_dir, spec, fp),
+            cached_png_path(output_dir, spec, entity_id),
+            published_png_path(output_dir, spec, entity_id),
         ):
             return "hit"
         return None
@@ -400,38 +473,47 @@ def _queue_or_publish(jobs, output_dir, spec, fp, payload, extra_render=None):
     if extra_render:
         render.update(extra_render)
     period = render.get("period") or payload.get("period") or "1m"
-    jobs.append({
+    row = {
         "output_dir": output_dir,
-        "fingerprint": fp,
+        "fingerprint": "" if is_contact_chart(spec) else entity_id,
         "key": key,
         "chart_id": spec.chart_id,
         "period": period,
         "render": render,
-    })
+    }
+    if is_contact_chart(spec):
+        row["contact_md5"] = entity_id
+    jobs.append(row)
     return "job"
 
 
 def _render_chart_job(job):
     spec = get_chart(job.get("chart_id")) or RELAY_BANDWIDTH_1M
     output_dir = job["output_dir"]
-    fingerprint = job["fingerprint"]
-    if not is_relay_fingerprint(fingerprint):
+    entity_id = _job_entity_id(job, spec)
+    if is_contact_chart(spec):
+        if not is_contact_hash(entity_id):
+            return {
+                "ok": False, "fingerprint": entity_id,
+                "error": "invalid contact hash",
+            }
+    elif not is_relay_fingerprint(entity_id):
         return {
-            "ok": False, "fingerprint": fingerprint, "error": "invalid fingerprint",
+            "ok": False, "fingerprint": entity_id, "error": "invalid fingerprint",
         }
     key = job["key"]
-    cache_png = cached_png_path(output_dir, spec, fingerprint)
+    cache_png = cached_png_path(output_dir, spec, entity_id)
     try:
         module = _import_renderer_module(spec)
         getattr(module, spec.renderer_name)(job["render"], cache_png)
         write_sidecar(
-            sidecar_path(output_dir, spec, fingerprint),
-            key, spec.chart_id, fingerprint,
+            sidecar_path(output_dir, spec, entity_id),
+            key, spec.chart_id, entity_id,
         )
-        publish_png(cache_png, published_png_path(output_dir, spec, fingerprint))
-        return {"ok": True, "fingerprint": fingerprint, "error": None}
+        publish_png(cache_png, published_png_path(output_dir, spec, entity_id))
+        return {"ok": True, "fingerprint": entity_id, "error": None}
     except Exception as exc:  # noqa: BLE001 — one bad relay must not kill the pool
-        return {"ok": False, "fingerprint": fingerprint, "error": str(exc)}
+        return {"ok": False, "fingerprint": entity_id, "error": str(exc)}
 
 
 def _drain_pool(pool, jobs, n_proc):
@@ -601,6 +683,51 @@ def run_chart_pass(relay_set, args, progress_logger=None):
             queued = _queue_or_publish(
                 jobs, output_dir, spec, fp, payload,
                 extra_render={"period": suffix},
+            )
+            if queued == "hit":
+                hits += 1
+                published_n += 1
+
+    contact_blocks = getattr(relay_set, "_contact_chart_blocks", None) if relay_set else None
+    if contact_blocks is None:
+        contact_blocks = contact_period_blocks(relay_set, sel)
+    from ..operator_analysis import contact_member_relays
+
+    by_fp = _relays_by_fp(sel.details)
+    for hid, periods in contact_blocks.items():
+        members = contact_member_relays(relay_set, hid)
+        if not members:
+            members = [
+                by_fp[fp]
+                for fp in member_fingerprints_for_contact(
+                    hid, sel.details, _contact_groups(relay_set),
+                )
+                if fp in by_fp
+            ]
+        for suffix, spec in CONTACT_PERIOD_SPEC_BY_SUFFIX.items():
+            block = periods.get(suffix)
+            if not block:
+                continue
+            payload = build_contact_bandwidth_payload(
+                hid,
+                members,
+                write=block["write"],
+                read=block["read"],
+                relays_published=published,
+                renderer_version=spec.renderer_version,
+                period=suffix,
+                member_n=block.get("member_n") or len(members),
+                bands=dict(bands_for_flags([]), role=""),
+                bands_frozen_from=frozen,
+            )
+            queued = _queue_or_publish(
+                jobs, output_dir, spec, hid, payload,
+                extra_render={
+                    "relays_published": published,
+                    "period": suffix,
+                    "scope": "operator",
+                    "contact_md5": hid,
+                },
             )
             if queued == "hit":
                 hits += 1

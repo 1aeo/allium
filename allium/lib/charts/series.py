@@ -1,7 +1,8 @@
 """Onionoo bandwidth and uptime series helpers. No matplotlib."""
 
 import re
-from datetime import timedelta
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from ..time_utils import parse_onionoo_timestamp
 from ..uptime_utils import build_uptime_map
@@ -12,6 +13,8 @@ MIN_ALIGNED_POINTS = 2
 # Match ``uptime_utils._compute_uptime_percentage_and_datapoints`` (0–999 → %).
 UPTIME_PERCENT_SCALE = 100.0 / 999.0
 _FP_RE = re.compile(r"^[0-9A-Fa-f]{40}$")
+_CONTACT_RE = re.compile(r"^[0-9A-Fa-f]{32}$")
+_ONIONOO_TS = "%Y-%m-%d %H:%M:%S"
 
 
 def history_block(period_data):
@@ -304,6 +307,189 @@ def normalize_fingerprint(value):
 def is_relay_fingerprint(value):
     """True for a 40-char hex fingerprint (optional leading ``$``)."""
     return bool(_FP_RE.match(str(value or "").lstrip("$")))
+
+
+def is_contact_hash(value):
+    """True for a 32-char hex contact MD5. Never a 40-hex fingerprint."""
+    text = str(value or "")
+    return bool(_CONTACT_RE.match(text)) and not is_relay_fingerprint(text)
+
+
+def is_contact_chart(spec):
+    """True when ``ChartSpec.chart_id`` is a contact_* family."""
+    return str(getattr(spec, "chart_id", "") or "").startswith("contact_")
+
+
+def contacts_from_relay_slice(details_relays, selected_fps):
+    """Contact MD5s whose members include a sliced relay fingerprint.
+
+    ``--charts-limit`` / ``--fingerprint`` still slice relays. There is no
+    ``--contacts-limit``. Hashes that fail ``is_contact_hash`` are skipped.
+    """
+    wanted = frozenset(selected_fps or ())
+    out = []
+    seen = set()
+    for relay in details_relays or []:
+        fp = relay.get("fingerprint")
+        if fp not in wanted:
+            continue
+        hid = relay.get("contact_md5")
+        if not is_contact_hash(hid) or hid in seen:
+            continue
+        seen.add(hid)
+        out.append(hid)
+    return out
+
+
+def member_fingerprints_for_contact(
+    contact_hash, details_relays, contact_groups=None,
+):
+    """Member fingerprints from ``sorted['contact'][hash]['relays']`` indices.
+
+    Indices point into ``details_relays`` (the same list as ``json['relays']``).
+    Falls back to walking details by ``contact_md5`` when the group is missing.
+    """
+    if not is_contact_hash(contact_hash):
+        return []
+    details_relays = details_relays or []
+    if contact_groups:
+        group = contact_groups.get(contact_hash)
+        if group is None:
+            wanted = contact_hash.lower()
+            for key, val in contact_groups.items():
+                if is_contact_hash(key) and key.lower() == wanted:
+                    group = val
+                    break
+        idxs = (group or {}).get("relays") or []
+        fps = []
+        for idx in idxs:
+            if not isinstance(idx, int) or idx < 0 or idx >= len(details_relays):
+                continue
+            fp = details_relays[idx].get("fingerprint")
+            if is_relay_fingerprint(fp):
+                fps.append(fp)
+        if fps:
+            return fps
+    wanted = contact_hash.lower()
+    fps = []
+    for relay in details_relays:
+        hid = relay.get("contact_md5")
+        if not is_contact_hash(hid) or hid.lower() != wanted:
+            continue
+        fp = relay.get("fingerprint")
+        if is_relay_fingerprint(fp):
+            fps.append(fp)
+    return fps
+
+
+def _onionoo_ts(dt):
+    if isinstance(dt, datetime) and dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.strftime(_ONIONOO_TS)
+
+
+def _sum_at_timestamps(timestamps, values, factor, dest):
+    factor = float(factor or 1)
+    for ts, raw in zip(timestamps, values or []):
+        if raw is None:
+            continue
+        dest[ts] = dest.get(ts, 0.0) + (raw * factor)
+
+
+def aggregate_operator_bandwidth(member_fps, bandwidth_map, onionoo_key):
+    """Sum member write/read at shared timestamps for one Onionoo period.
+
+    Aggregation is **sum** of bytes/s across members that have a value at
+    that timestamp. ``extract_operator_daily_bandwidth_totals`` is
+    index-aligned and returns averages — do not use it for the x-axis.
+
+    Members without this period's ``history_block`` are omitted. Members
+    whose write/read intervals disagree, or that do not match the most
+    common interval, are skipped. Does not invent a ``1_month`` series
+    when no member publishes that block.
+
+    Returns ``{"write", "read", "member_n"}`` history_blocks (factor 1.0)
+    or ``None`` when the aligned series is thinner than two points.
+    """
+    bandwidth_map = bandwidth_map or {}
+    candidates = []
+    for fp in member_fps or []:
+        if not is_relay_fingerprint(fp):
+            continue
+        write, read = period_blocks(bandwidth_map.get(fp), onionoo_key)
+        if not write or not read:
+            continue
+        try:
+            interval = int(write.get("interval") or 0)
+            read_interval = int(read.get("interval") or 0)
+        except (TypeError, ValueError):
+            continue
+        if interval <= 0 or interval != read_interval:
+            continue
+        w_ts = timestamps_for_block(write)
+        r_ts = timestamps_for_block(read)
+        if not w_ts or not r_ts:
+            continue
+        candidates.append((interval, write, read, w_ts, r_ts))
+    if not candidates:
+        return None
+    interval = Counter(item[0] for item in candidates).most_common(1)[0][0]
+    chosen = [item for item in candidates if item[0] == interval]
+    write_sums = {}
+    read_sums = {}
+    for _interval, write, read, w_ts, r_ts in chosen:
+        _sum_at_timestamps(w_ts, write.get("values"), write.get("factor"), write_sums)
+        _sum_at_timestamps(r_ts, read.get("values"), read.get("factor"), read_sums)
+    if not write_sums or not read_sums:
+        return None
+    all_ts = sorted(set(write_sums) | set(read_sums))
+    first = all_ts[0]
+    last = all_ts[-1]
+    n_slots = int(round((last - first).total_seconds() / interval)) + 1
+    if n_slots < MIN_ALIGNED_POINTS:
+        return None
+    write_values = []
+    read_values = []
+    for i in range(n_slots):
+        ts = first + timedelta(seconds=i * interval)
+        write_values.append(write_sums.get(ts))
+        read_values.append(read_sums.get(ts))
+    write_block = {
+        "first": _onionoo_ts(first),
+        "last": _onionoo_ts(last),
+        "interval": interval,
+        "factor": 1.0,
+        "values": write_values,
+    }
+    read_block = {
+        "first": _onionoo_ts(first),
+        "last": _onionoo_ts(last),
+        "interval": interval,
+        "factor": 1.0,
+        "values": read_values,
+    }
+    if aligned_1m_series(write_block, read_block) is None:
+        return None
+    return {
+        "write": write_block,
+        "read": read_block,
+        "member_n": len(chosen),
+    }
+
+
+def contact_spark_suffixes(periods):
+    """Ordered non-1M contact periods that have a drawable aggregate."""
+    periods = periods or {}
+    return tuple(suffix for _key, suffix in SPARK_ONIONOO if suffix in periods)
+
+
+def contact_hero_period(periods):
+    """First drawable period in ``PERIOD_KEYS`` order, or ``None``."""
+    periods = periods or {}
+    for _key, suffix in PERIOD_KEYS:
+        if suffix in periods:
+            return suffix
+    return None
 
 
 def family_group_key(relay):

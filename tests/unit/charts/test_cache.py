@@ -16,9 +16,19 @@ from allium.lib.charts.cache import (
     sidecar_path,
     write_sidecar,
 )
-from allium.lib.charts.pipeline import RELAY_BANDWIDTH_1M, RELAY_UPTIME_1M
+from allium.lib.charts.pipeline import (
+    CONTACT_BANDWIDTH_1M,
+    RELAY_BANDWIDTH_1M,
+    RELAY_UPTIME_1M,
+)
 from allium.lib.charts.series import history_block, is_relay_fingerprint
-from tests.unit.charts.conftest import FP_JEANGRAE, make_bw, make_relay, make_uptime
+from tests.unit.charts.conftest import (
+    CONTACT_A,
+    FP_JEANGRAE,
+    make_bw,
+    make_relay,
+    make_uptime,
+)
 
 _F3_TS_MS = 1786597200000
 
@@ -189,6 +199,12 @@ def test_cache_paths_sidecar_and_publish(temp_dir):
     os.remove(dest)
     assert publish_png(png, dest) is True
     assert os.path.isfile(dest)
+    contact_dest = published_png_path(temp_dir, CONTACT_BANDWIDTH_1M, CONTACT_A)
+    assert contact_dest == os.path.join(
+        temp_dir, "contact", CONTACT_A, "bandwidth-1m.png",
+    )
+    assert publish_png(png, contact_dest) is True
+    assert os.path.isfile(contact_dest)
 
 
 def test_uptime_payload_is_separate_from_bandwidth():

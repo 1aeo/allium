@@ -1334,6 +1334,32 @@ def write_pages_by_key(relay_set, k):
             print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
         print("---")
 
+
+def _contact_chart_template_flags(relay_set, k, v):
+    """Jinja flags for contact.html. Matplotlib stays out of this module."""
+    if k != "contact":
+        return {
+            "charts_enabled": False,
+            "has_contact_chart": False,
+            "contact_spark_periods": (),
+            "contact_hero_period": "1m",
+        }
+    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
+    hashes = getattr(relay_set, "contact_chart_hashes", None) or frozenset()
+    has_chart = charts_enabled and v in hashes
+    sparks = ()
+    hero = "1m"
+    if has_chart:
+        sparks = (getattr(relay_set, "contact_spark_periods", None) or {}).get(v) or ()
+        hero = (getattr(relay_set, "contact_hero_periods", None) or {}).get(v) or "1m"
+    return {
+        "charts_enabled": charts_enabled,
+        "has_contact_chart": has_chart,
+        "contact_spark_periods": sparks,
+        "contact_hero_period": hero,
+    }
+
+
 def build_template_args(
     relay_set,
     k,
@@ -1489,6 +1515,7 @@ def build_template_args(
         'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
         'contact_sort_enabled': (k == 'contact' and len(members) > 2),
         'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
+        **(_contact_chart_template_flags(relay_set, k, v)),
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):

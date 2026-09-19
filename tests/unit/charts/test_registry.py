@@ -1,6 +1,8 @@
 """Tests for ChartSpec and the period-hero registry in pipeline."""
 
 from allium.lib.charts.pipeline import (
+    CONTACT_BANDWIDTH_1M,
+    CONTACT_PERIOD_SPEC_BY_SUFFIX,
     PERIOD_SPEC_BY_SUFFIX,
     RELAY_BANDWIDTH_1M,
     RELAY_BANDWIDTH_PERIODS,
@@ -10,6 +12,7 @@ from allium.lib.charts.pipeline import (
     ChartSpec,
     get_chart,
 )
+from tests.unit.charts.conftest import CONTACT_A
 
 
 def test_period_heroes_registered():
@@ -43,3 +46,16 @@ def test_uptime_heroes_registered():
         assert spec.cache_subdir == "relay_uptime_%s" % suffix
         assert spec.output_path(fp) == "relay/%s/uptime-%s.png" % (fp, suffix)
     assert get_chart("relay_uptime_1m") is not get_chart("relay_bandwidth_1m")
+
+
+def test_contact_period_specs_use_contact_md5_paths():
+    assert list(CONTACT_PERIOD_SPEC_BY_SUFFIX) == ["1m", "6m", "1y", "5y"]
+    assert get_chart("contact_bandwidth_1m") is CONTACT_BANDWIDTH_1M
+    hid = CONTACT_A
+    for suffix, spec in CONTACT_PERIOD_SPEC_BY_SUFFIX.items():
+        assert spec is get_chart("contact_bandwidth_%s" % suffix)
+        assert spec.renderer_name == "render_relay_bandwidth_1m"
+        assert spec.cache_subdir == "contact_bandwidth_%s" % suffix
+        assert spec.output_path(hid) == "contact/%s/bandwidth-%s.png" % (hid, suffix)
+        assert spec.output_path(hid).startswith("contact/")
+        assert "relay/" not in spec.output_path(hid)

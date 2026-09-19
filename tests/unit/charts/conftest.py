@@ -7,6 +7,8 @@ FP_JEANGRAE = "02B1C5DFBCBEC735435652050DE1AF0BB0B108CF"
 FP_A = "A" * 40
 FP_B = "B" * 40
 FP_C = "C" * 40
+CONTACT_A = "a" * 32
+CONTACT_B = "b" * 32
 
 _PUBLISHED = "2026-08-15 06:00:00"
 _FIRST = "2026-07-16 12:00:00"
@@ -123,6 +125,17 @@ def make_uptime(
     for key in extra_periods:
         uptime[key] = dict(month)
     return {"fingerprint": fp, "uptime": uptime}
+
+
+def attach_contact_groups(relay_set):
+    """Index ``json['sorted']['contact'][hash]['relays']`` from details."""
+    relays = (relay_set.json or {}).get("relays") or []
+    groups = {}
+    for idx, relay in enumerate(relays):
+        hid = relay.get("contact_md5")
+        groups.setdefault(hid, {"relays": []})["relays"].append(idx)
+    relay_set.json.setdefault("sorted", {})["contact"] = groups
+    return relay_set
 
 
 def make_relay_set(output_dir, pairs=None, uptime_relays=None, **extra):

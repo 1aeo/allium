@@ -56,6 +56,8 @@ def test_cli_charts_flags():
     assert default.chart_workers == 0
     assert default.charts_limit == 0
     assert default.chart_fingerprints is None
+    assert not hasattr(default, "contacts_limit")
+    assert "--contacts-limit" not in _parser().format_help()
     assert resolve_charts_mode(default) == CHARTS_ON
     help_text = _parser().format_help()
     assert "default: on" in help_text
@@ -390,6 +392,7 @@ def test_job_period_reads_wrapper_chart_id_and_render():
     assert job_period({"period": "6m", "chart_id": "relay_bandwidth_1m"}) == "6m"
     assert job_period({"chart_id": "relay_bandwidth_5y"}) == "5y"
     assert job_period({"chart_id": "relay_uptime_6m"}) == "6m"
+    assert job_period({"chart_id": "contact_bandwidth_6m"}) == "6m"
     assert job_period({"render": {"period": "1y"}}) == "1y"
     assert job_period({}) == "1m"
 

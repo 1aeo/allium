@@ -28,3 +28,16 @@ from the live dump).
 `pip3 install -r config/requirements-charts.txt`. Detect with `find_spec("matplotlib")`. Pin `3.7.x` on Python 3.8.
 
 `ChartSpec` and the four period heroes live in `pipeline.py`. Same pool and cache root for new ids.
+
+## Contact / operator charts
+
+After HTML (same `maybe_run_charts` pass). `write_pages_by_key` `rmtree`s
+`www/contact/` — publish PNGs only under `contact/{contact_md5}/….png`.
+Contact ids are 32-hex MD5 (`contact_md5`); they never go through
+`is_relay_fingerprint`. `--charts-limit` / `--fingerprint` still slice
+relays; chart operators that include those fingerprints. No `--contacts-limit`.
+
+`contact.html` uses `src="{{ page_ctx.path_prefix }}contact/{{ value }}/….png"`
+so vanity copies become `../contact/{hash}/….png` via `adjust_vanity_paths`.
+Series: timestamp-aligned **sum** of member write/read. Do not invent 1M
+when no member has `1_month`. No extra Onionoo or datastore.

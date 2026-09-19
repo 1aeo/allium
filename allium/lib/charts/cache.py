@@ -8,7 +8,7 @@ import shutil
 from ..stability_utils import current_overload_status
 from ..time_utils import published_clock
 from .identity import operator_from_contact, role_from_flags
-from .series import history_block, is_relay_fingerprint
+from .series import history_block, is_contact_chart, is_contact_hash, is_relay_fingerprint
 
 # Bump when the payload layout changes.
 CACHE_SCHEMA_VERSION = 3
@@ -156,6 +156,67 @@ def build_relay_uptime_payload(
     }
 
 
+def build_contact_bandwidth_payload(
+    contact_md5,
+    members,
+    write=None,
+    read=None,
+    relays_published="",
+    renderer_version="1",
+    period="1m",
+    member_n=0,
+    bands=None,
+    bands_frozen_from="",
+):
+    """Canonical payload for ``contact_bandwidth_*`` (summed member series).
+
+    Aggregation is timestamp-aligned **sum** of member write/read. Identity
+    is ``operator_from_contact`` on the first member that has a ``url:`` host.
+    """
+    members = list(members or [])
+    operator = ""
+    advertised = 0
+    overloaded = False
+    clock = published_clock(relays_published)
+    member_fps = []
+    for relay in members:
+        fp = relay.get("fingerprint") or ""
+        if fp:
+            member_fps.append(fp)
+        advertised += relay.get("advertised_bandwidth") or 0
+        if not operator:
+            operator = operator_from_contact(relay.get("contact"))
+        fields = _overload_fields(relay, None)
+        if current_overload_status(fields, clock):
+            overloaded = True
+    suffix = period or "1m"
+    payload = {
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "chart_id": "contact_bandwidth_{}".format(suffix),
+        "renderer_version": str(renderer_version),
+        "contact_md5": contact_md5 or "",
+        "currently_overloaded": bool(overloaded),
+        "nickname": operator or "Operator",
+        "operator": operator,
+        "advertised_bandwidth": advertised,
+        "flags": [],
+        "role": "",
+        "last_restarted": "",
+        "scope": "operator",
+        "member_n": int(member_n or len(members)),
+        "member_fps": sorted(member_fps),
+        "bands": bands_key_fields(bands),
+        "bands_frozen_from": bands_frozen_from or "",
+        "period": suffix,
+        "write": write,
+        "read": read,
+    }
+    if suffix == "1m":
+        payload["write_1m"] = write
+        payload["read_1m"] = read
+    return payload
+
+
 def cache_key(payload):
     encoded = json.dumps(
         payload,
@@ -170,10 +231,20 @@ def cache_dir(output_dir, spec):
     return os.path.join(output_dir, ".chart-cache", spec.cache_subdir)
 
 
-def _fp_cache_path(output_dir, spec, fingerprint, suffix):
-    if not is_relay_fingerprint(fingerprint):
+def _entity_id_or_raise(spec, entity_id):
+    """40-hex relays stay strict; 32-hex contacts are a separate validator."""
+    if is_contact_chart(spec):
+        if not is_contact_hash(entity_id):
+            raise ValueError("invalid contact hash")
+        return entity_id
+    if not is_relay_fingerprint(entity_id):
         raise ValueError("invalid relay fingerprint")
-    return os.path.join(cache_dir(output_dir, spec), fingerprint + suffix)
+    return entity_id
+
+
+def _fp_cache_path(output_dir, spec, fingerprint, suffix):
+    entity_id = _entity_id_or_raise(spec, fingerprint)
+    return os.path.join(cache_dir(output_dir, spec), entity_id + suffix)
 
 
 def sidecar_path(output_dir, spec, fingerprint):
@@ -185,9 +256,8 @@ def cached_png_path(output_dir, spec, fingerprint):
 
 
 def published_png_path(output_dir, spec, fingerprint):
-    if not is_relay_fingerprint(fingerprint):
-        raise ValueError("invalid relay fingerprint")
-    return os.path.join(output_dir, spec.output_path(fingerprint))
+    entity_id = _entity_id_or_raise(spec, fingerprint)
+    return os.path.join(output_dir, spec.output_path(entity_id))
 
 
 def sidecar_matches(path, key):
@@ -202,7 +272,10 @@ def sidecar_matches(path, key):
 
 
 def cache_hit(output_dir, spec, fingerprint, key):
-    if not is_relay_fingerprint(fingerprint):
+    if is_contact_chart(spec):
+        if not is_contact_hash(fingerprint):
+            return False
+    elif not is_relay_fingerprint(fingerprint):
         return False
     if not sidecar_matches(sidecar_path(output_dir, spec, fingerprint), key):
         return False
