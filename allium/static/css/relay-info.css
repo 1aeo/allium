@@ -42,6 +42,17 @@
     color: inherit;
 }
 
+/* Issue/note links in the Issues Detected box: keep severity color,
+   underline signals clickability, :target highlights the section */
+.issue-link {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.issue-link:hover {
+    color: var(--color-primary);
+}
+
 /* Highlight section when targeted (outline avoids layout shift/overlap) */
 :target {
     background-color: var(--color-highlight-bg) !important;
