@@ -42,15 +42,38 @@
     color: inherit;
 }
 
-/* Issue/note links in the Issues Detected box: keep severity color,
-   underline signals clickability, :target highlights the section */
+/* Issue/note links: keep severity color, underline so they read as links */
 .issue-link {
     color: inherit;
     text-decoration: underline;
     text-underline-offset: 2px;
 }
-.issue-link:hover {
+.issue-link:hover,
+.issue-link:focus {
     color: var(--color-primary);
+}
+
+/* Keep anchored rows and column headers clear of the viewport edge */
+tr[id],
+th[id],
+h5[id],
+dt[id],
+div[id],
+#overload,
+#version,
+#authority-votes,
+#bw-measurement {
+    scroll-margin-top: 72px;
+    scroll-margin-bottom: 24px;
+}
+
+/* Striped table cells paint over the row, so highlight the cells */
+tr:target > td {
+    background-color: var(--color-highlight-bg) !important;
+    box-shadow: inset 0 0 0 2px var(--color-highlight-border);
+}
+th:target {
+    outline-offset: 0;
 }
 
 /* Highlight section when targeted (outline avoids layout shift/overlap) */

@@ -8,9 +8,8 @@ This module consolidates all issue detection into a single source of truth:
 - Version issues (not recommended)
 - Overload issues (general, rate limits, FD exhaustion)
 
-Each issue includes severity, category, title, description, actionable suggestion,
-and a `section` anchor pointing to the relay-info page section with more details
-(e.g. 'flags' → #flags, 'connectivity' → #connectivity, 'authority-votes' → #authority-votes).
+Each issue includes severity, category, title, description, an actionable
+suggestion, and a `section` fragment for the row or column that shows the details.
 
 Issue Severities:
 - error: Critical issues requiring immediate attention
@@ -67,6 +66,46 @@ except ImportError:
 from .stability_utils import OVERLOAD_THRESHOLD_HOURS, evaluate_overload  # noqa: F401
 
 
+# Fragment on the relay page that explains each issue, and the tooltip that
+# names that section. Flag-row ids match consensus_evaluation.FLAG_ROW_ANCHORS.
+ISSUE_ANCHORS = {
+    'not_in_consensus': ('col-running', 'Running column: which authorities voted'),
+    'ipv4_reachability': ('flag-running-ipv4', 'Running flag: IPv4 reachability'),
+    'ipv6_reachability': ('flag-running-ipv6', 'Running flag: IPv6 reachability'),
+    'guard_fast': ('flag-guard-prereq-fast', 'Guard prerequisite: Fast'),
+    'guard_stable': ('flag-guard-prereq-stable', 'Guard prerequisite: Stable'),
+    'guard_bandwidth': ('flag-guard-bandwidth', 'Guard bandwidth requirement'),
+    'guard_wfu': ('flag-guard-wfu', 'Guard WFU requirement'),
+    'guard_tk': ('flag-guard-time-known', 'Guard time-known requirement'),
+    'stable': ('flag-stable-mtbf', 'Stable flag requirements'),
+    'hsdir_fast': ('flag-hsdir-prereq-fast', 'HSDir prerequisite: Fast'),
+    'hsdir_stable': ('flag-hsdir-prereq-stable', 'HSDir prerequisite: Stable'),
+    'hsdir_v2dir': ('flag-hsdir-prereq-v2dir', 'HSDir prerequisite: V2Dir'),
+    'hsdir_wfu': ('flag-hsdir-wfu', 'HSDir WFU requirement'),
+    'hsdir_tk': ('flag-hsdir-time-known', 'HSDir time-known requirement'),
+    'consensus_weight': ('col-cons-wt', 'Consensus weight by authority'),
+    'bw_measured': ('bw-measured-by', 'Which bandwidth authorities measured this relay'),
+    'staledesc': ('col-desc-published', 'Descriptor published time'),
+    'badexit': ('flag-badexit', 'BadExit flag details'),
+    'middleonly': ('flag-middleonly', 'MiddleOnly restriction'),
+    'version': ('version', 'Software version'),
+    'overload_general': ('overload-general', 'General overload report'),
+    'overload_recent': ('overload-general', 'When general overload was last reported'),
+    'overload_fd': ('overload-fd', 'File descriptor exhaustion report'),
+    'overload_write': ('overload-write', 'How many times the write rate limit was hit'),
+    'overload_read': ('overload-read', 'How many times the read rate limit was hit'),
+    'overload_rate': ('overload-rate-config', 'Configured rate and burst limits'),
+}
+
+
+def _with_anchor(issue: dict, anchor_key: str) -> dict:
+    """Attach the on-page section that explains this issue."""
+    anchor, label = ISSUE_ANCHORS[anchor_key]
+    issue['section'] = anchor
+    issue['section_label'] = label
+    return issue
+
+
 def generate_relay_issues(relay: dict, consensus_data: dict = None, 
                           use_bits: bool = False,
                           now_timestamp: float = None) -> List[dict]:
@@ -85,8 +124,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
                       If None, time.time() is called once.
     
     Returns:
-        List of issue dicts with: severity, category, title, description,
-        suggestion, section (page anchor for detailed view)
+        List of issue dicts with: severity, category, title, description, suggestion, section
     """
     issues = []
 
@@ -174,15 +212,14 @@ def generate_issues_from_consensus(
     if not consensus_data.get('in_consensus'):
         vote_count = consensus_data.get('vote_count', 0)
         total = consensus_data.get('total_authorities', auth_count)
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'error',
             'category': 'consensus',
             'title': 'Not in consensus',
             'description': f"Only {vote_count}/{total} authorities voted for this relay (need {majority_threshold})",
             'suggestion': 'Verify your relay is reachable from multiple geographic locations. Check firewall rules allow incoming connections on your ORPort from all directory authority IP addresses.',
-            'section': 'authority-votes',
             'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
-        })
+        }, 'not_in_consensus'))
     
     # =========================================================================
     # REACHABILITY ISSUES (3 issue types)
@@ -194,25 +231,23 @@ def generate_issues_from_consensus(
     unreachable_ipv4 = [name for name in get_voting_authority_names() if name not in ipv4_reachable]
     
     if ipv4_count < majority_threshold:
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'error',
             'category': 'reachability',
             'title': 'IPv4 reachability issues',
             'description': f"Only {ipv4_count}/{auth_count} authorities can reach this relay",
             'suggestion': f"Authorities that cannot reach you: {', '.join(unreachable_ipv4)}. Check: 1) Firewall allows incoming TCP on ORPort, 2) No ISP-level blocking, 3) Tor is running and listening. Use 'nc -zv your-ip your-orport' from external hosts to test.",
-            'section': 'connectivity',
             'doc_ref': 'https://community.torproject.org/relay/setup/',
-        })
+        }, 'ipv4_reachability'))
     elif ipv4_count < auth_count and unreachable_ipv4:
         # Partial reachability - informational
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'info',
             'category': 'reachability',
             'title': 'Partial IPv4 reachability',
             'description': f"{ipv4_count}/{auth_count} authorities can reach this relay",
             'suggestion': f"Some authorities cannot reach you: {', '.join(unreachable_ipv4)}. This may be temporary or due to geographic routing issues.",
-            'section': 'connectivity',
-        })
+        }, 'ipv4_reachability'))
     
     # IPv6 reachability issues
     # Note: ipv6_not_tested_authorities may not be reliably populated.
@@ -232,15 +267,14 @@ def generate_issues_from_consensus(
             ipv6_tested = 0  # Don't generate issue if data is unreliable
     
     if ipv6_tested > 0 and ipv6_count == 0:
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'warning',
             'category': 'reachability',
             'title': 'IPv6 not reachable',
             'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
             'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
-            'section': 'connectivity',
             'doc_ref': 'https://community.torproject.org/relay/setup/',
-        })
+        }, 'ipv6_reachability'))
     
     # =========================================================================
     # GUARD FLAG ELIGIBILITY (5 issue types) - 3 changed from info to warning
@@ -257,24 +291,22 @@ def generate_issues_from_consensus(
         
         # Prerequisite flags first
         if not has_fast:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: requires Fast flag',
                 'description': 'Guard flag requires having the Fast flag first',
                 'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
-                'section': 'flags',
-            })
+            }, 'guard_fast'))
         
         if not has_stable:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: requires Stable flag',
                 'description': 'Guard flag requires having the Stable flag first',
                 'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running).',
-                'section': 'flags',
-            })
+            }, 'guard_stable'))
         
         # Note: V2Dir prereq for Guard is checked via the flag table but not
         # as a separate diagnostic — V2Dir is almost always present (default on)
@@ -282,40 +314,37 @@ def generate_issues_from_consensus(
         # Metric thresholds
         if not guard_bw_eligible and observed_bandwidth:
             bw_display = _format_rate(observed_bandwidth, use_bits)
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: bandwidth below threshold',
                 'description': f"Observed bandwidth {bw_display} is below 2 MB/s minimum (AuthDirGuardBWGuarantee)",
                 'suggestion': 'Guard requires ≥2 MB/s bandwidth OR being in top 25% of network. To increase bandwidth: 1) Ensure adequate upstream capacity, 2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx or ARM.',
-                'section': 'flags',
                 'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
-            })
+            }, 'guard_bandwidth'))
         
         if not wfu_eligible and relay_wfu is not None:
             wfu_pct = relay_wfu * 100
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: WFU below threshold',
                 'description': f"Weighted Fractional Uptime {wfu_pct:.1f}% is below 98% requirement",
                 'suggestion': 'WFU measures recent uptime (recent downtime weighs more heavily). To improve: 1) Minimize restarts, 2) Use systemd with Restart=always, 3) Monitor for OOM kills, 4) Schedule updates during low-traffic periods.',
-                'section': 'flags',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
+            }, 'guard_wfu'))
         
         if not tk_eligible and relay_tk is not None:
             tk_days = relay_tk / SECONDS_PER_DAY
             days_needed = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: Time Known below threshold',
                 'description': f"Time Known {tk_days:.1f} days is below 8 days requirement ({days_needed:.1f} more days needed)",
                 'suggestion': 'Time Known tracks how long authorities have observed your relay. This resets if: 1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.',
-                'section': 'flags',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
+            }, 'guard_tk'))
     
     # =========================================================================
     # STABLE FLAG ISSUES (1 issue type) - changed from info to warning
@@ -323,15 +352,14 @@ def generate_issues_from_consensus(
     if not has_stable and relay_tk is not None:
         stable_eligibility = flag_eligibility.get('stable', {})
         if stable_eligibility.get('eligible_count', 0) < majority_threshold:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',  # Changed from 'info'
                 'category': 'stable',
                 'title': 'Not eligible for Stable flag',
                 'description': 'Uptime or MTBF below network median for most authorities',
                 'suggestion': 'Stable flag requires uptime/MTBF at or above network median. Keep your relay running continuously for 2-3 weeks. Avoid restarts. Use reliable hardware and network connection.',
-                'section': 'flags',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
+            }, 'stable'))
     
     # =========================================================================
     # HSDIR FLAG ISSUES (5 issue types) - all warning severity
@@ -345,30 +373,28 @@ def generate_issues_from_consensus(
     if not has_hsdir:
         # Prerequisite checks (order matches Guard & flag table: Fast → Stable → V2Dir)
         if not has_fast:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'hsdir',
                 'title': 'HSDir: requires Fast flag',
                 'description': 'HSDir flag requires having the Fast flag first',
                 'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
-                'section': 'flags',
-            })
+            }, 'hsdir_fast'))
         
         if not has_stable:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'hsdir',
                 'title': 'HSDir: requires Stable flag',
                 'description': 'HSDir flag requires having the Stable flag first',
                 'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running). Avoid restarts.',
-                'section': 'flags',
-            })
+            }, 'hsdir_stable'))
         
         # V2Dir / tunnelled-dir-server check
         # Tor source requires supports_tunnelled_dir_requests for HSDir.
         # Without it, HSDir is never assigned even if all other metrics pass.
         if not has_v2dir:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'hsdir',
                 'title': 'HSDir: requires V2Dir (tunnelled-dir-server)',
@@ -376,33 +402,30 @@ def generate_issues_from_consensus(
                               'This relay is missing V2Dir — the descriptor likely does not include '
                               '<code>tunnelled-dir-server</code>, usually because <code>DirCache 0</code> is set in torrc.',
                 'suggestion': 'Remove <code>DirCache 0</code> from torrc (DirCache is enabled by default in Tor ≥0.3.3). '
-                              'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
-                              'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
-                'section': 'flags',
-            })
+                             'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
+                             'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
+            }, 'hsdir_v2dir'))
         
         # WFU check
         if relay_wfu is not None and relay_wfu < HSDIR_WFU_DEFAULT:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',  # Changed from 'info'
                 'category': 'hsdir',
                 'title': 'HSDir: WFU below threshold',
                 'description': f"WFU {relay_wfu*100:.1f}% below 98% required for HSDir",
                 'suggestion': 'HSDir requires ≥98% WFU, Stable flag, and Time Known ≥25 hours (or ~10 days for moria1). Improve uptime consistency.',
-                'section': 'flags',
-            })
+            }, 'hsdir_wfu'))
         
         # CHANGED: info → warning
         if relay_tk is not None and relay_tk < HSDIR_TK_DEFAULT:
             tk_hours = relay_tk / 3600
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',  # Changed from 'info'
                 'category': 'hsdir',
                 'title': 'HSDir: Time Known below threshold',
                 'description': f"Time Known {tk_hours:.1f} hours below 25 hours (dir-spec default)",
                 'suggestion': 'Most authorities use 25 hours for HSDir TK. moria1 uses ~10 days. Keep running stably.',
-                'section': 'flags',
-            })
+            }, 'hsdir_tk'))
     
     # =========================================================================
     # BANDWIDTH/MEASUREMENT ISSUES (3 issue types)
@@ -412,14 +435,15 @@ def generate_issues_from_consensus(
         deviation = bandwidth_data.get('deviation')
         median = bandwidth_data.get('median')
         if deviation and median and deviation > median * 0.5:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'bandwidth',
                 'title': 'High consensus weight deviation',
-                'description': "Large variation in Consensus Weight values across authorities (see 'Cons Wt' column in Per-Authority Details below)",
+                'description': "Large variation in Consensus Weight values across authorities "
+                              "(see <a href=\"#col-cons-wt\" class=\"issue-link\">"
+                              "'Cons Wt' column in Per-Authority Details</a>)",
                 'suggestion': 'Consensus weight measurements vary significantly between authorities. This can affect traffic distribution. Ensure stable network connection and consistent bandwidth availability.',
-                'section': 'authority-votes',
-            })
+            }, 'consensus_weight'))
         
         # NEW: Bandwidth authority measurement issues
         # Bandwidth authorities (sbws) measure relay capacity for accurate consensus weights
@@ -432,7 +456,7 @@ def generate_issues_from_consensus(
             
             if bw_auth_measured < 3:
                 # Critical: Very few measurements - relay may be "Unmeasured"
-                issues.append({
+                issues.append(_with_anchor({
                     'severity': 'warning',
                     'category': 'bandwidth',
                     'title': 'Low bandwidth authority measurements',
@@ -443,12 +467,11 @@ def generate_issues_from_consensus(
                                  '2) ORPort accepts connections from bandwidth scanners, '
                                  '3) RelayBandwidthRate in torrc matches actual capacity. '
                                  'New relays may take 1-2 days to be measured by all authorities.',
-                    'section': 'bandwidth',
                     'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
-                })
+                }, 'bw_measured'))
             elif bw_auth_measured < bw_auth_majority:
                 # Moderate: Below majority but above minimum
-                issues.append({
+                issues.append(_with_anchor({
                     'severity': 'info',
                     'category': 'bandwidth',
                     'title': 'Bandwidth authority measurements below majority',
@@ -457,66 +480,61 @@ def generate_issues_from_consensus(
                     'suggestion': 'Some bandwidth authorities cannot measure your relay. This may be temporary or '
                                  'due to geographic routing. Monitor over 24-48 hours. If persistent, check firewall '
                                  'rules and ensure ORPort is accessible from various locations.',
-                    'section': 'bandwidth',
-                })
+                }, 'bw_measured'))
     
     # =========================================================================
     # STALEDESC FLAG (1 issue type)
     # =========================================================================
     for vote in authority_votes:
         if vote.get('voted') and 'StaleDesc' in vote.get('flags', []):
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'descriptor',
                 'title': 'StaleDesc flag assigned',
                 'description': 'Relay descriptor is older than 18 hours',
                 'suggestion': 'Your relay is not publishing fresh descriptors. Check: 1) Tor process is running, 2) Network connectivity, 3) Clock is synchronized (NTP). Restart Tor if needed.',
-                'section': 'authority-votes',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
+            }, 'staledesc'))
             break  # Only report once
     
     # =========================================================================
     # BADEXIT FLAG (1 issue type)
     # =========================================================================
     if 'BadExit' in current_flags:
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'error',
             'category': 'flags',
             'title': 'BadExit flag assigned',
             'description': 'This relay has been flagged as a bad exit by directory authorities. BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.).',
             'suggestion': 'Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> to understand and resolve this issue.',
-            'section': 'flags',
             'doc_ref': 'https://community.torproject.org/relay/',
-        })
+        }, 'badexit'))
     
     # =========================================================================
     # MIDDLEONLY FLAG (1 issue type)
     # =========================================================================
     if 'MiddleOnly' in current_flags:
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'error',
             'category': 'flags',
             'title': 'MiddleOnly restriction active',
             'description': 'This relay has been restricted to middle position only by directory authorities. MiddleOnly removes Guard, Exit, HSDir, and V2Dir flags, and adds BadExit. This significantly limits the relay\'s role in the network.',
             'suggestion': 'This may indicate suspicious behavior patterns, Sybil risk indicators, or policy violations. Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> for more information.',
-            'section': 'flags',
             'doc_ref': 'https://spec.torproject.org/dir-spec/',
-        })
+        }, 'middleonly'))
     
     # =========================================================================
     # VERSION ISSUES (1 issue type)
     # =========================================================================
     if recommended_version is False and version:
-        issues.append({
+        issues.append(_with_anchor({
             'severity': 'warning',
             'category': 'version',
             'title': 'Tor version not recommended',
             'description': f'Running Tor version {_html.escape(str(version))} which is not on the recommended list.',
             'suggestion': 'Update to the latest stable Tor version. Outdated versions may have security vulnerabilities and could eventually be rejected by the network. See <a href="https://www.torproject.org/download/tor/">torproject.org/download</a> for latest releases.',
-            'section': 'software',
             'doc_ref': 'https://www.torproject.org/download/tor/',
-        })
+        }, 'version'))
     
     return issues
 
@@ -555,7 +573,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
     if facts['general_ts']:
         if facts['general_active']:
             # Scenario 1: Active overload (within 72 hours)
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'error',
                 'category': 'overload',
                 'title': 'General Overload Active',
@@ -563,21 +581,19 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               'This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion.',
                 'suggestion': 'Check CPU/memory with htop. Review logs for "out of memory" or "onionskins" warnings. '
                              'Consider increasing MaxMemInQueues in torrc. Verify TCP ports available.',
-                'section': 'overload',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
-            })
+            }, 'overload_general'))
         elif facts['general_age_hours'] < 168:  # Within 7 days
             # Scenario 2: Recent overload (stale but notable)
             # This caller only reports stale overloads within 7 days
             # (the stability cell reports them no matter how old)
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'info',
                 'category': 'overload',
                 'title': 'Recent Overload Reported',
                 'description': f"Relay reported overload {facts['general_days_ago']} days ago (no longer active per 72h threshold).",
                 'suggestion': 'Monitor for recurring issues. Check system resources periodically.',
-                'section': 'overload',
-            })
+            }, 'overload_recent'))
 
     # =========================================================================
     # SCENARIO 3: File Descriptor Exhaustion (overload_fd_exhausted)
@@ -600,7 +616,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
         
         # Scenario 4: Write Bandwidth Limit Hit
         if write_count > 0:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'overload',
                 'title': 'Write Bandwidth Limit Hit',
@@ -608,13 +624,12 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               'Relay is throttling outbound traffic.',
                 'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
                              'if your connection has more upload capacity.',
-                'section': 'overload',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
+            }, 'overload_write'))
         
         # Scenario 5: Read Bandwidth Limit Hit
         if read_count > 0:
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'warning',
                 'category': 'overload',
                 'title': 'Read Bandwidth Limit Hit',
@@ -622,14 +637,13 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               'Relay is throttling inbound traffic.',
                 'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
                              'if your connection has more download capacity.',
-                'section': 'overload',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
+            }, 'overload_read'))
         
         # Scenario 6: Rate Limit Configuration (info context)
         if rate_limit > 0 and (write_count > 0 or read_count > 0):
             burst_str = _format_volume(burst_limit)
-            issues.append({
+            issues.append(_with_anchor({
                 'severity': 'info',
                 'category': 'overload',
                 'title': 'Rate Limit Configuration',
@@ -637,8 +651,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               f'Limits hit: Write={write_count:,}, Read={read_count:,}.',
                 'suggestion': 'These are your configured torrc limits. Adjust RelayBandwidthRate '
                              'and RelayBandwidthBurst to match your actual network capacity.',
-                'section': 'overload',
-            })
+            }, 'overload_rate'))
     
     return issues
 
@@ -663,7 +676,7 @@ def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
         description = ('Relay reported running out of file descriptors. '
                       'This severely impacts connections and performance.')
     
-    return {
+    return _with_anchor({
         'severity': 'error',
         'category': 'overload',
         'title': 'File Descriptor Exhaustion',
@@ -672,9 +685,8 @@ def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
                       'For systemd: add "LimitNOFILE=65535" to [Service] section. '
                       'For shell: ulimit -n 65535. '
                       'Persistent: edit /etc/security/limits.conf.'),
-        'section': 'overload',
         'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
-    }
+    }, 'overload_fd')
 
 
 def _format_volume(volume_bytes: int) -> str:

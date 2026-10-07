@@ -753,31 +753,29 @@ class TestIssueSectionAnchors:
             observed_bandwidth=kwargs.pop('observed_bandwidth', 1_000_000),
         )
 
-    def test_flag_eligibility_issues_link_to_flags(self):
+    def test_flag_eligibility_issues_link_to_flag_rows(self):
         issues = self._issues(current_flags=['Stable'])  # no Fast, no Guard, no HSDir
-        guard = [i for i in issues if i['category'] == 'guard']
-        hsdir = [i for i in issues if i['category'] == 'hsdir']
-        assert guard and hsdir
-        for issue in guard + hsdir:
-            assert issue['section'] == 'flags'
+        by_title = {i['title']: i['section'] for i in issues}
+        assert by_title['Guard: requires Fast flag'] == 'flag-guard-prereq-fast'
+        assert by_title['Guard: bandwidth below threshold'] == 'flag-guard-bandwidth'
+        assert by_title['HSDir: requires Fast flag'] == 'flag-hsdir-prereq-fast'
 
-    def test_reachability_issues_link_to_connectivity(self):
+    def test_reachability_issues_link_to_running_rows(self):
         issues = self._issues(reachability={
             'ipv4_reachable_count': 3,
             'ipv4_reachable_authorities': ['bastet', 'dannenberg', 'dizum'],
             'ipv6_reachable_count': 0,
             'ipv6_not_tested_authorities': ['moria1'],
         })
-        reach = [i for i in issues if i['category'] == 'reachability']
-        assert len(reach) >= 2  # IPv4 error + IPv6 warning
-        for issue in reach:
-            assert issue['section'] == 'connectivity'
+        by_title = {i['title']: i['section'] for i in issues}
+        assert by_title['IPv4 reachability issues'] == 'flag-running-ipv4'
+        assert by_title['IPv6 not reachable'] == 'flag-running-ipv6'
 
     def test_consensus_issue_links_to_authority_votes(self):
         issues = self._issues(in_consensus=False, vote_count=3)
         consensus = [i for i in issues if i['category'] == 'consensus']
         assert len(consensus) == 1
-        assert consensus[0]['section'] == 'authority-votes'
+        assert consensus[0]['section'] == 'col-running'
 
     def test_weight_deviation_links_to_authority_votes(self):
         issues = self._issues(
@@ -787,7 +785,8 @@ class TestIssueSectionAnchors:
         )
         dev = [i for i in issues if 'deviation' in i['title']]
         assert len(dev) == 1
-        assert dev[0]['section'] == 'authority-votes'
+        assert dev[0]['section'] == 'col-cons-wt'
+        assert 'href="#col-cons-wt"' in dev[0]['description']
 
     def test_bw_measurement_issues_link_to_bandwidth(self):
         issues = self._issues(
@@ -797,7 +796,7 @@ class TestIssueSectionAnchors:
         )
         meas = [i for i in issues if 'bandwidth authority' in i['title'].lower()]
         assert len(meas) == 1
-        assert meas[0]['section'] == 'bandwidth'
+        assert meas[0]['section'] == 'bw-measured-by'
 
     def test_staledesc_links_to_authority_votes(self):
         issues = self._issues(
@@ -808,7 +807,7 @@ class TestIssueSectionAnchors:
         )
         stale = [i for i in issues if 'StaleDesc' in i['title']]
         assert len(stale) == 1
-        assert stale[0]['section'] == 'authority-votes'
+        assert stale[0]['section'] == 'col-desc-published'
 
     def test_version_issue_links_to_software(self):
         issues = generate_issues_from_consensus({
@@ -821,7 +820,7 @@ class TestIssueSectionAnchors:
             recommended_version=False)
         version = [i for i in issues if i['category'] == 'version']
         assert len(version) == 1
-        assert version[0]['section'] == 'software'
+        assert version[0]['section'] == 'version'
 
     def test_overload_issues_link_to_overload(self):
         now_ms = int(time.time() * 1000)
@@ -834,9 +833,12 @@ class TestIssueSectionAnchors:
             },
         }
         issues = _check_overload_issues(relay)
-        assert len(issues) >= 4
-        for issue in issues:
-            assert issue['section'] == 'overload'
+        by_title = {i['title']: i['section'] for i in issues}
+        assert by_title['General Overload Active'] == 'overload-general'
+        assert by_title['File Descriptor Exhaustion'] == 'overload-fd'
+        assert by_title['Write Bandwidth Limit Hit'] == 'overload-write'
+        assert by_title['Read Bandwidth Limit Hit'] == 'overload-read'
+        assert by_title['Rate Limit Configuration'] == 'overload-rate-config'
 
 
 class TestBackwardCompatibility:
@@ -855,13 +857,15 @@ class TestBackwardCompatibility:
         
         issues = generate_issues_from_consensus(consensus_data)
         
-        # Every issue should have required fields
+        # Every issue should have required fields, including the page anchor
         for issue in issues:
             assert 'severity' in issue
             assert 'category' in issue
             assert 'title' in issue
             assert 'description' in issue
             assert 'suggestion' in issue
+            assert issue.get('section')
+            assert issue.get('section_label')
             assert issue['severity'] in ('error', 'warning', 'info')
 
     def test_issues_carry_section_anchor(self):
@@ -893,7 +897,8 @@ class TestBackwardCompatibility:
         assert issues  # sanity: fixture triggers issues
         for issue in issues:
             assert 'section' in issue
-            assert issue['section'] in TestIssueSectionAnchors.VALID_SECTIONS
+            assert 'section_label' in issue
+            assert issue['section'] in set(EXPECTED_ISSUE_ANCHORS.values())
 
 
 class TestReachabilityAfterAuthorityRemoval:
@@ -945,4 +950,177 @@ class TestReachabilityAfterAuthorityRemoval:
         assert len(partial) == 1
         assert '7/8' in partial[0]['description']
         assert 'tor26' in partial[0]['suggestion']  # the one missing voter
+
+
+# Titles produced by the scenarios below, and the relay-page fragment each one opens.
+EXPECTED_ISSUE_ANCHORS = {
+    'Not in consensus': 'col-running',
+    'IPv4 reachability issues': 'flag-running-ipv4',
+    'Partial IPv4 reachability': 'flag-running-ipv4',
+    'IPv6 not reachable': 'flag-running-ipv6',
+    'Guard: requires Fast flag': 'flag-guard-prereq-fast',
+    'Guard: requires Stable flag': 'flag-guard-prereq-stable',
+    'Guard: bandwidth below threshold': 'flag-guard-bandwidth',
+    'Guard: WFU below threshold': 'flag-guard-wfu',
+    'Guard: Time Known below threshold': 'flag-guard-time-known',
+    'Not eligible for Stable flag': 'flag-stable-mtbf',
+    'HSDir: requires Fast flag': 'flag-hsdir-prereq-fast',
+    'HSDir: requires Stable flag': 'flag-hsdir-prereq-stable',
+    'HSDir: requires V2Dir (tunnelled-dir-server)': 'flag-hsdir-prereq-v2dir',
+    'HSDir: WFU below threshold': 'flag-hsdir-wfu',
+    'HSDir: Time Known below threshold': 'flag-hsdir-time-known',
+    'High consensus weight deviation': 'col-cons-wt',
+    'Low bandwidth authority measurements': 'bw-measured-by',
+    'Bandwidth authority measurements below majority': 'bw-measured-by',
+    'StaleDesc flag assigned': 'col-desc-published',
+    'BadExit flag assigned': 'flag-badexit',
+    'MiddleOnly restriction active': 'flag-middleonly',
+    'Tor version not recommended': 'version',
+    'General Overload Active': 'overload-general',
+    'Recent Overload Reported': 'overload-general',
+    'File Descriptor Exhaustion': 'overload-fd',
+    'Write Bandwidth Limit Hit': 'overload-write',
+    'Read Bandwidth Limit Hit': 'overload-read',
+    'Rate Limit Configuration': 'overload-rate-config',
+}
+
+
+def _collect_titled_issues():
+    """Build one example of every surfaced issue title."""
+    found = {}
+
+    def add(issues):
+        for issue in issues:
+            found.setdefault(issue['title'], issue)
+
+    add(generate_issues_from_consensus({
+        'in_consensus': False,
+        'vote_count': 2,
+        'total_authorities': 9,
+        'authority_votes': [{'voted': True, 'flags': ['StaleDesc'], 'wfu': 0.5, 'tk': 3600}],
+        'reachability': {
+            'ipv4_reachable_count': 2,
+            'ipv4_reachable_authorities': ['bastet', 'dannenberg'],
+            'ipv6_reachable_count': 0,
+            'ipv6_tested_count': 8,
+            'ipv6_not_tested_authorities': [],
+        },
+        'flag_eligibility': {'stable': {'eligible_count': 0}},
+        'bandwidth': {
+            'deviation': 5000,
+            'median': 100,
+            'bw_auth_measured_count': 1,
+            'bw_auth_total': 6,
+        },
+    }, current_flags=['BadExit', 'MiddleOnly'], observed_bandwidth=100_000,
+       version='0.4.7.0', recommended_version=False))
+
+    # Above-minimum measurement count, still short of a bandwidth-authority majority.
+    add(generate_issues_from_consensus({
+        'in_consensus': True,
+        'authority_votes': [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY, 'voted': True, 'flags': []}],
+        'reachability': {
+            'ipv4_reachable_count': 8,
+            'ipv4_reachable_authorities': ACTIVE_VOTING_AUTHORITIES_8[:-1],
+            'ipv6_reachable_count': 8,
+            'ipv6_not_tested_authorities': [],
+        },
+        'flag_eligibility': {'stable': {'eligible_count': 9}},
+        'bandwidth': {
+            'deviation': 10,
+            'median': 100,
+            'bw_auth_measured_count': 3,
+            'bw_auth_total': 7,
+        },
+    }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'V2Dir', 'Running', 'Valid'],
+       observed_bandwidth=10_000_000, version='0.4.8.10', recommended_version=True))
+
+    now_ms = int(time.time() * 1000)
+    add(_check_overload_issues({
+        'overload_general_timestamp': now_ms - 3600 * 1000,
+        'overload_fd_exhausted': {'timestamp': now_ms},
+        'overload_ratelimits': {
+            'rate-limit': 1_000_000,
+            'burst-limit': 2_000_000,
+            'write-count': 4,
+            'read-count': 2,
+        },
+    }))
+    add(_check_overload_issues({
+        'overload_general_timestamp': now_ms - 5 * 86400 * 1000,
+    }))
+    return found
+
+
+class TestIssueDetailAnchors:
+    """Each surfaced issue links to the section that explains it."""
+
+    def test_every_issue_title_has_expected_anchor(self):
+        found = _collect_titled_issues()
+        missing = sorted(set(EXPECTED_ISSUE_ANCHORS) - set(found))
+        assert not missing, f"scenarios did not produce: {missing}"
+        for title, anchor in EXPECTED_ISSUE_ANCHORS.items():
+            issue = found[title]
+            assert issue['section'] == anchor, title
+            assert issue['section_label']
+
+    def test_flag_row_anchors_match_issue_targets(self):
+        from allium.lib.consensus.consensus_evaluation import FLAG_ROW_ANCHORS
+        flag_targets = {a for a in EXPECTED_ISSUE_ANCHORS.values() if a.startswith('flag-')}
+        assert flag_targets <= set(FLAG_ROW_ANCHORS.values())
+
+    def test_page_has_a_target_for_every_non_flag_anchor(self):
+        from pathlib import Path
+        template = Path(__file__).resolve().parents[3] / 'allium' / 'templates' / 'relay-info.html'
+        html = template.read_text()
+        assert 'href="#{{ issue.section|default(\'status\') }}"' in html
+        assert 'href="#{{ note.section|default(\'status\') }}"' in html
+        assert 'id="{{ row.anchor }}"' in html
+        static = {a for a in EXPECTED_ISSUE_ANCHORS.values() if not a.startswith('flag-')}
+        for anchor in sorted(static):
+            assert f'id="{anchor}"' in html, anchor
+
+    def test_example_relay_issues_link_to_flag_and_consensus_weight_details(self):
+        """forest44-style relay: missing Fast, low Guard bandwidth, uneven Cons Wt."""
+        issues = generate_issues_from_consensus(
+            {
+                'in_consensus': True,
+                'authority_votes': [{'wfu': 0.999, 'tk': 24 * SECONDS_PER_DAY, 'voted': True, 'flags': []}],
+                'reachability': {
+                    'ipv4_reachable_count': 9,
+                    'ipv4_reachable_authorities': [
+                        'bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+                        'longclaw', 'maatuska', 'moria1', 'tor26',
+                    ],
+                    'ipv6_reachable_count': 8,
+                    'ipv6_not_tested_authorities': ['longclaw'],
+                },
+                'flag_eligibility': {'stable': {'eligible_count': 9}},
+                'bandwidth': {
+                    'deviation': 5160,
+                    'median': 2000,
+                    'bw_auth_measured_count': 5,
+                    'bw_auth_total': 7,
+                },
+            },
+            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'],
+            observed_bandwidth=700_000,  # ~5.6 Mbit/s, under the 2 MB/s Guard minimum
+            version='0.4.9.13',
+            recommended_version=True,
+        )
+        by_title = {issue['title']: issue for issue in issues}
+        assert by_title['Guard: requires Fast flag']['section'] == 'flag-guard-prereq-fast'
+        assert by_title['Guard: bandwidth below threshold']['section'] == 'flag-guard-bandwidth'
+        assert by_title['HSDir: requires Fast flag']['section'] == 'flag-hsdir-prereq-fast'
+        weight = by_title['High consensus weight deviation']
+        assert weight['section'] == 'col-cons-wt'
+        assert 'href="#col-cons-wt"' in weight['description']
+        # Same four the live relay page surfaces; nothing else at warning/error.
+        real = [issue['title'] for issue in issues if issue['severity'] != 'info']
+        assert real == [
+            'Guard: requires Fast flag',
+            'Guard: bandwidth below threshold',
+            'HSDir: requires Fast flag',
+            'High consensus weight deviation',
+        ]
 

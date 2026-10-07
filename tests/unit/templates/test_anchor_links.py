@@ -143,14 +143,21 @@ class TestIssueSectionLinks:
             'overload_ratelimits': {'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
                                     'write-count': 1, 'read-count': 1},
         }
+        from allium.lib.consensus.consensus_evaluation import FLAG_ROW_ANCHORS
+
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types
         sections = {i['section'] for i in issues}
-        assert {'authority-votes', 'connectivity', 'flags', 'bandwidth',
-                'software', 'overload'} <= sections
+        assert 'flag-running-ipv4' in sections
+        assert 'col-cons-wt' in sections
+        assert 'overload-general' in sections
+        assert 'id="{{ row.anchor }}"' in template_content
         for section in sections:
-            assert f'id="{section}"' in template_content, \
-                f"Issue section anchor missing from template: {section}"
+            if section.startswith('flag-'):
+                assert section in set(FLAG_ROW_ANCHORS.values()), section
+            else:
+                assert f'id="{section}"' in template_content, \
+                    f"Issue section anchor missing from template: {section}"
 
 
 if __name__ == "__main__":
