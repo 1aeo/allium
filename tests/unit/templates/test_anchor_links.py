@@ -5,6 +5,7 @@ Uses parametrized tests for better efficiency and cleaner output.
 """
 
 import re
+import time
 import pytest
 from pathlib import Path
 
@@ -87,6 +88,69 @@ class TestAnchorLinks:
         anchor_link_pattern = r'<a href="#[^"]*" class="anchor-link"[^>]*>'
         matches = re.findall(anchor_link_pattern, template_content)
         assert len(matches) >= 6, "Missing accessible anchor links"
+
+
+class TestIssueSectionLinks:
+    """Issues Detected entries must hyperlink to the section with more details."""
+
+    def test_issue_titles_are_links(self, template_content):
+        """Real issues render their title as an in-page anchor link."""
+        assert 'class="issue-link"' in template_content
+        assert 'href="#{{ issue.section|default(\'status\') }}"' in template_content
+
+    def test_note_titles_are_links(self, template_content):
+        """Info notes render their title as an in-page anchor link."""
+        assert 'href="#{{ note.section|default(\'status\') }}"' in template_content
+
+    def test_issue_link_css_defined(self):
+        css_path = Path(__file__).parent.parent.parent.parent / "allium" / "static" / "css" / "relay-info.css"
+        assert css_path.exists(), "External CSS file missing: relay-info.css"
+        css_content = css_path.read_text()
+        assert '.issue-link {' in css_content, "Missing .issue-link CSS rule"
+
+    def test_all_diagnostic_sections_have_template_anchors(self, template_content):
+        """Every `section` value relay_diagnostics produces must resolve to an
+        id in relay-info.html so issue hyperlinks never point at a missing anchor."""
+        from allium.lib.relay_diagnostics import generate_relay_issues
+
+        SECONDS_PER_DAY = 86400
+        now_ms = int(time.time() * 1000)
+        consensus_data = {
+            'in_consensus': False,
+            'vote_count': 2,
+            'total_authorities': 9,
+            'authority_votes': [
+                {'voted': True, 'flags': ['StaleDesc', 'Running'],
+                 'wfu': 0.90, 'tk': 3 * SECONDS_PER_DAY},
+            ],
+            'reachability': {
+                'ipv4_reachable_count': 3,
+                'ipv4_reachable_authorities': ['bastet', 'dannenberg', 'dizum'],
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': ['moria1'],
+            },
+            'flag_eligibility': {'stable': {'eligible_count': 2}},
+            'bandwidth': {'deviation': 10000, 'median': 5000,
+                          'bw_auth_measured_count': 1, 'bw_auth_total': 6},
+        }
+        relay = {
+            'flags': ['BadExit', 'MiddleOnly'],
+            'observed_bandwidth': 1_000_000,
+            'version': '0.4.8.10',
+            'recommended_version': False,
+            'overload_general_timestamp': now_ms - 3600000,
+            'overload_fd_exhausted': {'timestamp': now_ms},
+            'overload_ratelimits': {'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
+                                    'write-count': 1, 'read-count': 1},
+        }
+        issues = generate_relay_issues(relay, consensus_data)
+        assert len(issues) >= 10  # fixture should trigger many issue types
+        sections = {i['section'] for i in issues}
+        assert {'authority-votes', 'connectivity', 'flags', 'bandwidth',
+                'software', 'overload'} <= sections
+        for section in sections:
+            assert f'id="{section}"' in template_content, \
+                f"Issue section anchor missing from template: {section}"
 
 
 if __name__ == "__main__":

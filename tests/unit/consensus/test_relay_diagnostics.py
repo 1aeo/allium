@@ -725,6 +725,120 @@ class TestNoIssuesForHealthyRelay:
         assert len(real_issues) == 0
 
 
+class TestIssueSectionAnchors:
+    """Issues must hyperlink to the relay-info page section with more details.
+
+    Each issue carries a `section` key naming an anchor that exists on the
+    relay page (relay-info.html). Clicking an issue title scrolls to that
+    section (highlighted via the :target CSS rule).
+    """
+
+    # Section anchors that exist on the relay-info page
+    VALID_SECTIONS = {
+        'status', 'connectivity', 'flags', 'bandwidth', 'uptime', 'overload',
+        'operator', 'software', 'exit-policy', 'consensus-evaluation', 'authority-votes',
+    }
+
+    def _issues(self, **kwargs):
+        base = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.90, 'tk': 3 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        base.update(kwargs)
+        return generate_issues_from_consensus(
+            base,
+            current_flags=kwargs.pop('current_flags', ['Stable']),
+            observed_bandwidth=kwargs.pop('observed_bandwidth', 1_000_000),
+        )
+
+    def test_flag_eligibility_issues_link_to_flags(self):
+        issues = self._issues(current_flags=['Stable'])  # no Fast, no Guard, no HSDir
+        guard = [i for i in issues if i['category'] == 'guard']
+        hsdir = [i for i in issues if i['category'] == 'hsdir']
+        assert guard and hsdir
+        for issue in guard + hsdir:
+            assert issue['section'] == 'flags'
+
+    def test_reachability_issues_link_to_connectivity(self):
+        issues = self._issues(reachability={
+            'ipv4_reachable_count': 3,
+            'ipv4_reachable_authorities': ['bastet', 'dannenberg', 'dizum'],
+            'ipv6_reachable_count': 0,
+            'ipv6_not_tested_authorities': ['moria1'],
+        })
+        reach = [i for i in issues if i['category'] == 'reachability']
+        assert len(reach) >= 2  # IPv4 error + IPv6 warning
+        for issue in reach:
+            assert issue['section'] == 'connectivity'
+
+    def test_consensus_issue_links_to_authority_votes(self):
+        issues = self._issues(in_consensus=False, vote_count=3)
+        consensus = [i for i in issues if i['category'] == 'consensus']
+        assert len(consensus) == 1
+        assert consensus[0]['section'] == 'authority-votes'
+
+    def test_weight_deviation_links_to_authority_votes(self):
+        issues = self._issues(
+            current_flags=['Guard', 'Stable', 'Fast', 'HSDir'],
+            observed_bandwidth=10_000_000,
+            bandwidth={'deviation': 10000, 'median': 5000},
+        )
+        dev = [i for i in issues if 'deviation' in i['title']]
+        assert len(dev) == 1
+        assert dev[0]['section'] == 'authority-votes'
+
+    def test_bw_measurement_issues_link_to_bandwidth(self):
+        issues = self._issues(
+            current_flags=['Guard', 'Stable', 'Fast', 'HSDir'],
+            observed_bandwidth=10_000_000,
+            bandwidth={'bw_auth_measured_count': 1, 'bw_auth_total': 6},
+        )
+        meas = [i for i in issues if 'bandwidth authority' in i['title'].lower()]
+        assert len(meas) == 1
+        assert meas[0]['section'] == 'bandwidth'
+
+    def test_staledesc_links_to_authority_votes(self):
+        issues = self._issues(
+            authority_votes=[{'voted': True, 'flags': ['StaleDesc', 'Running'],
+                              'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
+            current_flags=['Guard', 'Stable', 'Fast', 'HSDir'],
+            observed_bandwidth=10_000_000,
+        )
+        stale = [i for i in issues if 'StaleDesc' in i['title']]
+        assert len(stale) == 1
+        assert stale[0]['section'] == 'authority-votes'
+
+    def test_version_issue_links_to_software(self):
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'Valid'],
+            observed_bandwidth=10_000_000, version='0.4.8.10',
+            recommended_version=False)
+        version = [i for i in issues if i['category'] == 'version']
+        assert len(version) == 1
+        assert version[0]['section'] == 'software'
+
+    def test_overload_issues_link_to_overload(self):
+        now_ms = int(time.time() * 1000)
+        relay = {
+            'overload_general_timestamp': now_ms - 3600000,  # active
+            'overload_fd_exhausted': {'timestamp': now_ms},
+            'overload_ratelimits': {
+                'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
+                'write-count': 100, 'read-count': 200,
+            },
+        }
+        issues = _check_overload_issues(relay)
+        assert len(issues) >= 4
+        for issue in issues:
+            assert issue['section'] == 'overload'
+
+
 class TestBackwardCompatibility:
     """Test backward compatibility with existing code."""
     
@@ -749,6 +863,37 @@ class TestBackwardCompatibility:
             assert 'description' in issue
             assert 'suggestion' in issue
             assert issue['severity'] in ('error', 'warning', 'info')
+
+    def test_issues_carry_section_anchor(self):
+        """Every issue should have a section anchor for in-page hyperlinking."""
+        consensus_data = {
+            'in_consensus': False,
+            'vote_count': 2,
+            'total_authorities': 9,
+            'authority_votes': [],
+            'reachability': {
+                'ipv4_reachable_count': 3,
+                'ipv4_reachable_authorities': ['bastet', 'dannenberg', 'dizum'],
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': ['moria1'],
+            },
+            'flag_eligibility': {'stable': {'eligible_count': 2}},
+            'bandwidth': {'deviation': 10000, 'median': 5000,
+                          'bw_auth_measured_count': 1, 'bw_auth_total': 6},
+        }
+        relay = {
+            'flags': ['BadExit'],
+            'observed_bandwidth': 1_000_000,
+            'version': '0.4.8.10',
+            'recommended_version': False,
+            'overload_general_timestamp': int(time.time() * 1000) - 3600000,
+        }
+
+        issues = generate_relay_issues(relay, consensus_data)
+        assert issues  # sanity: fixture triggers issues
+        for issue in issues:
+            assert 'section' in issue
+            assert issue['section'] in TestIssueSectionAnchors.VALID_SECTIONS
 
 
 class TestReachabilityAfterAuthorityRemoval:
