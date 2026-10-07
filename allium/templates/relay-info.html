@@ -393,7 +393,7 @@ Country: unknown
     {% for issue in real_issues %}
         <li style="margin-bottom: 5px;">
             <span class="{% if issue.severity == 'error' %}al-status-danger-bold{% else %}al-status-warning-bold{% endif %}">
-                {{ issue.title }}
+                <a href="#{{ issue.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this issue">{{ issue.title }}</a>
             </span>: {{ issue.description|safe }}
             {% if issue.suggestion %}
             <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> {{ issue.suggestion|safe }}</span>
@@ -409,7 +409,7 @@ Country: unknown
     <strong class="al-status-info">Notes:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for note in info_notes %}
-        <li style="font-size: 12px;">{{ note.title }}: {{ note.description }}</li>
+        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this note">{{ note.title }}</a>: {{ note.description }}</li>
     {% endfor %}
     </ul>
 </div>
