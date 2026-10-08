@@ -32,7 +32,7 @@ from allium.lib.consensus.collector_fetcher import (
 # 8 currently-voting authorities (gabelmoo removed) - shared with the
 # voting_registry_8_voters fixture in tests/conftest.py
 from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8 as _ACTIVE_VOTERS_8
-from tests.conftest import FOREST44_FINGERPRINT
+from tests.conftest import FOREST44_CURRENT_BW_FILES, FOREST44_FINGERPRINT
 
 
 # ============================================================================
@@ -1537,6 +1537,11 @@ class TestVoteBandwidthForest44:
         assert fast['maatuska']['speed_value'] == 854_000
         assert fast['maatuska']['sybil'] is True
         assert fast['maatuska']['eligible'] is False
+
+    def test_authorities_with_measurements_from_votes(self, forest44_fetcher):
+        """Same set as the bandwidth-file timestamps: stale faravahar and longclaw publish none."""
+        from allium.lib.consensus.collector_fetcher import authorities_with_measurements
+        assert authorities_with_measurements(forest44_fetcher.relay_index) == FOREST44_CURRENT_BW_FILES
 
     def test_parse_vote_tells_current_from_stale_bandwidth_file(self):
         fetcher = CollectorFetcher()

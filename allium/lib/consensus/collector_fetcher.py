@@ -1429,6 +1429,20 @@ class CollectorFetcher:
         }
 
 
+def authorities_with_measurements(relay_index: dict) -> set:
+    """Authorities whose votes carry any Measured= value (dirvote.c has_measured_bws).
+
+    Matches the bandwidth-file timestamp check in _parse_vote: tor only adds
+    Measured= values from a bandwidth file recent enough to apply.
+    """
+    found = set()
+    for relay in relay_index.values():
+        for auth_name, vote in relay.get('votes', {}).items():
+            if vote.get('measured') is not None:
+                found.add(auth_name)
+    return found
+
+
 def discover_authorities(relays: list, update_registry: bool = True) -> list:
     """
     Discover directory authorities from relay list (Onionoo details API).
