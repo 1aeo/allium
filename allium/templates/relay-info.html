@@ -394,7 +394,18 @@ Country: unknown
         <li style="margin-bottom: 5px;">
             <span class="{% if issue.severity == 'error' %}al-status-danger-bold{% else %}al-status-warning-bold{% endif %}">
                 <a href="#{{ issue.section|default('status') }}" class="issue-link" title="{{ issue.section_label|default('Jump to the section below with more details on this issue')|escape }}">{{ issue.title }}</a>
-            </span>: {{ issue.description|safe }}
+            </span>: {% if issue.description_link %}
+            {# Data layer names the phrase to link; the view owns the HTML/CSS #}
+            {% set _dl_phrase = issue.description_link.phrase %}
+            {% set _dl_idx = issue.description.find(_dl_phrase) %}
+            {% if _dl_idx >= 0 %}
+                {{ issue.description[:_dl_idx]|safe }}<a href="#{{ issue.description_link.target }}" class="issue-link">{{ _dl_phrase }}</a>{{ issue.description[_dl_idx + _dl_phrase|length:]|safe }}
+            {% else %}
+                {{ issue.description|safe }}
+            {% endif %}
+            {% else %}
+                {{ issue.description|safe }}
+            {% endif %}
             {% if issue.suggestion %}
             <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> {{ issue.suggestion|safe }}</span>
             {% endif %}
@@ -409,7 +420,17 @@ Country: unknown
     <strong class="al-status-info">Notes:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for note in info_notes %}
-        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="{{ note.section_label|default('Jump to the section below with more details on this note')|escape }}">{{ note.title }}</a>: {{ note.description }}</li>
+        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="{{ note.section_label|default('Jump to the section below with more details on this note')|escape }}">{{ note.title }}</a>: {% if note.description_link %}
+            {% set _dl_phrase = note.description_link.phrase %}
+            {% set _dl_idx = note.description.find(_dl_phrase) %}
+            {% if _dl_idx >= 0 %}
+                {{ note.description[:_dl_idx] }}<a href="#{{ note.description_link.target }}" class="issue-link">{{ _dl_phrase }}</a>{{ note.description[_dl_idx + _dl_phrase|length:] }}
+            {% else %}
+                {{ note.description }}
+            {% endif %}
+            {% else %}
+                {{ note.description }}
+            {% endif %}</li>
     {% endfor %}
     </ul>
 </div>

@@ -784,7 +784,10 @@ class TestIssueSectionAnchors:
         dev = [i for i in issues if 'deviation' in i['title']]
         assert len(dev) == 1
         assert dev[0]['section'] == 'col-cons-wt'
-        assert 'href="#col-cons-wt"' in dev[0]['description']
+        # Link target is data, the HTML is rendered by the template
+        assert '<a ' not in dev[0]['description']
+        assert dev[0]['description_link']['target'] == 'col-cons-wt'
+        assert dev[0]['description_link']['phrase'] in dev[0]['description']
 
     def test_bw_measurement_issues_link_to_measured_by(self):
         """Bandwidth-authority measurement issues link to the Measured By line."""
@@ -1119,7 +1122,8 @@ class TestIssueDetailAnchors:
         assert by_title['HSDir: requires Fast flag']['section'] == 'flag-hsdir-prereq-fast'
         weight = by_title['High consensus weight deviation']
         assert weight['section'] == 'col-cons-wt'
-        assert 'href="#col-cons-wt"' in weight['description']
+        assert weight['description_link']['target'] == 'col-cons-wt'
+        assert weight['description_link']['phrase'] in weight['description']
         # Same four the live relay page surfaces; nothing else at warning/error.
         real = [issue['title'] for issue in issues if issue['severity'] != 'info']
         assert real == [

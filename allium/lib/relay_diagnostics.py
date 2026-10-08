@@ -440,8 +440,12 @@ def generate_issues_from_consensus(
                 'category': 'bandwidth',
                 'title': 'High consensus weight deviation',
                 'description': "Large variation in Consensus Weight values across authorities "
-                              "(see <a href=\"#col-cons-wt\" class=\"issue-link\">"
-                              "'Cons Wt' column in Per-Authority Details</a>)",
+                              "(see 'Cons Wt' column in Per-Authority Details below)",
+                # Template renders the phrase as an in-page link (HTML/CSS stays in the view)
+                'description_link': {
+                    'phrase': "'Cons Wt' column in Per-Authority Details below",
+                    'target': 'col-cons-wt',
+                },
                 'suggestion': 'Consensus weight measurements vary significantly between authorities. This can affect traffic distribution. Ensure stable network connection and consistent bandwidth availability.',
             }, 'consensus_weight'))
         
