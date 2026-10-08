@@ -1096,21 +1096,26 @@ def _make_row(flag: str, flag_tooltip: str, flag_color: str, metric: str, metric
 
 def _make_prereq_row(parent_flag: str, parent_tooltip: str, parent_color: str,
                      prereq_flag: str, count: int, total: int, majority: int,
-                     rowspan: int = 0, threshold_override: str = None) -> dict:
+                     rowspan: int = 0, threshold_override: str = None,
+                     value_detail: str = None) -> dict:
     """Build a prerequisite row dict. DRY helper for Guard/HSDir prereq rows.
     
     If threshold_override is provided, shows the actual flag's threshold
     (e.g. Fast's bandwidth threshold) instead of a generic authority count.
+    value_detail (HTML) goes under the count, e.g. the bandwidth that decided Fast.
     """
     status = _majority_status(count, majority)
     threshold = threshold_override or f'≥{majority}/{total} DA assigned flag'
+    value = f'{count}/{total} DA assigned {prereq_flag}'
+    if value_detail:
+        value += f'<br>{value_detail}'
     return _make_row(
         flag=parent_flag,
         flag_tooltip=parent_tooltip,
         flag_color=parent_color,
         metric=f'Prereq: {prereq_flag}',
         metric_tooltip=f'{parent_flag} requires the {prereq_flag} flag.',
-        value=f'{count}/{total} DA assigned {prereq_flag}',
+        value=value,
         value_source='da',
         threshold=threshold,
         status=status,
@@ -1250,11 +1255,15 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                                       f"(AuthDirFastGuarantee, or the top-7/8 cutoff if lower)",
                                       majority_required, total_authorities)
         + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')))
+    fast_value_html = rv.get('fast_value_html', 'N/A')
     rows.append(_make_row('Fast', FLAG_TOOLTIPS['fast'], fast_color, 'Speed', METRIC_TOOLTIPS['speed_fast'],
-                          rv.get('fast_value_html', 'N/A'), 'da',
+                          fast_value_html, 'da',
                           fast_threshold, fast_status,
                           _get_status_text(fast_status, da_count=fast_da_count, da_total=total_authorities),
                           rowspan=1, anchor='flag-fast-speed'))
+    # The "requires Fast flag" issues link to the prereq rows, so they repeat the
+    # bandwidth each authority judged Fast by.
+    fast_detail = fast_value_html if fast_value_html != 'N/A' else None
     
     # Stable flag (2 rows) - using DRY helper
     stable_color = get_flag_color('stable')
@@ -1298,7 +1307,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     # Row 1-3: Prerequisites (order matches Guard: Fast → Stable → V2Dir)
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
                                   hsdir_prereq_fast, total_authorities, majority_required, rowspan=5,
-                                  threshold_override=fast_threshold))
+                                  threshold_override=fast_threshold, value_detail=fast_detail))
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
                                   hsdir_prereq_stable, total_authorities, majority_required,
                                   threshold_override=mtbf_threshold))
@@ -1339,7 +1348,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     # Row 1-3: Prerequisites - show actual flag thresholds
     rows.append(_make_prereq_row('Guard', guard_tooltip, guard_color, 'Fast',
                                   guard_prereq_fast, total_authorities, majority_required, rowspan=6,
-                                  threshold_override=fast_threshold))
+                                  threshold_override=fast_threshold, value_detail=fast_detail))
     rows.append(_make_prereq_row('Guard', guard_tooltip, guard_color, 'Stable',
                                   guard_prereq_stable, total_authorities, majority_required,
                                   threshold_override=mtbf_threshold))

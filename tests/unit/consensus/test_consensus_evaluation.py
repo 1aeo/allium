@@ -1623,6 +1623,18 @@ class TestForest44VoteBandwidthDisplay:
         assert 'faravahar: not published' in fast['value']
         assert fast['threshold'].startswith('≥102.0 KB/s (AuthDirFastGuarantee, or the top-7/8 cutoff if lower)')
 
+    def test_requires_fast_rows_show_the_measurements(self, formatted):
+        """The 'requires Fast flag' issue links land on these rows: Below (4/9) next to the measurements."""
+        rows = {row['anchor']: row for row in formatted['flag_requirements_table']}
+        for anchor in ('flag-guard-prereq-fast', 'flag-hsdir-prereq-fast'):
+            row = rows[anchor]
+            assert row['status'] == 'below', anchor
+            assert '4/9 DA' in row['status_text'], anchor
+            assert row['value'].startswith('4/9 DA assigned Fast<br>'), anchor
+            assert '32.0 KB/s – 230.0 KB/s' in row['value'] and '(5 DA measured)' in row['value'], anchor
+            assert '(3 DA relay-reported)' in row['value'], anchor
+            assert row['threshold'].startswith('≥102.0 KB/s'), anchor
+
     def test_guard_bandwidth_row_is_below(self, formatted):
         row = next(row for row in formatted['flag_requirements_table']
                    if row['flag'] == 'Guard' and row['metric'] == 'Bandwidth')
