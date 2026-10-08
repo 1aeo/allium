@@ -999,6 +999,10 @@ class TestFastFlagIssue:
              'speed_threshold': 102_000, 'speed_source': 'unpublished'},
             {'authority': 'dizum', 'assigned': True, 'speed_value': 854_000,
              'speed_threshold': 102_000, 'speed_source': 'reported'},
+            {'authority': 'gabelmoo', 'assigned': False, 'speed_value': 500_000,
+             'speed_threshold': 102_000, 'speed_source': 'measured'},
+            {'authority': 'tor26', 'assigned': False, 'speed_value': 600_000,
+             'speed_threshold': 102_000, 'speed_source': 'measured', 'sybil': True},
         ]
         issues = generate_issues_from_consensus({
             'in_consensus': True,
@@ -1007,6 +1011,10 @@ class TestFastFlagIssue:
             'flag_eligibility': {'fast': {'details': details}},
         }, current_flags=['Running', 'Valid'])
         fast = next(issue for issue in issues if issue['title'] == 'Not getting the Fast flag')
-        assert 'bastet has no measurement for this relay and counts it as 0.' in fast['description']
+        assert 'tor26 lists it as Sybil (more relays on its IP address than allowed), which clears all its flags.' \
+            in fast['description']
+        assert 'bastet has no current measurement for this relay and counts it as 0.' in fast['description']
+        assert 'gabelmoo does not vote Fast although its vote shows enough bandwidth.' in fast['description']
         assert 'faravahar decides from measurements it does not publish.' in fast['description']
+        assert 'measured this relay' not in fast['description']
         assert 'consensus weight' not in fast['description']

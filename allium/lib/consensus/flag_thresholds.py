@@ -154,6 +154,7 @@ BW_SOURCE_MEASURED = 'measured'        # its bandwidth scanner's Measured= value
 BW_SOURCE_REPORTED = 'reported'        # the relay's advertised Bandwidth= value
 BW_SOURCE_UNMEASURED = 'unmeasured'    # no measurement; authority counts it as 0
 BW_SOURCE_UNPUBLISHED = 'unpublished'  # authority uses measurements it doesn't publish
+BW_SOURCE_CACHED = 'cached'            # measurement from an earlier bandwidth file, not in the vote
 
 
 def credible_bandwidth(measured_kb: Optional[int], advertised_kb: Optional[int],

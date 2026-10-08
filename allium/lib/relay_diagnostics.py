@@ -778,7 +778,7 @@ def _bandwidth_source_sentences(details: list, value_key: str, source_key: str, 
         one = len(group) == 1
         names = _authority_names(group)
         if source == BW_SOURCE_UNMEASURED:
-            sentences.append(f"{names} {'has' if one else 'have'} no measurement for this relay and "
+            sentences.append(f"{names} {'has' if one else 'have'} no current measurement for this relay and "
                              f"{'counts' if one else 'count'} it as 0.")
             continue
         rate = _rate_range([d[value_key] for d in group], use_bits)
@@ -799,6 +799,12 @@ def _describe_fast_shortfall(details: list, fast_votes: int, auth_count: int, ma
     """Why authorities withheld Fast, from the bandwidth each one credits the relay with."""
     sentences = [f"Only {fast_votes}/{auth_count} authorities vote Fast ({majority} needed)."]
     withheld = [d for d in details if not d.get('assigned')]
+    sybil = [d for d in withheld if d.get('sybil')]
+    if sybil:
+        one = len(sybil) == 1
+        sentences.append(f"{_authority_names(sybil)} {'lists' if one else 'list'} it as Sybil (more relays "
+                         "on its IP address than allowed), which clears all its flags.")
+    withheld = [d for d in withheld if not d.get('sybil')]
     known = [d for d in withheld
              if d.get('speed_value') is not None and d.get('speed_threshold') is not None]
     below = [d for d in known if d['speed_value'] < d['speed_threshold']]
@@ -807,9 +813,8 @@ def _describe_fast_shortfall(details: list, fast_votes: int, auth_count: int, ma
     enough = [d for d in known if d['speed_value'] >= d['speed_threshold']]
     if enough:
         one = len(enough) == 1
-        sentences.append(f"{_authority_names(enough)} {'credits' if one else 'credit'} it with enough "
-                         f"bandwidth but {'does' if one else 'do'} not vote Fast: Fast also requires the "
-                         "relay to be running, valid and not hibernating.")
+        sentences.append(f"{_authority_names(enough)} {'does' if one else 'do'} not vote Fast although "
+                         f"{'its' if one else 'their'} vote shows enough bandwidth.")
     hidden = [d for d in withheld if d.get('speed_value') is None]
     if hidden:
         one = len(hidden) == 1

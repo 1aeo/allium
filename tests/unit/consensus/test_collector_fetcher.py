@@ -1517,6 +1517,27 @@ class TestVoteBandwidthForest44:
         # Cap only applies while 3+ votes carry Measured= values
         assert forest44_fetcher._format_bandwidth({'votes': votes})['median'] == 854_000
 
+    def test_fast_vote_without_measurement_means_earlier_measurement(self, forest44_fetcher):
+        """No Measured= but a Fast vote: tor used a measurement cached from an earlier file."""
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
+        votes['tor26']['measured'] = None
+        fast = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['fast']['details']}
+        assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (None, 'cached')
+        assert fast['bastet']['eligible'] is True
+        # Without a Fast vote, no measurement still counts as 0 (ignoring-advertised-bws=1)
+        assert (fast['tor26']['speed_value'], fast['tor26']['speed_source']) == (0, 'unmeasured')
+        assert fast['tor26']['eligible'] is False
+
+    def test_sybil_relay_gets_no_fast(self, forest44_fetcher):
+        """dirvote.c clear_status_flags_on_sybil drops every flag, whatever the bandwidth."""
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        votes['maatuska']['flags'] = ['Sybil']
+        fast = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['fast']['details']}
+        assert fast['maatuska']['speed_value'] == 854_000
+        assert fast['maatuska']['sybil'] is True
+        assert fast['maatuska']['eligible'] is False
+
     def test_parse_vote_tells_current_from_stale_bandwidth_file(self):
         fetcher = CollectorFetcher()
         header = "network-status-version 3\nvote-status vote\n"

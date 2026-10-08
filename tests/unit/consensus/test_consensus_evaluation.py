@@ -1648,3 +1648,20 @@ class TestForest44VoteBandwidthDisplay:
         assert rows['bastet']['measured_display'] == '544.0 Kbit/s'
         assert rows['bastet']['fast_threshold_display'] == '816.0 Kbit/s'
         assert formatted['bandwidth_summary']['median_display'] == '544.0 Kbit/s'
+
+    def test_earlier_measurement_and_sybil_cells(self, forest44_fetcher):
+        from tests.conftest import FOREST44_FINGERPRINT
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
+        votes['maatuska']['flags'] = ['Sybil']
+        formatted = format_relay_consensus_evaluation(
+            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
+            forest44_fetcher.flag_thresholds, current_flags=['Running', 'Valid', 'V2Dir', 'Stable'])
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        assert rows['bastet']['fast_speed_display'] == 'not published'
+        assert rows['bastet']['fast_meets'] is True
+        assert 'earlier bandwidth file' in rows['bastet']['flag_bw_title']
+        assert rows['maatuska']['fast_meets'] is False
+        assert 'lists this relay as Sybil' in rows['maatuska']['flag_bw_title']
+        fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
+        assert 'bastet, faravahar: not published' in fast['value']

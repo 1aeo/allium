@@ -308,6 +308,8 @@ from .flag_thresholds import (
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
     HSDIR_TK_DEFAULT,
+    BW_SOURCE_CACHED,
+    BW_SOURCE_UNMEASURED,
     MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
     check_stable_eligibility,
@@ -1058,9 +1060,15 @@ class CollectorFetcher:
         thresholds = self.flag_thresholds.get(auth_name, {})
         publishes = (self.current_bw_file_authorities is None
                      or auth_name in self.current_bw_file_authorities)
-        return credible_bandwidth(
+        bandwidth, source = credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),
             thresholds.get('ignoring-advertised-bws') == 1, publishes)
+        # tor keeps measurements from earlier bandwidth files for up to 3 days
+        # (bwauth.c), but the vote only shows the current file. A Fast vote means
+        # the authority credited more than 0, so it used one of those.
+        if source == BW_SOURCE_UNMEASURED and 'Fast' in vote_info.get('flags', []):
+            return None, BW_SOURCE_CACHED
+        return bandwidth, source
 
     def _format_authority_votes(self, relay: dict) -> List[dict]:
         """
@@ -1247,9 +1255,14 @@ class CollectorFetcher:
                 'mtbf_value': relay_mtbf,
             })
             
-            # Fast flag eligibility: credible bandwidth >= this authority's fast-speed
+            # Fast flag eligibility: credible bandwidth >= this authority's fast-speed.
+            # A relay it lists as Sybil gets no flags at all (dirvote.c
+            # clear_status_flags_on_sybil).
             fast_speed = thresholds.get('fast-speed')
-            if relay_bw is None or fast_speed is None:
+            is_sybil = 'Sybil' in auth_flags
+            if is_sybil:
+                fast_eligible = False
+            elif relay_bw is None or fast_speed is None:
                 fast_eligible = has_fast
             else:
                 fast_eligible = relay_bw >= fast_speed
@@ -1268,6 +1281,7 @@ class CollectorFetcher:
                 'speed_threshold': fast_speed,
                 'speed_value': relay_bw,
                 'speed_source': relay_bw_source,
+                'sybil': is_sybil,
             })
             
             # HSDir flag eligibility

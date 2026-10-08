@@ -29,6 +29,7 @@ from .flag_thresholds import (
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
     BW_SOURCE_UNPUBLISHED,
+    BW_SOURCE_CACHED,
     guard_bw_top_threshold,
     parse_wfu_threshold as _parse_wfu_threshold,
 )
@@ -992,10 +993,13 @@ _FLAG_BW_TITLES = {
     BW_SOURCE_MEASURED: "{authority}'s bandwidth scanner measured this relay (Measured= in its vote).",
     BW_SOURCE_REPORTED: ("{authority} has no measurement for this relay, so it uses the "
                          "relay-reported bandwidth (Bandwidth= in its vote)."),
-    BW_SOURCE_UNMEASURED: ("{authority} has no measurement for this relay and ignores relay-reported "
-                           "bandwidth (ignoring-advertised-bws=1), so it counts the relay as 0."),
+    BW_SOURCE_UNMEASURED: ("{authority} has no current measurement for this relay and ignores relay-reported "
+                           "bandwidth (ignoring-advertised-bws=1), so it counts the relay as 0, unless it "
+                           "still has a measurement from an earlier bandwidth file (kept up to 3 days)."),
     BW_SOURCE_UNPUBLISHED: ("{authority}'s bandwidth file is out of date, so its vote publishes no "
                             "measurements; it decides flags from measurements it cached earlier."),
+    BW_SOURCE_CACHED: ("{authority}'s vote has no Measured= for this relay, yet it voted Fast, so it is "
+                       "using a measurement from an earlier bandwidth file (tor keeps them up to 3 days)."),
 }
 
 # Marker after each per-authority bandwidth value (legend under the Per-Authority table)
@@ -1045,7 +1049,8 @@ def _format_flag_bandwidth_html(details: list, value_key: str, source_key: str, 
             shown += f' – {_format_bandwidth_value(high, use_bits)}'
         lines.append(f'<strong>{shown}</strong> '
                      f'<span class="al-text-small-muted">({len(values)} DA {label})</span>')
-    hidden = [d.get('authority', '?') for d in details if d.get(source_key) == BW_SOURCE_UNPUBLISHED]
+    hidden = [d.get('authority', '?') for d in details
+              if d.get(source_key) in (BW_SOURCE_UNPUBLISHED, BW_SOURCE_CACHED)]
     if hidden:
         lines.append(f'<span class="al-text-small-muted">{", ".join(hidden)}: not published</span>')
     return '<br>'.join(lines) if lines else 'N/A'
@@ -1533,7 +1538,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         flag_bw = vote.get('credible_bw')
         flag_bw_source = vote.get('credible_bw_source')
         authority_flags_set = set(vote.get('flags', []))
-        if flag_bw is None or fast_threshold is None:
+        if 'Sybil' in authority_flags_set:
+            fast_meets = False
+        elif flag_bw is None or fast_threshold is None:
             fast_meets = 'Fast' in authority_flags_set
         else:
             fast_meets = flag_bw >= fast_threshold
@@ -1545,6 +1552,8 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         flag_bw_display = (_format_bandwidth_value(flag_bw, use_bits)
                            if flag_bw is not None else 'not published')
         flag_bw_title = _FLAG_BW_TITLES.get(flag_bw_source, '').format(authority=auth_name)
+        if 'Sybil' in authority_flags_set:
+            flag_bw_title += f" {auth_name} lists this relay as Sybil, which clears all its flags."
         
         # Adaptive HSDir TK displays (increased precision when close)
         _hsdir_tk_val_disp, _hsdir_tk_thresh_disp = _format_days_adaptive(relay_tk, hsdir_tk_threshold)
