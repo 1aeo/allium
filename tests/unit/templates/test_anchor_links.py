@@ -129,7 +129,11 @@ class TestIssueSectionLinks:
                 'ipv6_reachable_count': 0,
                 'ipv6_not_tested_authorities': ['moria1'],
             },
-            'flag_eligibility': {'stable': {'eligible_count': 2}},
+            'flag_eligibility': {
+                'stable': {'eligible_count': 2},
+                'fast': {'details': [{'authority': 'bastet', 'assigned': False, 'speed_value': 50_000,
+                                      'speed_threshold': 102_000, 'speed_source': 'measured'}]},
+            },
             'bandwidth': {'deviation': 10000, 'median': 5000,
                           'bw_auth_measured_count': 1, 'bw_auth_total': 6},
         }
@@ -146,7 +150,7 @@ class TestIssueSectionLinks:
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types
         sections = {i['section'] for i in issues}
-        assert len(sections) == 25  # fixture reaches every link target
+        assert len(sections) == 26  # fixture reaches every link target
         rows = format_relay_consensus_evaluation(consensus_data, current_flags=relay['flags'])['flag_requirements_table']
         row_ids = {row['anchor'] for row in rows}
         assert '<tr id="{{ row.anchor }}">' in template_content

@@ -21,6 +21,7 @@ the last detected overload event.
 """
 
 import html as _html
+from collections import Counter
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -31,16 +32,24 @@ try:
         GUARD_TK_DEFAULT,
         GUARD_WFU_DEFAULT,
         GUARD_BW_GUARANTEE,
+        FAST_BW_GUARANTEE,
         HSDIR_TK_DEFAULT,
         HSDIR_WFU_DEFAULT,
+        BW_SOURCE_MEASURED,
+        BW_SOURCE_REPORTED,
+        BW_SOURCE_UNMEASURED,
     )
 except ImportError:
     SECONDS_PER_DAY = 86400
     GUARD_TK_DEFAULT = 691200  # 8 days
     GUARD_WFU_DEFAULT = 0.98
-    GUARD_BW_GUARANTEE = 2_000_000
+    GUARD_BW_GUARANTEE = 2_097_000
+    FAST_BW_GUARANTEE = 102_000
     HSDIR_TK_DEFAULT = 90000  # 25 hours
     HSDIR_WFU_DEFAULT = 0.98
+    BW_SOURCE_MEASURED = 'measured'
+    BW_SOURCE_REPORTED = 'reported'
+    BW_SOURCE_UNMEASURED = 'unmeasured'
 
 # Import authority data from collector_fetcher
 try:
@@ -73,7 +82,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     Generate ALL issues for a relay (consensus + overload).
     
     This is the main entry point for issue detection. It combines:
-    - 16 consensus-related issue types
+    - 23 consensus-related issue types
     - 6 overload issue types
     
     Args:
@@ -89,7 +98,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     """
     issues = []
 
-    # Consensus-related issues (16 types)
+    # Consensus-related issues (23 types)
     if consensus_data:
         issues.extend(generate_issues_from_consensus(
             consensus_data,
@@ -131,9 +140,11 @@ def generate_issues_from_consensus(
     Args:
         consensus_data: Raw consensus evaluation data
         current_flags: Relay's current flags (from Onionoo)
-        observed_bandwidth: Relay's observed bandwidth for Guard eligibility
+        observed_bandwidth: Relay's observed bandwidth; only used for the Guard bandwidth
+                            check when the votes give no per-authority details
         version: Tor version string running on the relay
         recommended_version: Whether the version is recommended
+        use_bits: Whether to show bandwidth in bits
     
     Returns:
         List of issue dicts
@@ -242,12 +253,44 @@ def generate_issues_from_consensus(
         })
     
     # =========================================================================
+    # FAST FLAG (1 issue type)
+    # Each authority decides Fast from the bandwidth it credits the relay with:
+    # its bandwidth scanner's Measured= value when it has one, not the bandwidth
+    # the relay reports (tor bwauth.c dirserv_get_credible_bandwidth_kb).
+    # =========================================================================
+    has_fast = 'Fast' in current_flags
+    fast_details = flag_eligibility.get('fast', {}).get('details', [])
+    fast_votes = sum(1 for d in fast_details if d.get('assigned'))
+    if not has_fast and fast_details and fast_votes < majority_threshold:
+        issues.append({
+            'severity': 'warning',
+            'category': 'fast',
+            'title': 'Not getting the Fast flag',
+            'description': _describe_fast_shortfall(
+                fast_details, fast_votes, auth_count, majority_threshold,
+                consensus_data.get('bandwidth') or {}, use_bits),
+            'suggestion': ('Authorities that have a bandwidth-scanner measurement for your relay use it '
+                           'instead of the bandwidth your relay reports. A low measurement means the scanners '
+                           'see your relay underperforming compared with other relays that report a similar '
+                           'speed. Clients only build circuits through Fast relays, so a relay near the '
+                           'threshold can gain and lose most of its traffic from one hourly consensus to the next.'),
+            'section': 'flag-fast-speed',
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+        })
+    
+    # =========================================================================
     # GUARD FLAG ELIGIBILITY (5 issue types) - 3 changed from info to warning
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
-    has_fast = 'Fast' in current_flags
-    guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
+    guard_details = flag_eligibility.get('guard', {}).get('details', [])
+    guard_bw_known = [d for d in guard_details if 'bw_met' in d]
+    guard_bw_votes = sum(1 for d in guard_bw_known
+                         if d.get('bw_met') or (d.get('bw_met') is None and d.get('assigned')))
+    if guard_bw_known:
+        guard_bw_eligible = guard_bw_votes >= majority_threshold
+    else:
+        guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
     wfu_eligible = relay_wfu and relay_wfu >= GUARD_WFU_DEFAULT
     tk_eligible = relay_tk and relay_tk >= GUARD_TK_DEFAULT
     
@@ -261,7 +304,7 @@ def generate_issues_from_consensus(
                 'category': 'guard',
                 'title': 'Guard: requires Fast flag',
                 'description': 'Guard flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+                'suggestion': _fast_flag_suggestion(use_bits),
                 'section': 'flag-guard-prereq-fast',
             })
         
@@ -279,14 +322,23 @@ def generate_issues_from_consensus(
         # as a separate diagnostic — V2Dir is almost always present (default on)
         
         # Metric thresholds
-        if not guard_bw_eligible and observed_bandwidth:
-            bw_display = _format_rate(observed_bandwidth, use_bits)
+        if not guard_bw_eligible and (guard_bw_known or observed_bandwidth):
+            guarantee = _format_rate(GUARD_BW_GUARANTEE, use_bits, decimal_places=1)
+            if guard_bw_known:
+                description = _describe_guard_bw_shortfall(
+                    guard_bw_known, guard_bw_votes, auth_count, majority_threshold, use_bits)
+            else:
+                description = (f"Observed bandwidth {_format_rate(observed_bandwidth, use_bits)} is below "
+                               f"the {guarantee} AuthDirGuardBWGuarantee")
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: bandwidth below threshold',
-                'description': f"Observed bandwidth {bw_display} is below 2 MB/s minimum (AuthDirGuardBWGuarantee)",
-                'suggestion': 'Guard requires ≥2 MB/s bandwidth OR being in top 25% of network. To increase bandwidth: 1) Ensure adequate upstream capacity, 2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx or ARM.',
+                'description': description,
+                'suggestion': (f'Guard requires a bandwidth of at least AuthDirGuardBWGuarantee ({guarantee} by '
+                               'default) or one in the top 25% of relays, judged by each authority the same way '
+                               'as for Fast. To increase bandwidth: 1) Ensure adequate upstream capacity, '
+                               '2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx.'),
                 'section': 'flag-guard-bandwidth',
                 'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
             })
@@ -349,7 +401,7 @@ def generate_issues_from_consensus(
                 'category': 'hsdir',
                 'title': 'HSDir: requires Fast flag',
                 'description': 'HSDir flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+                'suggestion': _fast_flag_suggestion(use_bits),
                 'section': 'flag-hsdir-prereq-fast',
             })
         
@@ -688,8 +740,103 @@ def _format_volume(volume_bytes: int) -> str:
     return format_data_volume_with_unit(volume_bytes)
 
 
-def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
-    """Format rate limit value for display."""
+def _fast_flag_suggestion(use_bits: bool = False) -> str:
+    """How authorities decide Fast (dir-spec "Assigning flags in a vote")."""
+    guarantee = _format_rate(FAST_BW_GUARANTEE, use_bits, decimal_places=1)
+    return (f'Fast requires a bandwidth in the top 7/8 of relays or at least AuthDirFastGuarantee '
+            f'({guarantee} by default), judged by each authority. Authorities that have a bandwidth-scanner '
+            'measurement of your relay judge by it, not by the bandwidth your relay reports.')
+
+
+def _authority_names(details: list) -> str:
+    names = [d.get('authority', '?') for d in details]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _rate_range(values: list, use_bits: bool) -> str:
+    low, high = min(values), max(values)
+    text = _format_rate(low, use_bits, decimal_places=1)
+    return text if high == low else f"{text} – {_format_rate(high, use_bits, decimal_places=1)}"
+
+
+def _threshold_summary(details: list, key: str, use_bits: bool) -> str:
+    """Most common threshold, then each authority that differs ('102.0 KB/s; moria1: 1.0 MB/s')."""
+    typical = Counter(d[key] for d in details).most_common(1)[0][0]
+    others = [f"{d.get('authority', '?')}: {_format_rate(d[key], use_bits, decimal_places=1)}"
+              for d in details if d[key] != typical]
+    return '; '.join([_format_rate(typical, use_bits, decimal_places=1)] + others)
+
+
+def _bandwidth_source_sentences(details: list, value_key: str, source_key: str, use_bits: bool,
+                                threshold_key: Optional[str] = None, flag: str = '') -> List[str]:
+    """One sentence per bandwidth source (measured / relay-reported / counted as 0)."""
+    sentences = []
+    for source in (BW_SOURCE_MEASURED, BW_SOURCE_REPORTED, BW_SOURCE_UNMEASURED):
+        group = [d for d in details if d.get(source_key) == source and d.get(value_key) is not None]
+        if not group:
+            continue
+        one = len(group) == 1
+        names = _authority_names(group)
+        if source == BW_SOURCE_UNMEASURED:
+            sentences.append(f"{names} {'has' if one else 'have'} no measurement for this relay and "
+                             f"{'counts' if one else 'count'} it as 0.")
+            continue
+        rate = _rate_range([d[value_key] for d in group], use_bits)
+        if source == BW_SOURCE_MEASURED:
+            sentence = f"{names} measured this relay at {rate}"
+        else:
+            sentence = f"{names} {'uses' if one else 'use'} the relay-reported {rate}"
+        if threshold_key:
+            whose = 'its' if one else "each one's own"
+            sentence += (f", below {whose} {flag} threshold "
+                         f"({_threshold_summary(group, threshold_key, use_bits)})")
+        sentences.append(sentence + '.')
+    return sentences
+
+
+def _describe_fast_shortfall(details: list, fast_votes: int, auth_count: int, majority: int,
+                             bandwidth: dict, use_bits: bool = False) -> str:
+    """Why authorities withheld Fast, from the bandwidth each one credits the relay with."""
+    sentences = [f"Only {fast_votes}/{auth_count} authorities vote Fast ({majority} needed)."]
+    withheld = [d for d in details if not d.get('assigned')]
+    known = [d for d in withheld
+             if d.get('speed_value') is not None and d.get('speed_threshold') is not None]
+    below = [d for d in known if d['speed_value'] < d['speed_threshold']]
+    sentences += _bandwidth_source_sentences(below, 'speed_value', 'speed_source', use_bits,
+                                             threshold_key='speed_threshold', flag='Fast')
+    enough = [d for d in known if d['speed_value'] >= d['speed_threshold']]
+    if enough:
+        one = len(enough) == 1
+        sentences.append(f"{_authority_names(enough)} {'credits' if one else 'credit'} it with enough "
+                         f"bandwidth but {'does' if one else 'do'} not vote Fast: Fast also requires the "
+                         "relay to be running, valid and not hibernating.")
+    hidden = [d for d in withheld if d.get('speed_value') is None]
+    if hidden:
+        one = len(hidden) == 1
+        sentences.append(f"{_authority_names(hidden)} {'decides' if one else 'decide'} from measurements "
+                         f"{'it does' if one else 'they do'} not publish.")
+    weight = bandwidth.get('median')
+    if any(d.get('speed_source') == BW_SOURCE_MEASURED for d in below) and weight and not bandwidth.get('unmeasured'):
+        sentences.append(f"Its consensus weight, the median of the {bandwidth.get('measurement_count', 0)} "
+                         f"bandwidth-scanner measurements, is {_format_rate(weight, use_bits, decimal_places=1)}.")
+    return ' '.join(sentences)
+
+
+def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int, majority: int,
+                                 use_bits: bool = False) -> str:
+    """How far each authority's bandwidth for this relay is from the Guard requirement."""
+    guarantee = _format_rate(GUARD_BW_GUARANTEE, use_bits, decimal_places=1)
+    lead = (f"{met_count}/{auth_count} authorities credit this relay with enough bandwidth for Guard "
+            f"({majority} needed): at least {guarantee} (AuthDirGuardBWGuarantee)")
+    top = [d['bw_top25_threshold'] for d in details if d.get('bw_top25_threshold') is not None]
+    if top:
+        lead += f" or a place in their top 25% ({_rate_range(top, use_bits)})"
+    short = [d for d in details if d.get('bw_met') is False]
+    return ' '.join([lead + '.'] + _bandwidth_source_sentences(short, 'bw_value', 'bw_source', use_bits))
+
+
+def _format_rate(rate_bytes: int, use_bits: bool = False, decimal_places: int = 0) -> str:
+    """Format a bandwidth rate (bytes/second) for display."""
     if not rate_bytes:
         return "unknown"
 
@@ -697,7 +844,8 @@ def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
     if _get_bw_formatter is not None:
         try:
             fmt = _get_bw_formatter(use_bits=use_bits)
-            return fmt.format_bandwidth_with_suffix(rate_bytes, fmt.determine_unit(rate_bytes), decimal_places=0)
+            return fmt.format_bandwidth_with_suffix(rate_bytes, fmt.determine_unit(rate_bytes),
+                                                    decimal_places=decimal_places)
         except Exception:
             pass
 
@@ -705,6 +853,6 @@ def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
     value, suffix = (rate_bytes * 8, "bit/s") if use_bits else (rate_bytes, "B/s")
     for threshold, prefix in [(1e9, "G"), (1e6, "M"), (1e3, "K")]:
         if value >= threshold:
-            return f"{value / threshold:.0f} {prefix}{suffix}"
+            return f"{value / threshold:.{decimal_places}f} {prefix}{suffix}"
     return f"{value:.0f} {suffix}"
 
