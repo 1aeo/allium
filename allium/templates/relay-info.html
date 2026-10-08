@@ -972,7 +972,7 @@ Country: unknown
         
         {# Right: Rate Limits + Recommendations #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;"><a href="#overload-rate-config" class="anchor-link">Rate Limits</a> <small class="al-status-muted">(from /bandwidth)</small></h5>
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">{% if ratelimits %}<a href="#overload-rate-config" class="anchor-link">Rate Limits</a>{% else %}Rate Limits{% endif %} <small class="al-status-muted">(from /bandwidth)</small></h5>
             {% if ratelimits %}
             <dl>
                 <dt id="overload-rate-config"><a href="#overload-rate-config" class="anchor-link">Rate Limit</a></dt>
