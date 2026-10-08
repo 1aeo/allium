@@ -1574,3 +1574,77 @@ class TestRunningValidV2DirFlags:
         # Check that threshold shows ≥4/7 DA (not ≥5/9)
         fast_row = frt[0]  # First row is Fast
         assert '≥4/7 DA' in fast_row['threshold'], f"Expected ≥4/7 DA, got: {fast_row['threshold']}"
+
+
+class TestForest44VoteBandwidthDisplay:
+    """forest44's real votes: units, sources and verdicts the relay page shows."""
+
+    @pytest.fixture
+    def formatted(self, forest44_fetcher):
+        from tests.conftest import FOREST44_FINGERPRINT
+        evaluation = forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)
+        return format_relay_consensus_evaluation(
+            evaluation, forest44_fetcher.flag_thresholds,
+            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'], observed_bandwidth=854_738)
+
+    def test_cons_wt_column_shows_vote_kilobytes_as_bytes(self, formatted):
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        # Measured=68 (KB/s) in bastet's vote; it counts toward the consensus weight
+        assert rows['bastet']['measured'] == 68_000
+        assert rows['bastet']['measured_display'] == '68.0 KB/s'
+        assert (rows['bastet']['cons_wt_mark'], rows['bastet']['cons_wt_counts']) == ('M', True)
+        # dizum has no measurement: its Bandwidth=854 is shown, but doesn't count
+        assert rows['dizum']['measured_display'] == '854.0 KB/s'
+        assert (rows['dizum']['cons_wt_mark'], rows['dizum']['cons_wt_counts']) == ('R', False)
+        assert "doesn't count toward the consensus weight" in rows['dizum']['cons_wt_title']
+
+    def test_fast_column_uses_each_authoritys_bandwidth(self, formatted):
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        assert (rows['tor26']['fast_speed_display'], rows['tor26']['fast_threshold_display']) == ('32.0 KB/s', '102.0 KB/s')
+        assert (rows['tor26']['flag_bw_mark'], rows['tor26']['fast_meets']) == ('M', False)
+        assert (rows['moria1']['fast_speed_display'], rows['moria1']['fast_threshold_display']) == ('230.0 KB/s', '1.0 MB/s')
+        assert rows['moria1']['fast_meets'] is False
+        assert (rows['maatuska']['fast_speed_display'], rows['maatuska']['flag_bw_mark']) == ('854.0 KB/s', 'R')
+        assert rows['maatuska']['fast_meets'] is True
+        assert rows['faravahar']['fast_speed_display'] == 'not published'
+        assert rows['faravahar']['fast_meets'] is True  # its actual Fast vote
+        for name, row in rows.items():
+            assert row['fast_meets'] == ('Fast' in row['flags']), name
+            assert row['guard_bw_meets'] is False, name
+
+    def test_fast_row_is_below_with_four_of_nine(self, formatted):
+        fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
+        assert fast['anchor'] == 'flag-fast-speed'
+        assert fast['status'] == 'below'
+        assert '4/9 DA' in fast['status_text']
+        assert '32.0 KB/s – 230.0 KB/s' in fast['value'] and '(5 DA measured)' in fast['value']
+        assert '854.0 KB/s' in fast['value'] and '(3 DA relay-reported)' in fast['value']
+        assert 'faravahar: not published' in fast['value']
+        assert fast['threshold'].startswith('≥102.0 KB/s (AuthDirFastGuarantee, or the top-7/8 cutoff if lower)')
+
+    def test_guard_bandwidth_row_is_below(self, formatted):
+        row = next(row for row in formatted['flag_requirements_table']
+                   if row['flag'] == 'Guard' and row['metric'] == 'Bandwidth')
+        assert row['status'] == 'below'
+        assert '0/9 DA' in row['status_text']
+        assert '≥2.1 MB/s (AuthDirGuardBWGuarantee)' in row['threshold']
+
+    def test_bandwidth_summary_is_the_consensus_weight(self, formatted):
+        summary = formatted['bandwidth_summary']
+        assert summary['median_display'] == '68.0 KB/s'
+        assert (summary['median_int'], summary['median_unit']) == (68, 'KB/s')
+        assert summary['unmeasured'] is False
+        assert (summary['min_display'], summary['max_display']) == ('32.0 KB/s', '230.0 KB/s')
+        assert summary['bw_auth_not_measured_display'] == (
+            'faravahar (bandwidth file out of date), longclaw (bandwidth file out of date)')
+
+    def test_bits_display(self, forest44_fetcher):
+        from tests.conftest import FOREST44_FINGERPRINT
+        formatted = format_relay_consensus_evaluation(
+            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
+            forest44_fetcher.flag_thresholds, current_flags=['Running', 'Valid', 'V2Dir', 'Stable'],
+            use_bits=True)
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        assert rows['bastet']['measured_display'] == '544.0 Kbit/s'
+        assert rows['bastet']['fast_threshold_display'] == '816.0 Kbit/s'
+        assert formatted['bandwidth_summary']['median_display'] == '544.0 Kbit/s'

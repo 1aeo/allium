@@ -817,6 +817,8 @@ class Relays:
             fetcher.relay_index = relay_index
             fetcher.flag_thresholds = flag_thresholds
             fetcher.bw_authorities = set(bw_authorities)
+            current_bw_files = collector_data.get('current_bw_file_authorities')
+            fetcher.current_bw_file_authorities = set(current_bw_files) if current_bw_files is not None else None
             fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
             
             # Process consensus evaluation for each relay
@@ -850,9 +852,9 @@ class Relays:
                     except (ValueError, TypeError):
                         pass
                 
-                # Format for template display, passing current flags, observed_bandwidth, and relay_uptime
-                # Note: observed_bandwidth (from descriptor) is the actual bandwidth for Guard eligibility
-                # NOT the scaled consensus weight or vote Measured value
+                # Format for template display, passing current flags, observed_bandwidth, and relay_uptime.
+                # Fast/Guard bandwidth checks use each authority's vote (Measured= when it has one);
+                # observed_bandwidth is only a fallback when no vote details are available.
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
                 version = relay.get('version')

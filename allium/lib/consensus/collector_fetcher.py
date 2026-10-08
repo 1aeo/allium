@@ -308,7 +308,12 @@ from .flag_thresholds import (
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
     HSDIR_TK_DEFAULT,
+    MAX_UNMEASURED_BW_KB,
+    VOTE_BW_KB_BYTES,
     check_stable_eligibility,
+    credible_bandwidth,
+    guard_bw_top_threshold,
+    low_median,
 )
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
@@ -353,6 +358,10 @@ class CollectorFetcher:
         self.relay_index = {}
         self.flag_thresholds = {}
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
+        # Bandwidth authorities whose vote carries a current bandwidth file (and so
+        # its Measured= values). None means unknown (collector data cached before
+        # this was tracked).
+        self.current_bw_file_authorities = set()
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
         self._timings = {}
     
@@ -370,6 +379,7 @@ class CollectorFetcher:
             'relay_index': {},
             'flag_thresholds': {},
             'bw_authorities': [],
+            'current_bw_file_authorities': [],
             'ipv6_testing_authorities': [],
             'fetched_at': datetime.now(timezone.utc).isoformat(),
             'errors': [],
@@ -428,6 +438,7 @@ class CollectorFetcher:
             result['consensus_method_info'] = {}
         
         result['bw_authorities'] = sorted(self.bw_authorities)
+        result['current_bw_file_authorities'] = sorted(self.current_bw_file_authorities)
         result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
         result['timings'] = self._timings
         
@@ -603,6 +614,8 @@ class CollectorFetcher:
                         # Track if this authority runs a bandwidth scanner
                         if vote_data.get('has_bandwidth_file_headers'):
                             self.bw_authorities.add(auth_name)
+                        if vote_data.get('bandwidth_file_current'):
+                            self.current_bw_file_authorities.add(auth_name)
                 except Exception as e:
                     logger.warning(f"Failed to fetch vote for {auth_fp}: {e}")
 
@@ -636,6 +649,9 @@ class CollectorFetcher:
             'relays': {},
             'flag_thresholds': {},
             'has_bandwidth_file_headers': False,
+            # tor only adds timestamp= to bandwidth-file-headers when the file was
+            # fresh enough to apply (bwauth.c), i.e. when the vote has Measured= values
+            'bandwidth_file_current': False,
             'consensus_methods': [],  # Methods this authority supports (from header)
             'params': {},  # Voted consensus params (from header)
         }
@@ -653,6 +669,7 @@ class CollectorFetcher:
             # Check for bandwidth-file-headers (indicates bandwidth authority)
             elif line.startswith('bandwidth-file-headers'):
                 vote['has_bandwidth_file_headers'] = True
+                vote['bandwidth_file_current'] = 'timestamp=' in line
             
             # Parse consensus-methods header (methods this authority supports)
             elif line.startswith('consensus-methods '):
@@ -1036,6 +1053,15 @@ class CollectorFetcher:
         except ValueError:
             return False
     
+    def _credible_bandwidth(self, auth_name: str, vote_info: dict) -> tuple:
+        """Bandwidth (bytes/s, source) this authority uses for Fast and Guard."""
+        thresholds = self.flag_thresholds.get(auth_name, {})
+        publishes = (self.current_bw_file_authorities is None
+                     or auth_name in self.current_bw_file_authorities)
+        return credible_bandwidth(
+            vote_info.get('measured'), vote_info.get('bandwidth'),
+            thresholds.get('ignoring-advertised-bws') == 1, publishes)
+
     def _format_authority_votes(self, relay: dict) -> List[dict]:
         """
         Format per-authority vote information for display.
@@ -1049,6 +1075,8 @@ class CollectorFetcher:
             
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
+            credible_bw, credible_bw_source = (self._credible_bandwidth(auth_name, vote_info)
+                                               if voted else (None, None))
             
             authority_votes.append({
                 'authority': auth_name,
@@ -1057,6 +1085,8 @@ class CollectorFetcher:
                 'flags': flags,
                 'bandwidth': vote_info.get('bandwidth'),
                 'measured': vote_info.get('measured'),
+                'credible_bw': credible_bw,
+                'credible_bw_source': credible_bw_source,
                 'wfu': vote_info.get('wfu'),
                 'wfu_display': f"{vote_info.get('wfu', 0) * 100:.1f}%" if vote_info.get('wfu') else 'N/A',
                 'tk': vote_info.get('tk'),
@@ -1095,8 +1125,13 @@ class CollectorFetcher:
         2. Must be Stable
         3. WFU >= guard-wfu threshold
         4. TK >= guard-tk threshold (makes relay "familiar")
-        5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB/s default) OR in top 25% (>= guard-bw-inc-exits)
+        5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB) OR in top 25%
+           (>= min(guard-bw-inc-exits, guard-bw-exc-exits))
         6. Must have V2Dir flag
+
+        "Bandwidth" for Fast and Guard is the authority's credible bandwidth
+        (see flag_thresholds.credible_bandwidth). When an authority's vote
+        doesn't reveal it, its actual Fast/Guard vote is used instead.
         """
         eligibility = {
             'guard': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
@@ -1119,19 +1154,11 @@ class CollectorFetcher:
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
             guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
-            guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
+            guard_bw_top25_threshold = guard_bw_top_threshold(thresholds)
             
             relay_wfu = vote_info.get('wfu', 0)
             relay_tk = vote_info.get('tk', 0)
-            # Use measured bandwidth (from sbws) for Guard eligibility, fall back to self-reported
-            relay_measured_bw = vote_info.get('measured') or vote_info.get('bandwidth', 0)
-            
-            # Guard BW check: bandwidth >= 2 MB/s (guarantee) OR in top 25% (>= guard-bw-inc-exits)
-            # Per Tor dir-spec: "bandwidth is at least AuthDirGuardBWGuarantee (2 MB by default), 
-            # OR its bandwidth is among the 25% fastest relays"
-            guard_bw_meets_guarantee = relay_measured_bw >= AUTH_DIR_GUARD_BW_GUARANTEE  # Use module constant
-            guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
-            guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
+            relay_bw, relay_bw_source = self._credible_bandwidth(auth_name, vote_info)
             
             # Guard flag prerequisites: must have Fast, Stable, and V2Dir flags from this authority
             # Per Tor dir-spec Section 3.4.2: Guard requires Fast, Stable, and V2Dir
@@ -1139,19 +1166,31 @@ class CollectorFetcher:
             has_stable = 'Stable' in auth_flags
             has_v2dir = 'V2Dir' in auth_flags
             guard_prereqs_met = has_fast and has_stable and has_v2dir
+            has_guard_flag = 'Guard' in auth_flags
             
-            guard_eligible = (
-                guard_prereqs_met and
-                relay_wfu >= guard_wfu_threshold and
-                relay_tk >= guard_tk_threshold and
-                guard_bw_eligible
-            )
+            # Guard BW: credible bandwidth >= AuthDirGuardBWGuarantee OR >= top-25% cutoff
+            if relay_bw is None:
+                guard_bw_meets_guarantee = guard_bw_in_top25 = guard_bw_eligible = None
+            else:
+                guard_bw_meets_guarantee = relay_bw >= AUTH_DIR_GUARD_BW_GUARANTEE
+                guard_bw_in_top25 = (guard_bw_top25_threshold is not None
+                                     and relay_bw >= guard_bw_top25_threshold)
+                guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
+            
+            if guard_bw_eligible is None:
+                guard_eligible = has_guard_flag
+            else:
+                guard_eligible = (
+                    guard_prereqs_met and
+                    relay_wfu >= guard_wfu_threshold and
+                    relay_tk >= guard_tk_threshold and
+                    guard_bw_eligible
+                )
             
             if guard_eligible:
                 eligibility['guard']['eligible_count'] += 1
             
             # Count actual Guard flag assignment by this authority
-            has_guard_flag = 'Guard' in auth_flags
             if has_guard_flag:
                 eligibility['guard']['assigned_count'] += 1
             
@@ -1172,10 +1211,11 @@ class CollectorFetcher:
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
-                # BW requirement
-                'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,  # 2 MB/s minimum
-                'bw_top25_threshold': guard_bw_top25_threshold,  # Top 25% cutoff
-                'bw_value': relay_measured_bw,
+                # BW requirement (bytes/s; bw_value None = not published by this authority)
+                'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,
+                'bw_top25_threshold': guard_bw_top25_threshold,
+                'bw_value': relay_bw,
+                'bw_source': relay_bw_source,
                 'bw_meets_guarantee': guard_bw_meets_guarantee,
                 'bw_in_top25': guard_bw_in_top25,
                 'bw_met': guard_bw_eligible,
@@ -1207,9 +1247,12 @@ class CollectorFetcher:
                 'mtbf_value': relay_mtbf,
             })
             
-            # Fast flag eligibility - use measured bandwidth
-            fast_speed = thresholds.get('fast-speed', 0)
-            fast_eligible = relay_measured_bw >= fast_speed
+            # Fast flag eligibility: credible bandwidth >= this authority's fast-speed
+            fast_speed = thresholds.get('fast-speed')
+            if relay_bw is None or fast_speed is None:
+                fast_eligible = has_fast
+            else:
+                fast_eligible = relay_bw >= fast_speed
             if fast_eligible:
                 eligibility['fast']['eligible_count'] += 1
             
@@ -1223,7 +1266,8 @@ class CollectorFetcher:
                 'eligible': fast_eligible,
                 'assigned': has_fast,  # Whether authority actually assigned Fast flag
                 'speed_threshold': fast_speed,
-                'speed_value': relay_measured_bw,
+                'speed_value': relay_bw,
+                'speed_source': relay_bw_source,
             })
             
             # HSDir flag eligibility
@@ -1274,65 +1318,70 @@ class CollectorFetcher:
     
     def _format_bandwidth(self, relay: dict) -> dict:
         """
-        Format bandwidth information from all sources.
-        
+        Consensus weight and bandwidth-authority measurements for one relay.
+
+        Values are bytes/second (votes publish KB/s). The consensus weight
+        follows dirvote.c / dir-spec "Computing a consensus": the low median of
+        the Measured= values when 3 or more authorities measured the relay,
+        otherwise the low median of the advertised Bandwidth= values, capped at
+        maxunmeasuredbw when 3 or more authorities publish measurements.
+
         Tracks:
         - bw_auth_measured_count: How many BW authorities actually measured this relay
         - bw_auth_total: Total number of BW authorities (denominator)
-        - measurement_count: Total bandwidth values (from all sources)
+        - measurement_count: Number of Measured= values in the votes
         """
         votes = relay.get('votes', {})
-        measurements = relay.get('bandwidth_measurements', {})
         
-        bandwidth_values = []
+        measured_kb = []
+        advertised_kb = []
         bw_auth_measured_count = 0  # BW authorities that measured THIS relay
         bw_auth_measured_set = set()  # Track names only for "not measured" display
         
         for auth_name, vote in votes.items():
             if vote.get('measured') is not None:
-                bandwidth_values.append(vote['measured'])
+                measured_kb.append(vote['measured'])
                 if auth_name in self.bw_authorities:
                     bw_auth_measured_count += 1
                     bw_auth_measured_set.add(auth_name)
-            elif vote.get('bandwidth') is not None:
-                bandwidth_values.append(vote['bandwidth'])
-        
-        # Add measurements from bandwidth files
-        bandwidth_values.extend(measurements.values())
+            if vote.get('bandwidth') is not None:
+                advertised_kb.append(vote['bandwidth'])
         
         bw_auth_total = len(self.bw_authorities)
         # Only compute missing names when not all BW authorities measured (template only uses this case)
         bw_auth_not_measured = (sorted(self.bw_authorities - bw_auth_measured_set)
                                 if bw_auth_measured_count < bw_auth_total else [])
+        publishing = (self.current_bw_file_authorities
+                      if self.current_bw_file_authorities is not None else self.bw_authorities)
+        bw_auth_stale = sorted(set(bw_auth_not_measured) - set(publishing))
         
-        if not bandwidth_values:
-            return {
-                'median': None, 'average': None, 'min': None, 'max': None, 
-                'deviation': None, 'measurement_count': 0,
-                'bw_auth_measured_count': 0,
-                'bw_auth_total': bw_auth_total,
-                'bw_auth_not_measured_names': sorted(self.bw_authorities),
-            }
-        
-        # Calculate median (what Tor consensus actually uses)
-        sorted_values = sorted(bandwidth_values)
-        n = len(sorted_values)
-        if n % 2 == 0:
-            median = (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2
+        unmeasured = len(measured_kb) < 3
+        if not unmeasured:
+            weight_kb = low_median(measured_kb)
+        elif advertised_kb:
+            weight_kb = low_median(advertised_kb)
+            if len(publishing) >= 3:
+                weight_kb = min(weight_kb, MAX_UNMEASURED_BW_KB)
         else:
-            median = sorted_values[n // 2]
+            weight_kb = None
         
-        avg = sum(bandwidth_values) / len(bandwidth_values)
+        def to_bytes(kb):
+            return kb * VOTE_BW_KB_BYTES if kb is not None else None
+        
+        spread = measured_kb if not unmeasured else []
         return {
-            'median': median,  # Tor consensus uses median
-            'average': avg,    # For reference
-            'min': min(bandwidth_values),
-            'max': max(bandwidth_values),
-            'deviation': max(bandwidth_values) - min(bandwidth_values) if len(bandwidth_values) > 1 else 0,
-            'measurement_count': len(bandwidth_values),
+            'median': to_bytes(weight_kb),  # Consensus weight
+            'consensus_weight_kb': weight_kb,
+            'unmeasured': unmeasured,
+            'average': to_bytes(sum(measured_kb) / len(measured_kb)) if measured_kb else None,
+            'min': to_bytes(min(measured_kb)) if measured_kb else None,
+            'max': to_bytes(max(measured_kb)) if measured_kb else None,
+            'deviation': to_bytes(max(spread) - min(spread)) if spread else 0,
+            'measurement_count': len(measured_kb),
             'bw_auth_measured_count': bw_auth_measured_count,
             'bw_auth_total': bw_auth_total,
             'bw_auth_not_measured_names': bw_auth_not_measured,
+            'bw_auth_stale_names': bw_auth_stale,
         }
     
     def _format_reachability(self, relay: dict) -> dict:
