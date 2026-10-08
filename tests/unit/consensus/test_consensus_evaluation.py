@@ -1164,6 +1164,25 @@ class TestMiddleOnlyFlag:
         rv = result['relay_values']
         assert rv['middleonly_flagged'] is True
         assert rv['middleonly_count'] == 7
+
+    def test_relay_flag_without_vote_counts_still_flagged(self):
+        """Row must render (and the issue anchor resolve) when the relay
+        itself carries MiddleOnly/BadExit per Onionoo, even if vote analysis
+        captured no assigned_count. relay_diagnostics raises those issues
+        based on Onionoo flags alone."""
+        result = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+
+        rv = result['relay_values']
+        assert rv['middleonly_flagged'] is True
+        assert rv['badexit_flagged'] is True
+
+        rows = {(r['flag'], r['metric']) for r in result['flag_requirements_table']}
+        assert ('MiddleOnly', 'Restriction (by DA)') in rows
+        assert ('BadExit', 'Restriction (by DA)') in rows
     
     def test_middleonly_in_flag_requirements_table(self):
         """Test that MiddleOnly relay shows MiddleOnly row in requirements table."""
@@ -1218,19 +1237,18 @@ class TestMiddleOnlyFlag:
         assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
     
     def test_middleonly_relay_row_count(self):
-        """Test that MiddleOnly relay has correct row count (base + MiddleOnly).
-        
-        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 20
-        """
+        """Test that MiddleOnly relay has correct row count
+        (base + MiddleOnly + BadExit — the relay carries both flags)."""
         result = format_relay_consensus_evaluation(
             self.MIDDLEONLY_EVALUATION,
             current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
             observed_bandwidth=5000000,
         )
-        
+
         frt = result['flag_requirements_table']
-        assert len(frt) == 20  # 19 base + 1 MiddleOnly
+        # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
+        # even though this fixture's flag_eligibility has no 'badexit' entry)
+        assert len(frt) == 21
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""
