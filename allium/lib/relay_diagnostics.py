@@ -65,29 +65,49 @@ except ImportError:
 # OVERLOAD_THRESHOLD_HOURS is re-exported: tests import it from this module.
 from .stability_utils import OVERLOAD_THRESHOLD_HOURS, evaluate_overload  # noqa: F401
 
+# Flag-row fragment ids: single source of truth shared with
+# consensus_evaluation (leaf module — no import cycle, see flag_anchors.py).
+from .consensus.flag_anchors import FLAG_ROW_ANCHORS as _FLAG_ROW_ANCHORS
+
 
 # Fragment on the relay page that explains each issue, and the tooltip that
-# names that section. Flag-row ids match consensus_evaluation.FLAG_ROW_ANCHORS.
+# names that section. Flag-row targets reference FLAG_ROW_ANCHORS so the ids
+# can only drift if the shared map itself changes.
 ISSUE_ANCHORS = {
     'not_in_consensus': ('col-running', 'Running column: which authorities voted'),
-    'ipv4_reachability': ('flag-running-ipv4', 'Running flag: IPv4 reachability'),
-    'ipv6_reachability': ('flag-running-ipv6', 'Running flag: IPv6 reachability'),
-    'guard_fast': ('flag-guard-prereq-fast', 'Guard prerequisite: Fast'),
-    'guard_stable': ('flag-guard-prereq-stable', 'Guard prerequisite: Stable'),
-    'guard_bandwidth': ('flag-guard-bandwidth', 'Guard bandwidth requirement'),
-    'guard_wfu': ('flag-guard-wfu', 'Guard WFU requirement'),
-    'guard_tk': ('flag-guard-time-known', 'Guard time-known requirement'),
-    'stable': ('flag-stable-mtbf', 'Stable flag requirements'),
-    'hsdir_fast': ('flag-hsdir-prereq-fast', 'HSDir prerequisite: Fast'),
-    'hsdir_stable': ('flag-hsdir-prereq-stable', 'HSDir prerequisite: Stable'),
-    'hsdir_v2dir': ('flag-hsdir-prereq-v2dir', 'HSDir prerequisite: V2Dir'),
-    'hsdir_wfu': ('flag-hsdir-wfu', 'HSDir WFU requirement'),
-    'hsdir_tk': ('flag-hsdir-time-known', 'HSDir time-known requirement'),
+    'ipv4_reachability': (_FLAG_ROW_ANCHORS[('Running', 'IPv4 Reachability')],
+                          'Running flag: IPv4 reachability'),
+    'ipv6_reachability': (_FLAG_ROW_ANCHORS[('Running', 'IPv6 Reachability')],
+                          'Running flag: IPv6 reachability'),
+    'guard_fast': (_FLAG_ROW_ANCHORS[('Guard', 'Prereq: Fast')],
+                   'Guard prerequisite: Fast'),
+    'guard_stable': (_FLAG_ROW_ANCHORS[('Guard', 'Prereq: Stable')],
+                     'Guard prerequisite: Stable'),
+    'guard_bandwidth': (_FLAG_ROW_ANCHORS[('Guard', 'Bandwidth')],
+                        'Guard bandwidth requirement'),
+    'guard_wfu': (_FLAG_ROW_ANCHORS[('Guard', 'WFU')],
+                  'Guard WFU requirement'),
+    'guard_tk': (_FLAG_ROW_ANCHORS[('Guard', 'Time Known')],
+                 'Guard time-known requirement'),
+    'stable': (_FLAG_ROW_ANCHORS[('Stable', 'MTBF')],
+               'Stable flag requirements'),
+    'hsdir_fast': (_FLAG_ROW_ANCHORS[('HSDir', 'Prereq: Fast')],
+                   'HSDir prerequisite: Fast'),
+    'hsdir_stable': (_FLAG_ROW_ANCHORS[('HSDir', 'Prereq: Stable')],
+                     'HSDir prerequisite: Stable'),
+    'hsdir_v2dir': (_FLAG_ROW_ANCHORS[('HSDir', 'Prereq: V2Dir')],
+                    'HSDir prerequisite: V2Dir'),
+    'hsdir_wfu': (_FLAG_ROW_ANCHORS[('HSDir', 'WFU')],
+                  'HSDir WFU requirement'),
+    'hsdir_tk': (_FLAG_ROW_ANCHORS[('HSDir', 'Time Known')],
+                 'HSDir time-known requirement'),
     'consensus_weight': ('col-cons-wt', 'Consensus weight by authority'),
     'bw_measured': ('bw-measured-by', 'Which bandwidth authorities measured this relay'),
     'staledesc': ('col-desc-published', 'Descriptor published time'),
-    'badexit': ('flag-badexit', 'BadExit flag details'),
-    'middleonly': ('flag-middleonly', 'MiddleOnly restriction'),
+    'badexit': (_FLAG_ROW_ANCHORS[('BadExit', 'Restriction (by DA)')],
+                'BadExit flag details'),
+    'middleonly': (_FLAG_ROW_ANCHORS[('MiddleOnly', 'Restriction (by DA)')],
+                   'MiddleOnly restriction'),
     'version': ('version', 'Software version'),
     'overload_general': ('overload-general', 'General overload report'),
     'overload_recent': ('overload-general', 'When general overload was last reported'),

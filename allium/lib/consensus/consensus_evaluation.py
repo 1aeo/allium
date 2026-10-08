@@ -1001,47 +1001,11 @@ def _majority_status(count: int, required: int) -> str:
     return 'meets' if count >= required else 'below'
 
 
-# Fragment ids for Eligibility Flag Vote Details rows. Issue diagnostics link here.
-FLAG_ROW_ANCHORS = {
-    ('Running', 'IPv4 Reachability'): 'flag-running-ipv4',
-    ('Running', 'IPv6 Reachability'): 'flag-running-ipv6',
-    ('Valid', 'Descriptor'): 'flag-valid',
-    ('V2Dir', 'DirPort Available'): 'flag-v2dir',
-    ('Fast', 'Speed'): 'flag-fast',
-    ('Stable', 'MTBF'): 'flag-stable-mtbf',
-    ('Stable', 'Uptime'): 'flag-stable-uptime',
-    ('HSDir', 'Prereq: Fast'): 'flag-hsdir-prereq-fast',
-    ('HSDir', 'Prereq: Stable'): 'flag-hsdir-prereq-stable',
-    ('HSDir', 'Prereq: V2Dir'): 'flag-hsdir-prereq-v2dir',
-    ('HSDir', 'WFU'): 'flag-hsdir-wfu',
-    ('HSDir', 'Time Known'): 'flag-hsdir-time-known',
-    ('Guard', 'Prereq: Fast'): 'flag-guard-prereq-fast',
-    ('Guard', 'Prereq: Stable'): 'flag-guard-prereq-stable',
-    ('Guard', 'Prereq: V2Dir'): 'flag-guard-prereq-v2dir',
-    ('Guard', 'WFU'): 'flag-guard-wfu',
-    ('Guard', 'Time Known'): 'flag-guard-time-known',
-    ('Guard', 'Bandwidth'): 'flag-guard-bandwidth',
-    ('Exit', 'Exit Policy'): 'flag-exit',
-    ('MiddleOnly', 'Restriction (by DA)'): 'flag-middleonly',
-    ('BadExit', 'Restriction (by DA)'): 'flag-badexit',
-}
-
-
-def _flag_row_anchor(flag: str, metric: str) -> str:
-    """Stable fragment id for one flag-requirements row."""
-    explicit = FLAG_ROW_ANCHORS.get((flag, metric))
-    if explicit:
-        return explicit
-    chars = []
-    dash = False
-    for ch in f'{flag}-{metric}'.lower():
-        if ch.isalnum():
-            chars.append(ch)
-            dash = False
-        elif not dash:
-            chars.append('-')
-            dash = True
-    return 'flag-' + ''.join(chars).strip('-')
+# Fragment ids for Eligibility Flag Vote Details rows. Issue diagnostics link
+# here — the single source of truth lives in flag_anchors.py so
+# relay_diagnostics can reference the same values (re-exported for backward
+# compatibility with existing imports of consensus_evaluation.FLAG_ROW_ANCHORS).
+from .flag_anchors import FLAG_ROW_ANCHORS, flag_row_anchor as _flag_row_anchor
 
 
 def _make_row(flag: str, flag_tooltip: str, flag_color: str, metric: str, metric_tooltip: str,
