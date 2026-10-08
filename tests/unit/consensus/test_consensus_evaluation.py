@@ -1593,10 +1593,11 @@ class TestForest44VoteBandwidthDisplay:
         assert rows['bastet']['measured'] == 68_000
         assert rows['bastet']['measured_display'] == '68.0 KB/s'
         assert (rows['bastet']['cons_wt_mark'], rows['bastet']['cons_wt_counts']) == ('M', True)
+        assert rows['bastet']['cons_wt_title'].startswith("Measured=68 (KB/s) in bastet's vote")
         # dizum has no measurement: its Bandwidth=854 is shown, but doesn't count
         assert rows['dizum']['measured_display'] == '854.0 KB/s'
         assert (rows['dizum']['cons_wt_mark'], rows['dizum']['cons_wt_counts']) == ('R', False)
-        assert "doesn't count toward the consensus weight" in rows['dizum']['cons_wt_title']
+        assert "Bandwidth=854 (KB/s), which doesn't count toward the consensus weight" in rows['dizum']['cons_wt_title']
 
     def test_fast_column_uses_each_authoritys_bandwidth(self, formatted):
         rows = {row['authority']: row for row in formatted['authority_table']}

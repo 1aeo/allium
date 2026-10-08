@@ -1010,18 +1010,19 @@ _BW_SOURCE_MARKS = {
 }
 
 
-def _cons_wt_title(authority: str, source: str, counts: bool, use_bits: bool = False) -> str:
+def _cons_wt_title(authority: str, source: str, counts: bool, vote_kb: int, use_bits: bool = False) -> str:
     """Tooltip for one vote's input to the consensus weight (dir-spec "Computing a consensus")."""
     if source == BW_SOURCE_MEASURED:
-        return (f"Measured= in {authority}'s vote: its bandwidth scanner's measurement. "
+        return (f"Measured={vote_kb} (KB/s) in {authority}'s vote: its bandwidth scanner's measurement. "
                 "The consensus weight is the median of the Measured= values.")
     if counts:
         cap = _format_bandwidth_value(MAX_UNMEASURED_BW_KB * VOTE_BW_KB_BYTES, use_bits)
-        return (f"Relay-reported Bandwidth= in {authority}'s vote. Fewer than 3 authorities measured this "
-                f"relay, so the consensus weight is the median of these values, capped at {cap} "
+        return (f"Relay-reported Bandwidth={vote_kb} (KB/s) in {authority}'s vote. Fewer than 3 authorities "
+                f"measured this relay, so the consensus weight is the median of these values, capped at {cap} "
                 "(maxunmeasuredbw) while 3 or more authorities publish measurements.")
-    return (f"{authority} has no measurement for this relay. Its vote lists the relay-reported Bandwidth=, "
-            "which doesn't count toward the consensus weight while 3 or more authorities measure the relay.")
+    return (f"{authority} has no measurement for this relay. Its vote lists the relay-reported "
+            f"Bandwidth={vote_kb} (KB/s), which doesn't count toward the consensus weight while 3 or more "
+            "authorities measure the relay.")
 
 
 # Order and wording for the bandwidth each authority used for Fast/Guard
@@ -1584,7 +1585,7 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             'cons_wt_source': cons_wt_source,
             'cons_wt_mark': _BW_SOURCE_MARKS.get(cons_wt_source, ''),
             'cons_wt_counts': cons_wt_counts,
-            'cons_wt_title': (_cons_wt_title(auth_name, cons_wt_source, cons_wt_counts, use_bits)
+            'cons_wt_title': (_cons_wt_title(auth_name, cons_wt_source, cons_wt_counts, cons_wt_kb, use_bits)
                               if cons_wt_source else ''),
             'flag_bw_source': flag_bw_source,
             'flag_bw_mark': _BW_SOURCE_MARKS.get(flag_bw_source, ''),
