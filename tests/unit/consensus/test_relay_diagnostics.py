@@ -733,12 +733,6 @@ class TestIssueSectionAnchors:
     section (highlighted via the :target CSS rule).
     """
 
-    # Section anchors that exist on the relay-info page
-    VALID_SECTIONS = {
-        'status', 'connectivity', 'flags', 'bandwidth', 'uptime', 'overload',
-        'operator', 'software', 'exit-policy', 'consensus-evaluation', 'authority-votes',
-    }
-
     def _issues(self, **kwargs):
         base = {
             'in_consensus': True,
@@ -754,6 +748,7 @@ class TestIssueSectionAnchors:
         )
 
     def test_flag_eligibility_issues_link_to_flag_rows(self):
+        """Missing Fast and low bandwidth link to the Guard and HSDir requirement rows."""
         issues = self._issues(current_flags=['Stable'])  # no Fast, no Guard, no HSDir
         by_title = {i['title']: i['section'] for i in issues}
         assert by_title['Guard: requires Fast flag'] == 'flag-guard-prereq-fast'
@@ -761,6 +756,7 @@ class TestIssueSectionAnchors:
         assert by_title['HSDir: requires Fast flag'] == 'flag-hsdir-prereq-fast'
 
     def test_reachability_issues_link_to_running_rows(self):
+        """IPv4 and IPv6 reachability issues link to the Running flag rows."""
         issues = self._issues(reachability={
             'ipv4_reachable_count': 3,
             'ipv4_reachable_authorities': ['bastet', 'dannenberg', 'dizum'],
@@ -771,13 +767,15 @@ class TestIssueSectionAnchors:
         assert by_title['IPv4 reachability issues'] == 'flag-running-ipv4'
         assert by_title['IPv6 not reachable'] == 'flag-running-ipv6'
 
-    def test_consensus_issue_links_to_authority_votes(self):
+    def test_not_in_consensus_links_to_running_column(self):
+        """Not in consensus links to the per-authority Running column."""
         issues = self._issues(in_consensus=False, vote_count=3)
         consensus = [i for i in issues if i['category'] == 'consensus']
         assert len(consensus) == 1
         assert consensus[0]['section'] == 'col-running'
 
-    def test_weight_deviation_links_to_authority_votes(self):
+    def test_weight_deviation_links_to_cons_wt_column(self):
+        """Consensus weight deviation links to the per-authority Cons Wt column."""
         issues = self._issues(
             current_flags=['Guard', 'Stable', 'Fast', 'HSDir'],
             observed_bandwidth=10_000_000,
@@ -788,7 +786,8 @@ class TestIssueSectionAnchors:
         assert dev[0]['section'] == 'col-cons-wt'
         assert 'href="#col-cons-wt"' in dev[0]['description']
 
-    def test_bw_measurement_issues_link_to_bandwidth(self):
+    def test_bw_measurement_issues_link_to_measured_by(self):
+        """Bandwidth-authority measurement issues link to the Measured By line."""
         issues = self._issues(
             current_flags=['Guard', 'Stable', 'Fast', 'HSDir'],
             observed_bandwidth=10_000_000,
@@ -798,7 +797,8 @@ class TestIssueSectionAnchors:
         assert len(meas) == 1
         assert meas[0]['section'] == 'bw-measured-by'
 
-    def test_staledesc_links_to_authority_votes(self):
+    def test_staledesc_links_to_desc_published_column(self):
+        """StaleDesc links to the per-authority Desc Published column."""
         issues = self._issues(
             authority_votes=[{'voted': True, 'flags': ['StaleDesc', 'Running'],
                               'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
@@ -809,7 +809,8 @@ class TestIssueSectionAnchors:
         assert len(stale) == 1
         assert stale[0]['section'] == 'col-desc-published'
 
-    def test_version_issue_links_to_software(self):
+    def test_version_issue_links_to_version_row(self):
+        """A non-recommended Tor version links to the Version row."""
         issues = generate_issues_from_consensus({
             'in_consensus': True,
             'authority_votes': [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}],
@@ -822,7 +823,8 @@ class TestIssueSectionAnchors:
         assert len(version) == 1
         assert version[0]['section'] == 'version'
 
-    def test_overload_issues_link_to_overload(self):
+    def test_overload_issues_link_to_their_detail_lines(self):
+        """Each overload issue links to its own line in the overload details."""
         now_ms = int(time.time() * 1000)
         relay = {
             'overload_general_timestamp': now_ms - 3600000,  # active
@@ -1056,6 +1058,7 @@ class TestIssueDetailAnchors:
     """Each surfaced issue links to the section that explains it."""
 
     def test_every_issue_title_has_expected_anchor(self):
+        """Every issue title links to its expected fragment and has a tooltip label."""
         found = _collect_titled_issues()
         missing = sorted(set(EXPECTED_ISSUE_ANCHORS) - set(found))
         assert not missing, f"scenarios did not produce: {missing}"
@@ -1065,11 +1068,13 @@ class TestIssueDetailAnchors:
             assert issue['section_label']
 
     def test_flag_row_anchors_match_issue_targets(self):
+        """Every flag-row fragment an issue links to is defined in FLAG_ROW_ANCHORS."""
         from allium.lib.consensus.consensus_evaluation import FLAG_ROW_ANCHORS
         flag_targets = {a for a in EXPECTED_ISSUE_ANCHORS.values() if a.startswith('flag-')}
         assert flag_targets <= set(FLAG_ROW_ANCHORS.values())
 
     def test_page_has_a_target_for_every_non_flag_anchor(self):
+        """relay-info.html has an id for every issue fragment that isn't a flag row."""
         from pathlib import Path
         template = Path(__file__).resolve().parents[3] / 'allium' / 'templates' / 'relay-info.html'
         html = template.read_text()
