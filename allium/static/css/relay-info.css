@@ -53,16 +53,12 @@
     color: var(--color-primary);
 }
 
-/* Keep anchored rows and column headers clear of the viewport edge */
-tr[id],
-th[id],
-h5[id],
-dt[id],
-div[id],
-#overload,
-#version,
-#authority-votes,
-#bw-measurement {
+/* Keep every in-page anchor target clear of the sticky navbar.
+   Intentionally global: scroll-margin only applies when the element is
+   actually the fragment target, and existing section anchors (#status,
+   #flags, ...) had the same clipping problem as the new row/column
+   targets. */
+[id] {
     scroll-margin-top: 72px;
     scroll-margin-bottom: 24px;
 }
