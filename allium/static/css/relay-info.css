@@ -42,7 +42,8 @@
     color: inherit;
 }
 
-/* Issue/note links: keep severity color, underline so they read as links */
+/* Issue/note links in the Issues Detected box: keep severity color,
+   underline signals clickability, :target highlights the section */
 .issue-link {
     color: inherit;
     text-decoration: underline;
@@ -53,27 +54,9 @@
     color: var(--color-primary);
 }
 
-/* Keep every in-page anchor target clear of the sticky navbar.
-   Intentionally global: scroll-margin only applies when the element is
-   actually the fragment target, and existing section anchors (#status,
-   #flags, ...) had the same clipping problem as the new row/column
-   targets. */
-[id] {
-    scroll-margin-top: 72px;
-    scroll-margin-bottom: 24px;
-}
-
-/* Striped table cells paint over the row, so highlight the cells */
-tr:target > td {
-    background-color: var(--color-highlight-bg) !important;
-    box-shadow: inset 0 0 0 2px var(--color-highlight-border);
-}
-th:target {
-    outline-offset: 0;
-}
-
 /* Highlight section when targeted (outline avoids layout shift/overlap) */
 :target {
+    scroll-margin-top: 72px;
     background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;
     outline: 3px solid var(--color-highlight-border);
@@ -83,6 +66,9 @@ th:target {
 dt:target {
     padding: 4px 6px;
     margin: -4px -6px 6px;
+}
+th:target {
+    outline-offset: 0;  /* header cells sit in a scrolling table that clips outlines drawn outside them */
 }
 
 /* Backward-compat anchor aliases: invisible but still scrollable */
