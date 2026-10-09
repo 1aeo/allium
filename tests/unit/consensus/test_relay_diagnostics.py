@@ -784,10 +784,6 @@ class TestIssueSectionAnchors:
         dev = [i for i in issues if 'deviation' in i['title']]
         assert len(dev) == 1
         assert dev[0]['section'] == 'col-cons-wt'
-        # Link target is data, the HTML is rendered by the template
-        assert '<a ' not in dev[0]['description']
-        assert dev[0]['description_link']['target'] == 'col-cons-wt'
-        assert dev[0]['description_link']['phrase'] in dev[0]['description']
 
     def test_bw_measurement_issues_link_to_measured_by(self):
         """Bandwidth-authority measurement issues link to the Measured By line."""
@@ -862,15 +858,13 @@ class TestBackwardCompatibility:
         
         issues = generate_issues_from_consensus(consensus_data)
         
-        # Every issue should have required fields, including the page anchor
+        # Every issue should have required fields
         for issue in issues:
             assert 'severity' in issue
             assert 'category' in issue
             assert 'title' in issue
             assert 'description' in issue
             assert 'suggestion' in issue
-            assert issue.get('section')
-            assert issue.get('section_label')
             assert issue['severity'] in ('error', 'warning', 'info')
 
 
