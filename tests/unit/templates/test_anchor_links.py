@@ -140,8 +140,8 @@ class TestIssueSectionLinks:
         """Every `section` value relay_diagnostics produces must resolve to an
         id in relay-info.html so issue hyperlinks never point at a missing anchor."""
         from allium.lib.relay_diagnostics import generate_relay_issues
+        from allium.lib.consensus.consensus_evaluation import format_relay_consensus_evaluation
 
-        SECONDS_PER_DAY = 86400
         now_ms = int(time.time() * 1000)
         consensus_data = {
             'in_consensus': False,
@@ -149,7 +149,7 @@ class TestIssueSectionLinks:
             'total_authorities': 9,
             'authority_votes': [
                 {'voted': True, 'flags': ['StaleDesc', 'Running'],
-                 'wfu': 0.90, 'tk': 3 * SECONDS_PER_DAY},
+                 'wfu': 0.90, 'tk': 20 * 3600},  # under HSDir's 25h too
             ],
             'reachability': {
                 'ipv4_reachable_count': 3,
@@ -171,21 +171,16 @@ class TestIssueSectionLinks:
             'overload_ratelimits': {'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
                                     'write-count': 1, 'read-count': 1},
         }
-        from allium.lib.consensus.consensus_evaluation import FLAG_ROW_ANCHORS
-
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types
         sections = {i['section'] for i in issues}
-        assert 'flag-running-ipv4' in sections
-        assert 'col-cons-wt' in sections
-        assert 'overload-general' in sections
-        assert 'id="{{ row.anchor }}"' in template_content
+        assert len(sections) == 25  # fixture reaches every link target
+        rows = format_relay_consensus_evaluation(consensus_data, current_flags=relay['flags'])['flag_requirements_table']
+        row_ids = {row['anchor'] for row in rows}
+        assert '<tr id="{{ row.anchor }}">' in template_content
         for section in sections:
-            if section.startswith('flag-'):
-                assert section in set(FLAG_ROW_ANCHORS.values()), section
-            else:
-                assert f'id="{section}"' in template_content, \
-                    f"Issue section anchor missing from template: {section}"
+            assert section in row_ids or f'id="{section}"' in template_content, \
+                f"Issue section anchor missing from template: {section}"
 
 
 if __name__ == "__main__":
