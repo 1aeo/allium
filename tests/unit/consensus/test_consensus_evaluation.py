@@ -1164,7 +1164,7 @@ class TestMiddleOnlyFlag:
         rv = result['relay_values']
         assert rv['middleonly_flagged'] is True
         assert rv['middleonly_count'] == 7
-    
+
     def test_middleonly_in_flag_requirements_table(self):
         """Test that MiddleOnly relay shows MiddleOnly row in requirements table."""
         result = format_relay_consensus_evaluation(
@@ -1218,19 +1218,28 @@ class TestMiddleOnlyFlag:
         assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
     
     def test_middleonly_relay_row_count(self):
-        """Test that MiddleOnly relay has correct row count (base + MiddleOnly).
-        
-        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 20
-        """
+        """Test that MiddleOnly relay has correct row count
+        (base + MiddleOnly + BadExit — the relay carries both flags)."""
         result = format_relay_consensus_evaluation(
             self.MIDDLEONLY_EVALUATION,
             current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
             observed_bandwidth=5000000,
         )
-        
+
         frt = result['flag_requirements_table']
-        assert len(frt) == 20  # 19 base + 1 MiddleOnly
+        # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
+        # even though this fixture's flag_eligibility has no 'badexit' entry)
+        assert len(frt) == 21
+        badexit = next(r for r in frt if r['flag'] == 'BadExit')
+        assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
+
+    def test_flagged_row_keeps_a_recorded_zero(self):
+        """A recorded 0 vote count still shows as 0; only a missing entry shows '?'."""
+        frt = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION, current_flags=['Running', 'Valid', 'MiddleOnly'],
+            observed_bandwidth=5000000)['flag_requirements_table']
+        middleonly = next(r for r in frt if r['flag'] == 'MiddleOnly')
+        assert middleonly['status_text'] == 'Flagged (0/9 DA)'
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""

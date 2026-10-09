@@ -49,12 +49,14 @@
     text-decoration: underline;
     text-underline-offset: 2px;
 }
-.issue-link:hover {
+.issue-link:hover,
+.issue-link:focus {
     color: var(--color-primary);
 }
 
 /* Highlight section when targeted (outline avoids layout shift/overlap) */
 :target {
+    scroll-margin-top: 72px;
     background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;
     outline: 3px solid var(--color-highlight-border);
@@ -64,6 +66,9 @@
 dt:target {
     padding: 4px 6px;
     margin: -4px -6px 6px;
+}
+th:target {
+    outline-offset: 0;  /* header cells sit in a scrolling table that clips outlines drawn outside them */
 }
 
 /* Backward-compat anchor aliases: invisible but still scrollable */

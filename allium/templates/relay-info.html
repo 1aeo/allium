@@ -620,7 +620,7 @@ Country: unknown
 </thead>
 <tbody>
     {% for row in diag.flag_requirements_table %}
-    <tr>
+    <tr id="{{ row.anchor }}">
         {% if row.rowspan > 0 %}
         <td rowspan="{{ row.rowspan }}" style="vertical-align: middle; color: {{ row.flag_color }}; font-weight: bold;" title="{{ row.flag_tooltip }}">{{ row.flag }}</td>
         {% endif %}
@@ -718,7 +718,7 @@ Country: unknown
         <p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener" style="color: #999;">CollecTor</a> — fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}</p>
         {% endif %}
         <dl>
-            <dt title="How many bandwidth authorities (sbws scanners) measured this relay">Measured By</dt>
+            <dt id="bw-measured-by" title="How many bandwidth authorities (sbws scanners) measured this relay">Measured By</dt>
             <dd>
                 {% if diag and diag.bandwidth_summary %}
                     <span style="color: {{ diag.bandwidth_summary.bw_auth_color }}; font-weight: bold;">
@@ -911,7 +911,7 @@ Country: unknown
 
 {% if not is_overloaded %}
 {# Not overloaded: compact single line #}
-<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+<div id="overload-general" style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <strong class="al-status-success">Overload Status:</strong>
     <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
     {% if 'Last general overload' in stability_tooltip %}
@@ -930,7 +930,7 @@ Country: unknown
     <div class="row">
         {# Left: General Overload + File Descriptors #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
+            <h5 id="overload-general" style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
@@ -950,7 +950,7 @@ Country: unknown
                 Flag remains 72h after last event (Tor spec 328).
             </p>
             
-            <h5 style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
+            <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
@@ -971,7 +971,7 @@ Country: unknown
             <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
             {% if ratelimits %}
             <dl>
-                <dt>Rate Limit</dt>
+                <dt id="overload-rate-config">Rate Limit</dt>
                 <dd>
                     {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
                     {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
@@ -981,7 +981,7 @@ Country: unknown
                     {# BandwidthBurst is a token-bucket size (bytes), not a rate #}
                     {{ ratelimits.get('burst-limit', 0)|format_data_volume }}
                 </dd>
-                <dt>Write Limit Hit</dt>
+                <dt id="overload-write">Write Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('write-count', 0) > 0 %}
                         <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
@@ -989,7 +989,7 @@ Country: unknown
                         <span class="al-status-success">0 times</span>
                     {% endif %}
                 </dd>
-                <dt>Read Limit Hit</dt>
+                <dt id="overload-read">Read Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('read-count', 0) > 0 %}
                         <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
@@ -1428,7 +1428,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 <thead>
 <tr>
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
-    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
+    <th id="col-running" title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
@@ -1444,8 +1444,8 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="Stable Uptime: Relay's uptime | Authority's threshold">Stable Uptime (Relay|T)</th>
     <th title="HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
     <th title="HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
-    <th title="Descriptor Published timestamp">Desc Published</th>
-    <th title="Authority-measured consensus weight (scaled) used for path selection">Cons Wt (Authority)</th>
+    <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
+    <th id="col-cons-wt" title="Authority-measured consensus weight (scaled) used for path selection">Cons Wt (Authority)</th>
 </tr>
 </thead>
 <tbody>
