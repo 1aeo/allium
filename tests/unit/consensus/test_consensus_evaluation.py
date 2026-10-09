@@ -1230,6 +1230,8 @@ class TestMiddleOnlyFlag:
         # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
         # even though this fixture's flag_eligibility has no 'badexit' entry)
         assert len(frt) == 21
+        badexit = next(r for r in frt if r['flag'] == 'BadExit')
+        assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""
