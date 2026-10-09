@@ -713,12 +713,12 @@ Country: unknown
     
     {# Right Column: Authority-Measured #}
     <div class="col-md-6">
-        <h5 id="bw-measurement" class="subsection-header"><a href="#bw-measurement" class="anchor-link">Measurement (Directory Authority Verified)</a></h5>
+        <h5 class="subsection-header">Measurement (Directory Authority Verified)</h5>
         {% if relays.collector_fetched_at %}
         <p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener" style="color: #999;">CollecTor</a> — fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}</p>
         {% endif %}
         <dl>
-            <dt id="bw-measured-by" title="How many bandwidth authorities (sbws scanners) measured this relay"><a href="#bw-measured-by" class="anchor-link">Measured By</a></dt>
+            <dt id="bw-measured-by" title="How many bandwidth authorities (sbws scanners) measured this relay">Measured By</dt>
             <dd>
                 {% if diag and diag.bandwidth_summary %}
                     <span style="color: {{ diag.bandwidth_summary.bw_auth_color }}; font-weight: bold;">
@@ -930,8 +930,7 @@ Country: unknown
     <div class="row">
         {# Left: General Overload + File Descriptors #}
         <div class="col-md-6">
-            <div id="overload-general">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;"><a href="#overload-general" class="anchor-link">General Overload</a> <small class="al-status-muted">(from /details)</small></h5>
+            <h5 id="overload-general" style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
@@ -950,10 +949,8 @@ Country: unknown
                 OOM killer, onionskin queue saturation, or TCP port exhaustion.
                 Flag remains 72h after last event (Tor spec 328).
             </p>
-            </div>
             
-            <div id="overload-fd">
-            <h5 style="font-size: 13px; font-weight: bold;"><a href="#overload-fd" class="anchor-link">File Descriptor Exhaustion</a> <small class="al-status-muted">(from /bandwidth)</small></h5>
+            <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
@@ -967,15 +964,14 @@ Country: unknown
                     {% endif %}
                 </dd>
             </dl>
-            </div>
         </div>
         
         {# Right: Rate Limits + Recommendations #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">{% if ratelimits %}<a href="#overload-rate-config" class="anchor-link">Rate Limits</a>{% else %}Rate Limits{% endif %} <small class="al-status-muted">(from /bandwidth)</small></h5>
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
             {% if ratelimits %}
             <dl>
-                <dt id="overload-rate-config"><a href="#overload-rate-config" class="anchor-link">Rate Limit</a></dt>
+                <dt id="overload-rate-config">Rate Limit</dt>
                 <dd>
                     {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
                     {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
@@ -985,7 +981,7 @@ Country: unknown
                     {# BandwidthBurst is a token-bucket size (bytes), not a rate #}
                     {{ ratelimits.get('burst-limit', 0)|format_data_volume }}
                 </dd>
-                <dt id="overload-write"><a href="#overload-write" class="anchor-link">Write Limit Hit</a></dt>
+                <dt id="overload-write">Write Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('write-count', 0) > 0 %}
                         <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
@@ -993,7 +989,7 @@ Country: unknown
                         <span class="al-status-success">0 times</span>
                     {% endif %}
                 </dd>
-                <dt id="overload-read"><a href="#overload-read" class="anchor-link">Read Limit Hit</a></dt>
+                <dt id="overload-read">Read Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('read-count', 0) > 0 %}
                         <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
