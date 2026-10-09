@@ -733,9 +733,9 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         
         # MiddleOnly / BadExit detection (Onionoo flag too: relay_diagnostics raises the issue from it)
         'middleonly_flagged': _middleonly_count > 0 or 'MiddleOnly' in current_flags,
-        'middleonly_count': _middleonly_count,
+        'middleonly_count': flag_eligibility.get('middleonly', {}).get('assigned_count', '?'),  # '?': votes have no entry
         'badexit_flagged': _badexit_count > 0 or 'BadExit' in current_flags,
-        'badexit_count': _badexit_count,
+        'badexit_count': flag_eligibility.get('badexit', {}).get('assigned_count', '?'),
         
         # V2Dir flag
         'v2dir_has_flag': 'V2Dir' in current_flags,
