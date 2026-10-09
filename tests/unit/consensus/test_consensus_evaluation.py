@@ -1232,6 +1232,14 @@ class TestMiddleOnlyFlag:
         assert len(frt) == 21
         badexit = next(r for r in frt if r['flag'] == 'BadExit')
         assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
+
+    def test_flagged_row_keeps_a_recorded_zero(self):
+        """A recorded 0 vote count still shows as 0; only a missing entry shows '?'."""
+        frt = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION, current_flags=['Running', 'Valid', 'MiddleOnly'],
+            observed_bandwidth=5000000)['flag_requirements_table']
+        middleonly = next(r for r in frt if r['flag'] == 'MiddleOnly')
+        assert middleonly['status_text'] == 'Flagged (0/9 DA)'
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""
