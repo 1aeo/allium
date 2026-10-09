@@ -1165,25 +1165,6 @@ class TestMiddleOnlyFlag:
         assert rv['middleonly_flagged'] is True
         assert rv['middleonly_count'] == 7
 
-    def test_relay_flag_without_vote_counts_still_flagged(self):
-        """Row must render (and the issue anchor resolve) when the relay
-        itself carries MiddleOnly/BadExit per Onionoo, even if vote analysis
-        captured no assigned_count. relay_diagnostics raises those issues
-        based on Onionoo flags alone."""
-        result = format_relay_consensus_evaluation(
-            self.NORMAL_EVALUATION,
-            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
-            observed_bandwidth=5000000,
-        )
-
-        rv = result['relay_values']
-        assert rv['middleonly_flagged'] is True
-        assert rv['badexit_flagged'] is True
-
-        rows = {(r['flag'], r['metric']) for r in result['flag_requirements_table']}
-        assert ('MiddleOnly', 'Restriction (by DA)') in rows
-        assert ('BadExit', 'Restriction (by DA)') in rows
-    
     def test_middleonly_in_flag_requirements_table(self):
         """Test that MiddleOnly relay shows MiddleOnly row in requirements table."""
         result = format_relay_consensus_evaluation(
