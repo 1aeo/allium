@@ -764,8 +764,8 @@ class TestIssueSectionAnchors:
             'ipv6_not_tested_authorities': ['moria1'],
         })
         by_title = {i['title']: i['section'] for i in issues}
-        assert by_title['IPv4 reachability issues'] == 'flag-running-ipv4'
-        assert by_title['IPv6 not reachable'] == 'flag-running-ipv6'
+        assert by_title['IPv4 reachability issues'] == 'flag-running-ipv4-reachability'
+        assert by_title['IPv6 not reachable'] == 'flag-running-ipv6-reachability'
 
     def test_not_in_consensus_links_to_running_column(self):
         """Not in consensus links to the per-authority Running column."""
