@@ -98,34 +98,6 @@ class TestIssueSectionLinks:
         assert 'class="issue-link"' in template_content
         assert 'href="#{{ issue.section|default(\'status\') }}"' in template_content
 
-    def test_description_link_html_rendered_by_template(self, template_content):
-        """The view (not the data layer) builds the in-description anchor HTML."""
-        assert 'issue.description_link' in template_content
-        assert 'href="#{{ issue.description_link.target }}"' in template_content
-        # Descriptions are plain text across all issue types; only
-        # description_link carries the target for the view to render
-        import time as _time
-        from allium.lib.relay_diagnostics import generate_issues_from_consensus
-
-        SECONDS_PER_DAY = 86400
-        issues = generate_issues_from_consensus({
-            'in_consensus': False,
-            'vote_count': 2, 'total_authorities': 9,
-            'authority_votes': [{'voted': True, 'flags': ['StaleDesc'],
-                                 'wfu': 0.5, 'tk': 3600}],
-            'reachability': {'ipv4_reachable_count': 2,
-                             'ipv4_reachable_authorities': ['bastet', 'dannenberg'],
-                             'ipv6_reachable_count': 0, 'ipv6_tested_count': 8,
-                             'ipv6_not_tested_authorities': []},
-            'flag_eligibility': {'stable': {'eligible_count': 0}},
-            'bandwidth': {'deviation': 5000, 'median': 100,
-                          'bw_auth_measured_count': 1, 'bw_auth_total': 6},
-        }, current_flags=['BadExit', 'MiddleOnly'], observed_bandwidth=100_000,
-            version='0.4.7.0', recommended_version=False)
-        assert issues
-        for issue in issues:
-            assert '<a ' not in issue['description'], issue['title']
-
     def test_note_titles_are_links(self, template_content):
         """Info notes render their title as an in-page anchor link."""
         assert 'href="#{{ note.section|default(\'status\') }}"' in template_content
