@@ -739,7 +739,7 @@ Country: unknown
             </dd>
             
             {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display %}
-            <dt title="Computed from the votes as the consensus does: the median of the bandwidth authorities' measurements (Measured=) when 3 or more measured the relay; otherwise the median of the relay-reported bandwidths (Bandwidth=), capped at maxunmeasuredbw and marked Unmeasured.">Consensus Weight</dt>
+            <dt id="bw-consensus-weight" title="Computed from the votes as the consensus does: the median of the bandwidth authorities' measurements (Measured=) when 3 or more measured the relay; otherwise the median of the relay-reported bandwidths (Bandwidth=), capped at maxunmeasuredbw and marked Unmeasured.">Consensus Weight</dt>
             <dd>{{ diag.bandwidth_summary.median_display }}{% if diag.bandwidth_summary.unmeasured %} <span class="al-status-warning" title="Fewer than 3 bandwidth authorities measured this relay">(Unmeasured)</span>{% else %} <span class="al-text-small-muted">(median of {{ diag.bandwidth_summary.measurement_count }} measurements)</span>{% endif %}</dd>
             
             <dt title="Lowest and highest Measured= value across the bandwidth authorities' votes">Measured Min / Max</dt>
@@ -1435,8 +1435,8 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
-    <th title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
-    <th title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
+    <th id="col-flags" title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
+    <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
     <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
     <th title="Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
     <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>

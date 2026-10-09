@@ -25,6 +25,17 @@ COMPAT_ANCHORS = [
     'indirect-family',
 ]
 
+# Deep-link targets for the vote data behind a relay's flags and consensus weight
+# (id= only): each authority's flags ('s' lines), its Fast bandwidth vs threshold,
+# its w-line value, and the resulting consensus weight
+VOTE_DATA_ANCHORS = [
+    'authority-votes',
+    'col-flags',
+    'col-fast',
+    'col-cons-wt',
+    'bw-consensus-weight',
+]
+
 # Required CSS classes
 REQUIRED_CSS_CLASSES = ['section-header', 'anchor-link']
 
@@ -62,6 +73,11 @@ class TestAnchorLinks:
     def test_compat_anchor_id_present(self, template_content, anchor):
         """Test that backward-compatible anchor IDs exist (for external URL compatibility)"""
         assert f'id="{anchor}"' in template_content, f"Missing compat anchor ID: {anchor}"
+
+    @pytest.mark.parametrize("anchor", VOTE_DATA_ANCHORS)
+    def test_vote_data_anchor_id_present(self, template_content, anchor):
+        """Vote data can be deep-linked without reading the raw votes"""
+        assert template_content.count(f'id="{anchor}"') == 1, f"Missing or duplicate anchor ID: {anchor}"
 
     @pytest.mark.parametrize("css_class", REQUIRED_CSS_CLASSES)
     def test_css_classes_present(self, template_content, css_class):
