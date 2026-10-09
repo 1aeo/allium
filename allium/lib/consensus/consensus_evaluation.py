@@ -731,12 +731,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'exit_policy_display': exit_analysis['display'],
         'exit_assigned_count': flag_eligibility.get('exit', {}).get('assigned_count', 0),
         
-        # MiddleOnly / BadExit detection.
-        # The flag-requirements row must render whenever the relay itself
-        # carries the flag (Onionoo) — that is also the condition under
-        # which relay_diagnostics raises the BadExit/MiddleOnly issue —
-        # even if the vote analysis did not capture an assigned_count
-        # (e.g. partial vote data).
+        # MiddleOnly / BadExit detection (Onionoo flag too: relay_diagnostics raises the issue from it)
         'middleonly_flagged': _middleonly_count > 0 or 'MiddleOnly' in current_flags,
         'middleonly_count': _middleonly_count,
         'badexit_flagged': _badexit_count > 0 or 'BadExit' in current_flags,
