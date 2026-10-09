@@ -361,9 +361,9 @@ class CollectorFetcher:
         self.flag_thresholds = {}
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
         # Bandwidth authorities whose vote carries a current bandwidth file (and so
-        # its Measured= values). None means unknown (collector data cached before
-        # this was tracked).
-        self.current_bw_file_authorities = set()
+        # its Measured= values). None: derive it from the votes, see
+        # _publishing_authorities().
+        self.current_bw_file_authorities = None
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
         self._timings = {}
     
@@ -440,7 +440,7 @@ class CollectorFetcher:
             result['consensus_method_info'] = {}
         
         result['bw_authorities'] = sorted(self.bw_authorities)
-        result['current_bw_file_authorities'] = sorted(self.current_bw_file_authorities)
+        result['current_bw_file_authorities'] = sorted(self._publishing_authorities())
         result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
         result['timings'] = self._timings
         
@@ -595,6 +595,7 @@ class CollectorFetcher:
         
         # Get latest vote for each authority
         latest_votes = self._get_latest_votes(vote_files)
+        self.current_bw_file_authorities = set()
         
         # Fetch each vote in parallel
         with concurrent.futures.ThreadPoolExecutor(max_workers=9) as executor:
@@ -1055,11 +1056,16 @@ class CollectorFetcher:
         except ValueError:
             return False
     
+    def _publishing_authorities(self) -> set:
+        """Authorities whose votes carry Measured= values (dirvote.c has_measured_bws)."""
+        if self.current_bw_file_authorities is None:
+            self.current_bw_file_authorities = authorities_with_measurements(self.relay_index)
+        return self.current_bw_file_authorities
+
     def _credible_bandwidth(self, auth_name: str, vote_info: dict) -> tuple:
         """Bandwidth (bytes/s, source) this authority uses for Fast and Guard."""
         thresholds = self.flag_thresholds.get(auth_name, {})
-        publishes = (self.current_bw_file_authorities is None
-                     or auth_name in self.current_bw_file_authorities)
+        publishes = auth_name in self._publishing_authorities()
         bandwidth, source = credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),
             thresholds.get('ignoring-advertised-bws') == 1, publishes)
@@ -1365,9 +1371,8 @@ class CollectorFetcher:
         # Only compute missing names when not all BW authorities measured (template only uses this case)
         bw_auth_not_measured = (sorted(self.bw_authorities - bw_auth_measured_set)
                                 if bw_auth_measured_count < bw_auth_total else [])
-        publishing = (self.current_bw_file_authorities
-                      if self.current_bw_file_authorities is not None else self.bw_authorities)
-        bw_auth_stale = sorted(set(bw_auth_not_measured) - set(publishing))
+        publishing = self._publishing_authorities()
+        bw_auth_stale = sorted(set(bw_auth_not_measured) - publishing)
         
         unmeasured = len(measured_kb) < 3
         if not unmeasured:

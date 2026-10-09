@@ -780,11 +780,7 @@ class Relays:
         try:
             import time as _time
             from .consensus import CollectorFetcher, format_relay_consensus_evaluation
-            from .consensus.collector_fetcher import (
-                authorities_with_measurements,
-                calculate_consensus_requirement,
-                discover_authorities,
-            )
+            from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
             from .relay_diagnostics import generate_relay_issues
             
             self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
@@ -821,10 +817,10 @@ class Relays:
             fetcher.relay_index = relay_index
             fetcher.flag_thresholds = flag_thresholds
             fetcher.bw_authorities = set(bw_authorities)
+            # None (collector data cached before this was recorded): the fetcher
+            # derives it from the votes
             current_bw_files = collector_data.get('current_bw_file_authorities')
-            if current_bw_files is None:  # collector data cached before this was recorded
-                current_bw_files = authorities_with_measurements(relay_index)
-            fetcher.current_bw_file_authorities = set(current_bw_files)
+            fetcher.current_bw_file_authorities = set(current_bw_files) if current_bw_files is not None else None
             fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
             
             # Process consensus evaluation for each relay

@@ -1538,6 +1538,18 @@ class TestVoteBandwidthForest44:
         assert fast['maatuska']['sybil'] is True
         assert fast['maatuska']['eligible'] is False
 
+    def test_unknown_publishing_set_comes_from_the_votes(self, forest44_fetcher):
+        """Without bandwidth-file status, votes carrying Measured= decide (has_measured_bws)."""
+        forest44_fetcher.current_bw_file_authorities = None
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        for name in ('bastet', 'dannenberg', 'gabelmoo'):
+            votes[name]['measured'] = None
+        bandwidth = forest44_fetcher._format_bandwidth({'votes': votes})
+        assert forest44_fetcher.current_bw_file_authorities == {'moria1', 'tor26'}
+        # Only 2 votes carry measurements, so tor doesn't cap the unmeasured median
+        assert (bandwidth['unmeasured'], bandwidth['median']) == (True, 854_000)
+        assert bandwidth['bw_auth_stale_names'] == ['bastet', 'dannenberg', 'faravahar', 'gabelmoo', 'longclaw']
+
     def test_authorities_with_measurements_from_votes(self, forest44_fetcher):
         """Same set as the bandwidth-file timestamps: stale faravahar and longclaw publish none."""
         from allium.lib.consensus.collector_fetcher import authorities_with_measurements
