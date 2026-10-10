@@ -1503,7 +1503,6 @@ class TestVoteBandwidthForest44:
         assert bandwidth['bw_auth_measured_count'] == 5
         assert bandwidth['bw_auth_total'] == 7
         assert bandwidth['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
-        assert bandwidth['bw_auth_stale_names'] == ['faravahar', 'longclaw']
 
     def test_unmeasured_weight_is_capped_median_of_bandwidth(self, forest44_fetcher):
         votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
@@ -1548,7 +1547,6 @@ class TestVoteBandwidthForest44:
         assert forest44_fetcher.current_bw_file_authorities == {'moria1', 'tor26'}
         # Only 2 votes carry measurements, so tor doesn't cap the unmeasured median
         assert (bandwidth['unmeasured'], bandwidth['median']) == (True, 854_000)
-        assert bandwidth['bw_auth_stale_names'] == ['bastet', 'dannenberg', 'faravahar', 'gabelmoo', 'longclaw']
 
     def test_authorities_with_measurements_from_votes(self, forest44_fetcher):
         """Same set as the bandwidth-file timestamps: stale faravahar and longclaw publish none."""

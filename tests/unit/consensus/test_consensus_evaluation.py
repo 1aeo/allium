@@ -1648,8 +1648,7 @@ class TestForest44VoteBandwidthDisplay:
         assert (summary['median_int'], summary['median_unit']) == (68, 'KB/s')
         assert summary['unmeasured'] is False
         assert (summary['min_display'], summary['max_display']) == ('32.0 KB/s', '230.0 KB/s')
-        assert summary['bw_auth_not_measured_display'] == (
-            'faravahar (bandwidth file out of date), longclaw (bandwidth file out of date)')
+        assert summary['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
 
     def test_bits_display(self, forest44_fetcher):
         from tests.conftest import FOREST44_FINGERPRINT

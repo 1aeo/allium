@@ -725,7 +725,7 @@ Country: unknown
                         {{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}
                     </span> Bandwidth Authorities
                     {% if diag.bandwidth_summary.bw_auth_not_measured_names and diag.bandwidth_summary.bw_auth_measured_count < diag.bandwidth_summary.bw_auth_total %}
-                        <br><span style="font-size: 11px; color: #856404;" title="These bandwidth authorities have no Measured= value for this relay in their votes. An authority whose bandwidth file is out of date (over 3 days old) publishes no measurements at all, but still decides flags from measurements it saved earlier.">Not measured by: {{ diag.bandwidth_summary.bw_auth_not_measured_display }}</span>
+                        <br><span style="font-size: 11px; color: #856404;" title="These bandwidth authorities did not measure this relay">Not measured by: {{ diag.bandwidth_summary.bw_auth_not_measured_names|join(', ') }}</span>
                     {% endif %}
                 {% elif relay['measured'] is not none %}
                     {% if relay['measured'] %}
@@ -1504,7 +1504,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 <strong>Bandwidth Values Explained:</strong><br>
 <strong>Measured (M)</strong> = An authority's bandwidth-scanner measurement of your relay (<code>Measured=</code> in its vote). An authority that has one uses it for the Fast and Guard flags, and the consensus weight is the median of these measurements when 3 or more authorities have one.<br>
 <strong>Relay-reported (R)</strong> = The bandwidth your relay advertises: the lower of its observed bandwidth and its rate limit, capped at 10 MB/s (<code>Bandwidth=</code> in every vote). An authority without a measurement uses it for flags, unless it has measurements for enough other relays (<code>ignoring-advertised-bws=1</code>); then your relay counts as 0 (U). It sets the consensus weight only when fewer than 3 authorities measured the relay, capped at 20 KB/s (maxunmeasuredbw) while 3 or more authorities publish measurements.<br>
-<strong>Not published</strong> = The authority's bandwidth file is more than 3 days old, so its vote shows no measurements, yet it still decides flags from measurements it saved earlier.<br>
+<strong>Not published</strong> = The authority has no measurement of your relay in its vote and ignores relay-reported bandwidth, yet it voted Fast or its vote has no measurements at all: it judges your relay by a measurement kept from an earlier bandwidth file (0 if none), which its vote doesn't show.<br>
 <em>Why different?</em> A low measurement means the bandwidth scanners see your relay underperforming compared with other relays that report a similar speed. Votes list both values in kilobytes per second. Rules: <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Assigning flags in a vote</a>, <a href="https://spec.torproject.org/dir-spec/computing-consensus.html" target="_blank" rel="noopener">Computing a consensus</a>.
 </div>
 

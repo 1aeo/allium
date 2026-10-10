@@ -1372,7 +1372,6 @@ class CollectorFetcher:
         bw_auth_not_measured = (sorted(self.bw_authorities - bw_auth_measured_set)
                                 if bw_auth_measured_count < bw_auth_total else [])
         publishing = self._publishing_authorities()
-        bw_auth_stale = sorted(set(bw_auth_not_measured) - publishing)
         
         unmeasured = len(measured_kb) < 3
         if not unmeasured:
@@ -1400,7 +1399,6 @@ class CollectorFetcher:
             'bw_auth_measured_count': bw_auth_measured_count,
             'bw_auth_total': bw_auth_total,
             'bw_auth_not_measured_names': bw_auth_not_measured,
-            'bw_auth_stale_names': bw_auth_stale,
         }
     
     def _format_reachability(self, relay: dict) -> dict:

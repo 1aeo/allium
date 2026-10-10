@@ -996,8 +996,9 @@ _FLAG_BW_TITLES = {
     BW_SOURCE_UNMEASURED: ("{authority} has no current measurement for this relay and ignores relay-reported "
                            "bandwidth (ignoring-advertised-bws=1), so it counts the relay as 0, unless it "
                            "still has a measurement from an earlier bandwidth file (kept up to 3 days)."),
-    BW_SOURCE_UNPUBLISHED: ("{authority}'s bandwidth file is out of date, so its vote publishes no "
-                            "measurements; it decides flags from measurements it cached earlier."),
+    BW_SOURCE_UNPUBLISHED: ("{authority}'s vote has no Measured= values at all, yet it ignores relay-reported "
+                            "bandwidth (ignoring-advertised-bws=1), so it judges this relay by a measurement kept "
+                            "from an earlier bandwidth file (0 if none), which its vote doesn't show."),
     BW_SOURCE_CACHED: ("{authority}'s vote has no Measured= for this relay, yet it voted Fast, so it is "
                        "using a measurement from an earlier bandwidth file (tor keeps them up to 3 days)."),
 }
@@ -1840,11 +1841,6 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
     else:
         bw_auth_color = '#dc3545'  # red
     
-    stale = set(bandwidth.get('bw_auth_stale_names', []))
-    not_measured_display = ', '.join(
-        f'{name} (bandwidth file out of date)' if name in stale else name
-        for name in bandwidth.get('bw_auth_not_measured_names', []))
-    
     return {
         'median': median,
         'median_display': median_display,
@@ -1867,8 +1863,6 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
         'bw_auth_majority': bw_auth_majority,  # Pre-computed for template
         'bw_auth_color': bw_auth_color,        # Pre-computed for template
         'bw_auth_not_measured_names': bandwidth.get('bw_auth_not_measured_names', []),
-        'bw_auth_not_measured_display': not_measured_display,
-        'bw_auth_stale_names': bandwidth.get('bw_auth_stale_names', []),
     }
 
 
