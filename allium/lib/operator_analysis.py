@@ -9,7 +9,9 @@ Extracted from relays.py for better modularity.
 import html as _html
 import statistics
 
+from .bandwidth_utils import build_bandwidth_map
 from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES, ONIONOO_HISTORY_PERIODS
+from .uptime_utils import build_uptime_map
 
 
 def _build_contact_rankings_index(relay_set):
@@ -206,22 +208,19 @@ def get_leaderboard_category_info(category):
     return category_info.get(category, _info(default_name, '🏅'))
 
 
-def contact_member_relays(relay_set, contact_hash):
-    """Resolve ``json['sorted']['contact'][hash]['relays']`` indices to dicts.
+def history_maps(relay_set):
+    """``(uptime, bandwidth)`` Onionoo rows by fingerprint, built once and cached on the relay set.
 
-    Contact ids are 32-hex MD5 values (``contact_md5``). They are not
-    relay fingerprints and must not be passed through ``is_relay_fingerprint``.
+    PERFORMANCE: operator reliability runs per contact (~3,000x per site
+    generation) and the charts run per relay; without the cache every call
+    rebuilt these ~10k-entry maps. Lazy, so it also works per-process in
+    forked mp workers.
     """
-    json_doc = getattr(relay_set, "json", None) or {}
-    relays = json_doc.get("relays") or []
-    group = ((json_doc.get("sorted") or {}).get("contact") or {}).get(
-        contact_hash
-    ) or {}
-    members = []
-    for idx in group.get("relays") or []:
-        if isinstance(idx, int) and 0 <= idx < len(relays):
-            members.append(relays[idx])
-    return members
+    if getattr(relay_set, '_uptime_fp_map', None) is None:
+        relay_set._uptime_fp_map = build_uptime_map(getattr(relay_set, 'uptime_data', None))
+    if getattr(relay_set, '_bandwidth_fp_map', None) is None:
+        relay_set._bandwidth_fp_map = build_bandwidth_map(getattr(relay_set, 'bandwidth_data', None))
+    return relay_set._uptime_fp_map, relay_set._bandwidth_fp_map
 
 
 def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
@@ -250,30 +249,15 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         extract_relay_uptime_for_period, 
         calculate_statistical_outliers,
         find_operator_percentile_position,
-        build_uptime_map,
     )
     from .bandwidth_utils import (
         extract_relay_bandwidth_for_period,
         extract_operator_daily_bandwidth_totals,
-        build_bandwidth_map,
     )
 
-    # PERFORMANCE: build the fingerprint->data maps ONCE per relay set and
-    # cache them on it (lazy, also works per-process in forked mp workers).
-    # This function runs per contact (~3,000x per site generation); without
-    # the cache every call rebuilt these ~10k-entry maps up to 14x (5 uptime
-    # periods + 3 bandwidth periods + 3 daily-total calls + 3 builds inside
-    # calculate_bandwidth_reliability_metrics) = ~42,000 redundant rebuilds.
-    uptime_map = None
-    if uptime_data:
-        uptime_map = getattr(relay_set, '_uptime_fp_map', None)
-        if uptime_map is None:
-            uptime_map = relay_set._uptime_fp_map = build_uptime_map(uptime_data)
-    bandwidth_map = None
-    if bandwidth_data:
-        bandwidth_map = getattr(relay_set, '_bandwidth_fp_map', None)
-        if bandwidth_map is None:
-            bandwidth_map = relay_set._bandwidth_fp_map = build_bandwidth_map(bandwidth_data)
+    uptime_map, bandwidth_map = history_maps(relay_set)
+    uptime_map = uptime_map if uptime_data else None
+    bandwidth_map = bandwidth_map if bandwidth_data else None
     
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']

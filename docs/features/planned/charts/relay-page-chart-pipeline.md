@@ -1,43 +1,32 @@
-# Relay-page chart pipeline
+# Relay and operator history charts
 
-Option B period heroes after HTML. Matplotlib never imports on the Jinja /
-`write_relay_info` path. Encoding locks: C copy in `outcome.py`, identity in
-`identity.py`, frozen bands in `data/role_ratio_bands.json` (do not recompute
-from the live dump).
+Build-time SVG charts on relay and contact pages: throughput over a write/read
+strip for 1M / 6M / 1Y / 5Y, Running-flag uptime for the same periods, and the
+summed throughput of an operator's relays. No JavaScript and no extra
+dependency: `allium/lib/charts/svg.py` writes the SVG text directly. Colors and
+type follow the 1aeo.com/blog charts (dark `#1e1e1e` canvas, DejaVu Sans).
 
-## Constraints
+## Where they are written
 
-- After `generate_site()`. `write_relay_info()` `rmtree`s `www/relay/` — publish after HTML.
-- Spawn pools after HTML (`--chart-workers`, default `min(cpu, 16)`, cap 16). Four date-range runners (1M / 6M / 1Y / 5Y) share that single process budget — never 4×N. Do not reuse `--workers` (HTML fork pool). Matplotlib Agg initializer; matplotlib must not enter Jinja.
-- `--charts` default `on`; `--no-charts`; slice with `--charts-limit` / `--fingerprint`.
-- `--apis details` has no `/bandwidth`: skip, HTML succeeds.
-- Read history via `build_bandwidth_map` + `series_by_fp`. Do not attach 1M arrays to every relay dict.
-- Cache: SHA-256 of drawn fields, schema 3, `{output}/.chart-cache/`. Not in the key: votes, `last_seen`, uptime, raw `relays_published`, `--display-bandwidth-units`.
-- HTML flags (`apply_chart_html_flags` on `relays.py`) run before Jinja. Thin periods omit PNG, spark link, and extra HTML.
-- Family/peer overlays are 1M-only. 6M/1Y/5Y reuse the same hero renderer; sparks are CSS-scaled links to `index.html` / `6m.html` / `1y.html` / `5y.html`.
+- `allium.py` builds one `ChartWriter` (`charts/render.py`) before forking when
+  `/bandwidth` or `/uptime` data is loaded (`--apis all`). It holds the cached
+  fingerprint maps (`operator_analysis.history_maps`) and the 1M family and
+  peer write/read medians, which need every relay.
+- The relay page workers (`_RelayPageRenderer.write`) call
+  `ChartWriter.relay()` and the contact page workers (`_render_contact_variants`)
+  call `ChartWriter.contact()`. The SVGs land next to the page they belong to,
+  so a page only references charts that were written.
+- About 68k charts for the whole network take under a minute of CPU in those
+  existing workers (about 1-3 ms each, about 9 KB each).
+- `--no-charts` skips them.
 
-## CLI
+## Content rules
 
-`--charts {off,auto,on}` (bare `--charts` = on), `--no-charts`, `--charts-limit N`, `--fingerprint FP`, `--chart-workers N`.
-
-| Mode | extra missing | extra present |
-|------|---------------|---------------|
-| `off` / `auto` | silent | `auto` runs |
-| `on` | one line + install hint | run |
-
-`pip3 install -r config/requirements-charts.txt`. Detect with `find_spec("matplotlib")`. Pin `3.7.x` on Python 3.8.
-
-`ChartSpec` and the four period heroes live in `pipeline.py`. Same pool and cache root for new ids.
-
-## Contact / operator charts
-
-After HTML (same `maybe_run_charts` pass). `write_pages_by_key` `rmtree`s
-`www/contact/` — publish PNGs only under `contact/{contact_md5}/….png`.
-Contact ids are 32-hex MD5 (`contact_md5`); they never go through
-`is_relay_fingerprint`. `--charts-limit` / `--fingerprint` still slice
-relays; chart operators that include those fingerprints. No `--contacts-limit`.
-
-`contact.html` uses `src="{{ page_ctx.path_prefix }}contact/{{ value }}/….png"`
-so vanity copies become `../contact/{hash}/….png` via `adjust_vanity_paths`.
-Series: timestamp-aligned **sum** of member write/read. Do not invent 1M
-when no member has `1_month`. No extra Onionoo or datastore.
+- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
+  frozen role bands in `data/role_ratio_bands.json` (do not recompute from the
+  live dump).
+- Each period only shows its own window, ending at Onionoo's `relays_published`.
+- Bandwidth charts need a 1M history; family and peer medians are 1M only.
+- Operator charts sum members on the most common sampling interval, compare
+  write/read with the members' most common role, and are skipped for the
+  group of relays without contact info.

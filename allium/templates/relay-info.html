@@ -1,5 +1,5 @@
 {% extends "skeleton.html" -%}
-{% from "macros.html" import navigation, aroi_validation_badge -%}
+{% from "macros.html" import navigation, aroi_validation_badge, chart_history -%}
 {# DRY macro: format bandwidth value with auto-detected unit #}
 {%- macro bw(value) -%}
 {% set unit = value|determine_unit(relays.use_bits) -%}
@@ -785,7 +785,7 @@ Country: unknown
     </div>
     {% endif %}
 </div>
-{% include "relay-bandwidth-history.html" %}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', hero_period, anchor='bandwidth') }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1027,7 +1027,7 @@ Country: unknown
 </div>
 {% endif %}
 
-{% include "relay-uptime-history.html" %}
+{{ chart_history('uptime', uptime_periods, 'Uptime', hero_period, anchor='uptime') }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}

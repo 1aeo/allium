@@ -615,3 +615,26 @@
 {# This macro is deprecated - issues are now shown in per-category sections #}
 {# Kept empty for backwards compatibility during transition #}
 {%- endmacro %}
+
+{#- A period's history chart (the first period by default) plus small copies of the
+    other periods, linked to their own pages when anchor is set. -#}
+{% macro chart_history(name, periods, alt, hero=none, src='', anchor='') %}
+{% if periods %}
+{% set hero = hero or periods[0] %}
+{% set spans = {'1m': 'last 30 days', '6m': 'last 6 months', '1y': 'last year', '5y': 'last 5 years'} %}
+{% set tag = 'a' if anchor else 'span' %}
+<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<div class="chart-history">
+    {% if hero in periods %}
+    <img src="{{ src }}{{ name }}-{{ hero }}.svg" alt="{{ alt }}, {{ spans[hero] }}" loading="lazy">
+    {% endif %}
+    <div class="chart-sparks">
+        {% for period in periods if period != hero %}
+        <{{ tag }} class="chart-spark"{% if anchor %} href="{{ 'index' if period == '1m' else period }}.html#{{ anchor }}"{% endif %}>
+            <img src="{{ src }}{{ name }}-{{ period }}.svg" alt="{{ alt }}, {{ spans[period] }}" loading="lazy">
+        </{{ tag }}>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}

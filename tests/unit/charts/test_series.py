@@ -1,316 +1,78 @@
-"""Onionoo 1M series and overlay alignment — no matplotlib."""
+"""Onionoo history parsing, operator sums and peer medians for the charts."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from allium.lib.bandwidth_utils import build_bandwidth_map
+import pytest
+
 from allium.lib.charts.series import (
-    _daily_ratios,
-    advertised_mbit,
-    aligned_1m_series,
-    chartable_fingerprints,
-    drawable_suffixes,
-    family_group_key,
-    history_block,
-    history_series,
-    is_relay_fingerprint,
-    merged_period_views,
-    overlays_for_relay,
-    period_blocks,
-    period_axis_caption,
-    period_views,
-    precompute_overlays,
-    series_by_fp,
-    spark_suffixes,
-    uptime_by_fp,
-    uptime_percent_series,
-)
-from tests.unit.charts.conftest import (
-    FP_A,
-    FP_B,
-    FP_C,
-    FP_JEANGRAE,
-    make_bw,
-    make_relay,
-    make_uptime,
+    MBIT, family_key, operator_throughput, peer_medians, points, throughput,
 )
 
-
-_WRITE = {
-    "first": "2026-07-16 12:00:00",
-    "last": "2026-07-19 12:00:00",
-    "interval": 86400,
-    "factor": 1000.0,
-    "values": [100, 110, None, 120],
-}
-_READ = {
-    "first": "2026-07-16 12:00:00",
-    "last": "2026-07-19 12:00:00",
-    "interval": 86400,
-    "factor": 1000.0,
-    "values": [95, 105, None, 115],
-}
+DAY = 86400
+T0 = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
 
 
-def _bw(fp=FP_A):
-    return make_bw(
-        fp,
-        write_values=list(_WRITE["values"]),
-        read_values=list(_READ["values"]),
-        factor=_WRITE["factor"],
-        first=_WRITE["first"],
-        last=_WRITE["last"],
-        interval=_WRITE["interval"],
-    )
+def block(values, first="2026-09-01 12:00:00", interval=DAY, factor=1000.0):
+    return {"first": first, "interval": interval, "factor": factor, "values": list(values)}
 
 
-def test_history_block_and_series():
-    block = history_block({
-        "first": "a", "last": "b", "interval": 86400, "factor": 1.5,
-        "values": [1, None, 3], "count": 99,
-    })
-    assert block == {
-        "first": "a", "last": "b", "interval": 86400, "factor": 1.5,
-        "values": [1, None, 3],
+def bandwidth_row(write, read, key="1_month", **kwargs):
+    return {"write_history": {key: block(write, **kwargs)}, "read_history": {key: block(read, **kwargs)}}
+
+
+def test_points_scale_by_factor_skip_holes_and_clip_to_window():
+    assert points(block([1, None, 3]), 2.0) == {T0: 2000.0, T0 + timedelta(days=2): 6000.0}
+    assert points(block([1, 2, 3]), since=T0 + timedelta(days=1)) == {
+        T0 + timedelta(days=1): 2000.0, T0 + timedelta(days=2): 3000.0}
+    assert points(None) == {} and points(block([1], first="bad")) == {}
+
+
+def test_throughput_keeps_timestamps_with_both_directions():
+    ts, write, read, interval = throughput(bandwidth_row([1, 2, None, 4], [1, None, 3, 4]), "1_month")
+    assert ts == [T0, T0 + timedelta(days=3)]
+    assert write == [1000 * MBIT, 4000 * MBIT] and read == [1000 * MBIT, 4000 * MBIT]
+    assert interval == DAY
+
+
+def test_throughput_needs_two_points_inside_the_window():
+    row = bandwidth_row([1, 2, 3], [1, 2, 3])
+    assert throughput(row, "6_months") is None
+    assert throughput(row, "1_month", since=T0 + timedelta(days=2)) is None
+
+
+def test_operator_throughput_sums_members_on_the_common_interval():
+    bandwidth_map = {
+        "A": bandwidth_row([1, 2], [1, 2]),
+        "B": bandwidth_row([10, 20], [10, None]),
+        "C": bandwidth_row([5, 5], [5, 5], interval=2 * DAY),  # outvoted interval
     }
-    assert history_block(None) is None
-    assert history_block({"values": []}) is None
-    ts, vals = history_series(_WRITE)
-    assert len(ts) == 3
-    assert vals == [100000.0, 110000.0, 120000.0]
-    assert ts[0] == datetime(2026, 7, 16, 12, tzinfo=timezone.utc)
+    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D")]
+    (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
+    assert [r["fingerprint"] for r in summed] == ["A", "B"]
+    assert ts == [T0, T0 + timedelta(days=1)] and interval == DAY
+    assert [round(v / MBIT) for v in write] == [11000, 22000]
+    assert [round(v / MBIT) for v in read] == [11000, 2000]
+    assert operator_throughput(members[3:], bandwidth_map, "1_month") == (None, [])
 
 
-def test_aligned_series_requires_two_points():
-    series = aligned_1m_series(*period_blocks(_bw(), "1_month"))
-    assert series is not None
-    assert len(series["ts"]) == 3
-    assert advertised_mbit(125000) == 1.0
-    assert aligned_1m_series(*period_blocks({}, "1_month")) is None
-    thin = {
-        "write_history": {"1_month": {"values": [1], "first": "2026-01-01 00:00:00",
-                                      "interval": 86400, "factor": 1}},
-        "read_history": {"1_month": {"values": [1], "first": "2026-01-01 00:00:00",
-                                     "interval": 86400, "factor": 1}},
+def test_family_key_is_the_effective_family_when_it_has_other_members():
+    assert family_key({"effective_family": ["A", "B"]}) == ("A", "B")
+    assert family_key({"effective_family": ["A"]}) is None
+
+
+def test_peer_medians_by_role_and_family_skip_quiet_relays():
+    def relay(fp, flags, family):
+        return {"fingerprint": fp, "flags": flags, "effective_family": family}
+
+    relays = [relay("A", ["Guard"], ["A", "B"]), relay("B", ["Guard"], ["A", "B"]),
+              relay("C", ["Guard"], ["C"]), relay("Q", ["Guard"], ["Q"])]
+    bandwidth_map = {
+        "A": bandwidth_row([110, 120], [100, 100]),
+        "B": bandwidth_row([130, 140], [100, 100]),
+        "C": bandwidth_row([100, 100], [100, 100]),
+        "Q": bandwidth_row([1, 1], [2, 2]),  # under MIN_OVERLAY_MBIT: not a peer
     }
-    assert aligned_1m_series(*period_blocks(thin, "1_month")) is None
-
-
-def test_build_bandwidth_map_and_chartable():
-    fp = FP_JEANGRAE
-    doc = {"relays": [_bw(fp)]}
-    bw_map = build_bandwidth_map(doc)
-    assert fp in bw_map
-    relays = [{"fingerprint": fp, "flags": ["Guard"]}]
-    assert chartable_fingerprints(relays, bw_map) == [fp]
-
-
-def test_chartable_limit_and_fingerprint_filter():
-    fp1, fp2, fp3 = FP_A, FP_B, FP_C
-    relays = [
-        {"fingerprint": fp1, "flags": ["Guard"]},
-        {"fingerprint": fp2, "flags": ["Guard"]},
-        {"fingerprint": fp3, "flags": ["Guard"]},
-    ]
-    bw_map = {fp1: _bw(fp1), fp2: _bw(fp2), fp3: _bw(fp3)}
-    assert chartable_fingerprints(relays, bw_map, limit=2) == [fp1, fp2]
-    assert chartable_fingerprints(
-        relays, bw_map, fingerprints=["$" + fp2.lower(), fp3],
-    ) == [fp2, fp3]
-    assert chartable_fingerprints(
-        relays, bw_map, fingerprints=[fp2, fp3], limit=1,
-    ) == [fp2]
-
-
-def test_chartable_rejects_path_like_fingerprints():
-    assert is_relay_fingerprint("../etc/passwd") is False
-    assert is_relay_fingerprint("Α" * 40) is False
-    evil = "../" + ("A" * 37)
-    relays = [{"fingerprint": evil, "flags": ["Guard"]}]
-    bw_map = {evil: _bw(evil)}
-    assert chartable_fingerprints(relays, bw_map) == []
-
-
-def test_series_by_fp_skips_thin_and_evil():
-    evil = "../" + ("A" * 37)
-    relays = [
-        make_relay(FP_A, flags=["Guard"]),
-        {"fingerprint": evil, "flags": ["Guard"]},
-        {"fingerprint": FP_B, "flags": ["Guard"]},
-    ]
-    bw_map = {
-        FP_A: _bw(FP_A),
-        evil: _bw(evil),
-        FP_B: {
-            "fingerprint": FP_B,
-            "write_history": {"1_month": {
-                "values": [1], "first": "2026-01-01 00:00:00",
-                "interval": 86400, "factor": 1,
-            }},
-            "read_history": {"1_month": {
-                "values": [1], "first": "2026-01-01 00:00:00",
-                "interval": 86400, "factor": 1,
-            }},
-        },
-    }
-    parsed = series_by_fp(relays, bw_map)
-    assert set(parsed) == {FP_A}
-    assert parsed[FP_A]["series"] is not None
-    assert set(parsed[FP_A]["periods"]) == {"1m"}
-    assert spark_suffixes(parsed[FP_A]) == ()
-
-
-def test_family_group_key_from_effective_family():
-    fp1 = FP_A
-    fp2 = FP_B
-    family = ["$" + fp1, "$" + fp2]
-    key_a = family_group_key({
-        "fingerprint": fp1, "effective_family": family, "contact_md5": "only-me",
-    })
-    key_b = family_group_key({
-        "fingerprint": fp2, "effective_family": list(reversed(family)),
-        "contact": "url:other.example",
-    })
-    assert key_a == key_b
-    assert key_a.startswith("fam:")
-    singleton = family_group_key({"fingerprint": fp1, "effective_family": [fp1]})
-    assert singleton != key_a
-
-
-def test_precompute_omits_singleton_family_overlay():
-    fp1, fp2, fp3 = FP_A, FP_B, FP_C
-    family_bc = [fp2, fp3]
-    relays = [
-        {
-            "fingerprint": fp1, "flags": ["Guard"],
-            "effective_family": [fp1], "contact_md5": "shared",
-        },
-        {
-            "fingerprint": fp2, "flags": ["Guard"],
-            "effective_family": family_bc, "contact_md5": "shared",
-        },
-        {
-            "fingerprint": fp3, "flags": ["Guard"],
-            "effective_family": family_bc, "contact_md5": "other",
-        },
-    ]
-    bw_map = {
-        fp1: _bw(fp1),
-        fp2: _bw(fp2),
-        fp3: _bw(fp3),
-    }
-    pre = precompute_overlays(relays, bw_map)
-    assert "contact_median" not in pre
-    assert "family_median" in pre
-    write_1m, _read = period_blocks(_bw(fp1), "1_month")
-    family, role = overlays_for_relay(relays[0], write_1m, pre)
-    assert family is None
-    assert role is not None
-    assert role["n"] == 3
-    assert len(role["values"]) == 4
-
-    family2, _role2 = overlays_for_relay(relays[1], write_1m, pre)
-    assert family2 is not None
-    assert family2["n"] == 2
-
-
-def test_daily_ratios_skip_below_cut():
-    tiny = {
-        "write_history": {"1_month": {
-            "first": "2026-07-16 12:00:00", "interval": 86400,
-            "factor": 1.0, "values": [10, 10],
-        }},
-        "read_history": {"1_month": {
-            "first": "2026-07-16 12:00:00", "interval": 86400,
-            "factor": 1.0, "values": [10, 10],
-        }},
-    }
-    assert _daily_ratios(aligned_1m_series(*period_blocks(tiny, "1_month"))) == {}
-    assert _daily_ratios(aligned_1m_series(*period_blocks(_bw(), "1_month")))
-
-
-def test_series_by_fp_collects_spark_periods_in_one_walk():
-    bw = make_bw(
-        FP_A,
-        extra_periods=("6_months", "1_year"),
-    )
-    parsed = series_by_fp([make_relay(FP_A, flags=["Guard"])], {FP_A: bw})
-    assert spark_suffixes(parsed[FP_A]) == ("6m", "1y")
-    assert "1m" in parsed[FP_A]["periods"]
-    assert "5y" not in parsed[FP_A]["periods"]
-    write_6m, read_6m = period_blocks(bw, "6_months")
-    assert parsed[FP_A]["periods"]["6m"]["write"] == write_6m
-    assert parsed[FP_A]["periods"]["6m"]["read"] == read_6m
-    assert parsed[FP_A]["periods"]["6m"]["series"]["write_m"]
-
-
-def test_period_views_and_captions():
-    assert period_axis_caption("6m", {"interval": 86400}) == "6M · 1-day"
-    assert period_axis_caption("5y", {"interval": 604800}) == "5Y · 1-week"
-    views = period_views(("1m", "6m", "1y"))
-    by_hero = {hero: (name, sparks) for name, hero, sparks in views}
-    assert by_hero["1m"] == ("index.html", ("6m", "1y"))
-    assert by_hero["6m"] == ("6m.html", ("1m", "1y"))
-    assert "5y" not in by_hero
-    assert period_views(()) == ()
-
-
-def test_uptime_percent_series_skips_none_keeps_zero():
-    block = history_block({
-        "first": "2026-07-16 12:00:00",
-        "last": "2026-07-19 12:00:00",
-        "interval": 86400,
-        "factor": 0.001,
-        "values": [999, None, 0, 980],
-    })
-    ts, pct = uptime_percent_series(block)
-    assert len(ts) == 3
-    assert pct[0] == 999 * (100.0 / 999.0)
-    assert pct[1] == 0.0
-    assert history_series(block)[1] != pct
-
-
-def test_uptime_by_fp_one_walk_does_not_need_bandwidth():
-    data = {
-        "relays": [
-            make_uptime(FP_A, extra_periods=("6_months", "1_year")),
-            make_uptime("not-a-fingerprint"),
-            {"fingerprint": FP_B, "uptime": {"1_month": {"values": [999]}}},
-        ]
-    }
-    parsed = uptime_by_fp(data)
-    assert FP_A in parsed
-    assert spark_suffixes(parsed[FP_A]) == ("6m", "1y")
-    assert drawable_suffixes(parsed[FP_A]) == ("1m", "6m", "1y")
-    assert FP_B not in parsed
-    assert "not-a-fingerprint" not in parsed
-    assert uptime_by_fp(None) == {}
-
-
-def test_chartable_includes_uptime_only_via_also():
-    relays = [make_relay(FP_A), make_relay(FP_B, nickname="two")]
-    bw_map = {FP_A: _bw(FP_A)}
-    up = uptime_by_fp({"relays": [make_uptime(FP_B)]})
-    assert chartable_fingerprints(relays, bw_map) == [FP_A]
-    assert chartable_fingerprints(relays, bw_map, also=up) == [FP_A, FP_B]
-    assert chartable_fingerprints(relays, {}, also=up, limit=1) == [FP_B]
-
-
-def test_merged_period_views_keep_bandwidth_sparks_separate():
-    rows = merged_period_views(("1m", "6m"), ("1m", "5y"))
-    by_hero = {hero: row for row in rows for hero in (row[1],)}
-    index = by_hero["1m"]
-    assert index[0] == "index.html"
-    assert index[2] == ("6m",)
-    assert index[3]["has_bandwidth_chart"] is True
-    assert index[3]["uptime_show_hero"] is True
-    assert index[3]["uptime_spark_periods"] == ("5y",)
-    six = by_hero["6m"]
-    assert six[2] == ("1m",)
-    assert six[3]["has_bandwidth_chart"] is True
-    assert six[3]["uptime_show_hero"] is False
-    five = by_hero["5y"]
-    assert five[0] == "5y.html"
-    assert five[2] == ()
-    assert five[3]["has_bandwidth_chart"] is False
-    assert five[3]["uptime_show_hero"] is True
-    assert five[3]["uptime_spark_periods"] == ("1m",)
+    roles, families = peer_medians(relays, bandwidth_map)
+    assert set(roles) == {"Guard"}
+    assert roles["Guard"][T0] == pytest.approx(1.1)  # median of 1.1, 1.3, 1.0
+    assert families == {("A", "B"): (2, pytest.approx({T0: 1.2, T0 + timedelta(days=1): 1.3}))}

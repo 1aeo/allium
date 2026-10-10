@@ -47,7 +47,7 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
-from .charts.series import merged_period_views, period_views
+from .charts.series import PERIODS
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1156,6 +1156,12 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     validation or when sort modes change between generations.
     """
     files_written = 0
+    chart_writer = getattr(relay_set, 'chart_writer', None)
+    base_template_args = dict(
+        base_template_args,
+        contact_chart_periods=(
+            chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else ()),
+    )
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1428,32 +1434,6 @@ def write_pages_by_key(relay_set, k):
             print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
         print("---")
 
-
-def _contact_chart_template_flags(relay_set, k, v):
-    """Jinja flags for contact.html. Matplotlib stays out of this module."""
-    if k != "contact":
-        return {
-            "charts_enabled": False,
-            "has_contact_chart": False,
-            "contact_spark_periods": (),
-            "contact_hero_period": "1m",
-        }
-    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
-    hashes = getattr(relay_set, "contact_chart_hashes", None) or frozenset()
-    has_chart = charts_enabled and v in hashes
-    sparks = ()
-    hero = "1m"
-    if has_chart:
-        sparks = (getattr(relay_set, "contact_spark_periods", None) or {}).get(v) or ()
-        hero = (getattr(relay_set, "contact_hero_periods", None) or {}).get(v) or "1m"
-    return {
-        "charts_enabled": charts_enabled,
-        "has_contact_chart": has_chart,
-        "contact_spark_periods": sparks,
-        "contact_hero_period": hero,
-    }
-
-
 def build_template_args(
     relay_set,
     k,
@@ -1609,7 +1589,6 @@ def build_template_args(
         'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
         'contact_sort_enabled': (k == 'contact' and len(members) > 2),
         'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
-        **(_contact_chart_template_flags(relay_set, k, v)),
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):
@@ -1673,32 +1652,6 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         
         write_pages_by_key(relay_set, k)
 
-def write_relay_period_files(
-    template, relay_dir, render_kwargs, views, base_url, fingerprint,
-):
-    """Write index.html plus any drawable period views in ``relay_dir``."""
-    if not views:
-        views = (("index.html", "1m", ()),)
-    os.makedirs(relay_dir, exist_ok=True)
-    for row in views:
-        extra = {}
-        if len(row) == 4:
-            filename, hero, sparks, extra = row
-        else:
-            filename, hero, sparks = row
-        ctx = dict(render_kwargs)
-        ctx.update(
-            hero_period=hero,
-            bandwidth_spark_periods=sparks,
-            canonical_url=canonical_url_for_output(
-                base_url, "relay/{}/{}".format(fingerprint, filename),
-            ),
-        )
-        if extra:
-            ctx.update(extra)
-        _write_html(os.path.join(relay_dir, filename), template.render(**ctx))
-
-
 class _RelayPageRenderer:
     """Renders relay-info pages; built once, then shared with forked workers."""
 
@@ -1716,11 +1669,7 @@ class _RelayPageRenderer:
         self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
         self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
         self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
-        self.charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
-        self.bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
-        self.spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
-        self.uptime_chart_fps = getattr(relay_set, "uptime_chart_fps", None) or frozenset()
-        self.uptime_periods_by_fp = getattr(relay_set, "uptime_chart_periods", None) or {}
+        self.chart_writer = getattr(relay_set, 'chart_writer', None)
 
     def write(self, relay):
         """Render one relay page to relay/FINGERPRINT/index.html."""
@@ -1739,39 +1688,33 @@ class _RelayPageRenderer:
         _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
                                 self.family_key_to_fps)
 
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
+        # with the history charts beside it and one page per longer chart period.
         fingerprint = relay["fingerprint"]
-        has_chart = self.charts_enabled and fingerprint in self.bandwidth_chart_fps
-        has_up = self.charts_enabled and fingerprint in self.uptime_chart_fps
-        sparks = self.spark_by_fp.get(fingerprint) or ()
-        up_periods = tuple(self.uptime_periods_by_fp.get(fingerprint) or ())
-        if has_up:
-            bw_periods = (("1m",) + tuple(sparks)) if has_chart else ()
-            views = merged_period_views(bw_periods, up_periods)
-        else:
-            views = period_views(("1m",) + tuple(sparks)) if has_chart else (
-                ("index.html", "1m", ()),
+        relay_dir = os.path.join(self.output_path, fingerprint)
+        os.makedirs(relay_dir, exist_ok=True)
+        bandwidth_periods, uptime_periods = (
+            self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ((), ()))
+        for _key, period in PERIODS:
+            if period != "1m" and period not in bandwidth_periods and period not in uptime_periods:
+                continue
+            filename = "index.html" if period == "1m" else period + ".html"
+            rendered = self.template.render(
+                relay=relay, page_ctx=page_ctx, relays=self.relay_set,
+                contact_display_data=contact_display_data,
+                contact_validation_status=contact_validation_status,
+                aroi_validation_timestamp=self.aroi_validation_timestamp,
+                validated_aroi_domains=self.validated_aroi_domains,
+                base_url=self.base_url,
+                canonical_url=canonical_url_for_output(
+                    self.base_url, f"relay/{fingerprint}/{filename}"
+                ),
+                page_number=1,
+                hero_period=period,
+                bandwidth_periods=bandwidth_periods,
+                uptime_periods=uptime_periods,
             )
-        render_kwargs = dict(
-            relay=relay, page_ctx=page_ctx, relays=self.relay_set,
-            contact_display_data=contact_display_data,
-            contact_validation_status=contact_validation_status,
-            aroi_validation_timestamp=self.aroi_validation_timestamp,
-            validated_aroi_domains=self.validated_aroi_domains,
-            base_url=self.base_url,
-            page_number=1,
-            charts_enabled=self.charts_enabled,
-            has_bandwidth_chart=has_chart,
-            has_uptime_chart=has_up,
-        )
-
-        write_relay_period_files(
-            self.template,
-            os.path.join(self.output_path, fingerprint),
-            render_kwargs,
-            views,
-            self.base_url,
-            fingerprint,
-        )
+            _write_html(os.path.join(relay_dir, filename), rendered)
 
 
 _mp_relay_page_renderer = None

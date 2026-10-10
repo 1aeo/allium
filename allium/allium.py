@@ -15,13 +15,8 @@ import os
 import sys
 import time
 import urllib.parse
-from lib.charts.pipeline import (
-    add_chart_arguments,
-    maybe_run_charts,
-)
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
-from lib.relays import apply_chart_html_flags
 from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -258,7 +253,12 @@ if __name__ == "__main__":
         help="parallel workers for page generation (default: auto-detected CPU count, min 4)",
         required=False,
     )
-    add_chart_arguments(parser)
+    parser.add_argument(
+        "--no-charts",
+        dest="charts",
+        action="store_false",
+        help="skip the bandwidth and uptime history charts on relay and contact pages",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
@@ -337,7 +337,11 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    apply_chart_html_flags(RELAY_SET, args)
+    # History charts are written next to the relay and contact pages. Their
+    # peer medians need every relay, so build the writer before forking.
+    if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
+        from lib.charts.render import ChartWriter
+        RELAY_SET.chart_writer = ChartWriter(RELAY_SET)
 
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid
@@ -348,7 +352,6 @@ if __name__ == "__main__":
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
-    maybe_run_charts(RELAY_SET, args, progress_logger)
 
     # The relay set holds several GB of small objects, and freeing them one
     # by one at interpreter shutdown took ~40s. Every output file is closed

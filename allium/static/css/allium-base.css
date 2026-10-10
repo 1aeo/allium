@@ -621,36 +621,31 @@ th[title]::after {
     margin: 12px 0;
 }
 
-/* Operator History on contact pages (same classes as relay-info.css) */
-.relay-bandwidth-history {
+/* History charts (relay and contact pages): dark 1aeo.com/blog cards, the
+   other periods as a row of small copies. */
+.chart-history {
     margin: 12px 0 0;
-    background: #ffffff;
-    border-radius: 6px;
-    padding: 8px 8px 4px;
-    border: 1px solid var(--color-border-subtle, #e9ecef);
+    padding: 6px;
+    background: var(--aeo-dark-surface);
+    border: 1px solid var(--aeo-dark-border);
+    border-radius: 8px;
 }
-.relay-bandwidth-history > img {
+.chart-history img {
+    display: block;
     width: 100%;
     height: auto;
-    display: block;
 }
-.relay-bandwidth-sparks {
+.chart-sparks {
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    justify-content: flex-start;
-    align-items: flex-start;
+    gap: 6px;
+    margin-top: 6px;
 }
-.relay-bandwidth-spark {
-    flex: 0 0 calc((100% - 16px) / 3);
-    width: calc((100% - 16px) / 3);
-    display: block;
-    text-decoration: none;
+.chart-spark {
+    flex: 0 0 calc((100% - 12px) / 3);
     border-radius: 4px;
     outline: 1px solid transparent;
 }
-.relay-bandwidth-history .relay-bandwidth-sparks img {
-    width: 100%;
-    height: auto;
-    display: block;
+a.chart-spark:hover,
+a.chart-spark:focus {
+    outline-color: var(--aeo-green);
 }
