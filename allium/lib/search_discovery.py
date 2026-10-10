@@ -113,7 +113,7 @@ def _canonical_urls_from_html(output_path, base_url):
     for (html_path, relative), signal in zip(pages, signals):
         if signal is None:
             raise ValueError(
-                f"{relative.as_posix()} has no complete <head> within {MAX_HEAD_CHARS} bytes"
+                f"{relative.as_posix()} has no complete <head> within {MAX_HEAD_CHARS} characters"
             )
         canonicals, noindex = signal
         html_count += 1

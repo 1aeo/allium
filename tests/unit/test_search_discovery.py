@@ -213,7 +213,7 @@ def test_head_beyond_the_limit_is_rejected(temp_dir):
     from pathlib import Path
     _page(temp_dir, "index.html", head_padding=search_discovery.MAX_HEAD_CHARS)
 
-    with pytest.raises(ValueError, match="no complete <head> within 262144 bytes"):
+    with pytest.raises(ValueError, match="no complete <head> within 262144 characters"):
         _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
 
 
