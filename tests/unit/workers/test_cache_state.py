@@ -80,6 +80,7 @@ class TestCacheManagement:
             loaded_data = cache_manager.load_cache("test_format")
             assert loaded_data == test_data
     
+    @pytest.mark.slow
     def test_cache_file_size_and_performance(self):
         """Test cache performance with large datasets"""
         from allium.lib.workers import _save_cache, _load_cache
