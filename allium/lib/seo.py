@@ -168,18 +168,13 @@ _PARALLEL_MIN_FILES = 256
 
 def map_html_files(function, html_paths, chunksize):
     """Yield ``function(path)`` for each path in order, in worker processes
-    for large builds.
-
-    If the pool fails (e.g. a worker is killed by the OOM killer, which
-    raises BrokenProcessPool), the paths still without a result are
-    processed in this process, so errors surface in path order too.
-    """
+    for large builds. If the pool fails (e.g. BrokenProcessPool when a worker
+    is OOM-killed), the paths still without a result run in this process."""
     done = 0
     if len(html_paths) >= _PARALLEL_MIN_FILES:
         try:
             with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
-                for result in executor.map(function, html_paths, chunksize=chunksize):
-                    done += 1
+                for done, result in enumerate(executor.map(function, html_paths, chunksize=chunksize), 1):
                     yield result
         except Exception as exc:
             logger.warning("HTML file worker pool failed (%s), processing %d of %d files sequentially",
