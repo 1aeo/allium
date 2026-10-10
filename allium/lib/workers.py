@@ -684,13 +684,15 @@ def _fetch_with_cache_fallback(
 
     cache_age = None
     cached_data = None
+    cache_load_attempted = False
 
     def load_cached():
         """Load the cache on first use; a cache that fails to load counts as
         missing. Most runs fetch new data and never need the cache, and
         parsing then freeing the ~240MB uptime cache cost ~10s per run."""
-        nonlocal cache_age, cached_data
-        if cached_data is None and cache_age is not None:
+        nonlocal cache_age, cached_data, cache_load_attempted
+        if not cache_load_attempted and cache_age is not None:
+            cache_load_attempted = True
             cached_data = _load_cache(api_name)
             if cached_data is None:
                 cache_age = None
@@ -886,8 +888,9 @@ def _fetch_with_cache_fallback(
         log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
 
-        # Try to return cached data as fallback
-        cached = cached_data if cached_data is not None else _load_cache(api_name)
+        # Try to return cached data as fallback, without re-parsing a cache that
+        # already failed to load (here, or in the caller refetching with ignore_cache)
+        cached = cached_data if cache_load_attempted or ignore_cache else _load_cache(api_name)
         if cached:
             log_progress(f"using cached {display_name} data as fallback")
             return cached

@@ -61,6 +61,15 @@ def test_unreadable_fresh_cache_retries_server_errors():
     assert timeouts == [5, 10]
 
 
+def test_unreadable_cache_is_parsed_once_when_the_refetch_fails():
+    # An unexpected error in the cache-less refetch (here a JSON list, which has
+    # no .get) must not parse the cache that already failed to load again.
+    result, timeouts, load = _fetch([TotalTimeoutError("timeout"), b"[]"])
+    assert result is None
+    assert timeouts == [5, 10]
+    load.assert_called_once_with('test_api')
+
+
 def test_not_modified_loads_cache_once():
     result, _, load = _fetch([_http_error(304)], cached=CACHED)
     assert result == CACHED
