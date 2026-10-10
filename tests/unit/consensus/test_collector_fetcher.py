@@ -1470,10 +1470,12 @@ class TestVoteBandwidthForest44:
     """
 
     def _details(self, fetcher, flag):
+        """forest44's per-authority eligibility details for one flag, by authority."""
         evaluation = fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)
         return {d['authority']: d for d in evaluation['flag_eligibility'][flag]['details']}
 
     def test_fast_decided_from_each_authoritys_bandwidth(self, forest44_fetcher):
+        """Each authority judges Fast by its own Measured= or relay-reported value, as its vote shows."""
         fast = self._details(forest44_fetcher, 'fast')
         # Measured= wins, in bytes/s: 68 KB/s, not the relay-reported 854 KB/s
         assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (68_000, 'measured')
@@ -1488,6 +1490,7 @@ class TestVoteBandwidthForest44:
         assert sum(d['eligible'] for d in fast.values()) == 4
 
     def test_no_authority_credits_enough_bandwidth_for_guard(self, forest44_fetcher):
+        """No authority credits forest44 with 2097 KB/s or a place in its top 25%."""
         guard = self._details(forest44_fetcher, 'guard')
         # faravahar's bandwidth isn't in its vote, so its Guard vote (none) stands in
         assert guard['faravahar']['bw_value'] is None
@@ -1496,6 +1499,7 @@ class TestVoteBandwidthForest44:
         assert guard['bastet']['bw_guarantee'] == 2_097_000
 
     def test_consensus_weight_is_low_median_of_measured(self, forest44_fetcher):
+        """The consensus weight is the low median of the 5 Measured= values (w Bandwidth=68)."""
         bandwidth = forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)['bandwidth']
         assert (bandwidth['median'], bandwidth['unmeasured']) == (68_000, False)
         assert (bandwidth['min'], bandwidth['max']) == (32_000, 230_000)
@@ -1504,6 +1508,7 @@ class TestVoteBandwidthForest44:
         assert bandwidth['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
 
     def test_unmeasured_weight_is_capped_median_of_bandwidth(self, forest44_fetcher):
+        """Fewer than 3 Measured= values: the median of Bandwidth=, capped while 3+ votes measure."""
         votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
         for name in ('bastet', 'dannenberg', 'gabelmoo'):
             votes[name]['measured'] = None

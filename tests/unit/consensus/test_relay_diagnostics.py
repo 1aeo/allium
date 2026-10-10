@@ -925,6 +925,7 @@ class TestFastFlagIssue:
 
     @staticmethod
     def _issues(fetcher, flags=('Running', 'Valid', 'V2Dir', 'Stable'), **kwargs):
+        """Issues for forest44's votes, by title."""
         return {issue['title']: issue for issue in generate_issues_from_consensus(
             fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9), current_flags=list(flags), **kwargs)}
 
@@ -957,16 +958,19 @@ class TestFastFlagIssue:
         assert 'dizum, longclaw and maatuska used the relay-reported 854.0 KB/s.' in guard_bw
 
     def test_fast_issue_in_bits(self, forest44_fetcher):
+        """The Fast issue's rates follow the bits display."""
         description = self._issues(forest44_fetcher, use_bits=True)['Not getting the Fast flag']['description']
         assert '256.0 Kbit/s – 1.8 Mbit/s' in description
         assert '(816.0 Kbit/s; moria1: 8.4 Mbit/s)' in description
         assert description.endswith('is 544.0 Kbit/s.')
 
     def test_no_fast_issue_when_relay_has_fast(self, forest44_fetcher):
+        """A relay that has the Fast flag gets no Fast issue."""
         assert 'Not getting the Fast flag' not in self._issues(
             forest44_fetcher, flags=('Fast', 'Running', 'Valid', 'V2Dir', 'Stable'))
 
     def test_fast_issue_names_authorities_that_count_relay_as_zero(self):
+        """Each reason an authority withheld Fast gets its own sentence."""
         details = [
             {'authority': 'bastet', 'assigned': False, 'speed_value': 0,
              'speed_threshold': 102_000, 'speed_source': 'unmeasured'},

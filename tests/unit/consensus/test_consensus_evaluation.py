@@ -1582,19 +1582,23 @@ class TestForest44VoteBandwidthDisplay:
 
     @staticmethod
     def _format(fetcher, **kwargs):
+        """format_relay_consensus_evaluation() for forest44 without the Fast flag."""
         return format_relay_consensus_evaluation(
             fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9), fetcher.flag_thresholds,
             current_flags=['Running', 'Valid', 'V2Dir', 'Stable'], **kwargs)
 
     @pytest.fixture
     def formatted(self, forest44_fetcher):
+        """forest44's formatted evaluation, shown in bytes."""
         return self._format(forest44_fetcher, observed_bandwidth=854_738)
 
     @pytest.fixture
     def rows(self, formatted):
+        """Per-Authority table rows by authority."""
         return {row['authority']: row for row in formatted['authority_table']}
 
     def test_cons_wt_column_shows_vote_kilobytes_as_bytes(self, rows):
+        """Cons Wt shows each vote's KB/s value in bytes, marks its source and grays out values that don't count."""
         # Measured=68 (KB/s) in bastet's vote; it counts toward the consensus weight
         assert (rows['bastet']['measured'], rows['bastet']['measured_display']) == (68_000, '68.0 KB/s')
         assert (rows['bastet']['cons_wt_mark'], rows['bastet']['cons_wt_counts']) == ('M', True)
@@ -1605,6 +1609,7 @@ class TestForest44VoteBandwidthDisplay:
         assert "Bandwidth=854 (KB/s), which doesn't count toward the consensus weight" in rows['dizum']['cons_wt_title']
 
     def test_fast_column_uses_each_authoritys_bandwidth(self, rows):
+        """The Fast column compares each authority's own bandwidth with its own fast-speed."""
         assert (rows['tor26']['fast_speed_display'], rows['tor26']['fast_threshold_display']) == ('32.0 KB/s', '102.0 KB/s')
         assert (rows['tor26']['flag_bw_mark'], rows['tor26']['fast_meets']) == ('M', False)
         assert (rows['moria1']['fast_speed_display'], rows['moria1']['fast_threshold_display']) == ('230.0 KB/s', '1.0 MB/s')
@@ -1618,6 +1623,7 @@ class TestForest44VoteBandwidthDisplay:
             assert row['guard_bw_meets'] is False, name
 
     def test_fast_row_is_below_with_four_of_nine(self, formatted):
+        """The Fast row reads Below (4/9 DA) next to the bandwidth each authority judged by."""
         fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
         assert (fast['anchor'], fast['status']) == ('flag-fast-speed', 'below')
         assert '4/9 DA' in fast['status_text']
@@ -1639,6 +1645,7 @@ class TestForest44VoteBandwidthDisplay:
             assert row['threshold'].startswith('≥102.0 KB/s'), anchor
 
     def test_guard_bandwidth_row_is_below(self, formatted):
+        """No authority credits enough bandwidth for Guard: Below (0/9 DA)."""
         row = next(row for row in formatted['flag_requirements_table']
                    if row['flag'] == 'Guard' and row['metric'] == 'Bandwidth')
         assert row['status'] == 'below'
@@ -1646,6 +1653,7 @@ class TestForest44VoteBandwidthDisplay:
         assert '≥2.1 MB/s (AuthDirGuardBWGuarantee)' in row['threshold']
 
     def test_bandwidth_summary_is_the_consensus_weight(self, formatted):
+        """Bandwidth Metrics show the consensus weight and the Measured= range."""
         summary = formatted['bandwidth_summary']
         assert summary['median_display'] == '68.0 KB/s'
         assert (summary['median_int'], summary['median_unit']) == (68, 'KB/s')
@@ -1654,6 +1662,7 @@ class TestForest44VoteBandwidthDisplay:
         assert summary['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
 
     def test_bits_display(self, forest44_fetcher):
+        """Vote KB/s values convert to the default bits display."""
         formatted = self._format(forest44_fetcher, use_bits=True)
         rows = {row['authority']: row for row in formatted['authority_table']}
         assert rows['bastet']['measured_display'] == '544.0 Kbit/s'
@@ -1661,6 +1670,7 @@ class TestForest44VoteBandwidthDisplay:
         assert formatted['bandwidth_summary']['median_display'] == '544.0 Kbit/s'
 
     def test_earlier_measurement_and_sybil_cells(self, forest44_fetcher):
+        """A Fast vote without Measured= shows 'not published'; a Sybil listing explains a missing Fast."""
         votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
         votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
         votes['maatuska']['flags'] = ['Sybil']

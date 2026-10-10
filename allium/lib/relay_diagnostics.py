@@ -730,11 +730,13 @@ def _format_volume(volume_bytes: int) -> str:
 
 
 def _authority_names(details: list) -> str:
+    """The details' authority names as 'a', 'a and b' or 'a, b and c'."""
     names = [d.get('authority', '?') for d in details]
     return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def _rate_range(values: list, use_bits: bool) -> str:
+    """'low – high' for the rates, or a single rate when both ends display the same."""
     low, high = (_format_rate(v, use_bits, decimal_places=1) for v in (min(values), max(values)))
     return low if low == high else f"{low} – {high}"
 
