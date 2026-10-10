@@ -256,8 +256,6 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     )
 
     uptime_map, bandwidth_map = history_maps(relay_set)
-    uptime_map = uptime_map if uptime_data else None
-    bandwidth_map = bandwidth_map if bandwidth_data else None
     
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']

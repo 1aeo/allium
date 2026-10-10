@@ -6,11 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 from ..stability_utils import evaluate_overload
 from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
-from .bands import (
-    RATIO_SCALE_LO, band_legend_labels, bands_for_flags, bands_for_role, census_footnote, ratio_strip_data_hi,
-)
+from .bands import RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi
 from .identity import chart_identity, operator_from_contact, role_from_flags
-from .outcome import format_day, format_day_span, format_day_time, mbit, subtitles
+from .outcome import format_day, format_day_span, mbit, subtitles
 from .series import (
     MBIT, PERIOD_SPAN, PERIODS, WINDOW, family_key, operator_throughput, peer_medians, points, throughput,
 )
@@ -78,14 +76,23 @@ def _spike_callout(svg, panel, rows, bands, clear_of, period):
     svg.text(box_x + 7, clear_of + 22.5, label, 11.5, RED, bold=True)
 
 
-def bandwidth_chart(period, series, advertised, bands, identity, title_role, restart=None, overload=None,
-                    overlays=None, family_n=0, scope="relay"):
+def _restarted(restart, ts):
+    """The restart legend entry when the restart is on the time axis, else nothing."""
+    if restart and ts[0] <= restart <= view_end(ts):
+        return [("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart))]
+    return []
+
+
+def bandwidth_chart(period, series, advertised, bands, identity, restart=None, overload=None,
+                    overlays=None, family_n=0, operator=False):
     """Throughput panel over a write/read panel against the role's frozen bands."""
     ts, write, read, interval = series
-    rows = [(t, w, r, w / r) for t, w, r in zip(ts, write, read) if r]
+    ratios = [w / r if r else None for w, r in zip(write, read)]
+    rows = [row for row in zip(ts, write, read, ratios) if row[3] is not None]
     overlays = overlays or {}
     thru_sub, ratio_sub = subtitles(rows, advertised, overlays, bands, period, interval)
-    span = PERIOD_SPAN[period] + ("  ·  " + bands["role"] if title_role else "")
+    span = PERIOD_SPAN[period] + ("" if operator else "  ·  " + bands["role"])
+    restarted = _restarted(restart, ts)
     svg = Svg(WIDTH)
 
     y = _header(svg, identity, "Throughput · " + span, thru_sub)
@@ -94,34 +101,28 @@ def bandwidth_chart(period, series, advertised, bands, identity, title_role, res
     spike = any(row[3] > bands["invest_hi"] for row in rows)
     headroom = (1.45 if overload else 1.34) if spike else (1.28 if overload else 1.26)
     top = Panel(svg, "t", LEFT, y, PLOT_WIDTH, 290, ts, 0, ceiling * headroom)
-    restart = restart if restart and ts[0] <= restart <= top.end else None
     top.yaxis(nice_ticks(top.yspan), "Throughput (Mbit/s)")
     top.xaxis(period, ts, labels=False)
+    entries = [("line", GREEN, None, "Write (outbound)"), ("line", BLUE, None, "Read (inbound)")]
     if advertised:
         top.hline(advertised, ORANGE, 1.3, DASHED)
-    if restart:
+        entries.append(("line", ORANGE, DASHED, "Advertised  {} Mbit/s".format(mbit(advertised))))
+    if restarted:
         top.vline(restart, PURPLE, 1.4, DASHDOT)
     top.series(ts, write, GREEN, 2.4)
     top.series(ts, read, BLUE, 1.7)
-    entries = [("line", GREEN, None, "Write (outbound)"), ("line", BLUE, None, "Read (inbound)")]
-    if advertised:
-        entries.append(("line", ORANGE, DASHED, "Advertised  {} Mbit/s".format(mbit(advertised))))
-    if restart:
-        entries.append(("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart)))
-    y += 8 + legend(svg, LEFT + 8, y + 8, [entries] + ([[("marker", RED, None, overload)]] if overload else []))
+    y += 8 + legend(svg, LEFT + 8, y + 8, [entries + restarted] + ([[("marker", RED, None, overload)]] if overload else []))
     _spike_callout(svg, top, rows, bands, y, period)
 
     y = _header(svg, "", "Write / read · " + span, ratio_sub, top.top + top.height + 8)
-    entries = [("line", TEXT, None, "This operator" if scope == "operator" else "This relay")]
+    entries = [("line", TEXT, None, "This operator" if operator else "This relay")]
     if overlays.get("family"):
         entries.append(("line", MUTED, DOTTED, "Operator Family (median, n={})".format(family_n)))
     if overlays.get("role"):
         entries.append(("line", CYAN, DASHED, "Peers (network median)"))
-    if restart:
-        entries.append(("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart)))
     labels = band_legend_labels(bands)
-    y += 6 + legend(svg, LEFT, y, [entries, [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]),
-                                             ("patch", RED, 0.22, labels[2])]])
+    bands_row = [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]), ("patch", RED, 0.22, labels[2])]
+    y += 6 + legend(svg, LEFT, y, [entries + restarted, bands_row])
     tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     ylo, yhi = RATIO_SCALE_LO, ratio_strip_data_hi(bands)
     strip = Panel(svg, "r", LEFT, y, PLOT_WIDTH, 150, ts, ylo, yhi)
@@ -145,7 +146,6 @@ def bandwidth_chart(period, series, advertised, bands, identity, title_role, res
     for key, color, dash in (("role", CYAN, DASHED), ("family", MUTED, DOTTED)):
         if key in overlays:
             strip.series(ts, [overlays[key].get(t) for t in ts], color, 1.4, dash)
-    ratios = [w / r if r else None for w, r in zip(write, read)]
     clipped = [None if v is None else min(max(v, ylo), yhi) for v in ratios]
     strip.series(ts, clipped, TEXT, 2.2)
     strip.series(ts, [v if r is not None and not ilo <= r <= ihi else None for v, r in zip(clipped, ratios)], RED, 2.4)
@@ -153,7 +153,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, title_role, res
         if r is not None and not ylo <= r <= yhi:
             x, edge = strip.x(t), strip.y(yhi if r > yhi else ylo)
             svg.path("M%.1f %.1fl5 %gh-10z" % (x, edge, 8 if r > yhi else -8), RED, 1, fill=RED)
-    if restart:
+    if restarted:
         strip.vline(restart, PURPLE, 1.4, DASHDOT)
     return svg.document(_footer(svg, strip, period, interval, census_footnote(bands)))
 
@@ -163,15 +163,12 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average):
     svg = Svg(WIDTH)
     subtitle = "Average {:.1f}%  ·  Onionoo Running flag".format(average) if average else ""
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
-    restart = restart if restart and ts[0] <= restart <= view_end(ts) else None
-    entries = [("line", GREEN, None, "Running flag")]
-    if restart:
-        entries.append(("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart)))
-    y += 8 + legend(svg, LEFT, y, [entries])
+    restarted = _restarted(restart, ts)
+    y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
     panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105)
     panel.yaxis(range(0, 101, 20), "Uptime (%)")
     panel.xaxis(period, ts)
-    if restart:
+    if restarted:
         panel.vline(restart, PURPLE, 1.4, DASHDOT)
     panel.series(ts, percent, GREEN, 2.2)
     return svg.document(_footer(svg, panel, period, interval))
@@ -187,8 +184,8 @@ def _overload_text(relay):
     stamps = [stamp for stamp in stamps if stamp]
     if not stamps:
         return "currently overloaded"
-    return "currently overloaded · last report " + format_day_time(
-        datetime.fromtimestamp(max(stamps) / 1000.0, timezone.utc))
+    last = datetime.fromtimestamp(max(stamps) / 1000.0, timezone.utc)
+    return "currently overloaded · last report {}, {:%H:%M} UTC".format(format_day(last), last)
 
 
 class ChartWriter(object):
@@ -221,17 +218,15 @@ class ChartWriter(object):
 
     def relay(self, relay, directory):
         """Write ``bandwidth-<period>.svg`` and ``uptime-<period>.svg``; return the periods drawn for each."""
-        bands = bands_for_flags(relay.get("flags"))
-        identity = chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact")))
-        restart = parse_onionoo_timestamp(relay.get("last_restarted"))
-        common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT, bands=bands, identity=identity,
-                      title_role=True, restart=restart, overload=_overload_text(relay))
+        common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT,
+                      bands=bands_for_role(role_from_flags(relay.get("flags"))),
+                      identity=chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact"))),
+                      restart=parse_onionoo_timestamp(relay.get("last_restarted")), overload=_overload_text(relay))
         bandwidth, uptime = [], []
         for key, period in PERIODS:
             if self._save(directory, "bandwidth-%s.svg" % period, self._relay_bandwidth, relay, key, period, common):
                 bandwidth.append(period)
-            if self._save(directory, "uptime-%s.svg" % period, self._relay_uptime, relay, key, period, identity,
-                          restart):
+            if self._save(directory, "uptime-%s.svg" % period, self._relay_uptime, relay, key, period, common):
                 uptime.append(period)
         return tuple(bandwidth), tuple(uptime)
 
@@ -248,7 +243,7 @@ class ChartWriter(object):
             overlays["family"] = {t: family[t] for t in series[0] if t in family}
         return bandwidth_chart(period, series, overlays=overlays, family_n=family_n, **common)
 
-    def _relay_uptime(self, relay, key, period, identity, restart):
+    def _relay_uptime(self, relay, key, period, common):
         block = ((self.uptime.get(relay["fingerprint"]) or {}).get("uptime") or {}).get(key) or {}
         percent = points(block, 100.0, self.since[period])
         if len(percent) < 2:
@@ -257,8 +252,8 @@ class ChartWriter(object):
         # Average what is drawn (factor applied, window clipped); like the site's uptime figures,
         # only from 30 points and above 1%.
         average = sum(percent.values()) / len(percent)
-        return uptime_chart(period, ts, [percent[t] for t in ts], int(block.get("interval") or 0), identity,
-                            restart, average if len(percent) >= 30 and average > 1.0 else 0)
+        return uptime_chart(period, ts, [percent[t] for t in ts], int(block.get("interval") or 0), common["identity"],
+                            common["restart"], average if len(percent) >= 30 and average > 1.0 else 0)
 
     def contact(self, member_indexes, directory):
         """Write ``bandwidth-<period>.svg`` for an operator's summed members; return the periods drawn."""
@@ -269,7 +264,7 @@ class ChartWriter(object):
         operator = next((host for host in (operator_from_contact(r.get("contact")) for r in members) if host), "")
         # Operators mix roles: judge write/read against the members' most common role.
         bands = bands_for_role(Counter(role_from_flags(r.get("flags")) for r in members).most_common(1)[0][0])
-        identity = chart_identity(operator or "Operator", operator)
+        identity = operator or "Operator"
         return tuple(period for key, period in PERIODS if self._save(
             directory, "bandwidth-%s.svg" % period, self._contact_bandwidth, members, key, period, bands, identity))
 
@@ -278,4 +273,4 @@ class ChartWriter(object):
         if not series:
             return None
         advertised = sum(relay.get("advertised_bandwidth") or 0 for relay in summed) * MBIT
-        return bandwidth_chart(period, series, advertised, bands, identity, title_role=False, scope="operator")
+        return bandwidth_chart(period, series, advertised, bands, identity, operator=True)

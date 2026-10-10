@@ -8,11 +8,9 @@ from types import SimpleNamespace
 from allium.lib.charts.render import ChartWriter
 from allium.lib.charts.svg import Svg, date_ticks, nice_ticks
 
+from .test_series import bandwidth_row, block
+
 PUBLISHED = "2026-09-30 12:00:00"
-
-
-def block(values, first="2026-09-01 12:00:00", interval=86400, factor=1000.0):
-    return {"first": first, "interval": interval, "factor": factor, "values": list(values)}
 
 
 def relay(fp, contact="url:example.com", flags=("Guard", "Running"), **extra):
@@ -22,7 +20,7 @@ def relay(fp, contact="url:example.com", flags=("Guard", "Running"), **extra):
 
 
 def history(write, read=None, key="1_month", **kwargs):
-    return {"write_history": {key: block(write, **kwargs)}, "read_history": {key: block(read or write, **kwargs)}}
+    return bandwidth_row(write, read or write, key, **kwargs)
 
 
 def writer(relays, bandwidth, uptime=None):
@@ -109,6 +107,9 @@ def test_axis_ticks():
         return datetime(*ymd, tzinfo=timezone.utc)
 
     assert labels("1m", day(2026, 9, 1), day(2026, 10, 1)) == ["Sep 1", "Sep 8", "Sep 15", "Sep 22", "Sep 29"]
+    # Onionoo's daily points sit at noon: no tick at the Tuesday midnight before the first one.
+    noon = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    assert labels("1m", noon, day(2026, 10, 1))[0] == "Sep 8"
     assert labels("6m", day(2025, 11, 5), day(2026, 3, 1))[:3] == ["Dec '25", "Jan '26", "Feb '26"]
     assert labels("5y", day(2022, 3, 1), day(2026, 10, 1)) == ["2023", "2024", "2025", "2026"]
     # Too short to reach two ticks: label the ends instead.

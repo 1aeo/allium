@@ -2,13 +2,11 @@
 
 from datetime import date, datetime, timedelta, timezone
 
-from allium.lib.charts.bands import (
-    CATALOG, band_legend_labels, bands_for_flags, census_footnote, ratio_strip_data_hi,
-)
+from allium.lib.charts.bands import CATALOG, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi
 from allium.lib.charts.identity import chart_identity, operator_from_contact, peers_word, role_from_flags
 from allium.lib.charts.outcome import format_day_span, subtitles
 
-GUARD = bands_for_flags(["Guard", "Fast"])
+GUARD = bands_for_role("Guard")
 T0 = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
 
 
@@ -54,7 +52,7 @@ def test_peers_outside_the_band_take_the_blame():
 
 def test_frozen_bands_and_copy():
     assert CATALOG["frozen_from"] and GUARD["role"] == "Guard"
-    exit_guard = bands_for_flags(["Exit", "Guard"])
+    exit_guard = bands_for_role("Exit+Guard")
     assert ratio_strip_data_hi(exit_guard) > exit_guard["invest_hi"] > 1.70
     assert ratio_strip_data_hi(GUARD) == 1.70
     assert band_legend_labels(GUARD)[0] == "Typical  1.01–1.17  ·  p10–p90"

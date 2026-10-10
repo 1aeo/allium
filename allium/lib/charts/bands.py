@@ -3,7 +3,8 @@
 import json
 import os
 
-from .identity import peers_word, role_from_flags
+from ..time_utils import parse_onionoo_timestamp
+from .identity import peers_word
 
 # Global fallbacks used only if a role is missing from the catalog.
 _DEFAULT_BANDS = {"typical_lo": 0.90, "typical_hi": 1.15, "invest_lo": 0.80, "invest_hi": 1.50, "n": 0}
@@ -12,7 +13,6 @@ RATIO_SCALE_LO = 0.50
 RATIO_SCALE_HI = 1.70
 MIN_TOP_INVESTIGATE = 0.12
 RAISED_TOP_INVESTIGATE = 0.18
-_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "role_ratio_bands.json"),
           encoding="utf-8") as _handle:
@@ -22,10 +22,6 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "role
 def bands_for_role(role):
     """Typical / uncommon / investigate row for one role (``role_from_flags``)."""
     return dict(CATALOG["roles"].get(role) or _DEFAULT_BANDS, role=role)
-
-
-def bands_for_flags(flags):
-    return bands_for_role(role_from_flags(flags))
 
 
 def ratio_strip_data_hi(bands):
@@ -55,8 +51,5 @@ def census_footnote(bands):
     """``4,444 Guards · baseline 15 Aug 2026``."""
     peers = peers_word(bands["role"])
     head = "{:,} {}".format(bands["n"], peers) if bands["n"] else peers
-    date = str(CATALOG.get("frozen_from") or "").split(" ", 1)[0].split("-")
-    if len(date) != 3:
-        return head
-    year, month, day = date
-    return "{} · baseline {} {} {}".format(head, int(day), _MONTHS[int(month) - 1], year)
+    frozen = parse_onionoo_timestamp(CATALOG.get("frozen_from"))
+    return "{} · baseline {} {:%b %Y}".format(head, frozen.day, frozen) if frozen else head

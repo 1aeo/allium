@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import timedelta
+from statistics import median
 
 from ..time_utils import ONIONOO_HISTORY_PERIODS, PERIOD_SHORT_NAMES, parse_onionoo_timestamp
 from .identity import role_from_flags
@@ -78,12 +79,6 @@ def family_key(relay):
     return tuple(family) if len(family) > 1 else None
 
 
-def _median(values):
-    values = sorted(values)
-    mid = len(values) // 2
-    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2.0
-
-
 def peer_medians(relays, bandwidth_map, since=None):
     """Daily write/read medians per role and per effective family, from every relay's 1M history.
 
@@ -108,7 +103,7 @@ def peer_medians(relays, bandwidth_map, since=None):
         for daily in dailies:
             for t, ratio in daily.items():
                 days.setdefault(t, []).append(ratio)
-        return {t: _median(ratios) for t, ratios in days.items()}
+        return {t: median(ratios) for t, ratios in days.items()}
 
     return (
         {role: medians(dailies) for role, dailies in by_role.items()},

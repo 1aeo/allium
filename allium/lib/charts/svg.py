@@ -42,8 +42,8 @@ def text_width(text, size, bold=False):
     return em * size / (89.0 if bold else 100.0)
 
 
-def _attrs(dash=None, opacity=None):
-    return (' stroke-dasharray="%s"' % dash if dash else "") + (' opacity="%g"' % opacity if opacity else "")
+def _dash(dash):
+    return ' stroke-dasharray="%s"' % dash if dash else ""
 
 
 class Svg(object):
@@ -61,19 +61,19 @@ class Svg(object):
             ' transform="rotate(-90 %.1f %.1f)"' % (x, y) if rotate else "",
             escape(_CONTROL.sub("", text), quote=False).replace("  ", "&#160;&#160;")))  # keep double spaces
 
-    def line(self, x1, y1, x2, y2, color, width=1.0, dash=None, opacity=None):
+    def line(self, x1, y1, x2, y2, color, width=1.0, dash=None):
         self.parts.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%g"%s/>' % (
-            x1, y1, x2, y2, color, width, _attrs(dash, opacity)))
+            x1, y1, x2, y2, color, width, _dash(dash)))
 
     def rect(self, x, y, w, h, fill, opacity=None, stroke=None, rx=0):
         self.parts.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s"%s%s%s/>' % (
-            x, y, w, h, fill, _attrs(None, opacity),
+            x, y, w, h, fill, ' opacity="%g"' % opacity if opacity else "",
             ' stroke="%s"' % stroke if stroke else "", ' rx="%g"' % rx if rx else ""))
 
     def path(self, d, color, width, dash=None, fill="none", clip=None):
         if d:
             self.parts.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%g" stroke-linejoin="round"%s%s/>' % (
-                d, fill, color, width, _attrs(dash), ' clip-path="url(#%s)"' % clip if clip else ""))
+                d, fill, color, width, _dash(dash), ' clip-path="url(#%s)"' % clip if clip else ""))
 
     def document(self, height):
         return (
@@ -81,17 +81,6 @@ class Svg(object):
             'font-family="DejaVu Sans, Verdana, sans-serif"><rect width="100%" height="100%" fill="{bg}"/>'
             '{body}</svg>\n'
         ).format(w=self.width, h=height, bg=BG, body="".join(self.parts))
-
-
-def _month_starts(start, end, every):
-    year, month = start.year, start.month
-    while True:
-        tick = datetime(year, month, 1, tzinfo=timezone.utc)
-        if tick > end:
-            return
-        if tick >= start and (month - 1) % every == 0:
-            yield tick
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
 
 
 def date_ticks(period, ts, end):
@@ -103,13 +92,15 @@ def date_ticks(period, ts, end):
     if period == "1m":
         day = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
         day += timedelta(days=(1 - day.weekday()) % 7)
-        ticks = [(day + timedelta(days=7 * i), None) for i in range((end - day).days // 7 + 1)]
-        ticks = [(t, format_day(t)) for t, _ in ticks if t <= end]
+        ticks = [(t, format_day(t)) for t in (day + timedelta(days=7 * i) for i in range((end - day).days // 7 + 1))
+                 if start <= t <= end]
     elif period == "5y":
         ticks = [(datetime(y, 1, 1, tzinfo=timezone.utc), str(y)) for y in range(start.year + 1, end.year + 1)]
-    else:
-        fmt = "%b '%y" if start.year != ts[-1].year else "%b"
-        ticks = [(t, t.strftime(fmt)) for t in _month_starts(start, end, 2 if period == "1y" else 1)]
+    else:  # month starts, every other month on 1Y
+        fmt, every = "%b '%y" if start.year != ts[-1].year else "%b", 2 if period == "1y" else 1
+        months = (datetime(m // 12, m % 12 + 1, 1, tzinfo=timezone.utc)
+                  for m in range(start.year * 12 + start.month - 1, end.year * 12 + end.month) if m % 12 % every == 0)
+        ticks = [(t, t.strftime(fmt)) for t in months if t >= start]
     if len(ticks) < 2:
         ticks = [(t, format_day(t, year=period in ("1y", "5y"))) for t in (ts[0], ts[-1])]
     return ticks
@@ -191,18 +182,17 @@ class Panel(object):
         self.svg.line(self.left, bottom, self.left + self.width, bottom, AXIS, 1)
 
 
-def legend(svg, x, y, rows, size=11.5, right=None):
+def legend(svg, x, y, rows, size=11.5):
     """Framed rows of ``(kind, color, style, label)`` entries. Returns the height.
 
     ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity)
-    or ``marker`` (a diamond). A legend wider than
-    the room up to ``right`` moves left.
+    or ``marker`` (a diamond). A legend too wide for the canvas moves left.
     """
     pad, swatch, gap, row_h = 8, 22, 16, size * 1.55
     widths = [[swatch + 6 + text_width(entry[3], size) for entry in row] for row in rows]
     total = max(sum(row) + gap * (len(row) - 1) for row in widths) + pad * 2
     height = pad * 2 + row_h * len(rows) - (row_h - size * 1.2)
-    x = min(x, (right or svg.width - 12) - total)
+    x = min(x, svg.width - 12 - total)
     svg.rect(x, y, total, height, LEGEND_BG, stroke=LEGEND_EDGE, rx=4)
     for r, (row, row_widths) in enumerate(zip(rows, widths)):
         cy, cx = y + pad + size * 0.6 + r * row_h, x + pad

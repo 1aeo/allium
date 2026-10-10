@@ -17,11 +17,6 @@ def format_day(dt, year=False):
     return "{} {}{}".format(dt.strftime("%b"), dt.day, dt.strftime(" '%y") if year else "")
 
 
-def format_day_time(dt):
-    """``Aug 28, 22:00 UTC``."""
-    return "{}, {} UTC".format(format_day(dt), dt.strftime("%H:%M"))
-
-
 def format_day_span(dates, step=timedelta(days=1), year=False):
     """``Jul 22–23, Aug 2``: runs of dates at most ``step`` apart, or ``Jul 2–Sep 9 (12 days)`` past three runs."""
     dates = sorted(dates)
@@ -54,51 +49,35 @@ def _left_typical(ts, overlay, bands, days):
 
 def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
     """``(throughput, write/read)`` subtitles for ``rows`` of ``(t, write, read, ratio)``."""
-    role = bands["role"] or "relay"
-    invest = [row for row in rows if not bands["invest_lo"] <= row[3] <= bands["invest_hi"]]
     if len(rows) < 3:
         return "", ""
-    n = float(len(rows))
-    mean_ratio = sum(row[3] for row in rows) / n
-    mean_write = sum(row[1] for row in rows) / n
-    mean_read = sum(row[2] for row in rows) / n
-    if bands["typical_lo"] <= mean_ratio <= bands["typical_hi"]:
-        zone = "typical"
-    elif bands["invest_lo"] <= mean_ratio <= bands["invest_hi"]:
-        zone = "uncommon"
-    else:
-        zone = "investigate"
-    write_heavy = [row[3] for row in invest if row[3] > bands["typical_hi"]]
-    read_heavy = [row[3] for row in invest if row[3] < bands["typical_lo"]]
+    role = bands["role"] or "relay"
+    tlo, thi = bands["typical_lo"], bands["typical_hi"]
+    invest = [row for row in rows if not bands["invest_lo"] <= row[3] <= bands["invest_hi"]]
+    mean_write, mean_read, mean_ratio = (sum(column) / len(rows) for column in list(zip(*rows))[1:])
+    typical = tlo <= mean_ratio <= thi
+    outside = not bands["invest_lo"] <= mean_ratio <= bands["invest_hi"]
+    write_heavy = [row[3] for row in invest if row[3] > thi]
+    read_heavy = [row[3] for row in invest if row[3] < tlo]
     util = 100.0 * mean_write / advertised if advertised else None
     # The larger excursion past the typical band names the spike (the callout shows the write side).
-    if write_heavy and (not read_heavy or max(write_heavy) / bands["typical_hi"]
-                        >= bands["typical_lo"] / max(min(read_heavy), 1e-9)):
-        spike = "write"
+    if write_heavy and (not read_heavy or max(write_heavy) / thi >= tlo / max(min(read_heavy), 1e-9)):
+        spike = "Write"
     else:
-        spike = "read" if read_heavy else None
-    persistent = zone == "investigate" and len(invest) >= max(5, len(rows) // 3)
-    if util is None:
-        thru = "unknown"
-    elif spike and not persistent:
-        thru = "spike"
-    elif util < 25:
-        # "Dropped" means low against advertised too, not just a small relay.
-        thru = "crash" if mean_write < 20 and mean_read < 20 else "low"
-    else:
-        thru = "near" if util >= 70 else "steady"
-    if thru not in ("spike", "crash") and not invest and zone == "typical":
+        spike = "Read" if read_heavy else None
+    persistent = outside and len(invest) >= max(5, len(rows) // 3)
+    spiked = util is not None and spike and not persistent
+    # "Dropped" means low against advertised too, not just a small relay.
+    dropped = util is not None and not spiked and util < 25 and mean_write < 20 and mean_read < 20
+    if not (spiked or dropped or invest) and typical:
         return "", ""
 
     span = format_day_span([row[0] for row in invest], timedelta(seconds=interval or 86400),
                            year=period in ("1y", "5y"))
-    util_bit = mbit(mean_write) + " Mbit/s"
-    if util is not None:
-        util_bit += " ({:.0f}% of advertised)".format(util)
-    if thru == "spike":
-        throughput = "{} spiked{}".format("Write" if spike == "write" else "Read", " " + span if span else "")
-        throughput += " · " + util_bit
-    elif thru == "crash":
+    util_bit = mbit(mean_write) + " Mbit/s" + (" ({:.0f}% of advertised)".format(util) if util is not None else "")
+    if spiked:
+        throughput = "{} spiked{} · {}".format(spike, " " + span if span else "", util_bit)
+    elif dropped:
         throughput = "Write and read both dropped {} · {}".format(span or ALL_PERIOD[period], util_bit)
     else:
         throughput = util_bit
@@ -108,7 +87,7 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
     peers = peers_word(bands["role"])
     when = " " + span if span else ""
     if not invest:
-        ratio = ""
+        ratio = "" if typical else "Write/read {:.2f} · inside the {} band with other {}".format(mean_ratio, role, peers)
     elif _left_typical(ts, overlays.get("role", {}), bands, days):
         ratio = "Outside the band with other {}{}".format(peers, when)
     elif _left_typical(ts, overlays.get("family", {}), bands, days):
@@ -116,6 +95,4 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
     else:
         # Family and peer lines are only drawn (and only checked) on 1M relay charts.
         ratio = "Outside the {} band{}{}".format(role, when, " · family and peers stayed" if overlays else "")
-    if not ratio and zone != "typical":
-        ratio = "Write/read {:.2f} · inside the {} band with other {}".format(mean_ratio, role, peers)
     return throughput, ratio

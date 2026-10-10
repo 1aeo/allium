@@ -637,13 +637,10 @@ th[title]::after {
     height: auto;
 }
 .chart-history .chart-hero {
-    display: none;
+    display: block;
     scroll-margin-top: 80px;
 }
-.chart-history .chart-hero:last-of-type,
-.chart-history .chart-hero:target {
-    display: block;
-}
+.chart-history .chart-hero:not(:last-of-type):not(:target),
 .chart-history .chart-hero:target ~ .chart-hero {
     display: none;
 }

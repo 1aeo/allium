@@ -1156,11 +1156,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     """
     files_written = 0
     chart_writer = getattr(relay_set, 'chart_writer', None)
-    base_template_args = dict(
-        base_template_args,
-        contact_chart_periods=(
-            chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else ()),
-    )
+    chart_periods = chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else ()
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1207,6 +1203,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
             template_args = dict(variant_args)
             template_args['relay_subset'] = visible_relays
             template_args['contact_has_ipv6'] = has_ipv6
+            template_args['contact_chart_periods'] = chart_periods
             template_args['page_number'] = page_number
             template_args['pagination'] = pagination_context(
                 base_filename, page_number, total_pages
@@ -1691,8 +1688,7 @@ class _RelayPageRenderer:
         # with the relay's history charts beside it
         relay_dir = os.path.join(self.output_path, relay["fingerprint"])
         os.makedirs(relay_dir, exist_ok=True)
-        bandwidth_periods, uptime_periods = (
-            self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ((), ()))
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ((), ())
 
         rendered = self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
