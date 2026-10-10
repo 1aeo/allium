@@ -80,8 +80,8 @@ ACTIVE_VOTING_AUTHORITIES_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
 # answered on tor-relays ("Relay suddenly stopped relaying traffic", 2026-10-04).
 # Per authority: 's' flags, 'w' Bandwidth= and Measured= (KB/s), then its
 # flag-thresholds fast-speed, guard-bw-inc-exits, guard-bw-exc-exits (bytes/s)
-# and ignoring-advertised-bws. faravahar and longclaw had out-of-date bandwidth
-# files (empty bandwidth-file-headers line), so their votes have no Measured=.
+# and ignoring-advertised-bws. Bandwidth authorities faravahar and longclaw had an
+# empty bandwidth-file-headers line and no Measured= values in their votes.
 FOREST44_FINGERPRINT = '0EF2A357140FCBDAE2F948CC2228909695B81B35'
 FOREST44_VOTES = {
     'bastet': ('Running Stable V2Dir Valid', 854, 68, 102000, 25000000, 26000000, 1),
@@ -94,8 +94,7 @@ FOREST44_VOTES = {
     'moria1': ('Running Stable V2Dir Valid', 854, 230, 1048000, 26000000, 27000000, 1),
     'tor26': ('Running Stable V2Dir Valid', 854, 32, 102000, 33000000, 34000000, 1),
 }
-FOREST44_CURRENT_BW_FILES = {'bastet', 'dannenberg', 'gabelmoo', 'moria1', 'tor26'}
-FOREST44_BW_AUTHORITIES = FOREST44_CURRENT_BW_FILES | {'faravahar', 'longclaw'}
+FOREST44_BW_AUTHORITIES = {'bastet', 'dannenberg', 'faravahar', 'gabelmoo', 'longclaw', 'moria1', 'tor26'}
 
 
 # ============================================================================
@@ -198,7 +197,6 @@ def forest44_fetcher():
     update_voting_authorities(sorted(FOREST44_VOTES))
     fetcher = CollectorFetcher()
     fetcher.bw_authorities = set(FOREST44_BW_AUTHORITIES)
-    fetcher.current_bw_file_authorities = set(FOREST44_CURRENT_BW_FILES)
     votes = {}
     for auth, (flags, bandwidth, measured, fast, inc, exc, ignoring) in FOREST44_VOTES.items():
         fetcher.flag_thresholds[auth] = {

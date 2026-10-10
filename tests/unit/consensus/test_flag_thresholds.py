@@ -26,6 +26,9 @@ from allium.lib.consensus.flag_thresholds import (
     check_stable_eligibility,
     get_flag_thresholds_summary,
     sort_flags,
+    credible_bandwidth,
+    guard_bw_top_threshold,
+    low_median,
 )
 
 
@@ -688,65 +691,32 @@ class TestTimeConstants:
         assert SECONDS_PER_MINUTE == 60
 
 
-class TestCredibleBandwidth:
-    """Bandwidth an authority uses for Fast and Guard (bwauth.c dirserv_get_credible_bandwidth_kb)."""
-
-    def test_vote_bandwidth_is_kilobytes(self):
-        """Vote w-line values are KB/s (dir-spec consensus-formats); 1 KB = 1000 bytes."""
-        from allium.lib.consensus.flag_thresholds import VOTE_BW_KB_BYTES
-        assert VOTE_BW_KB_BYTES == 1000
-
-    def test_measurement_wins_over_relay_reported(self):
-        from allium.lib.consensus.flag_thresholds import credible_bandwidth
-        assert credible_bandwidth(68, 854, ignoring_advertised=True) == (68_000, 'measured')
-        assert credible_bandwidth(68, 854, ignoring_advertised=False) == (68_000, 'measured')
-
-    def test_relay_reported_when_authority_keeps_advertised(self):
-        from allium.lib.consensus.flag_thresholds import credible_bandwidth
-        assert credible_bandwidth(None, 854, ignoring_advertised=False) == (854_000, 'reported')
-        assert credible_bandwidth(None, None, ignoring_advertised=False) == (0, 'reported')
-
-    def test_unmeasured_counts_as_zero_when_ignoring_advertised(self):
-        from allium.lib.consensus.flag_thresholds import credible_bandwidth
-        assert credible_bandwidth(None, 854, ignoring_advertised=True) == (0, 'unmeasured')
-
-    def test_stale_bandwidth_file_hides_the_value(self):
-        """A stale file publishes no Measured=, but tor still uses cached measurements."""
-        from allium.lib.consensus.flag_thresholds import credible_bandwidth
-        assert credible_bandwidth(None, 854, ignoring_advertised=True,
-                                  publishes_measurements=False) == (None, 'unpublished')
-        # Without ignoring-advertised-bws the relay-reported value still applies
-        assert credible_bandwidth(None, 854, ignoring_advertised=False,
-                                  publishes_measurements=False) == (854_000, 'reported')
+@pytest.mark.parametrize("args, expected", [
+    ((68, 854, True), (68_000, 'measured')),           # Measured= (KB/s) wins
+    ((68, 854, False), (68_000, 'measured')),
+    ((None, 854, False), (854_000, 'reported')),       # else the relay-reported Bandwidth=
+    ((None, None, False), (0, 'reported')),
+    ((None, 854, True), (0, 'unmeasured')),            # else 0 with ignoring-advertised-bws=1,
+    ((None, 854, True, True), (None, 'unpublished')),  # unless the vote gives away a kept measurement
+    ((None, 854, False, True), (854_000, 'reported')),
+])
+def test_credible_bandwidth(args, expected):
+    """Bandwidth an authority judges Fast and Guard by (bwauth.c dirserv_get_credible_bandwidth_kb)."""
+    assert credible_bandwidth(*args) == expected
 
 
-class TestGuardBwTopThreshold:
-    """voteflags.c accepts MIN(guard_bandwidth_including_exits, guard_bandwidth_excluding_exits)."""
-
-    def test_lower_of_the_two_cutoffs(self):
-        from allium.lib.consensus.flag_thresholds import guard_bw_top_threshold
-        assert guard_bw_top_threshold({'guard-bw-inc-exits': 40_000_000,
-                                       'guard-bw-exc-exits': 35_000_000}) == 35_000_000
-        assert guard_bw_top_threshold({'guard-bw-inc-exits': 25_000_000,
-                                       'guard-bw-exc-exits': 26_000_000}) == 25_000_000
-
-    def test_one_or_no_cutoff(self):
-        from allium.lib.consensus.flag_thresholds import guard_bw_top_threshold
-        assert guard_bw_top_threshold({'guard-bw-inc-exits': 10_000_000}) == 10_000_000
-        assert guard_bw_top_threshold({}) is None
+@pytest.mark.parametrize("thresholds, expected", [
+    ({'guard-bw-inc-exits': 40_000_000, 'guard-bw-exc-exits': 35_000_000}, 35_000_000),
+    ({'guard-bw-inc-exits': 25_000_000, 'guard-bw-exc-exits': 26_000_000}, 25_000_000),
+    ({'guard-bw-inc-exits': 10_000_000}, 10_000_000),
+    ({}, None),
+])
+def test_guard_bw_top_threshold(thresholds, expected):
+    """voteflags.c takes MIN(guard_bandwidth_including_exits, guard_bandwidth_excluding_exits)."""
+    assert guard_bw_top_threshold(thresholds) == expected
 
 
-class TestLowMedian:
+@pytest.mark.parametrize("values, expected", [([230, 84, 68, 53, 32], 68), ([40, 10, 30, 20], 20), ([], None)])
+def test_low_median(values, expected):
     """tor's median_uint32() picks index (n-1)/2 of the sorted values."""
-
-    def test_odd_count(self):
-        from allium.lib.consensus.flag_thresholds import low_median
-        assert low_median([230, 84, 68, 53, 32]) == 68
-
-    def test_even_count_takes_lower_middle(self):
-        from allium.lib.consensus.flag_thresholds import low_median
-        assert low_median([40, 10, 30, 20]) == 20
-
-    def test_empty(self):
-        from allium.lib.consensus.flag_thresholds import low_median
-        assert low_median([]) is None
+    assert low_median(values) == expected

@@ -149,47 +149,28 @@ FAST_BW_GUARANTEE = FAST_BW_GUARANTEE_KB * VOTE_BW_KB_BYTES  # bytes/second
 # HELPER FUNCTIONS
 # ============================================================================
 
-# Where an authority's flag bandwidth came from (see credible_bandwidth()).
+# Where the bandwidth an authority judges Fast and Guard by comes from (credible_bandwidth())
 BW_SOURCE_MEASURED = 'measured'        # its bandwidth scanner's Measured= value
 BW_SOURCE_REPORTED = 'reported'        # the relay's advertised Bandwidth= value
-BW_SOURCE_UNMEASURED = 'unmeasured'    # no measurement; authority counts it as 0
-BW_SOURCE_UNPUBLISHED = 'unpublished'  # authority uses measurements it doesn't publish
-BW_SOURCE_CACHED = 'cached'            # measurement from an earlier bandwidth file, not in the vote
+BW_SOURCE_UNMEASURED = 'unmeasured'    # no measurement; the authority counts it as 0
+BW_SOURCE_UNPUBLISHED = 'unpublished'  # a measurement the vote doesn't show
 
 
 def credible_bandwidth(measured_kb: Optional[int], advertised_kb: Optional[int],
-                       ignoring_advertised: bool,
-                       publishes_measurements: bool = True) -> tuple:
+                       ignoring_advertised: bool, unpublished: bool = False) -> tuple:
     """
-    Bandwidth one authority uses for the Fast and Guard flags, in bytes/second.
+    (bytes/second or None, BW_SOURCE_*) an authority judges Fast and Guard by.
 
-    Mirrors tor's dirserv_get_credible_bandwidth_kb() (src/feature/dirauth/bwauth.c)
-    and dir-spec "Assigning flags in a vote":
-    - a Measured= value from the authority's bandwidth scanner wins;
-    - without one, the relay's advertised Bandwidth= is used, unless the
-      authority reports ignoring-advertised-bws=1, in which case it is 0.
-
-    An authority whose bandwidth file is out of date publishes no Measured=
-    values, but tor keeps using measurements it cached earlier (bwauth.c skips
-    cache expiry for stale files). When such an authority also reports
-    ignoring-advertised-bws=1, the value it uses can't be known from its vote.
-
-    Args:
-        measured_kb: Measured= from the vote (KB/s), or None
-        advertised_kb: Bandwidth= from the vote (KB/s), or None
-        ignoring_advertised: The vote's ignoring-advertised-bws flag
-        publishes_measurements: Whether the vote carries any Measured= values
-
-    Returns:
-        (bytes_per_second or None, source) with source one of the BW_SOURCE_* values
+    tor's dirserv_get_credible_bandwidth_kb() (bwauth.c): the vote's Measured=, else its
+    Bandwidth=, else 0 if the vote says ignoring-advertised-bws=1, unless tor kept a
+    measurement from an earlier bandwidth file. Votes don't show those, so when the
+    vote gives one away (unpublished) the value is unknown (None).
     """
     if measured_kb is not None:
         return measured_kb * VOTE_BW_KB_BYTES, BW_SOURCE_MEASURED
     if not ignoring_advertised:
         return (advertised_kb or 0) * VOTE_BW_KB_BYTES, BW_SOURCE_REPORTED
-    if publishes_measurements:
-        return 0, BW_SOURCE_UNMEASURED
-    return None, BW_SOURCE_UNPUBLISHED
+    return (None, BW_SOURCE_UNPUBLISHED) if unpublished else (0, BW_SOURCE_UNMEASURED)
 
 
 def guard_bw_top_threshold(thresholds: Dict[str, Any]) -> Optional[float]:

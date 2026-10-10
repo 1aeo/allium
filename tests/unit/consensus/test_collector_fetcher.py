@@ -32,7 +32,7 @@ from allium.lib.consensus.collector_fetcher import (
 # 8 currently-voting authorities (gabelmoo removed) - shared with the
 # voting_registry_8_voters fixture in tests/conftest.py
 from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8 as _ACTIVE_VOTERS_8
-from tests.conftest import FOREST44_CURRENT_BW_FILES, FOREST44_FINGERPRINT
+from tests.conftest import FOREST44_FINGERPRINT
 
 
 # ============================================================================
@@ -1469,17 +1469,18 @@ class TestVoteBandwidthForest44:
     ('w Bandwidth=68'): only dizum, faravahar, longclaw and maatuska voted Fast.
     """
 
-    def _evaluation(self, fetcher):
-        return fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)
+    def _details(self, fetcher, flag):
+        evaluation = fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)
+        return {d['authority']: d for d in evaluation['flag_eligibility'][flag]['details']}
 
     def test_fast_decided_from_each_authoritys_bandwidth(self, forest44_fetcher):
-        fast = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['fast']['details']}
+        fast = self._details(forest44_fetcher, 'fast')
         # Measured= wins, in bytes/s: 68 KB/s, not the relay-reported 854 KB/s
         assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (68_000, 'measured')
         # moria1 measured 230 KB/s, above everyone else's 102 KB/s but below its own fast-speed
         assert (fast['moria1']['speed_value'], fast['moria1']['speed_threshold']) == (230_000, 1_048_000)
         assert (fast['dizum']['speed_value'], fast['dizum']['speed_source']) == (854_000, 'reported')
-        # Stale bandwidth file + ignoring-advertised-bws=1: the value it uses isn't in the vote
+        # No Measured= values in its vote, yet ignoring-advertised-bws=1: the value it uses isn't in the vote
         assert (fast['faravahar']['speed_value'], fast['faravahar']['speed_source']) == (None, 'unpublished')
         assert fast['longclaw']['speed_source'] == 'reported'
         for name, detail in fast.items():
@@ -1487,42 +1488,42 @@ class TestVoteBandwidthForest44:
         assert sum(d['eligible'] for d in fast.values()) == 4
 
     def test_no_authority_credits_enough_bandwidth_for_guard(self, forest44_fetcher):
-        guard = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['guard']['details']}
-        assert guard['faravahar']['bw_met'] is None
+        guard = self._details(forest44_fetcher, 'guard')
+        assert (guard['faravahar']['bw_value'], guard['faravahar']['bw_met']) == (None, None)
         assert all(d['bw_met'] is False for name, d in guard.items() if name != 'faravahar')
         assert guard['dannenberg']['bw_top25_threshold'] == 35_000_000  # MIN(inc 36M, exc 35M)
         assert guard['bastet']['bw_guarantee'] == 2_097_000
 
     def test_consensus_weight_is_low_median_of_measured(self, forest44_fetcher):
-        bandwidth = self._evaluation(forest44_fetcher)['bandwidth']
-        assert bandwidth['consensus_weight_kb'] == 68
-        assert bandwidth['median'] == 68_000
-        assert bandwidth['unmeasured'] is False
+        bandwidth = forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)['bandwidth']
+        assert (bandwidth['median'], bandwidth['unmeasured']) == (68_000, False)
         assert (bandwidth['min'], bandwidth['max']) == (32_000, 230_000)
         assert bandwidth['measurement_count'] == 5
-        assert bandwidth['bw_auth_measured_count'] == 5
-        assert bandwidth['bw_auth_total'] == 7
+        assert (bandwidth['bw_auth_measured_count'], bandwidth['bw_auth_total']) == (5, 7)
         assert bandwidth['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
 
     def test_unmeasured_weight_is_capped_median_of_bandwidth(self, forest44_fetcher):
         votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
         for name in ('bastet', 'dannenberg', 'gabelmoo'):
             votes[name]['measured'] = None
+        # 2 Measured= values: the median of Bandwidth= (854 KB/s), not capped while fewer
+        # than 3 votes carry Measured= values (dirvote.c has_measured_bws)
+        assert forest44_fetcher.measuring_authorities == {'moria1', 'tor26'}
         bandwidth = forest44_fetcher._format_bandwidth({'votes': votes})
-        # 2 Measured= values: median of Bandwidth= (854), capped at maxunmeasuredbw 20 KB/s
-        assert bandwidth['unmeasured'] is True
-        assert bandwidth['median'] == 20_000
-        forest44_fetcher.current_bw_file_authorities = {'moria1', 'tor26'}
-        # Cap only applies while 3+ votes carry Measured= values
-        assert forest44_fetcher._format_bandwidth({'votes': votes})['median'] == 854_000
+        assert (bandwidth['unmeasured'], bandwidth['median']) == (True, 854_000)
+        # With 3+ votes measuring other relays it is capped at maxunmeasuredbw, 20 KB/s
+        forest44_fetcher.measuring_authorities = {'bastet', 'dannenberg', 'gabelmoo', 'moria1', 'tor26'}
+        assert forest44_fetcher._format_bandwidth({'votes': votes})['median'] == 20_000
 
     def test_fast_vote_without_measurement_means_earlier_measurement(self, forest44_fetcher):
-        """No Measured= but a Fast vote: tor used a measurement cached from an earlier file."""
+        """No Measured= but a Fast vote: tor used a measurement kept from an earlier file."""
+        # Derived before the edits below, as if these votes still measured other relays
+        assert forest44_fetcher.measuring_authorities == {'bastet', 'dannenberg', 'gabelmoo', 'moria1', 'tor26'}
         votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
         votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
         votes['tor26']['measured'] = None
-        fast = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['fast']['details']}
-        assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (None, 'cached')
+        fast = self._details(forest44_fetcher, 'fast')
+        assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (None, 'unpublished')
         assert fast['bastet']['eligible'] is True
         # Without a Fast vote, no measurement still counts as 0 (ignoring-advertised-bws=1)
         assert (fast['tor26']['speed_value'], fast['tor26']['speed_source']) == (0, 'unmeasured')
@@ -1530,33 +1531,6 @@ class TestVoteBandwidthForest44:
 
     def test_sybil_relay_gets_no_fast(self, forest44_fetcher):
         """dirvote.c clear_status_flags_on_sybil drops every flag, whatever the bandwidth."""
-        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
-        votes['maatuska']['flags'] = ['Sybil']
-        fast = {d['authority']: d for d in self._evaluation(forest44_fetcher)['flag_eligibility']['fast']['details']}
-        assert fast['maatuska']['speed_value'] == 854_000
-        assert fast['maatuska']['sybil'] is True
-        assert fast['maatuska']['eligible'] is False
-
-    def test_unknown_publishing_set_comes_from_the_votes(self, forest44_fetcher):
-        """Without bandwidth-file status, votes carrying Measured= decide (has_measured_bws)."""
-        forest44_fetcher.current_bw_file_authorities = None
-        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
-        for name in ('bastet', 'dannenberg', 'gabelmoo'):
-            votes[name]['measured'] = None
-        bandwidth = forest44_fetcher._format_bandwidth({'votes': votes})
-        assert forest44_fetcher.current_bw_file_authorities == {'moria1', 'tor26'}
-        # Only 2 votes carry measurements, so tor doesn't cap the unmeasured median
-        assert (bandwidth['unmeasured'], bandwidth['median']) == (True, 854_000)
-
-    def test_authorities_with_measurements_from_votes(self, forest44_fetcher):
-        """Same set as the bandwidth-file timestamps: stale faravahar and longclaw publish none."""
-        from allium.lib.consensus.collector_fetcher import authorities_with_measurements
-        assert authorities_with_measurements(forest44_fetcher.relay_index) == FOREST44_CURRENT_BW_FILES
-
-    def test_parse_vote_tells_current_from_stale_bandwidth_file(self):
-        fetcher = CollectorFetcher()
-        header = "network-status-version 3\nvote-status vote\n"
-        current = fetcher._parse_vote(header + "bandwidth-file-headers timestamp=1791430726 version=1.9.0\n", 'X')
-        stale = fetcher._parse_vote(header + "bandwidth-file-headers\n", 'X')
-        assert current['has_bandwidth_file_headers'] and current['bandwidth_file_current']
-        assert stale['has_bandwidth_file_headers'] and not stale['bandwidth_file_current']
+        forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']['maatuska']['flags'] = ['Sybil']
+        maatuska = self._details(forest44_fetcher, 'fast')['maatuska']
+        assert (maatuska['speed_value'], maatuska['sybil'], maatuska['eligible']) == (854_000, True, False)

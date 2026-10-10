@@ -29,7 +29,6 @@ from .flag_thresholds import (
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
     BW_SOURCE_UNPUBLISHED,
-    BW_SOURCE_CACHED,
     guard_bw_top_threshold,
     parse_wfu_threshold as _parse_wfu_threshold,
 )
@@ -996,11 +995,10 @@ _FLAG_BW_TITLES = {
     BW_SOURCE_UNMEASURED: ("{authority} has no current measurement for this relay and ignores relay-reported "
                            "bandwidth (ignoring-advertised-bws=1), so it counts the relay as 0, unless it "
                            "still has a measurement from an earlier bandwidth file (kept up to 3 days)."),
-    BW_SOURCE_UNPUBLISHED: ("{authority}'s vote has no Measured= values at all, yet it ignores relay-reported "
-                            "bandwidth (ignoring-advertised-bws=1), so it judges this relay by a measurement kept "
-                            "from an earlier bandwidth file (0 if none), which its vote doesn't show."),
-    BW_SOURCE_CACHED: ("{authority}'s vote has no Measured= for this relay, yet it voted Fast, so it is "
-                       "using a measurement from an earlier bandwidth file (tor keeps them up to 3 days)."),
+    BW_SOURCE_UNPUBLISHED: (
+        "{authority}'s vote doesn't show the bandwidth it judges this relay by: it has no Measured= for it "
+        "and ignores relay-reported bandwidth (ignoring-advertised-bws=1), yet it voted Fast or its vote has "
+        "no Measured= values at all, so it uses a measurement kept from an earlier bandwidth file (0 if none)."),
 }
 
 # Marker after each per-authority bandwidth value (legend under the Per-Authority table)
@@ -1052,7 +1050,7 @@ def _format_flag_bandwidth_html(details: list, value_key: str, source_key: str, 
         lines.append(f'<strong>{shown}</strong> '
                      f'<span class="al-text-small-muted">({len(values)} DA {label})</span>')
     hidden = [d.get('authority', '?') for d in details
-              if d.get(source_key) in (BW_SOURCE_UNPUBLISHED, BW_SOURCE_CACHED)]
+              if d.get(source_key) == BW_SOURCE_UNPUBLISHED]
     if hidden:
         lines.append(f'<span class="al-text-small-muted">{", ".join(hidden)}: not published</span>')
     return '<br>'.join(lines) if lines else 'N/A'
