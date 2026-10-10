@@ -99,3 +99,76 @@ def test_parallel_and_sequential_generation_write_identical_pages(tmp_path, monk
     _match, mismatch, errors = filecmp.cmpfiles(
         tmp_path / "parallel", tmp_path / "sequential", parallel_files, shallow=False)
     assert mismatch == [] and errors == []
+
+
+def _die_in_worker(monkeypatch, name, poisoned):
+    """Make a pool worker exit abruptly when page_writer.<name> is called for a poisoned item.
+
+    Workers look the function up in their forked copy of page_writer; the
+    parent's sequential fallback never dies.
+    """
+    original = getattr(page_writer, name)
+    parent_pid = os.getpid()
+
+    def dying(*args, **kwargs):
+        """Exit at once in a worker called for a poisoned item; otherwise call the original."""
+        if os.getpid() != parent_pid and poisoned(*args):
+            os._exit(1)  # simulate a worker killed by the OOM killer
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(page_writer, name, dying)
+
+
+# multiprocessing.Pool replaces a dead worker without failing its task, so
+# these hang (pytest-timeout fails them) unless the pool reports the death.
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="parallel generation needs fork()")
+@pytest.mark.parametrize("key", ["family", "contact"])
+def test_page_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, key):
+    """A page worker killed mid-run leads to a sequential re-render with every page intact."""
+    sequential = _build(tmp_path / "sequential", mp_workers=0)
+    page_writer.write_pages_by_key(sequential, key)
+
+    relay_set = _build(tmp_path / "parallel", mp_workers=2)
+    relay_set.timestamp = sequential.timestamp  # rendered into every page
+    poisoned_dir = page_writer._sanitize_path_component(list(relay_set.json["sorted"][key])[7])
+    _die_in_worker(monkeypatch, "_write_html",
+                   lambda path, _html: os.path.basename(os.path.dirname(path)) == poisoned_dir)
+
+    page_writer.write_pages_by_key(relay_set, key)
+
+    assert relay_set.mp_workers == 0  # the pool broke and the pages were rendered sequentially
+    files = _tree(tmp_path / "parallel")
+    assert files == _tree(tmp_path / "sequential")
+    assert any(name.startswith(os.path.join(key, poisoned_dir) + os.sep) for name in files)
+    _match, mismatch, errors = filecmp.cmpfiles(
+        tmp_path / "parallel", tmp_path / "sequential", files, shallow=False)
+    assert mismatch == [] and errors == []
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="parallel generation needs fork()")
+@pytest.mark.parametrize("group, compute, sequential_step", [
+    ("contact", "_compute_contact_predata", "_precompute_single_contact"),
+    ("family", "_compute_family_predata", "_precompute_single_family"),
+])
+def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, group, compute, sequential_step):
+    """A precompute worker killed mid-run leads to every group being precomputed sequentially."""
+    sequential = _build(tmp_path / "sequential", mp_workers=0)
+    poisoned = list(sequential.json["sorted"][group])[7]
+    _die_in_worker(monkeypatch, compute, lambda _relay_set, group_hash, *_args: group_hash == poisoned)
+
+    recomputed = []
+    original_step = getattr(Relays, sequential_step)
+
+    def recording_step(self, group_hash, *args):
+        """Note each group the sequential fallback recomputes, then run the real step."""
+        recomputed.append(group_hash)
+        return original_step(self, group_hash, *args)
+
+    monkeypatch.setattr(Relays, sequential_step, recording_step)
+
+    relay_set = _build(tmp_path / "parallel", mp_workers=2)
+
+    # The pool broke and every group was precomputed again sequentially,
+    # ending up exactly as the sequential path leaves it.
+    assert sorted(recomputed) == sorted(sequential.json["sorted"][group])
+    assert relay_set.json["sorted"][group] == sequential.json["sorted"][group]
