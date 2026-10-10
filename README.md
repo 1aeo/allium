@@ -92,6 +92,7 @@ cd www && python3 -m http.server 8000
 - Multiprocessing page generation (configurable via `--workers`)
 - Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
+- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages: static SVG, no JavaScript, no extra dependency (skip with `--no-charts`)
 
 </details>
 
@@ -182,6 +183,7 @@ Pre-computed analysis attached to contact pages:
 | `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
 | `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
+| `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
 
 **Examples**:
 

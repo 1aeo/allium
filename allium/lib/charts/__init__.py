@@ -1,2 +1,1 @@
-"""Build-time relay-page charts. Must not import matplotlib at load."""
-
+"""Build-time SVG history charts for relay and contact pages."""

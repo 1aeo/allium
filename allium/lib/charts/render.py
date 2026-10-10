@@ -5,7 +5,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from ..stability_utils import evaluate_overload
-from ..time_utils import parse_onionoo_timestamp
+from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
 from .bands import (
     RATIO_SCALE_HI, RATIO_SCALE_LO, band_legend_labels, bands_for_flags, bands_for_role,
     census_footnote, ratio_strip_data_hi,
@@ -22,7 +22,6 @@ from .svg import (
 
 WIDTH, LEFT = 1080, 138
 PLOT_WIDTH = WIDTH - LEFT - 24
-SHORT = {"1m": "1M", "6m": "6M", "1y": "1Y", "5y": "5Y"}
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -42,8 +41,9 @@ def _footer(svg, panel, period, interval, footnote=""):
     """Date-axis caption (``6M · 1-day``) under longer periods, then the footnote. Returns the height."""
     y = panel.top + panel.height + 38
     if period != "1m":
-        unit = next(((s, n) for s, n in ((604800, "week"), (86400, "day"), (3600, "hour")) if interval % s == 0), None)
-        caption = "{} · {}-{}".format(SHORT[period], interval // unit[0], unit[1]) if interval and unit else SHORT[period]
+        units = ((SECONDS_PER_WEEK, "week"), (SECONDS_PER_DAY, "day"), (SECONDS_PER_HOUR, "hour"))
+        unit = next(((s, n) for s, n in units if interval and interval % s == 0), None)
+        caption = period.upper() + (" · {}-{}".format(interval // unit[0], unit[1]) if unit else "")
         y += 20
         svg.text(LEFT + PLOT_WIDTH / 2, y, caption, 13, MUTED, "middle")
     if footnote:
@@ -72,9 +72,9 @@ def _spike_callout(svg, panel, rows, bands, clear_of):
     x, y = panel.x(peak[0]), panel.y(peak[1])
     width = text_width(label, 11.5, bold=True) + 14
     left = (x - panel.left) * 1.03 > 0.62 * panel.width  # late peaks get the label on their left
-    box_x = x - 19 - width if left else x + 19
+    box_x = min(max(x - 19 - width if left else x + 19, 12), svg.width - 12 - width)
     box_y = y - 44 if y - 48 > clear_of else y + 20
-    svg.line(x, y, box_x + (width if left else 0), box_y + 12, MUTED, 1)
+    svg.line(x, y, min(max(x, box_x), box_x + width), box_y + 12, MUTED, 1)
     svg.rect(box_x, box_y, width, 24, "#161a20", stroke=RED, rx=5)
     svg.text(box_x + 7, box_y + 16.5, label, 11.5, RED, bold=True)
 
