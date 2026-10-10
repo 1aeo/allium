@@ -621,8 +621,9 @@ th[title]::after {
     margin: 12px 0;
 }
 
-/* History charts (relay and contact pages): dark 1aeo.com/blog cards, the
-   other periods as a row of small copies. */
+/* History charts (relay and contact pages): dark 1aeo.com/blog cards. Only
+   the default chart (last in the DOM) shows until a thumbnail link targets
+   another period; same pure-CSS :target pattern as the AROI pagination. */
 .chart-history {
     margin: 12px 0 0;
     padding: 6px;
@@ -635,17 +636,28 @@ th[title]::after {
     width: 100%;
     height: auto;
 }
+.chart-history .chart-hero {
+    display: none;
+    scroll-margin-top: 80px;
+}
+.chart-history .chart-hero:last-of-type,
+.chart-history .chart-hero:target {
+    display: block;
+}
+.chart-history .chart-hero:target ~ .chart-hero {
+    display: none;
+}
 .chart-sparks {
     display: flex;
     gap: 6px;
     margin-top: 6px;
 }
 .chart-spark {
-    flex: 0 0 calc((100% - 12px) / 3);
+    flex: 0 1 25%;
     border-radius: 4px;
     outline: 1px solid transparent;
 }
-a.chart-spark:hover,
-a.chart-spark:focus {
+.chart-spark:hover,
+.chart-spark:focus {
     outline-color: var(--aeo-green);
 }

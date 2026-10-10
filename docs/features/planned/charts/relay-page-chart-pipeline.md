@@ -18,6 +18,9 @@ type follow the 1aeo.com/blog charts (dark `#1e1e1e` canvas, DejaVu Sans).
   so a page only references charts that were written.
 - About 68k charts for the whole network take under a minute of CPU in those
   existing workers (about 1-3 ms each, about 9 KB each).
+- A section shows its first period; the thumbnails link to `#bandwidth-6m`
+  and so on, and CSS `:target` swaps the chart in place, so no page is
+  copied per period and no JavaScript runs.
 - `--no-charts` skips them.
 
 ## Content rules

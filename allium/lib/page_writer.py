@@ -47,7 +47,6 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
-from .charts.series import PERIODS
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1689,32 +1688,27 @@ class _RelayPageRenderer:
                                 self.family_key_to_fps)
 
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
-        # with the history charts beside it and one page per longer chart period.
-        fingerprint = relay["fingerprint"]
-        relay_dir = os.path.join(self.output_path, fingerprint)
+        # with the relay's history charts beside it
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
         os.makedirs(relay_dir, exist_ok=True)
         bandwidth_periods, uptime_periods = (
             self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ((), ()))
-        for _key, period in PERIODS:
-            if period != "1m" and period not in bandwidth_periods and period not in uptime_periods:
-                continue
-            filename = "index.html" if period == "1m" else period + ".html"
-            rendered = self.template.render(
-                relay=relay, page_ctx=page_ctx, relays=self.relay_set,
-                contact_display_data=contact_display_data,
-                contact_validation_status=contact_validation_status,
-                aroi_validation_timestamp=self.aroi_validation_timestamp,
-                validated_aroi_domains=self.validated_aroi_domains,
-                base_url=self.base_url,
-                canonical_url=canonical_url_for_output(
-                    self.base_url, f"relay/{fingerprint}/{filename}"
-                ),
-                page_number=1,
-                hero_period=period,
-                bandwidth_periods=bandwidth_periods,
-                uptime_periods=uptime_periods,
-            )
-            _write_html(os.path.join(relay_dir, filename), rendered)
+
+        rendered = self.template.render(
+            relay=relay, page_ctx=page_ctx, relays=self.relay_set,
+            contact_display_data=contact_display_data,
+            contact_validation_status=contact_validation_status,
+            aroi_validation_timestamp=self.aroi_validation_timestamp,
+            validated_aroi_domains=self.validated_aroi_domains,
+            base_url=self.base_url,
+            canonical_url=canonical_url_for_output(
+                self.base_url, f"relay/{relay['fingerprint']}/index.html"
+            ),
+            page_number=1,
+            bandwidth_periods=bandwidth_periods,
+            uptime_periods=uptime_periods,
+        )
+        _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 
 _mp_relay_page_renderer = None

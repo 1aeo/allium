@@ -785,7 +785,7 @@ Country: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', hero_period, anchor='bandwidth') }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read') }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1027,7 +1027,7 @@ Country: unknown
 </div>
 {% endif %}
 
-{{ chart_history('uptime', uptime_periods, 'Uptime', hero_period, anchor='uptime') }}
+{{ chart_history('uptime', uptime_periods, 'Uptime') }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}

@@ -616,25 +616,24 @@
 {# Kept empty for backwards compatibility during transition #}
 {%- endmacro %}
 
-{#- A period's history chart (the first period by default) plus small copies of the
-    other periods, linked to their own pages when anchor is set. -#}
-{% macro chart_history(name, periods, alt, hero=none, src='', anchor='') %}
+{#- History charts, one per period. The first shows; a thumbnail link shows its period
+    through CSS :target instead (no JavaScript, no page copy). As in the AROI pagination,
+    the default chart is last in the DOM so the ~ combinator can hide it. -#}
+{% macro chart_history(name, periods, alt, src='') %}
 {% if periods %}
-{% set hero = hero or periods[0] %}
 {% set spans = {'1m': 'last 30 days', '6m': 'last 6 months', '1y': 'last year', '5y': 'last 5 years'} %}
-{% set tag = 'a' if anchor else 'span' %}
 <h5 class="subsection-header" style="margin-top: 16px;">History</h5>
 <div class="chart-history">
-    {% if hero in periods %}
-    <img src="{{ src }}{{ name }}-{{ hero }}.svg" alt="{{ alt }}, {{ spans[hero] }}" loading="lazy">
-    {% endif %}
+    {% for period in periods[1:] + periods[:1] %}
+    <img id="{{ name }}-{{ period }}" class="chart-hero" src="{{ src }}{{ name }}-{{ period }}.svg" alt="{{ alt }}, {{ spans[period] }}" loading="lazy">
+    {% endfor %}
+    {% if periods|length > 1 %}
     <div class="chart-sparks">
-        {% for period in periods if period != hero %}
-        <{{ tag }} class="chart-spark"{% if anchor %} href="{{ 'index' if period == '1m' else period }}.html#{{ anchor }}"{% endif %}>
-            <img src="{{ src }}{{ name }}-{{ period }}.svg" alt="{{ alt }}, {{ spans[period] }}" loading="lazy">
-        </{{ tag }}>
+        {% for period in periods %}
+        <a class="chart-spark" href="#{{ name }}-{{ period }}" aria-label="Show the {{ spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.svg" alt="" loading="lazy"></a>
         {% endfor %}
     </div>
+    {% endif %}
 </div>
 {% endif %}
 {% endmacro %}
