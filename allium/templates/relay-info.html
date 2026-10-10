@@ -274,7 +274,7 @@ Country: unknown
                 {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.bw_auth_total -%}
 <span style="color: {{ diag.bandwidth_summary.bw_auth_color }};" title="Number of bandwidth authorities (sbws scanners) that measured this relay. Currently {{ diag.bandwidth_summary.bw_auth_total }} authorities run bandwidth scanners.">{{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}</span> BW Auths Measured
                     {% if diag.bandwidth_summary.median_int -%}
-<span title="Median bandwidth measurement from bandwidth authorities. Used to calculate consensus weight.">{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }} Median</span>
+<span title="{% if diag.bandwidth_summary.unmeasured %}Consensus weight: fewer than 3 bandwidth authorities measured this relay, so it is the median of the relay-reported bandwidths in the votes, capped (maxunmeasuredbw).{% else %}Consensus weight: the median of the bandwidth authorities' measurements (Measured= in their votes).{% endif %}">{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }} Median</span>
                     {% endif -%}
                 {% elif relay['measured'] -%}
 <span class="al-status-success" title="Relay has been measured by bandwidth authorities.">Measured</span>
@@ -739,10 +739,10 @@ Country: unknown
             </dd>
             
             {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display %}
-            <dt title="Median of measurements from bandwidth authorities">Median Measurement</dt>
-            <dd>{{ diag.bandwidth_summary.median_display }}</dd>
+            <dt id="bw-consensus-weight" title="Computed from the votes as the consensus does: the median of the bandwidth authorities' measurements (Measured=) when 3 or more measured the relay; otherwise the median of the relay-reported bandwidths (Bandwidth=), capped at maxunmeasuredbw and marked Unmeasured.">Consensus Weight</dt>
+            <dd>{{ diag.bandwidth_summary.median_display }}{% if diag.bandwidth_summary.unmeasured %} <span class="al-status-warning" title="Fewer than 3 bandwidth authorities measured this relay">(Unmeasured)</span>{% else %} <span class="al-text-small-muted">(median of {{ diag.bandwidth_summary.measurement_count }} measurements)</span>{% endif %}</dd>
             
-            <dt title="Range of measurements across authorities">Min / Max</dt>
+            <dt title="Lowest and highest Measured= value across the bandwidth authorities' votes">Measured Min / Max</dt>
             <dd>
                 {{ diag.bandwidth_summary.min_display|default('N/A') }} / {{ diag.bandwidth_summary.max_display|default('N/A') }}
             </dd>
@@ -1435,9 +1435,9 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
-    <th title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
-    <th title="Fast flag: top 7/8ths OR Tor spec minimum">Fast (Relay|T)</th>
-    <th title="Guard BW: Tor spec minimum OR top 25%">Guard BW (Relay|Threshold)</th>
+    <th id="col-flags" title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
+    <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
+    <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
     <th title="Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
     <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>
     <th title="Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
@@ -1445,7 +1445,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
     <th title="HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
     <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
-    <th id="col-cons-wt" title="Authority-measured consensus weight (scaled) used for path selection">Cons Wt (Authority)</th>
+    <th id="col-cons-wt" title="Each vote's input to the consensus weight. When 3 or more authorities measured the relay, the consensus weight is the median of their measurements (M); relay-reported values (R) then don't count and are grayed out. Otherwise it is the median of the relay-reported values, capped at maxunmeasuredbw.">Cons Wt (Authority)</th>
 </tr>
 </thead>
 <tbody>
@@ -1480,8 +1480,8 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
         {% elif vote.flags %}{{ vote.flags_display }}
         {% else %}<span class="al-status-muted">—</span>{% endif %}
     </td>
-    <td>{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay: {{ vote.fast_speed_display }} | Threshold: {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay: {{ vote.guard_bw_value_display }} | Top 25%: {{ vote.guard_bw_top25_display }} | Tor spec min: {{ vote.guard_bw_guarantee_display }}">{{ vote.guard_bw_value_display }} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Guard needs this authority's top-25% cutoff ({{ vote.guard_bw_top25_display }}) OR AuthDirGuardBWGuarantee ({{ vote.guard_bw_guarantee_display }}).">{{ vote.guard_bw_value_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
@@ -1489,7 +1489,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu >= 0.98 %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span class="{% if vote.hsdir_tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.measured %}<span title="Consensus weight: {{ vote.measured_display }}">{{ vote.measured_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
@@ -1497,14 +1497,15 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 </div>
 
 <p style="font-size: 10px; color: #666; margin-top: 5px;">
-— = not tested/available • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known
+— = not tested/available • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known • Bandwidth source: (M) bandwidth-scanner measurement, (R) relay-reported, (U) unmeasured, counted as 0
 </p>
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
 <strong>Bandwidth Values Explained:</strong><br>
-<strong>Relay Reported</strong> = Your relay's self-reported bandwidth from its descriptor (observed_bandwidth). Used for <em>flag eligibility</em> (Guard, Fast).<br>
-<strong>Authority Measured</strong> = Bandwidth measured by authority's sbws scanner. Used for <em>consensus weight</em> (path selection probability).<br>
-<em>Why different?</em> Authorities verify your reported bandwidth independently. 6 of 9 authorities run bandwidth scanners; 3 use relay-reported values directly.
+<strong>Measured (M)</strong> = An authority's bandwidth-scanner measurement of your relay (<code>Measured=</code> in its vote). An authority that has one uses it for the Fast and Guard flags, and the consensus weight is the median of these measurements when 3 or more authorities have one.<br>
+<strong>Relay-reported (R)</strong> = The bandwidth your relay advertises: the lower of its observed bandwidth and its rate limit, capped at 10 MB/s (<code>Bandwidth=</code> in every vote). An authority without a measurement uses it for flags, unless it has measurements for enough other relays (<code>ignoring-advertised-bws=1</code>); then your relay counts as 0 (U). It sets the consensus weight only when fewer than 3 authorities measured the relay, capped at 20 KB/s (maxunmeasuredbw) while 3 or more authorities publish measurements.<br>
+<strong>Not published</strong> = The authority has no measurement of your relay in its vote and ignores relay-reported bandwidth, yet it voted Fast or its vote has no measurements at all: it judges your relay by a measurement kept from an earlier bandwidth file (0 if none), which its vote doesn't show.<br>
+<em>Why different?</em> A low measurement means the bandwidth scanners see your relay underperforming compared with other relays that report a similar speed. Votes list both values in kilobytes per second. Rules: <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Assigning flags in a vote</a>, <a href="https://spec.torproject.org/dir-spec/computing-consensus.html" target="_blank" rel="noopener">Computing a consensus</a>.
 </div>
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #17a2b8;">

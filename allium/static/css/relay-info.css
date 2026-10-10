@@ -66,6 +66,7 @@
 dt:target {
     padding: 4px 6px;
     margin: -4px -6px 6px;
+    outline-offset: -3px;  /* inside the padding: an outer outline crosses the line above */
 }
 th:target {
     outline-offset: 0;  /* header cells sit in a scrolling table that clips outlines drawn outside them */

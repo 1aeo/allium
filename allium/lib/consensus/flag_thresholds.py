@@ -20,8 +20,12 @@ Guard (all must be true):
   - TK (Time Known) >= guard-tk threshold  
     * Default: 8 days (691200 seconds) per dir-spec "TK" parameter
   - Bandwidth >= AuthDirGuardBWGuarantee OR in fastest 25% of network
-    * AuthDirGuardBWGuarantee default: 2 MB/s (2,000,000 bytes/s)
+    * AuthDirGuardBWGuarantee default: "2 MB" = 2,097,152 bytes, compared
+      by tor as 2097 KB/s (voteflags.c: routerbw_kb >= bw_opt / 1000)
   - Has "V2Dir" flag
+
+Fast and Guard bandwidth is each authority's own: its vote's Measured= value if it
+has one, else the relay's advertised Bandwidth= (see credible_bandwidth()).
 
 Stable:
   - Weighted MTBF >= median network MTBF, OR
@@ -30,7 +34,8 @@ Stable:
 Fast:
   - Bandwidth in top 7/8ths of network, OR
   - Bandwidth >= AuthDirFastGuarantee
-    * Default: 100 KB/s (100,000 bytes/s)
+    * Default: "100 KB" = 102,400 bytes; tor caps the Fast threshold at
+      102 KB/s, which votes publish as fast-speed=102000
 
 HSDir:
   - Has "Stable" flag
@@ -62,16 +67,26 @@ SECONDS_PER_DAY = 86400
 SECONDS_PER_WEEK = 604800
 
 # ============================================================================
-# GUARD FLAG THRESHOLDS
-# Per dir-spec Section 3.4.2 and Tor source (src/app/config/config.c)
+# BANDWIDTH UNITS
 # ============================================================================
 
-# AuthDirGuardBWGuarantee: Minimum bandwidth for Guard flag
-# Per dir-spec: "AuthDirGuardBWGuarantee" default is 2 MB/s (2,000,000 bytes/s)
+# Vote "w" lines give Bandwidth= and Measured= in KB/s (dir-spec); flag-thresholds
+# values (fast-speed, guard-bw-*) are already bytes/second.
+VOTE_BW_KB_BYTES = 1000
+# Consensus weight cap while fewer than 3 authorities measured a relay (maxunmeasuredbw)
+MAX_UNMEASURED_BW_KB = 20
+
+# ============================================================================
+# GUARD FLAG THRESHOLDS
+# Per dir-spec Section 3.4.2 and Tor source (src/feature/dirauth/voteflags.c)
+# ============================================================================
+
+# AuthDirGuardBWGuarantee: Minimum bandwidth for Guard flag.
+# Default "2 MB" is a tor MEMUNIT (2 * 1024 * 1024 bytes); voteflags.c compares
+# credible bandwidth in KB/s against bw_opt / 1000, i.e. 2097 KB/s.
 # If a relay has at least this bandwidth, it meets the BW requirement for Guard
 # regardless of whether it's in the top 25% by bandwidth.
-# Verified: All 9 voting authorities use this value.
-GUARD_BW_GUARANTEE = 2_000_000  # bytes/second (2 MB/s)
+GUARD_BW_GUARANTEE = (2 * 1024 * 1024) // 1000 * VOTE_BW_KB_BYTES  # 2,097,000 bytes/second
 
 # Guard time-known (TK) threshold per dir-spec: 8 days
 # Per dir-spec: "TK" parameter default is 8 days (691200 seconds)
@@ -106,11 +121,11 @@ HSDIR_WFU_DEFAULT = 0.98
 # Per dir-spec Section 3.4.2
 # ============================================================================
 
-# AuthDirFastGuarantee: Minimum bandwidth for Fast flag
-# Per dir-spec: "AuthDirFastGuarantee" default is 100 KB/s (100,000 bytes/s)
+# AuthDirFastGuarantee: Minimum bandwidth for Fast flag.
+# Default "100 KB" is a tor MEMUNIT (102,400 bytes); voteflags.c caps the Fast
+# threshold at fast_opt / 1000 = 102 KB/s, published as fast-speed=102000.
 # Relays with at least this bandwidth get Fast flag even if not in top 7/8ths.
-# The Fast flag indicates the relay has sufficient bandwidth for general use.
-FAST_BW_GUARANTEE = 100_000  # bytes/second (100 KB/s)
+FAST_BW_GUARANTEE = (100 * 1024) // 1000 * VOTE_BW_KB_BYTES  # 102,000 bytes/second
 
 # ============================================================================
 # STABLE FLAG THRESHOLDS
@@ -124,6 +139,43 @@ FAST_BW_GUARANTEE = 100_000  # bytes/second (100 KB/s)
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+# Where the bandwidth an authority judges Fast and Guard by comes from (credible_bandwidth())
+BW_SOURCE_MEASURED = 'measured'        # its bandwidth scanner's Measured= value
+BW_SOURCE_REPORTED = 'reported'        # the relay's advertised Bandwidth= value
+BW_SOURCE_UNMEASURED = 'unmeasured'    # no measurement; the authority counts it as 0
+BW_SOURCE_UNPUBLISHED = 'unpublished'  # a measurement the vote doesn't show
+
+
+def credible_bandwidth(measured_kb: Optional[int], advertised_kb: Optional[int],
+                       ignoring_advertised: bool, unpublished: bool = False) -> tuple:
+    """
+    (bytes/second or None, BW_SOURCE_*) an authority judges Fast and Guard by.
+
+    tor's dirserv_get_credible_bandwidth_kb() (bwauth.c): the vote's Measured=, else its
+    Bandwidth=, else 0 if the vote says ignoring-advertised-bws=1, unless tor kept a
+    measurement from an earlier bandwidth file. Votes don't show those, so when the
+    vote gives one away (unpublished) the value is unknown (None).
+    """
+    if measured_kb is not None:
+        return measured_kb * VOTE_BW_KB_BYTES, BW_SOURCE_MEASURED
+    if not ignoring_advertised:
+        return (advertised_kb or 0) * VOTE_BW_KB_BYTES, BW_SOURCE_REPORTED
+    return (None, BW_SOURCE_UNPUBLISHED) if unpublished else (0, BW_SOURCE_UNMEASURED)
+
+
+def guard_bw_top_threshold(thresholds: Dict[str, Any]) -> Optional[float]:
+    """Top-25% Guard cutoff (bytes/s): voteflags.c takes MIN(guard-bw-inc-exits, guard-bw-exc-exits)."""
+    values = [thresholds[key] for key in ('guard-bw-inc-exits', 'guard-bw-exc-exits')
+              if isinstance(thresholds.get(key), (int, float))]
+    return min(values) if values else None
+
+
+def low_median(values: list):
+    """Lower median, as tor's median_uint32() picks for an even count."""
+    ordered = sorted(values)
+    return ordered[(len(ordered) - 1) // 2] if ordered else None
+
 
 def parse_wfu_threshold(value: Any) -> Optional[float]:
     """
@@ -172,12 +224,12 @@ def check_guard_eligibility(
     Per Tor dir-spec, Guard requires:
     - WFU >= guard-wfu threshold (typically 98%)
     - TK >= guard-tk threshold (typically 8 days)
-    - Bandwidth >= 2 MB/s OR in top 25% of relays
+    - Bandwidth >= AuthDirGuardBWGuarantee OR in top 25% of relays
     
     Args:
         wfu: Relay's weighted fractional uptime
         tk: Relay's time-known in seconds
-        bandwidth: Relay's observed bandwidth in bytes/second
+        bandwidth: Bandwidth the authority credits the relay with (bytes/s, see credible_bandwidth)
         wfu_threshold: WFU threshold from authority
         tk_threshold: TK threshold from authority
         bw_top25_threshold: Top 25% bandwidth cutoff from authority
@@ -262,10 +314,10 @@ def check_fast_eligibility(
     Check if a relay meets Fast flag eligibility requirements.
     
     Fast requires:
-    - Bandwidth in top 7/8ths of relays OR >= 100 KB/s (AuthDirFastGuarantee)
+    - Bandwidth in top 7/8ths of relays OR >= AuthDirFastGuarantee
     
     Args:
-        bandwidth: Relay's measured bandwidth in bytes/second
+        bandwidth: Bandwidth the authority credits the relay with (bytes/s, see credible_bandwidth)
         fast_threshold: Top 7/8ths bandwidth cutoff from authority
         
     Returns:

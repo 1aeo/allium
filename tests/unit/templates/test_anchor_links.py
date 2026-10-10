@@ -25,6 +25,17 @@ COMPAT_ANCHORS = [
     'indirect-family',
 ]
 
+# Deep-link targets for the vote data behind a relay's flags and consensus weight
+# (id= only): each authority's flags ('s' lines), its Fast bandwidth vs threshold,
+# its w-line value, and the resulting consensus weight
+VOTE_DATA_ANCHORS = [
+    'authority-votes',
+    'col-flags',
+    'col-fast',
+    'col-cons-wt',
+    'bw-consensus-weight',
+]
+
 # Required CSS classes
 REQUIRED_CSS_CLASSES = ['section-header', 'anchor-link']
 
@@ -62,6 +73,11 @@ class TestAnchorLinks:
     def test_compat_anchor_id_present(self, template_content, anchor):
         """Test that backward-compatible anchor IDs exist (for external URL compatibility)"""
         assert f'id="{anchor}"' in template_content, f"Missing compat anchor ID: {anchor}"
+
+    @pytest.mark.parametrize("anchor", VOTE_DATA_ANCHORS)
+    def test_vote_data_anchor_id_present(self, template_content, anchor):
+        """Vote data can be deep-linked without reading the raw votes"""
+        assert template_content.count(f'id="{anchor}"') == 1, f"Missing or duplicate anchor ID: {anchor}"
 
     @pytest.mark.parametrize("css_class", REQUIRED_CSS_CLASSES)
     def test_css_classes_present(self, template_content, css_class):
@@ -129,7 +145,11 @@ class TestIssueSectionLinks:
                 'ipv6_reachable_count': 0,
                 'ipv6_not_tested_authorities': ['moria1'],
             },
-            'flag_eligibility': {'stable': {'eligible_count': 2}},
+            'flag_eligibility': {
+                'stable': {'eligible_count': 2},
+                'fast': {'details': [{'authority': 'bastet', 'assigned': False, 'speed_value': 50_000,
+                                      'speed_threshold': 102_000, 'speed_source': 'measured'}]},
+            },
             'bandwidth': {'deviation': 10000, 'median': 5000,
                           'bw_auth_measured_count': 1, 'bw_auth_total': 6},
         }
@@ -146,7 +166,7 @@ class TestIssueSectionLinks:
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types
         sections = {i['section'] for i in issues}
-        assert len(sections) == 25  # fixture reaches every link target
+        assert len(sections) == 26  # fixture reaches every link target
         rows = format_relay_consensus_evaluation(consensus_data, current_flags=relay['flags'])['flag_requirements_table']
         row_ids = {row['anchor'] for row in rows}
         assert '<tr id="{{ row.anchor }}">' in template_content

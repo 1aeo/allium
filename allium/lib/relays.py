@@ -851,8 +851,7 @@ class Relays:
                         pass
                 
                 # Format for template display, passing current flags, observed_bandwidth, and relay_uptime
-                # Note: observed_bandwidth (from descriptor) is the actual bandwidth for Guard eligibility
-                # NOT the scaled consensus weight or vote Measured value
+                # (Fast/Guard bandwidth comes from each authority's vote; observed_bandwidth is a fallback)
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
                 version = relay.get('version')
