@@ -42,12 +42,31 @@ ONIONOO_HISTORY_PERIODS = ('1_month', '6_months', '1_year', '5_years')
 
 
 def parse_onionoo_timestamp(timestamp_str):
-    """Parse Onionoo timestamp string into datetime object"""
+    """Parse Onionoo ``YYYY-MM-DD HH:MM:SS`` (or datetime) as UTC.
+
+    Existing callers pass strings and still receive ``None`` on bad input.
+    Datetime values are accepted so chart series and the published clock can
+    share this helper without a second parser.
+    """
+    if isinstance(timestamp_str, datetime):
+        if timestamp_str.tzinfo is None:
+            return timestamp_str.replace(tzinfo=timezone.utc)
+        return timestamp_str
     try:
         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
         return timestamp.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+def published_clock(value):
+    """Unix seconds for the Onionoo published clock, or None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    parsed = parse_onionoo_timestamp(value)
+    return parsed.timestamp() if parsed else None
 
 
 def create_time_thresholds():

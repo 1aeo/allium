@@ -44,6 +44,7 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href
+from .charts.series import merged_period_views, period_views
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1333,6 +1334,32 @@ def write_pages_by_key(relay_set, k):
             print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
         print("---")
 
+
+def _contact_chart_template_flags(relay_set, k, v):
+    """Jinja flags for contact.html. Matplotlib stays out of this module."""
+    if k != "contact":
+        return {
+            "charts_enabled": False,
+            "has_contact_chart": False,
+            "contact_spark_periods": (),
+            "contact_hero_period": "1m",
+        }
+    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
+    hashes = getattr(relay_set, "contact_chart_hashes", None) or frozenset()
+    has_chart = charts_enabled and v in hashes
+    sparks = ()
+    hero = "1m"
+    if has_chart:
+        sparks = (getattr(relay_set, "contact_spark_periods", None) or {}).get(v) or ()
+        hero = (getattr(relay_set, "contact_hero_periods", None) or {}).get(v) or "1m"
+    return {
+        "charts_enabled": charts_enabled,
+        "has_contact_chart": has_chart,
+        "contact_spark_periods": sparks,
+        "contact_hero_period": hero,
+    }
+
+
 def build_template_args(
     relay_set,
     k,
@@ -1488,6 +1515,7 @@ def build_template_args(
         'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
         'contact_sort_enabled': (k == 'contact' and len(members) > 2),
         'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
+        **(_contact_chart_template_flags(relay_set, k, v)),
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):
@@ -1559,6 +1587,36 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         
         write_pages_by_key(relay_set, k)
 
+def write_relay_period_files(
+    template, relay_dir, render_kwargs, views, base_url, fingerprint,
+):
+    """Write index.html plus any drawable period views in ``relay_dir``."""
+    if not views:
+        views = (("index.html", "1m", ()),)
+    os.makedirs(relay_dir, exist_ok=True)
+    for row in views:
+        extra = {}
+        if len(row) == 4:
+            filename, hero, sparks, extra = row
+        else:
+            filename, hero, sparks = row
+        ctx = dict(render_kwargs)
+        ctx.update(
+            hero_period=hero,
+            bandwidth_spark_periods=sparks,
+            canonical_url=canonical_url_for_output(
+                base_url, "relay/{}/{}".format(fingerprint, filename),
+            ),
+        )
+        if extra:
+            ctx.update(extra)
+        rendered = template.render(**ctx)
+        with open(
+            os.path.join(relay_dir, filename), "w", encoding="utf8",
+        ) as html:
+            html.write(rendered)
+
+
 def write_relay_info(relay_set):
     """
     Render and write per-relay HTML info documents to disk
@@ -1588,6 +1646,12 @@ def write_relay_info(relay_set):
     fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
     family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
 
+    charts_enabled = bool(getattr(relay_set, "charts_enabled", False))
+    bandwidth_chart_fps = getattr(relay_set, "bandwidth_chart_fps", None) or frozenset()
+    spark_by_fp = getattr(relay_set, "bandwidth_spark_periods", None) or {}
+    uptime_chart_fps = getattr(relay_set, "uptime_chart_fps", None) or frozenset()
+    uptime_periods_by_fp = getattr(relay_set, "uptime_chart_periods", None) or {}
+
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
             continue
@@ -1607,26 +1671,36 @@ def write_relay_info(relay_set):
         
         # Partition family lists by family-cert status for template display
         _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps)
-        
-        rendered = template.render(
-            relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
+
+        fingerprint = relay["fingerprint"]
+        has_chart = charts_enabled and fingerprint in bandwidth_chart_fps
+        has_up = charts_enabled and fingerprint in uptime_chart_fps
+        sparks = spark_by_fp.get(fingerprint) or ()
+        up_periods = tuple(uptime_periods_by_fp.get(fingerprint) or ())
+        if has_up:
+            bw_periods = (("1m",) + tuple(sparks)) if has_chart else ()
+            views = merged_period_views(bw_periods, up_periods)
+        else:
+            views = period_views(("1m",) + tuple(sparks)) if has_chart else (
+                ("index.html", "1m", ()),
+            )
+        render_kwargs = dict(
+            relay=relay, page_ctx=page_ctx, relays=relay_set,
+            contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
             aroi_validation_timestamp=aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
             base_url=base_url,
-            canonical_url=canonical_url_for_output(
-                base_url, f"relay/{relay['fingerprint']}/index.html"
-            ),
             page_number=1,
+            charts_enabled=charts_enabled,
+            has_bandwidth_chart=has_chart,
+            has_uptime_chart=has_up,
         )
-        
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
-        
-        with open(
-            os.path.join(relay_dir, "index.html"),
-            "w",
-            encoding="utf8",
-        ) as html:
-            html.write(rendered)
+        write_relay_period_files(
+            template,
+            os.path.join(output_path, fingerprint),
+            render_kwargs,
+            views,
+            base_url,
+            fingerprint,
+        )

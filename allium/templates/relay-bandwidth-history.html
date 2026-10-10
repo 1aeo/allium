@@ -1,0 +1,31 @@
+{%- if charts_enabled|default(false) and has_bandwidth_chart|default(false) -%}
+{%- set _hero = hero_period|default('1m') -%}
+{%- set _period_alt = {
+    '1m': 'last 30 days',
+    '6m': 'last 6 months',
+    '1y': 'last year',
+    '5y': 'last 5 years',
+} -%}
+{%- set _period_href = {
+    '1m': 'index.html',
+    '6m': '6m.html',
+    '1y': '1y.html',
+    '5y': '5y.html',
+} -%}
+<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<div class="relay-bandwidth-history">
+    <img src="bandwidth-{{ _hero }}.png"
+         alt="Throughput and write/read, {{ _period_alt.get(_hero, _hero) }}">
+    {%- if bandwidth_spark_periods|default([]) %}
+    <div class="relay-bandwidth-sparks">
+        {%- for period in bandwidth_spark_periods %}
+        <a class="relay-bandwidth-spark"
+           href="{{ _period_href.get(period, period + '.html') }}#bandwidth">
+            <img src="bandwidth-{{ period }}.png"
+                 alt="Throughput and write/read, {{ _period_alt.get(period, period) }}">
+        </a>
+        {%- endfor %}
+    </div>
+    {%- endif %}
+</div>
+{%- endif -%}

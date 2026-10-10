@@ -97,6 +97,7 @@ These features represent the **roadmap** for future development. They are:
 
 ### Advanced Features
 - [visualization-dashboard-proposal.md](visualization-dashboard-proposal.md) - Interactive visualization system
+- [charts/relay-page-chart-pipeline.md](charts/relay-page-chart-pipeline.md) - Shipped build-time relay bandwidth chart pass; encoding locks live in `allium/lib/charts/`
 - [actionable-improvement-guidance.md](actionable-improvement-guidance.md) - Operator recommendations
 - [multi-api-implementation-plan.md](multi-api-implementation-plan.md) - Additional API integrations
 

@@ -91,6 +91,10 @@ def build_uptime_map(uptime_data):
 def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period, uptime_map=None):
     """
     Extract uptime data for all relays in an operator for a specific time period.
+
+    Returns per-relay **averages** for the period, not a timestamp-aligned
+    x-axis series. There is no historical AROI-adoption store. Drawable
+    operator charts walk live Onionoo maps in ``charts.series``.
     
     This is the core shared logic used by both AROI leaderboards and contact page reliability.
     

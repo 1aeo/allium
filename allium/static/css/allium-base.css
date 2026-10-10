@@ -620,3 +620,37 @@ th[title]::after {
     gap: 12px;
     margin: 12px 0;
 }
+
+/* Operator History on contact pages (same classes as relay-info.css) */
+.relay-bandwidth-history {
+    margin: 12px 0 0;
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 8px 8px 4px;
+    border: 1px solid var(--color-border-subtle, #e9ecef);
+}
+.relay-bandwidth-history > img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.relay-bandwidth-sparks {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+.relay-bandwidth-spark {
+    flex: 0 0 calc((100% - 16px) / 3);
+    width: calc((100% - 16px) / 3);
+    display: block;
+    text-decoration: none;
+    border-radius: 4px;
+    outline: 1px solid transparent;
+}
+.relay-bandwidth-history .relay-bandwidth-sparks img {
+    width: 100%;
+    height: auto;
+    display: block;
+}

@@ -205,6 +205,25 @@ def get_leaderboard_category_info(category):
     default_name = category.replace('_', ' ').title()
     return category_info.get(category, _info(default_name, '🏅'))
 
+
+def contact_member_relays(relay_set, contact_hash):
+    """Resolve ``json['sorted']['contact'][hash]['relays']`` indices to dicts.
+
+    Contact ids are 32-hex MD5 values (``contact_md5``). They are not
+    relay fingerprints and must not be passed through ``is_relay_fingerprint``.
+    """
+    json_doc = getattr(relay_set, "json", None) or {}
+    relays = json_doc.get("relays") or []
+    group = ((json_doc.get("sorted") or {}).get("contact") or {}).get(
+        contact_hash
+    ) or {}
+    members = []
+    for idx in group.get("relays") or []:
+        if isinstance(idx, int) and 0 <= idx < len(relays):
+            members.append(relays[idx])
+    return members
+
+
 def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     """
     Calculate comprehensive reliability statistics for an operator.

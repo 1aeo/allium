@@ -1,0 +1,24 @@
+{%- if charts_enabled|default(false) and has_contact_chart|default(false) -%}
+{%- set _hero = contact_hero_period|default('1m') -%}
+{%- set _period_alt = {
+    '1m': 'last 30 days',
+    '6m': 'last 6 months',
+    '1y': 'last year',
+    '5y': 'last 5 years',
+} -%}
+<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<div class="relay-bandwidth-history">
+    <img src="{{ page_ctx.path_prefix }}contact/{{ value }}/bandwidth-{{ _hero }}.png"
+         alt="Operator throughput and write/read, {{ _period_alt.get(_hero, _hero) }}">
+    {%- if contact_spark_periods|default([]) %}
+    <div class="relay-bandwidth-sparks">
+        {%- for period in contact_spark_periods %}
+        <span class="relay-bandwidth-spark">
+            <img src="{{ page_ctx.path_prefix }}contact/{{ value }}/bandwidth-{{ period }}.png"
+                 alt="Operator throughput and write/read, {{ _period_alt.get(period, period) }}">
+        </span>
+        {%- endfor %}
+    </div>
+    {%- endif %}
+</div>
+{%- endif -%}

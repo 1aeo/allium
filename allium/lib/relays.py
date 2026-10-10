@@ -1269,3 +1269,51 @@ class Relays:
         metadata = validation_data.get('metadata', {})
         timestamp_str = metadata.get('timestamp', '')
         return _format_timestamp(timestamp_str)
+
+
+def apply_chart_html_flags(relay_set, args):
+    """Set chart HTML flags before Jinja. Bandwidth flags stay bandwidth-only."""
+    from .charts.pipeline import _selection, _skip_reason, contact_period_blocks
+    from .charts.series import (
+        contact_hero_period,
+        contact_spark_suffixes,
+        drawable_suffixes,
+        spark_suffixes,
+    )
+
+    will_run = not _skip_reason(args, relay_set)
+    sel = _selection(relay_set, args) if will_run else None
+    fps = frozenset(sel.selected) if sel else frozenset()
+    bw_series = sel.series if sel else {}
+    up_series = sel.uptime_series if sel else {}
+    bw_fps = frozenset(fp for fp in fps if fp in bw_series)
+    up_fps = frozenset(fp for fp in fps if fp in up_series)
+    sparks = {
+        fp: spark_suffixes(bw_series.get(fp)) for fp in bw_fps
+    }
+    up_sparks = {
+        fp: spark_suffixes(up_series.get(fp)) for fp in up_fps
+    }
+    up_periods = {
+        fp: drawable_suffixes(up_series.get(fp)) for fp in up_fps
+    }
+    contact_blocks = contact_period_blocks(relay_set, sel) if sel else {}
+    if relay_set is not None:
+        relay_set.charts_enabled = will_run
+        relay_set.bandwidth_chart_fps = bw_fps
+        relay_set.bandwidth_spark_periods = sparks
+        relay_set.uptime_chart_fps = up_fps
+        relay_set.uptime_spark_periods = up_sparks
+        relay_set.uptime_chart_periods = up_periods
+        relay_set.contact_chart_hashes = frozenset(contact_blocks)
+        relay_set.contact_spark_periods = {
+            hid: contact_spark_suffixes(periods)
+            for hid, periods in contact_blocks.items()
+        }
+        relay_set.contact_hero_periods = {
+            hid: contact_hero_period(periods)
+            for hid, periods in contact_blocks.items()
+        }
+        relay_set._chart_selection = sel
+        relay_set._contact_chart_blocks = contact_blocks if will_run else {}
+    return will_run
