@@ -684,15 +684,17 @@ def _fetch_with_cache_fallback(
 
     cache_age = None
     cached_data = None
-    cache_load_attempted = False
+    # Whether the cache file's current contents were read already (with
+    # ignore_cache, the refetching caller found them unreadable)
+    cache_read = ignore_cache
 
     def load_cached():
         """Load the cache on first use; a cache that fails to load counts as
         missing. Most runs fetch new data and never need the cache, and
         parsing then freeing the ~240MB uptime cache cost ~10s per run."""
-        nonlocal cache_age, cached_data, cache_load_attempted
-        if not cache_load_attempted and cache_age is not None:
-            cache_load_attempted = True
+        nonlocal cache_age, cached_data, cache_read
+        if not cache_read and cache_age is not None:
+            cache_read = True
             cached_data = _load_cache(api_name)
             if cached_data is None:
                 cache_age = None
@@ -836,6 +838,7 @@ def _fetch_with_cache_fallback(
         # Cache the data
         log_progress(f"caching {display_name} data...")
         _save_cache(api_name, data)
+        cache_read = False  # the cache file now holds this response
     
         # Write timestamp for future conditional requests
         if config.use_conditional_requests:
@@ -888,9 +891,9 @@ def _fetch_with_cache_fallback(
         log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
 
-        # Try to return cached data as fallback, without re-parsing a cache that
-        # already failed to load (here, or in the caller refetching with ignore_cache)
-        cached = cached_data if cache_load_attempted or ignore_cache else _load_cache(api_name)
+        # Try to return cached data as fallback (not re-reading a cache file
+        # whose current contents were already read)
+        cached = cached_data if cache_read else _load_cache(api_name)
         if cached:
             log_progress(f"using cached {display_name} data as fallback")
             return cached

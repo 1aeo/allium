@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+from allium.lib import seo
 from allium.lib.search_discovery import (
     SITEMAP_NAMESPACE,
     generate_search_discovery,
@@ -80,7 +81,9 @@ def test_public_base_rejects_unstable_components():
         public_base_url("https://example.test/?preview=1")
 
 
-def test_rewrites_only_internal_html_links(temp_dir):
+@pytest.mark.parametrize("min_files", [1, 256], ids=["pool", "in_process"])
+def test_rewrites_only_internal_html_links(temp_dir, monkeypatch, min_files):
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", min_files)
     _write_page(
         temp_dir,
         "index.html",

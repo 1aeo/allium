@@ -93,8 +93,9 @@ def _canonical_urls_from_html(output_path, base_url):
             continue
         pages.append((html_path, relative))
 
-    # Signals are consumed in page order, so errors name the same first page
-    # (~30k heads took ~40s to parse sequentially)
+    # Signals are consumed in page order, so the first page without one head
+    # and one canonical is the one reported (a read error in a worker surfaces
+    # with its 64-page chunk). ~30k heads took ~40s to parse sequentially.
     signals = map_html_files(_head_signals, [str(html_path) for html_path, _ in pages], 64)
     for (html_path, relative), signal in zip(pages, signals):
         if signal is None:

@@ -19,8 +19,9 @@ NEW = b'{"relays": [{"id": "new"}]}'
 CACHED = {"relays": [{"id": "cached"}]}
 
 
-def _fetch(responses, cached=None):
-    """Fetch with a fresh (60s old) cache whose load returns `cached`.
+def _fetch(responses, cached=None, **kwargs):
+    """Fetch with a fresh (60s old) cache whose load returns `cached` (each
+    load returns the next item when it is a list).
     Returns (result, timeout of each attempt, the _load_cache mock)."""
     config = APIConfig(api_name='test_api', display_name='test API', cache_max_age_hours=1,
                        timeout_fresh_cache=5, timeout_stale_cache=10,
@@ -30,8 +31,11 @@ def _fetch(responses, cached=None):
                         _fetch_url_with_total_timeout=DEFAULT, _load_cache=DEFAULT) as mocks:
         mocks['_cache_manager'].get_cache_age.return_value = 60
         mocks['_fetch_url_with_total_timeout'].side_effect = responses
-        mocks['_load_cache'].return_value = cached
-        result = _fetch_with_cache_fallback(url="http://test.example.com/api", config=config)
+        if isinstance(cached, list):
+            mocks['_load_cache'].side_effect = cached
+        else:
+            mocks['_load_cache'].return_value = cached
+        result = _fetch_with_cache_fallback(url="http://test.example.com/api", config=config, **kwargs)
     timeouts = [call.args[1] for call in mocks['_fetch_url_with_total_timeout'].call_args_list]
     return result, timeouts, mocks['_load_cache']
 
@@ -61,13 +65,25 @@ def test_unreadable_fresh_cache_retries_server_errors():
     assert timeouts == [5, 10]
 
 
-def test_unreadable_cache_is_parsed_once_when_the_refetch_fails():
-    # An unexpected error in the cache-less refetch (here a JSON list, which has
-    # no .get) must not parse the cache that already failed to load again.
-    result, timeouts, load = _fetch([TotalTimeoutError("timeout"), b"[]"])
+def test_unreadable_cache_is_not_reread_after_an_unexpected_error():
+    # The cache-less refetch fails unexpectedly before saving anything: the
+    # cache file still holds what already failed to load.
+    def validator(data):
+        raise RuntimeError("bad validator")
+
+    result, timeouts, load = _fetch([TotalTimeoutError("timeout"), NEW], validator=validator)
     assert result is None
     assert timeouts == [5, 10]
     load.assert_called_once_with('test_api')
+
+
+def test_cache_saved_before_an_unexpected_error_is_reread():
+    # A JSON list (no .get) fails after the response was saved to the cache
+    # file, so the fallback reads that file again.
+    saved = {"relays": [{"id": "saved"}]}
+    result, _, load = _fetch([TotalTimeoutError("timeout"), b"[]"], cached=[None, saved])
+    assert result == saved
+    assert load.call_count == 2
 
 
 def test_not_modified_loads_cache_once():
