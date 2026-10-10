@@ -1,5 +1,6 @@
 """Tests for canonical URLs, clean links, and crawler discovery files."""
 
+import multiprocessing
 import os
 import random
 import re
@@ -253,3 +254,24 @@ def test_size_guard_reports_only_oversized_html(temp_dir):
     assert oversized_html_files(temp_dir, max_bytes=300) == [
         ("large.html", os.path.getsize(os.path.join(temp_dir, "large.html")))
     ]
+
+
+def _upper(path):
+    """Dies like an OOM-killed worker on a poisoned path; raises on a bad one."""
+    if path.endswith("poison") and multiprocessing.parent_process():
+        os._exit(1)
+    if path.endswith("bad"):
+        raise ValueError(path)
+    return path.upper()
+
+
+def test_map_html_files_finishes_in_process_when_a_worker_dies(monkeypatch, caplog):
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", 2)
+    paths = [f"p{i:02d}" for i in range(40)]
+    paths[25] = "p25-poison"
+
+    assert list(seo.map_html_files(_upper, paths, 4)) == [p.upper() for p in paths]
+    assert "worker pool failed" in caplog.text
+    paths[9], paths[30] = "p09-bad", "p30-bad"  # errors still raise in path order
+    with pytest.raises(ValueError, match="p09-bad"):
+        list(seo.map_html_files(_upper, paths, 4))

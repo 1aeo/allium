@@ -2,11 +2,13 @@
 
 from concurrent.futures import ProcessPoolExecutor
 import functools
+import logging
 import os
 from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import quote, urlsplit, urlunsplit
 
+logger = logging.getLogger(__name__)
 
 MAX_HTML_BYTES = 1_900_000
 
@@ -166,12 +168,18 @@ _PARALLEL_MIN_FILES = 256
 
 def map_html_files(function, html_paths, chunksize):
     """Yield ``function(path)`` for each path in order, in worker processes
-    for large builds."""
-    if len(html_paths) < _PARALLEL_MIN_FILES:
-        yield from map(function, html_paths)
-        return
-    with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
-        yield from executor.map(function, html_paths, chunksize=chunksize)
+    for large builds. If the pool fails (e.g. BrokenProcessPool when a worker
+    is OOM-killed), the paths still without a result run in this process."""
+    done = 0
+    if len(html_paths) >= _PARALLEL_MIN_FILES:
+        try:
+            with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
+                for done, result in enumerate(executor.map(function, html_paths, chunksize=chunksize), 1):
+                    yield result
+        except Exception as exc:
+            logger.warning("HTML file worker pool failed (%s), processing %d of %d files sequentially",
+                           exc, len(html_paths) - done, len(html_paths))
+    yield from map(function, html_paths[done:])
 
 
 def _rewrite_html_file(html_path):
