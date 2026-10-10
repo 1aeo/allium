@@ -10,6 +10,7 @@ Default output directory: ./www
 """
 
 import argparse
+import gc
 import os
 import sys
 import time
@@ -69,6 +70,16 @@ def check_dependencies(show_progress=False):
         print("💡 Please upgrade Python or use a virtual environment with Python 3.8+")
         sys.exit(1)
 
+
+
+def _tooling_active():
+    """True when a debugger, profiler or coverage tool is attached."""
+    if sys.gettrace() is not None or sys.getprofile() is not None:
+        return True
+    # Python 3.12+ profilers/coverage may use sys.monitoring tool slots instead
+    monitoring = getattr(sys, "monitoring", None)
+    return monitoring is not None and any(
+        monitoring.get_tool(tool_id) is not None for tool_id in range(6))
 
 
 def validate_url_arguments(args):
@@ -296,7 +307,12 @@ if __name__ == "__main__":
 
     # object containing onionoo data and processing routines
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
-    
+
+    # Fetching and processing build a multi-GB heap of long-lived objects
+    # (parsed API JSON, per-relay dicts) that holds almost no reference
+    # cycles, yet every full cyclic-GC pass re-traverses all of it (~12s
+    # each, ~45-100s per run). Pause collection until the data set is built.
+    gc.disable()
     try:
         RELAY_SET = create_relay_set_with_coordinator(args, progress_logger=progress_logger)
         if RELAY_SET is None or RELAY_SET.json is None:
@@ -315,6 +331,22 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
+    # Freeze the finished data set so later collections, here and in the
+    # forked page-rendering workers, skip it (workers then also avoid
+    # copy-on-write copies of the heap that a full collection would cause).
+    gc.freeze()
+    gc.enable()
+
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
+
+    # The relay set holds several GB of small objects, and freeing them one
+    # by one at interpreter shutdown took ~40s. Every output file is closed
+    # and every worker pool joined by now, so flush and skip the teardown,
+    # unless a tracer, profiler or coverage tool still has to write results.
+    if not _tooling_active():
+        for stream in (sys.stdout, sys.stderr):
+            if stream is not None:
+                stream.flush()
+        os._exit(0)

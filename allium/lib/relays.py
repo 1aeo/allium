@@ -47,6 +47,7 @@ from .page_writer import (
     _init_precompute_worker,
     _precompute_contact_worker,
     _precompute_family_worker,
+    load_precomputed,
 )
 
 class Relays:
@@ -1124,6 +1125,7 @@ class Relays:
             ):
                 # Apply result directly to contact data (flat storage pattern)
                 if precomputed_data and contact_hash in self.json["sorted"]["contact"]:
+                    precomputed_data = load_precomputed(precomputed_data, self.json["relays"])
                     contact_data = self.json["sorted"]["contact"][contact_hash]
                     # Store each field directly on contact_data (Sonnet-style simple access)
                     for key, value in precomputed_data.items():
@@ -1204,6 +1206,7 @@ class Relays:
             ):
                 # Apply result directly to family data
                 if precomputed_data and family_hash in self.json["sorted"]["family"]:
+                    precomputed_data = load_precomputed(precomputed_data, self.json["relays"])
                     family_data = self.json["sorted"]["family"][family_hash]
                     for key, value in precomputed_data.items():
                         family_data[key] = value

@@ -52,8 +52,9 @@ The multiprocessing implementation uses a two-phase approach for contact pages:
 │     ├── Shared template and relay data via fork()               │
 │     └── Each worker renders and writes pages independently      │
 │                                                                 │
-│  Applies to: family, contact, as, first_seen pages              │
-│  (threshold: 100+ pages to trigger parallel processing)         │
+│  Applies to: family, contact, as, country, flag, first_seen     │
+│  and relay info pages                                           │
+│  (threshold: 100+ output files to trigger parallel processing)  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -154,6 +155,24 @@ if k == "contact":
     is_validated_aroi = i.get("is_validated_aroi", False)
 ```
 
+### Sharing Relay Data With Workers
+
+- **Precompute results reference relays by index.** Contact and family
+  results embed the group's relay dicts (validation status entries point at
+  them). Workers pickle each shared relay dict as its index in
+  `relay_set.json["relays"]` and the parent re-links its own dict
+  (`_dump_precomputed` / `load_precomputed`), as the sequential path stores
+  them. Sending copies cost ~29GB of pickles per run, because family groups
+  list every member once per member.
+- **The heap is frozen before rendering.** `allium.py` pauses the cyclic GC
+  while data is fetched and processed (the data holds almost no cycles), then
+  calls `gc.freeze()` before page generation so collections in the parent and
+  in forked workers skip the multi-GB data set instead of re-traversing it.
+- **Relay rows are memoized per worker.** `contact-relay-list.html` renders
+  each row as a cached `relay_row_head` (`_RelayRowCache`, keyed on everything
+  the macro reads) plus an uncached `relay_row_tail` holding the cells that
+  depend on the current time.
+
 ---
 
 ## Configuration
@@ -176,7 +195,7 @@ python3 allium.py --out ./www --workers 0
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `--workers` | 4 | Number of parallel workers |
-| Page threshold | 100 | Minimum pages to trigger parallel processing |
+| Page threshold | 100 | Minimum output files to trigger parallel processing |
 | Chunk size | 50+ | Minimum chunk size for imap_unordered |
 
 ---
@@ -198,16 +217,20 @@ with ctx.Pool(workers, initializer, initargs) as pool:
 If multiprocessing fails or isn't available (Windows), the code falls back to sequential processing:
 
 ```python
-use_mp = (self.mp_workers > 0 and len(sorted_values) >= 100 and 
+use_mp = (relay_set.mp_workers > 0 and output_files >= 100 and
           hasattr(mp, 'get_context'))
 
 if use_mp:
-    self._write_pages_parallel(...)
+    write_pages_parallel(...)
 else:
     # Sequential fallback
     for v in sorted_values:
-        self._render_page(...)
+        ...
 ```
+
+Relay info pages use a `ProcessPoolExecutor` instead of a `Pool`, so a worker
+killed mid-run (e.g. by the OOM killer) raises `BrokenProcessPool` and triggers
+the same sequential fallback instead of hanging.
 
 ---
 
@@ -270,7 +293,7 @@ python3 -m pytest tests/test_integration_contact_template.py -v
 
 ## Future Improvements
 
-- [ ] Parallel relay info page generation (11,000+ pages)
+- [x] Parallel relay info page generation (11,000+ pages)
 - [ ] Adaptive worker count based on system resources
 - [ ] Shared memory for large datasets (reduce fork overhead)
 - [ ] Progress bars for individual page types

@@ -5,6 +5,7 @@ Time-related utility functions for parsing, formatting, and calculating
 timestamps used throughout the allium codebase.
 """
 
+import functools
 import time as _time_module
 
 from datetime import datetime, timedelta, timezone
@@ -41,13 +42,25 @@ PERIOD_DISPLAY_NAMES = {
 ONIONOO_HISTORY_PERIODS = ('1_month', '6_months', '1_year', '5_years')
 
 
-def parse_onionoo_timestamp(timestamp_str):
-    """Parse Onionoo timestamp string into datetime object"""
+def _parse_onionoo_timestamp(timestamp_str):
     try:
         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
         return timestamp.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+# The same timestamps are parsed over and over (every contact page sort
+# variant formats each relay's dates again, ~1.5M parses per run) and
+# strptime is slow; parsing is pure and datetimes are immutable.
+_parse_onionoo_timestamp_str = functools.lru_cache(maxsize=1 << 16)(_parse_onionoo_timestamp)
+
+
+def parse_onionoo_timestamp(timestamp_str):
+    """Parse Onionoo timestamp string into datetime object"""
+    if type(timestamp_str) is str:
+        return _parse_onionoo_timestamp_str(timestamp_str)
+    return _parse_onionoo_timestamp(timestamp_str)
 
 
 def create_time_thresholds():

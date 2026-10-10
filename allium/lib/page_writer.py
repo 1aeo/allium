@@ -7,9 +7,12 @@ page writing functions.
 Extracted from relays.py for better modularity.
 """
 
+import io
 import logging
 import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
 import os
+import pickle
 import re
 import time
 from shutil import rmtree
@@ -43,7 +46,7 @@ from .operator_analysis import (
 )
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
-from .seo import canonical_url_for_output, clean_href
+from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -79,6 +82,24 @@ def pagination_context(base_filename, page_number, total_pages):
         "first": href(1),
         "last": href(total_pages),
     }
+
+
+def _write_html(path, rendered):
+    """Write a rendered page with internal .html links in clean-route form.
+
+    Rewriting in memory replaces a post-generation pass that re-read and
+    re-wrote every generated page. A page whose links change is written as
+    that pass left it: as read back with universal newlines after a
+    text-mode write (CR/CRLF become LF).
+    """
+    text = rendered
+    if os.linesep != "\n":
+        text = text.replace("\n", os.linesep)
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    html, changed_links = rewrite_internal_links(text)
+    with open(path, "w", encoding="utf8") as f:
+        f.write(html if changed_links else rendered)
 
 
 def _paginated_validation_status(status, visible_relays):
@@ -193,6 +214,62 @@ def _ordinal(n):
 ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
 ENV.filters['ordinal'] = _ordinal
 
+
+# relay_row_head icon types whose markup ignores the page's fingerprint sets
+_FIXED_ROW_ICON_TYPES = frozenset(
+    ('validated', 'unauthorized', 'misconfigured', 'not_configured'))
+
+
+class _RelayRowCache:
+    """Memoizes contact-relay-list.html's relay_row_head macro per process.
+
+    Family pages list every member relay once per member (a family of N
+    relays renders ~N^2 rows) and contact pages repeat their rows for every
+    sort variant, so most rows re-render identical HTML. The key covers all
+    the macro reads: the relay dict (shared and not modified while pages
+    render), the call arguments, the page values, and for rows that show
+    aroi_validation_icon the relay's membership in the page's fingerprint sets.
+    """
+
+    MAX_ENTRIES = 1 << 16
+
+    def __init__(self):
+        self._rows = {}
+
+    def head(self, macro, relay, show_validation_icon, validation_icon_type,
+             path_prefix, key, use_bits, validated_fps, unauthorized_fps,
+             misconfigured_fps, security_fps, pending_fps):
+        icon_state = None
+        if show_validation_icon and validation_icon_type not in _FIXED_ROW_ICON_TYPES:
+            fingerprint = relay['fingerprint']
+            icon_state = (
+                bool(security_fps) and fingerprint in security_fps,
+                bool(pending_fps) and fingerprint in pending_fps,
+                fingerprint in validated_fps,
+                fingerprint in unauthorized_fps,
+                fingerprint in misconfigured_fps,
+            )
+        cache_key = (id(relay), show_validation_icon, validation_icon_type,
+                     path_prefix, key, use_bits, icon_state)
+        entry = self._rows.get(cache_key)
+        # The entry holds the relay itself, so its id cannot be reused
+        if entry is not None and entry[0] is relay:
+            return entry[1]
+        if len(self._rows) >= self.MAX_ENTRIES:
+            self._rows.clear()
+        row = macro(relay, show_validation_icon, validation_icon_type)
+        self._rows[cache_key] = (relay, row)
+        return row
+
+
+def _reset_relay_row_cache():
+    """Start a fresh row cache, e.g. before a page set whose relays may have
+    changed since rows were last rendered in this process."""
+    ENV.globals['relay_row_cache'] = _RelayRowCache()
+
+
+_reset_relay_row_cache()
+
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
 # ============================================================================
@@ -304,8 +381,7 @@ def _render_page_mp(args):
     
     # Render and write
     rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
-    with open(html_path, "w", encoding="utf8") as f:
-        f.write(rendered)
+    _write_html(html_path, rendered)
     return True
 
 
@@ -356,12 +432,59 @@ def _contact_validation_status(relay_set, members):
 
 # Precomputation worker globals (for contact page data parallelization)
 _precompute_relay_set = None
+_precompute_relay_indexes = None
 
 
 def _init_precompute_worker(relay_set):
     """Initialize precompute worker with shared relay_set via fork"""
-    global _precompute_relay_set
+    global _precompute_relay_set, _precompute_relay_indexes
     _precompute_relay_set = relay_set
+    _precompute_relay_indexes = {
+        id(relay): index for index, relay in enumerate(relay_set.json["relays"])
+    }
+
+
+class _RelayRefPickler(pickle.Pickler):
+    """Pickles the shared relay dicts as their index in relay_set.json["relays"]."""
+
+    def __init__(self, file, relay_indexes):
+        super().__init__(file, pickle.HIGHEST_PROTOCOL)
+        self._relay_indexes = relay_indexes
+
+    def persistent_id(self, obj):
+        if type(obj) is dict:
+            return self._relay_indexes.get(id(obj))
+        return None
+
+
+class _RelayRefUnpickler(pickle.Unpickler):
+    """Resolves relay indexes written by _RelayRefPickler to the parent's dicts."""
+
+    def __init__(self, file, relays):
+        super().__init__(file)
+        self._relays = relays
+
+    def persistent_load(self, pid):
+        return self._relays[pid]
+
+
+def _dump_precomputed(result):
+    """Serialize a worker's precomputed group data for the parent.
+
+    Group data embeds the group's relay dicts (validation status entries
+    reference them). Sending each as its index keeps the parent pointing at
+    its own relay dicts, as the sequential path stores them, instead of
+    receiving a copy of every member relay: ~29GB of pickles per run, as
+    families list each member once per member.
+    """
+    buffer = io.BytesIO()
+    _RelayRefPickler(buffer, _precompute_relay_indexes).dump(result)
+    return buffer.getvalue()
+
+
+def load_precomputed(data, relays):
+    """Inverse of _dump_precomputed, re-linking to ``relays`` (the parent's list)."""
+    return _RelayRefUnpickler(io.BytesIO(data), relays).load()
 
 
 def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains):
@@ -429,9 +552,9 @@ def _precompute_contact_worker(args):
     try:
         result = _compute_contact_predata(
             _precompute_relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains)
-        return (contact_hash, result)
     except Exception:
         return (contact_hash, None)
+    return (contact_hash, _dump_precomputed(result) if result else None)
 
 
 def _compute_family_predata(relay_set, family_hash):
@@ -503,9 +626,9 @@ def _precompute_family_worker(args):
     
     try:
         result = _compute_family_predata(_precompute_relay_set, family_hash)
-        return (family_hash, result)
     except Exception:
         return (family_hash, None)
+    return (family_hash, _dump_precomputed(result) if result else None)
 
 
 
@@ -631,9 +754,7 @@ def write_misc(
     template_render = template.render(**template_vars)
     output = os.path.join(relay_set.output_dir, path)
     os.makedirs(os.path.dirname(output), exist_ok=True)
-
-    with open(output, "w", encoding="utf8") as html:
-        html.write(template_render)
+    _write_html(output, template_render)
 
 def probe_authority_latency(relay_set):
     """TCP-probe voting directory authorities; returns the latency status map.
@@ -1124,14 +1245,12 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
 
             rendered = template.render(relays=relay_set, **template_args)
 
-            with open(os.path.join(dir_path, filename), "w", encoding="utf8") as html:
-                html.write(rendered)
+            _write_html(os.path.join(dir_path, filename), rendered)
             files_written += 1
 
             if vanity_dir:
-                adjusted_html = _adjust_vanity_paths(rendered)
-                with open(os.path.join(vanity_dir, filename), "w", encoding="utf8") as vanity_html:
-                    vanity_html.write(adjusted_html)
+                _write_html(os.path.join(vanity_dir, filename),
+                            _adjust_vanity_paths(rendered))
 
     return files_written
 
@@ -1246,6 +1365,7 @@ def write_pages_by_key(relay_set, k):
     
     template = ENV.get_template(k + ".html")
     output_path = os.path.join(relay_set.output_dir, k)
+    _reset_relay_row_cache()
 
     the_prefixed = [
         "Dominican Republic", "Ivory Coast", "Marshall Islands",
@@ -1261,8 +1381,14 @@ def write_pages_by_key(relay_set, k):
 
     sorted_values = sorted(relay_set.json["sorted"][k].keys()) if k == "first_seen" else list(relay_set.json["sorted"][k].keys())
     
-    # Use multiprocessing for large page sets on systems with fork()
-    use_mp = (relay_set.mp_workers > 0 and len(sorted_values) >= 100 and 
+    # Use multiprocessing for large page sets on systems with fork(). Count
+    # output files, not groups: the 12 flags alone span ~300 pages.
+    output_files = sum(
+        max(1, (len(relay_set.json["sorted"][k][v].get("relays", []))
+                + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+        for v in sorted_values
+    )
+    use_mp = (relay_set.mp_workers > 0 and output_files >= 100 and
               hasattr(mp, 'get_context'))
 
     # Contact pages use dedicated variant-aware renderers (17 by-*.html + index default)
@@ -1305,9 +1431,7 @@ def write_pages_by_key(relay_set, k):
 
             # Time the file I/O
             io_start = time.time()
-            html_path = os.path.join(dir_path, output_filename)
-            with open(html_path, "w", encoding="utf8") as html:
-                html.write(rendered)
+            _write_html(os.path.join(dir_path, output_filename), rendered)
             io_time += time.time() - io_start
             rendered_file_count += 1
 
@@ -1559,74 +1683,122 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         
         write_pages_by_key(relay_set, k)
 
+class _RelayPageRenderer:
+    """Renders relay-info pages; built once, then shared with forked workers."""
+
+    def __init__(self, relay_set, output_path):
+        from .page_context import StandardTemplateContexts
+        self.relay_set = relay_set
+        self.output_path = output_path
+        self.template = ENV.get_template("relay-info.html")
+        self.standard_contexts = StandardTemplateContexts(relay_set)
+        self.contact_map = relay_set.json.get("sorted", {}).get("contact", {})
+        self.validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+        self.aroi_validation_timestamp = relay_set._aroi_validation_timestamp
+        self.base_url = relay_set.base_url
+        # Family cert data for partitioned family display (O(1) per member)
+        self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
+        self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
+        self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+
+    def write(self, relay):
+        """Render one relay page to relay/FINGERPRINT/index.html."""
+        contact_hash = relay.get('contact_md5')
+        contact_display_data = {}
+        contact_validation_status = None
+
+        if contact_hash and contact_hash in self.contact_map:
+            contact_data = self.contact_map[contact_hash]
+            contact_display_data = contact_data.get('contact_display_data', {})
+            contact_validation_status = contact_data.get('contact_validation_status')
+
+        page_ctx = self.standard_contexts.get_relay_page_context(relay, contact_display_data)
+
+        # Partition family lists by family-cert status for template display
+        _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
+                                self.family_key_to_fps)
+
+        rendered = self.template.render(
+            relay=relay, page_ctx=page_ctx, relays=self.relay_set,
+            contact_display_data=contact_display_data,
+            contact_validation_status=contact_validation_status,
+            aroi_validation_timestamp=self.aroi_validation_timestamp,
+            validated_aroi_domains=self.validated_aroi_domains,
+            base_url=self.base_url,
+            canonical_url=canonical_url_for_output(
+                self.base_url, f"relay/{relay['fingerprint']}/index.html"
+            ),
+            page_number=1,
+        )
+
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
+        os.makedirs(relay_dir, exist_ok=True)
+        _write_html(os.path.join(relay_dir, "index.html"), rendered)
+
+
+_mp_relay_page_renderer = None
+
+
+def _init_relay_page_worker(renderer):
+    """Initialize a relay-page worker with the renderer shared via fork"""
+    global _mp_relay_page_renderer
+    _mp_relay_page_renderer = renderer
+
+
+def _render_relay_page_mp(relay_index):
+    """Render one relay page in a worker (only the index crosses IPC)."""
+    renderer = _mp_relay_page_renderer
+    renderer.write(renderer.relay_set.json["relays"][relay_index])
+    return True
+
+
 def write_relay_info(relay_set):
     """
     Render and write per-relay HTML info documents to disk
     """
     relay_list = relay_set.json["relays"]
-    template = ENV.get_template("relay-info.html")
     output_path = os.path.join(relay_set.output_dir, "relay")
 
     if os.path.exists(output_path):
         rmtree(output_path)
     os.makedirs(output_path)
 
-    # Optimization: Move imports and setup outside the loop (10k+ iterations)
-    from .page_context import StandardTemplateContexts
-    standard_contexts = StandardTemplateContexts(relay_set)
-    
-    # Optimization: Pre-fetch collections for fast lookup
-    # Safely get contact map - avoiding 3-level .get() in loop
-    contact_map = relay_set.json.get("sorted", {}).get("contact", {})
-    
-    # Optimization: Cache frequently-accessed properties before 10K relay loop
-    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
-    aroi_validation_timestamp = relay_set._aroi_validation_timestamp
-    base_url = relay_set.base_url
-    # Pre-fetch family cert data for partitioned family display (O(1) per member)
-    family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
-    fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
-    family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+    renderer = _RelayPageRenderer(relay_set, output_path)
+    relay_indexes = [
+        index for index, relay in enumerate(relay_list)
+        if relay["fingerprint"].isalnum()
+    ]
 
-    for relay in relay_list:
-        if not relay["fingerprint"].isalnum():
-            continue
-        
-        # Optimization: Fast direct lookup for contact data
-        contact_hash = relay.get('contact_md5')
-        contact_display_data = {}
-        contact_validation_status = None
-        
-        if contact_hash and contact_hash in contact_map:
-            contact_data = contact_map[contact_hash]
-            contact_display_data = contact_data.get('contact_display_data', {})
-            contact_validation_status = contact_data.get('contact_validation_status')
-        
-        full_context = standard_contexts.get_relay_page_context(relay, contact_display_data)
-        page_ctx = full_context
-        
-        # Partition family lists by family-cert status for template display
-        _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps)
-        
-        rendered = template.render(
-            relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
-            contact_validation_status=contact_validation_status,
-            aroi_validation_timestamp=aroi_validation_timestamp,
-            validated_aroi_domains=validated_aroi_domains,
-            base_url=base_url,
-            canonical_url=canonical_url_for_output(
-                base_url, f"relay/{relay['fingerprint']}/index.html"
-            ),
-            page_number=1,
-        )
-        
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
-        
-        with open(
-            os.path.join(relay_dir, "index.html"),
-            "w",
-            encoding="utf8",
-        ) as html:
-            html.write(rendered)
+    # Relay pages are the largest page set (~10k); render them in parallel
+    # like the other page types.
+    use_mp = (relay_set.mp_workers > 0 and len(relay_indexes) >= 100 and
+              hasattr(mp, 'get_context'))
+    if use_mp:
+        try:
+            # ProcessPoolExecutor raises BrokenProcessPool if a worker is
+            # killed (e.g. by the OOM killer); multiprocessing.Pool would hang.
+            chunksize = max(1, len(relay_indexes) // (relay_set.mp_workers * 16))
+            with ProcessPoolExecutor(relay_set.mp_workers, mp_context=mp.get_context('fork'),
+                                     initializer=_init_relay_page_worker,
+                                     initargs=(renderer,)) as executor:
+                for _ in executor.map(_render_relay_page_mp, relay_indexes,
+                                      chunksize=chunksize):
+                    pass
+            return
+        except Exception as e:
+            relay_set.progress_logger.log_without_increment(
+                f"Relay page multiprocessing failed ({e}), falling back to sequential...")
+            relay_set.mp_workers = 0
+            for retry in range(3):
+                try:
+                    if os.path.exists(output_path):
+                        rmtree(output_path)
+                    os.makedirs(output_path)
+                    break
+                except OSError:
+                    if retry < 2:
+                        time.sleep(0.1)
+
+    for index in relay_indexes:
+        renderer.write(relay_list[index])

@@ -435,7 +435,13 @@ class TestOnionooUptimeCaching:
                     assert result is None
     
     def test_corrupted_cache_uses_long_timeout(self):
-        """Test that with corrupted cache file, function uses long timeout"""
+        """Test that a corrupted cache still gets the long timeout.
+
+        The cache is only read when needed, so the first attempt treats it as
+        fresh (30s); once that attempt fails and the cache turns out unreadable,
+        the fetch is repeated as if no cache existed (20 min).
+        """
+        import socket
         mock_data = {
             "relays": [{"fingerprint": "GHI789", "uptime": {"1_month": 98.0}}],
             "version": "fresh_uptime"
@@ -452,19 +458,16 @@ class TestOnionooUptimeCaching:
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
                     mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
-                    mock_urlopen.return_value = mock_response
+                    mock_urlopen.side_effect = [socket.timeout("timed out"), mock_response]
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
                     
                     # Should return fresh data
                     assert result is not None
-                    # Should have called urlopen with 1200 second (20 min) timeout
-                    # because corrupted cache is treated as no cache
-                    # retry logic may attempt multiple times; every attempt must
-                    # use the expected timeout
-                    assert mock_urlopen.called
-                    assert all(c[1]['timeout'] == 1200
-                               for c in mock_urlopen.call_args_list)
+                    assert result["version"] == "fresh_uptime"
+                    # The short attempt failed; the retry treats the corrupted
+                    # cache as no cache and uses the 1200 second (20 min) timeout
+                    assert [c[1]['timeout'] for c in mock_urlopen.call_args_list] == [30, 1200]
     
     def test_preloaded_cache_used_on_timeout(self):
         """Test that pre-loaded cache is reused on timeout (not loaded twice)"""

@@ -1,6 +1,9 @@
 """Tests for canonical URLs, clean links, and crawler discovery files."""
 
 import os
+import random
+import re
+from urllib.parse import urlsplit, urlunsplit
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -12,9 +15,11 @@ from allium.lib.search_discovery import (
 from allium.lib.seo import (
     canonical_output_path,
     canonical_url_for_output,
+    clean_href,
     oversized_html_files,
     public_base_url,
     rewrite_internal_html_links,
+    rewrite_internal_links,
     route_for_html,
 )
 
@@ -94,6 +99,80 @@ def test_rewrites_only_internal_html_links(temp_dir):
     assert 'href="misc/all#relay-table"' in rendered
     assert 'href="relay/ABC/"' in rendered
     assert 'href="https://spec.torproject.org/example.html"' in rendered
+
+
+def test_rewrite_skips_files_written_since_cutoff(temp_dir):
+    _write_page(temp_dir, "old.html", "/", body='<a href="a/index.html">A</a>')
+    _write_page(temp_dir, "new.html", "/", body='<a href="b/index.html">B</a>')
+    old_path = os.path.join(temp_dir, "old.html")
+    os.utime(old_path, (1_000_000, 1_000_000))
+
+    stats = rewrite_internal_html_links(temp_dir, modified_before=2_000_000)
+
+    assert stats == {"changed_files": 1, "changed_links": 1}
+    assert 'href="a/"' in open(old_path, encoding="utf-8").read()
+    new_page = open(os.path.join(temp_dir, "new.html"), encoding="utf-8").read()
+    assert 'href="b/index.html"' in new_page
+
+
+_REFERENCE_HREF_RE = re.compile(
+    r"(?P<prefix>\bhref\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']+)(?P=quote)",
+    re.IGNORECASE,
+)
+
+
+def _reference_rewrite(html):
+    """The original whole-page regex rewrite that rewrite_internal_links replaced."""
+    changed = 0
+
+    def replacement(match):
+        nonlocal changed
+        value = match.group("value")
+        parsed = urlsplit(value)
+        if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+            return match.group(0)
+        if not parsed.path.endswith(".html"):
+            return match.group(0)
+        changed += 1
+        rewritten = urlunsplit(
+            ("", "", clean_href(parsed.path), parsed.query, parsed.fragment))
+        quote_char = match.group("quote")
+        return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
+
+    return _REFERENCE_HREF_RE.sub(replacement, html), changed
+
+
+@pytest.mark.parametrize("html", [
+    '<a href="misc/all.html#t">x</a> <a href="https://a.test/b.html">y</a>',
+    "<a HREF='../relay/A/index.html?x=1'>x</a><a Href = \"index.html\">i</a>",
+    '<a href="/abs/page.html">x</a><a href="//cdn.test/x.html">y</a>',
+    '<a href="mailto:a.html">m</a><a href="#frag.html">f</a>',
+    'see index.html in text <img src="pic.html"> <a data-href="x.html">d</a>',
+    # A value ending in "href=" swallows the next attribute's opening quote
+    '<a title="href=" href="x.html">x</a><a href="y.html">y</a>',
+    '<a title="a href = \'" href=\'x.html\'>x</a>',
+    '<a href="a.html"href="b.html">ab</a><a href="">e</a><a href="c.html.html">c</a>',
+    # urlsplit drops tab/CR/LF, so these values still end in ".html"
+    '<a href="a.ht\tml">x</a>',
+    "<a href='misc/all.\nhtml#t'>x</a>",
+    '<a href="x.h\r\ntml?q=1">x</a> <a href="y.html">y</a>',
+])
+def test_rewrite_internal_links_matches_reference(html):
+    assert rewrite_internal_links(html) == _reference_rewrite(html)
+
+
+def test_rewrite_internal_links_matches_reference_on_random_markup():
+    tokens = [
+        "href", "HREF", "hRef", "ahref", "_href", "=", " = ", "\t", "\n", "\u2003",
+        '"', "'", "a.html", "index.html", "../x/index.html", "#f", "//h/a.html",
+        "http://h/a.html", "?q=1", ".html", "html", "<a ", ">", "x", "\u00e9", "_",
+        ".", "ht", "ml", "\r",
+        'title="href="', 'href="x.html"', "href='y.html'",
+    ]
+    rng = random.Random(1234)
+    for _ in range(20_000):
+        html = "".join(rng.choice(tokens) for _ in range(rng.randint(1, 30)))
+        assert rewrite_internal_links(html) == _reference_rewrite(html), html
 
 
 def test_discovery_uses_unique_canonicals_and_excludes_noindex(temp_dir):
