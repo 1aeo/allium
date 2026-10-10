@@ -121,8 +121,11 @@
 {# =============================================================================
    MACRO: Render a single relay row (DRY - used by all sections)
    PERF: IPv6 check is now passed as parameter (computed once per table, not per row)
+   PERF: relay_row_head is memoized per process by relay_row_cache (a page_writer
+   global), so it may only read what relay_row_cache() keys on; cells derived
+   from the current time live in relay_row_tail.
    ============================================================================= #}
-{% macro relay_row(relay, show_validation_icon=true, validation_icon_type=none, table_has_ipv6=false) -%}
+{% macro relay_row_head(relay, show_validation_icon=true, validation_icon_type=none) -%}
 <tr>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
@@ -277,6 +280,9 @@
     {% else -%}
         <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
     {% endif -%}
+{%- endmacro %}
+
+{%- macro relay_row_tail(relay, table_has_ipv6) -%}
     {% if key != 'first_seen' -%}
         <td>
             <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
@@ -316,6 +322,10 @@
     </td>
     {% endif -%}
 </tr>
+{%- endmacro %}
+
+{%- macro relay_row(relay, show_validation_icon=true, validation_icon_type=none, table_has_ipv6=false) -%}
+{% if relay_row_cache is defined %}{{ relay_row_cache(relay_row_head, relay, show_validation_icon, validation_icon_type, page_ctx.path_prefix, key, relays.use_bits, validated_fps, unauthorized_fps, misconfigured_fps, security_fps, pending_fps) }}{% else %}{{ relay_row_head(relay, show_validation_icon, validation_icon_type) }}{% endif %}{{ relay_row_tail(relay, table_has_ipv6) }}
 {%- endmacro %}
 
 {% if use_sections %}

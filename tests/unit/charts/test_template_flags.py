@@ -132,11 +132,12 @@ def test_write_relay_period_files_emits_6m_html(temp_dir):
     index = open(os.path.join(relay_dir, "index.html"), encoding="utf-8").read()
     six = open(os.path.join(relay_dir, "6m.html"), encoding="utf-8").read()
     year = open(os.path.join(relay_dir, "1y.html"), encoding="utf-8").read()
+    # Page writes rewrite internal .html links to clean routes.
     assert index.startswith("hero=1m")
-    assert 'href="6m.html"' in index
+    assert 'href="6m"' in index
     assert six.startswith("hero=6m")
-    assert 'href="index.html"' in six
-    assert 'href="1y.html"' in six
+    assert 'href="./"' in six
+    assert 'href="1y"' in six
     assert year.startswith("hero=1y")
     assert not os.path.isfile(os.path.join(relay_dir, "5y.html"))
 

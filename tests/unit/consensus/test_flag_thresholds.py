@@ -26,6 +26,9 @@ from allium.lib.consensus.flag_thresholds import (
     check_stable_eligibility,
     get_flag_thresholds_summary,
     sort_flags,
+    credible_bandwidth,
+    guard_bw_top_threshold,
+    low_median,
 )
 
 
@@ -38,8 +41,9 @@ class TestConstants:
         assert SECONDS_PER_DAY == 24 * 60 * 60
     
     def test_guard_bw_guarantee(self):
-        """Test Guard BW guarantee is 2 MB/s."""
-        assert GUARD_BW_GUARANTEE == 2_000_000  # 2 MB/s
+        """AuthDirGuardBWGuarantee "2 MB" (2,097,152 bytes) is compared as 2097 KB/s."""
+        # voteflags.c: routerbw_kb >= AuthDirGuardBWGuarantee / 1000
+        assert GUARD_BW_GUARANTEE == 2_097_000
     
     def test_guard_tk_default(self):
         """Test Guard TK default is 8 days."""
@@ -61,8 +65,9 @@ class TestConstants:
         assert HSDIR_WFU_DEFAULT == 0.98
     
     def test_fast_bw_guarantee(self):
-        """Test Fast BW guarantee is 100 KB/s."""
-        assert FAST_BW_GUARANTEE == 100_000  # 100 KB/s
+        """AuthDirFastGuarantee "100 KB" caps fast-speed at 102 KB/s, as votes publish it."""
+        # voteflags.c: fast_bandwidth_kb capped at AuthDirFastGuarantee / 1000; votes print kb * 1000
+        assert FAST_BW_GUARANTEE == 102_000
 
 
 class TestParseWfuThreshold:
@@ -390,11 +395,11 @@ class TestGuardEligibilityEdgeCases:
         assert result['eligible'] == True
     
     def test_exactly_at_bw_guarantee(self):
-        """Test relay exactly at 2 MB/s BW threshold."""
+        """Test relay exactly at the 2097 KB/s BW threshold."""
         result = check_guard_eligibility(
             wfu=0.99,
             tk=10 * SECONDS_PER_DAY,
-            bandwidth=2_000_000,  # Exactly at threshold
+            bandwidth=2_097_000,  # Exactly at threshold
         )
         
         assert result['bw_meets_guarantee'] == True
@@ -423,11 +428,11 @@ class TestGuardEligibilityEdgeCases:
         assert result['eligible'] == False
     
     def test_just_below_bw_guarantee(self):
-        """Test relay just below 2 MB/s BW threshold."""
+        """Test relay just below the 2097 KB/s BW threshold (2096 KB/s in a vote)."""
         result = check_guard_eligibility(
             wfu=0.99,
             tk=10 * SECONDS_PER_DAY,
-            bandwidth=1_999_999,  # Just below
+            bandwidth=2_096_000,  # Just below
         )
         
         assert result['bw_meets_guarantee'] == False
@@ -527,18 +532,18 @@ class TestFastEligibilityEdgeCases:
     """Edge case tests for Fast eligibility checking."""
     
     def test_exactly_at_fast_guarantee(self):
-        """Test relay exactly at 100 KB/s Fast threshold."""
+        """Test relay exactly at the 102 KB/s Fast threshold (fast-speed=102000)."""
         result = check_fast_eligibility(
-            bandwidth=100_000,  # Exactly 100 KB/s
+            bandwidth=102_000,  # Exactly 102 KB/s
         )
         
         assert result['meets_guarantee'] == True
         assert result['eligible'] == True
     
     def test_just_below_fast_guarantee(self):
-        """Test relay just below 100 KB/s Fast threshold."""
+        """Test relay just below the 102 KB/s Fast threshold (101 KB/s in a vote)."""
         result = check_fast_eligibility(
-            bandwidth=99_999,  # Just below
+            bandwidth=101_000,  # Just below
             fast_threshold=0,  # No dynamic threshold
         )
         
@@ -682,3 +687,34 @@ class TestTimeConstants:
         """Test SECONDS_PER_MINUTE is correct."""
         from allium.lib.consensus.flag_thresholds import SECONDS_PER_MINUTE
         assert SECONDS_PER_MINUTE == 60
+
+
+@pytest.mark.parametrize("args, expected", [
+    ((68, 854, True), (68_000, 'measured')),           # Measured= (KB/s) wins
+    ((68, 854, False), (68_000, 'measured')),
+    ((None, 854, False), (854_000, 'reported')),       # else the relay-reported Bandwidth=
+    ((None, None, False), (0, 'reported')),
+    ((None, 854, True), (0, 'unmeasured')),            # else 0 with ignoring-advertised-bws=1,
+    ((None, 854, True, True), (None, 'unpublished')),  # unless the vote gives away a kept measurement
+    ((None, 854, False, True), (854_000, 'reported')),
+])
+def test_credible_bandwidth(args, expected):
+    """Bandwidth an authority judges Fast and Guard by (bwauth.c dirserv_get_credible_bandwidth_kb)."""
+    assert credible_bandwidth(*args) == expected
+
+
+@pytest.mark.parametrize("thresholds, expected", [
+    ({'guard-bw-inc-exits': 40_000_000, 'guard-bw-exc-exits': 35_000_000}, 35_000_000),
+    ({'guard-bw-inc-exits': 25_000_000, 'guard-bw-exc-exits': 26_000_000}, 25_000_000),
+    ({'guard-bw-inc-exits': 10_000_000}, 10_000_000),
+    ({}, None),
+])
+def test_guard_bw_top_threshold(thresholds, expected):
+    """voteflags.c takes MIN(guard_bandwidth_including_exits, guard_bandwidth_excluding_exits)."""
+    assert guard_bw_top_threshold(thresholds) == expected
+
+
+@pytest.mark.parametrize("values, expected", [([230, 84, 68, 53, 32], 68), ([40, 10, 30, 20], 20), ([], None)])
+def test_low_median(values, expected):
+    """tor's median_uint32() picks index (n-1)/2 of the sorted values."""
+    assert low_median(values) == expected
