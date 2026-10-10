@@ -15,6 +15,7 @@ from allium.lib.seo import (
     oversized_html_files,
     public_base_url,
     rewrite_internal_html_links,
+    root_relative_base_prefix,
     route_for_html,
 )
 
@@ -66,6 +67,31 @@ def test_canonical_url_is_absolute_or_root_relative():
     assert public_base_url("https://example.test/metrics/") == (
         "https://example.test/metrics"
     )
+
+
+def test_canonical_url_preserves_root_relative_subdirectory_prefix():
+    """Documented --base-url /tor-metrics must prefix every canonical route."""
+    assert canonical_url_for_output(
+        "/tor-metrics", "index.html"
+    ) == "/tor-metrics/"
+    assert canonical_url_for_output(
+        "/tor-metrics/", "country/US/index.html"
+    ) == "/tor-metrics/country/US/"
+    assert canonical_url_for_output(
+        "/tor-metrics", "misc/all-page-2.html"
+    ) == "/tor-metrics/misc/all-page-2"
+    assert canonical_url_for_output(
+        "/tor-metrics", "example.org/page-2.html"
+    ) == "/tor-metrics/example.org/page-2"
+
+
+def test_slash_only_base_url_is_rejected_for_canonicals():
+    with pytest.raises(ValueError, match="not supported"):
+        root_relative_base_prefix("/")
+    with pytest.raises(ValueError, match="not supported"):
+        canonical_url_for_output("/", "country/US/index.html")
+    assert root_relative_base_prefix("/tor-metrics/") == "/tor-metrics"
+    assert root_relative_base_prefix("") is None
 
 
 def test_public_base_rejects_unstable_components():
