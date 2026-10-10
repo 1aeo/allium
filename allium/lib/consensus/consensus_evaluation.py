@@ -346,9 +346,9 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         evaluation: Raw evaluation from CollectorFetcher.get_relay_consensus_evaluation()
         flag_thresholds: Optional flag threshold data
         current_flags: List of flags the relay currently has (from Onionoo)
-        observed_bandwidth: Relay's observed bandwidth in bytes/s (from Onionoo)
-                           This is the ACTUAL bandwidth used for Guard eligibility,
-                           NOT the scaled consensus weight or vote Measured value.
+        observed_bandwidth: Relay's observed bandwidth in bytes/s (from Onionoo). Only the
+                           issues use it, for the Guard bandwidth check when the votes give
+                           no per-authority details.
         use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s).
                   Should match the allium runtime --bits flag.
         relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
@@ -390,10 +390,10 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Relay values (consumed by flag_requirements_table builder below)
         'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary, current_flags=current_flags, version=version, recommended_version=recommended_version, dir_address=dir_address),
         
-        # Per-authority voting details - pass observed_bandwidth, use_bits, relay_uptime
+        # Per-authority voting details
         'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
         
-        # Flag eligibility summary - recalculate using observed_bandwidth
+        # Flag eligibility summary (actual flag assignments)
         'flag_summary': _format_flag_summary(evaluation, observed_bandwidth),
         
         # Reachability summary
