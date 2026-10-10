@@ -184,7 +184,7 @@
 
 /* verified-hostname, unverified-hostname, status classes,
    section-box, subsection-card, subsection-header, and
-   status-note moved to relay-info.html (only consumer) */
+   status-note moved to relay-info.css (only consumer) */
 
 /* ========== 6. CONTACT & TEXT TRUNCATION ========== */
 .contact-text {
@@ -261,8 +261,8 @@
 .aroi-center-text { text-align: center; }
 .aroi-subsection { margin-bottom: 30px; }
 
-/* AROI Leaderboard CSS moved to aroi-leaderboards.html (only consumer) */
-/* Network Health CSS moved to network-health-dashboard.html (only consumer) */
+/* AROI Leaderboard CSS moved to aroi-leaderboards.css (only consumer) */
+/* Network Health CSS moved to network-health.css (only consumer) */
 
 /* ========== 10. CSS-ONLY TOOLTIPS ========== */
 /* Base tooltip styling for elements with title attributes */
@@ -413,12 +413,14 @@ th[title]::after {
     font-weight: bold;
 }
 
-/* Desktop: show navigation horizontally */
+/* Desktop: show navigation horizontally.
+   No !important needed: the mobile toggle rule (.navbar-toggle-checkbox:checked ...)
+   is inside @media (max-width: 767px) so it never competes at desktop widths. */
 @media (min-width: 768px) {
     .navbar-collapse {
-        display: block !important;
-        height: auto !important;
-        overflow: visible !important;
+        display: block;
+        height: auto;
+        overflow: visible;
     }
     
     .nav.navbar-nav {
@@ -564,7 +566,7 @@ th[title]::after {
         display: block !important;
     }
 }
-/* API Diagnostics CSS moved to api-diagnostics.html (only consumer) */
+/* API Diagnostics CSS moved to api-diagnostics.css (only consumer) */
 
 /* ========== 13. SHARED SEMANTIC CLASSES (al- namespaced) ========== */
 /*
@@ -597,7 +599,9 @@ th[title]::after {
 .al-rating-okay         { color: #cc9900; font-weight: bold; }
 .al-rating-poor         { color: #c82333; font-weight: bold; }
 
-/* Box classes — color-only (layout stays inline per instance) */
+/* Box classes — color-only (layout stays inline per instance)
+   Currently used: al-box-warning, al-box-danger, al-box-muted.
+   Unused variants kept to complete the semantic set for future use. */
 .al-box-warning         { background-color: #fff3cd; border-left-color: var(--color-warning-bg); }
 .al-box-danger          { background-color: #f8d7da; border-left-color: var(--color-danger); }
 .al-box-success         { background-color: #d4edda; border-left-color: var(--color-success); }
@@ -607,7 +611,6 @@ th[title]::after {
 
 /* Utility classes */
 .al-link-plain          { text-decoration: none; }
-.al-section-title       { margin-top: 0; margin-bottom: 12px; }
 .al-font-bold           { font-weight: bold; }
 .page-title {
     font-size: 30px;
