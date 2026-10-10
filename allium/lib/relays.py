@@ -44,6 +44,7 @@ from .aroi_validation import (
 from .page_writer import (
     _compute_contact_predata,
     _compute_family_predata,
+    _fork_executor,
     _init_precompute_worker,
     _precompute_contact_worker,
     _precompute_family_worker,
@@ -1100,15 +1101,13 @@ class Relays:
                 contact_data[key] = value
     
     def _precompute_contacts_parallel(self, contact_hashes, aroi_validation_timestamp, validated_aroi_domains):
-        """Parallel precomputation using fork() with imap_unordered for better memory and progress.
-        
-        Uses chunked imap_unordered (GPT-style streaming) instead of map() to:
-        - Keep peak memory lower by processing results as they complete
+        """Parallel precomputation using fork() with streaming results for better memory and progress.
+
+        Iterates the chunked executor.map() as results arrive instead of collecting them first to:
+        - Keep peak memory lower by applying each result as it is yielded
         - Enable granular progress reporting during precomputation
+        A worker that dies raises BrokenProcessPool, so the caller falls back to sequential.
         """
-        # Use fork context for efficient memory sharing
-        ctx = mp.get_context('fork')
-        
         # Prepare arguments for worker function
         worker_args = [(contact_hash, aroi_validation_timestamp, validated_aroi_domains) 
                        for contact_hash in contact_hashes]
@@ -1118,9 +1117,9 @@ class Relays:
         chunk_size = max(50, total_contacts // (self.mp_workers * 4))  # Balance granularity vs overhead
         
         # Initialize workers with self reference (fork shares memory)
-        with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-            # Use imap_unordered for streaming results (lower peak memory)
-            for contact_hash, precomputed_data in pool.imap_unordered(
+        with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
+            # Stream results chunk by chunk (lower peak memory)
+            for contact_hash, precomputed_data in executor.map(
                 _precompute_contact_worker, worker_args, chunksize=chunk_size
             ):
                 # Apply result directly to contact data (flat storage pattern)
@@ -1183,13 +1182,10 @@ class Relays:
                 family_data[key] = value
     
     def _precompute_families_parallel(self, family_hashes):
-        """Parallel family precomputation using fork() with imap_unordered.
-        
+        """Parallel family precomputation using fork() with streaming executor.map().
+
         Mirrors _precompute_contacts_parallel for consistency.
         """
-        # Use fork context for efficient memory sharing
-        ctx = mp.get_context('fork')
-        
         # Prepare arguments for worker function (single-element tuple)
         worker_args = [(family_hash,) for family_hash in family_hashes]
         
@@ -1198,9 +1194,9 @@ class Relays:
         chunk_size = max(50, total_families // (self.mp_workers * 4))
         
         # Initialize workers with self reference (fork shares memory)
-        with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-            # Use imap_unordered for streaming results
-            for family_hash, precomputed_data in pool.imap_unordered(
+        with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
+            # Stream results chunk by chunk
+            for family_hash, precomputed_data in executor.map(
                 _precompute_family_worker, worker_args, chunksize=chunk_size
             ):
                 # Apply result directly to family data
