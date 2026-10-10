@@ -594,16 +594,14 @@ def _retry_with_backoff(
     if kwargs is None:
         kwargs = {}
 
-    last_exception = None
     max_attempts = 1 + retry_count  # 1 initial attempt + retry_count retries
 
     for attempt in range(max_attempts):
         try:
             return fetch_fn(*args, **kwargs)
         except Exception as exc:
-            # Not kept in a local: the traceback references this frame, so
-            # storing exc forms a reference cycle that keeps a partial
-            # download alive while allium.py pauses the cyclic GC.
+            # exc is never stored: its traceback holds this frame, and the cycle
+            # would keep a partial download alive while allium.py pauses the GC.
 
             # Don't retry if this is not a transient error
             if not _is_retryable_error(exc):
@@ -630,9 +628,6 @@ def _retry_with_backoff(
                 )
 
             time.sleep(delay)
-
-    # Should not reach here, but just in case
-    raise last_exception  # type: ignore[misc]
 
 # ============================================================================
 
@@ -672,8 +667,8 @@ def _fetch_with_cache_fallback(
         cache_hours_override: Override config's cache_max_age_hours (e.g., for bandwidth API)
         return_fresh_cache: If True, return fresh cache immediately without fetching
         validator: Optional function to validate response data structure
-        ignore_cache: Treat the cache as missing (retry after a cache presumed
-            readable turned out not to be)
+        ignore_cache: Treat the cache as missing and leave HTTP/network errors
+            to the caller (the refetch after a presumed-fresh cache proved unreadable)
         
     Returns:
         dict: Parsed JSON response or cached data, None if unavailable
@@ -689,21 +684,17 @@ def _fetch_with_cache_fallback(
 
     cache_age = None
     cached_data = None
-    cache_loaded = False
-    refetched = False
 
     def load_cached():
         """Load the cache on first use; a cache that fails to load counts as
         missing. Most runs fetch new data and never need the cache, and
         parsing then freeing the ~240MB uptime cache cost ~10s per run."""
-        nonlocal cache_age, cached_data, cache_loaded
-        if not cache_loaded:
-            cache_loaded = True
-            if cache_age is not None:
-                cached_data = _load_cache(api_name)
-                if cached_data is None:
-                    cache_age = None
-                    log_progress("cache file exists but is invalid, treating as no cache...")
+        nonlocal cache_age, cached_data
+        if cached_data is None and cache_age is not None:
+            cached_data = _load_cache(api_name)
+            if cached_data is None:
+                cache_age = None
+                log_progress("cache file exists but is invalid, treating as no cache...")
         return cached_data
 
     def _cache_fallback(reason, stale_msg, no_cache_log=None):
@@ -711,32 +702,24 @@ def _fetch_with_cache_fallback(
         ready) or mark it stale and return None. `reason` feeds the
         "using cached ... due to <reason>" log; `no_cache_log` (when set)
         is logged before marking stale."""
-        cached = load_cached()
-        if cached:
+        if load_cached():
             log_progress(f"using cached {display_name} data due to {reason}")
             _mark_ready(api_name)
-            return cached
+            return cached_data
         if no_cache_log:
             log_progress(no_cache_log)
         _mark_stale(api_name, stale_msg)
         return None
 
-    def _presumed_cache_unreadable():
-        """A failed fetch used the shorter fresh-cache timeout and retries;
-        if the cache turns out unreadable, the fetch must be repeated the way
-        a missing cache is fetched, as an up-front validity check arranged."""
-        return presumed_fresh_cache and load_cached() is None
-
     def _refetch_without_cache():
-        nonlocal refetched
-        refetched = True  # the nested call logs its own errors
+        # The failed fetch presumed a fresh cache (shorter timeout and retries)
+        # that proved unreadable: repeat it the way a missing cache is fetched.
         return _fetch_with_cache_fallback(
             url, config, progress_logger, cache_hours_override,
             return_fresh_cache, validator, ignore_cache=True)
 
     def _fetch_failed(reason, stale_msg, no_cache_log):
-        """Fallback after the fetch failed."""
-        if _presumed_cache_unreadable():
+        if presumed_fresh_cache and load_cached() is None:
             return _refetch_without_cache()
         return _cache_fallback(reason, stale_msg, no_cache_log=no_cache_log)
     
@@ -744,14 +727,12 @@ def _fetch_with_cache_fallback(
         cache_age = None if ignore_cache else _cache_manager.get_cache_age(api_name)
     
         # If cache is fresh and valid, optionally return immediately
-        if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds:
-            fresh_cache = load_cached()
-            if fresh_cache:
-                log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
-                _mark_ready(api_name)
-                item_count = len(fresh_cache.get(config.count_field, []))
-                log_progress(f"loaded {item_count} items from {display_name} cache")
-                return fresh_cache
+        if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and load_cached():
+            log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
+            _mark_ready(api_name)
+            item_count = len(cached_data.get(config.count_field, []))
+            log_progress(f"loaded {item_count} items from {display_name} cache")
+            return cached_data
     
         # Determine timeout based on cache state
         if cache_age is None:
@@ -816,8 +797,7 @@ def _fetch_with_cache_fallback(
         
             if not is_timeout:
                 # e.g. HTTP 5xx or a reset connection (a 304 is handled below)
-                not_modified = isinstance(e, urllib.error.HTTPError) and e.code == 304
-                if not not_modified and _presumed_cache_unreadable():
+                if presumed_fresh_cache and getattr(e, "code", None) != 304 and load_cached() is None:
                     return _refetch_without_cache()
                 raise
             log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
@@ -845,11 +825,10 @@ def _fetch_with_cache_fallback(
         # Validate response if validator provided
         if validator and not validator(data):
             log_progress(f"warning: invalid {display_name} data structure")
-            cached = load_cached()
-            if cached:
+            if load_cached():
                 log_progress("using cached data due to invalid response structure")
                 _mark_ready(api_name)
-                return cached
+                return cached_data
             return None
     
         # Cache the data
@@ -872,15 +851,14 @@ def _fetch_with_cache_fallback(
         return data
 
     except urllib.error.HTTPError as err:
-        if refetched:
-            raise
+        if ignore_cache:
+            raise  # the refetching caller handles and logs it
         if err.code == 304:
             # No update since last run - use cached data
             log_progress(f"no {display_name} update since last run, using cached data...")
-            cached = load_cached()
-            if cached:
+            if load_cached():
                 _mark_ready(api_name)
-                return cached
+                return cached_data
             elif config.allow_exit_on_304:
                 log_progress(f"no {display_name} update since last run, dying peacefully...")
                 # Don't call sys.exit(1) from worker threads - it only kills the thread
@@ -896,8 +874,8 @@ def _fetch_with_cache_fallback(
             raise
 
     except urllib.error.URLError as err:
-        if refetched:
-            raise
+        if ignore_cache:
+            raise  # the refetching caller handles and logs it
         log_progress(f"network error fetching {display_name} data: {err}")
         log_progress("check your internet connection and try again")
         log_progress("in CI environments, this might be a temporary network issue")

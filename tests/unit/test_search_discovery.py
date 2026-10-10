@@ -1,11 +1,12 @@
 """Tests for robots.txt and sitemap generation."""
 
 import os
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
 
-from allium.lib import search_discovery
+from allium.lib import search_discovery, seo
 from allium.lib.search_discovery import (
     SITEMAP_NAMESPACE,
     _canonical_urls_from_html,
@@ -199,7 +200,6 @@ def _page(root, relative, head_padding=0, canonical="https://metrics.1aeo.com/x/
     search_discovery.MAX_HEAD_CHARS - 200,
 ])
 def test_head_is_found_wherever_it_ends_within_the_limit(temp_dir, padding):
-    from pathlib import Path
     _page(temp_dir, "index.html", head_padding=padding)
 
     urls, html_count, noindex_count = _canonical_urls_from_html(
@@ -210,7 +210,6 @@ def test_head_is_found_wherever_it_ends_within_the_limit(temp_dir, padding):
 
 
 def test_head_beyond_the_limit_is_rejected(temp_dir):
-    from pathlib import Path
     _page(temp_dir, "index.html", head_padding=search_discovery.MAX_HEAD_CHARS)
 
     with pytest.raises(ValueError, match="no complete <head> within 262144 characters"):
@@ -218,13 +217,12 @@ def test_head_beyond_the_limit_is_rejected(temp_dir):
 
 
 def test_parallel_head_parsing_matches_sequential(temp_dir, monkeypatch):
-    from pathlib import Path
     for index in range(12):
         _page(temp_dir, f"p{index:02d}/index.html",
               canonical=f"https://metrics.1aeo.com/p{index % 5}/")
     sequential = _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
 
-    monkeypatch.setattr(search_discovery, "_PARALLEL_MIN_PAGES", 2)
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", 2)
     parallel = _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
 
     assert parallel == sequential

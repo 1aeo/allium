@@ -15,7 +15,6 @@ To add a new sorted-by variant (e.g., "by-latency"):
 import filecmp
 import os
 import re
-import time
 from shutil import copy2
 
 from .page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
@@ -194,8 +193,6 @@ def generate_site(relay_set, args, progress_logger):
     """
     # Path to the allium package directory (where static/ and templates/ live)
     allium_pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # Pages written from here on get clean-route links as they are rendered
-    generation_started_at = time.time()
     
     progress_logger.log(f"Details API data loaded successfully - found {len(relay_set.json.get('relays', []))} relays")
 
@@ -349,10 +346,9 @@ def generate_site(relay_set, args, progress_logger):
         oversized_html_files,
         rewrite_internal_html_links,
     )
-    # Generated pages were rewritten as they were written; only HTML left
-    # in the output directory by earlier runs still needs a pass.
+    # Pages written since this run started were rewritten as they were written
     link_stats = rewrite_internal_html_links(
-        args.output_dir, modified_before=generation_started_at
+        args.output_dir, modified_before=progress_logger.start_time
     )
     progress_logger.log_without_increment(
         f"Rewrote {link_stats['changed_links']} internal .html link(s) "

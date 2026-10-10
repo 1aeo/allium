@@ -26,41 +26,24 @@ class _FakeRenderer:
             f.write(str(os.getpid()))
 
 
-def _relay_set(output_dir, count=120):
-    return SimpleNamespace(
-        json={"relays": [{"fingerprint": f"{i:040X}"} for i in range(count)]},
-        output_dir=str(output_dir),
-        mp_workers=2,
-        progress_logger=Mock(),
-    )
-
-
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="needs fork()")
-def test_relay_pages_render_in_parallel(tmp_path, monkeypatch):
+@pytest.mark.parametrize("poisoned", [None, f"{7:040X}"], ids=["parallel", "worker_dies"])
+def test_relay_pages_render_in_parallel_or_fall_back(tmp_path, monkeypatch, poisoned):
     monkeypatch.setattr(page_writer, "_RelayPageRenderer", _FakeRenderer)
     monkeypatch.setattr(_FakeRenderer, "parent_pid", os.getpid())
-    monkeypatch.setattr(_FakeRenderer, "poisoned", None)
-    relay_set = _relay_set(tmp_path)
+    monkeypatch.setattr(_FakeRenderer, "poisoned", poisoned)
+    relay_set = SimpleNamespace(
+        json={"relays": [{"fingerprint": f"{i:040X}"} for i in range(120)]},
+        output_dir=str(tmp_path), mp_workers=2, progress_logger=Mock())
 
     page_writer.write_relay_info(relay_set)
 
     written = os.listdir(tmp_path / "relay")
     assert len(written) == 120
     writers = {(tmp_path / "relay" / name).read_text() for name in written}
-    assert str(os.getpid()) not in writers
-    assert relay_set.mp_workers == 2
-
-
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="needs fork()")
-def test_relay_pages_fall_back_when_a_worker_dies(tmp_path, monkeypatch):
-    monkeypatch.setattr(page_writer, "_RelayPageRenderer", _FakeRenderer)
-    monkeypatch.setattr(_FakeRenderer, "parent_pid", os.getpid())
-    monkeypatch.setattr(_FakeRenderer, "poisoned", f"{7:040X}")
-    relay_set = _relay_set(tmp_path)
-
-    page_writer.write_relay_info(relay_set)
-
-    written = os.listdir(tmp_path / "relay")
-    assert len(written) == 120
-    assert {(tmp_path / "relay" / name).read_text() for name in written} == {str(os.getpid())}
-    assert relay_set.mp_workers == 0
+    if poisoned is None:  # every page rendered by a worker
+        assert str(os.getpid()) not in writers
+        assert relay_set.mp_workers == 2
+    else:  # a worker died: the parent re-rendered every page
+        assert writers == {str(os.getpid())}
+        assert relay_set.mp_workers == 0

@@ -6,7 +6,8 @@ shortcut). A cache presumed readable that turns out not to be must still get
 the cache-less retry policy (stale timeout, full retries).
 """
 
-from unittest.mock import patch
+import urllib.error
+from unittest.mock import DEFAULT, patch
 
 from allium.lib.workers import (
     APIConfig,
@@ -14,146 +15,62 @@ from allium.lib.workers import (
     _fetch_with_cache_fallback,
 )
 
-
-def _config(**overrides):
-    defaults = dict(
-        api_name='test_api',
-        display_name='test API',
-        cache_max_age_hours=1,
-        timeout_fresh_cache=5,
-        timeout_stale_cache=10,
-        use_conditional_requests=False,
-        retry_count=2,
-        retry_delay_base=0.01,
-    )
-    defaults.update(overrides)
-    return APIConfig(**defaults)
+NEW = b'{"relays": [{"id": "new"}]}'
+CACHED = {"relays": [{"id": "cached"}]}
 
 
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_successful_fetch_never_loads_cache(mock_fetch, mock_cm, mock_save,
-                                            mock_stale, mock_ready):
-    mock_cm.get_cache_age.return_value = 60  # fresh
-    mock_fetch.return_value = b'{"relays": [{"id": "new"}]}'
+def _fetch(responses, cached=None):
+    """Fetch with a fresh (60s old) cache whose load returns `cached`.
+    Returns (result, timeout of each attempt, the _load_cache mock)."""
+    config = APIConfig(api_name='test_api', display_name='test API', cache_max_age_hours=1,
+                       timeout_fresh_cache=5, timeout_stale_cache=10,
+                       use_conditional_requests=False, retry_count=2, retry_delay_base=0.01)
+    with patch.multiple('allium.lib.workers', _mark_ready=DEFAULT, _mark_stale=DEFAULT,
+                        _save_cache=DEFAULT, _cache_manager=DEFAULT,
+                        _fetch_url_with_total_timeout=DEFAULT, _load_cache=DEFAULT) as mocks:
+        mocks['_cache_manager'].get_cache_age.return_value = 60
+        mocks['_fetch_url_with_total_timeout'].side_effect = responses
+        mocks['_load_cache'].return_value = cached
+        result = _fetch_with_cache_fallback(url="http://test.example.com/api", config=config)
+    timeouts = [call.args[1] for call in mocks['_fetch_url_with_total_timeout'].call_args_list]
+    return result, timeouts, mocks['_load_cache']
 
-    with patch('allium.lib.workers._load_cache') as mock_load:
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
 
+def _http_error(code):
+    return urllib.error.HTTPError("http://test.example.com/api", code, "", {}, None)
+
+
+def test_successful_fetch_never_loads_cache():
+    result, _, load = _fetch([NEW])
     assert result == {"relays": [{"id": "new"}]}
-    mock_load.assert_not_called()
+    load.assert_not_called()
 
 
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_unreadable_fresh_cache_refetches_like_missing_cache(
-        mock_fetch, mock_cm, mock_save, mock_stale, mock_ready):
-    mock_cm.get_cache_age.return_value = 60  # fresh, but unreadable below
+def test_unreadable_fresh_cache_refetches_like_missing_cache():
     # Fresh-cache attempt: one try (no retries) with the fresh timeout fails;
     # the cache-less attempt then uses the stale timeout and retries.
-    mock_fetch.side_effect = [
-        TotalTimeoutError("timeout"),
-        TotalTimeoutError("timeout"),
-        b'{"relays": [{"id": "recovered"}]}',
-    ]
-
-    with patch('allium.lib.workers._load_cache', return_value=None) as mock_load:
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
-
-    assert result == {"relays": [{"id": "recovered"}]}
-    timeouts = [call.args[1] for call in mock_fetch.call_args_list]
+    result, timeouts, load = _fetch([TotalTimeoutError("timeout"), TotalTimeoutError("timeout"), NEW])
+    assert result == {"relays": [{"id": "new"}]}
     assert timeouts == [5, 10, 10]
-    mock_load.assert_called_once_with('test_api')
+    load.assert_called_once_with('test_api')
 
 
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_readable_fresh_cache_is_used_after_failed_fetch(
-        mock_fetch, mock_cm, mock_save, mock_stale, mock_ready):
-    cached = {"relays": [{"id": "cached"}]}
-    mock_cm.get_cache_age.return_value = 60
-    mock_fetch.side_effect = TotalTimeoutError("timeout")
-
-    with patch('allium.lib.workers._load_cache', return_value=cached):
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
-
-    assert result == cached
-    assert mock_fetch.call_count == 1
+def test_unreadable_fresh_cache_retries_server_errors():
+    result, timeouts, _ = _fetch([_http_error(503), NEW])
+    assert result == {"relays": [{"id": "new"}]}
+    assert timeouts == [5, 10]
 
 
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_not_modified_loads_cache_once(mock_fetch, mock_cm, mock_save,
-                                       mock_stale, mock_ready):
-    import urllib.error
-    cached = {"relays": [{"id": "cached"}]}
-    mock_cm.get_cache_age.return_value = 60
-    mock_fetch.side_effect = urllib.error.HTTPError(
-        "http://test.example.com/api", 304, "Not Modified", {}, None)
-
-    with patch('allium.lib.workers._load_cache', return_value=cached) as mock_load:
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
-
-    assert result == cached
-    mock_load.assert_called_once_with('test_api')
+def test_not_modified_loads_cache_once():
+    result, _, load = _fetch([_http_error(304)], cached=CACHED)
+    assert result == CACHED
+    load.assert_called_once_with('test_api')
 
 
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_unreadable_fresh_cache_retries_server_errors(
-        mock_fetch, mock_cm, mock_save, mock_stale, mock_ready):
-    import urllib.error
-    mock_cm.get_cache_age.return_value = 60  # fresh, but unreadable below
-    mock_fetch.side_effect = [
-        urllib.error.HTTPError("http://test.example.com/api", 503, "Busy", {}, None),
-        b'{"relays": [{"id": "recovered"}]}',
-    ]
-
-    with patch('allium.lib.workers._load_cache', return_value=None):
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
-
-    assert result == {"relays": [{"id": "recovered"}]}
-    assert [call.args[1] for call in mock_fetch.call_args_list] == [5, 10]
-
-
-@patch('allium.lib.workers._mark_ready')
-@patch('allium.lib.workers._mark_stale')
-@patch('allium.lib.workers._save_cache')
-@patch('allium.lib.workers._cache_manager')
-@patch('allium.lib.workers._fetch_url_with_total_timeout')
-def test_not_modified_with_unreadable_cache_does_not_refetch(
-        mock_fetch, mock_cm, mock_save, mock_stale, mock_ready):
-    import urllib.error
-    mock_cm.get_cache_age.return_value = 60
-    mock_fetch.side_effect = urllib.error.HTTPError(
-        "http://test.example.com/api", 304, "Not Modified", {}, None)
-
-    with patch('allium.lib.workers._load_cache', return_value=None):
-        result = _fetch_with_cache_fallback(
-            url="http://test.example.com/api", config=_config())
-
+def test_not_modified_with_unreadable_cache_does_not_refetch():
+    result, timeouts, _ = _fetch([_http_error(304)])
     assert result is None
-    assert mock_fetch.call_count == 1
+    assert timeouts == [5]
 
 
 def test_failed_attempts_leave_no_reference_cycles():

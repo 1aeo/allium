@@ -215,13 +215,14 @@ ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
 ENV.filters['ordinal'] = _ordinal
 
 
-# relay_row_head icon types whose markup ignores the page's fingerprint sets
-_FIXED_ROW_ICON_TYPES = frozenset(
-    ('validated', 'unauthorized', 'misconfigured', 'not_configured'))
+# relay_row_head rows memoized per process (cleared before each page set)
+_relay_row_heads = {}
 
 
-class _RelayRowCache:
-    """Memoizes contact-relay-list.html's relay_row_head macro per process.
+def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_type,
+                           path_prefix, key, use_bits, validated_fps, unauthorized_fps,
+                           misconfigured_fps, security_fps, pending_fps):
+    """Memoize contact-relay-list.html's relay_row_head macro.
 
     Family pages list every member relay once per member (a family of N
     relays renders ~N^2 rows) and contact pages repeat their rows for every
@@ -230,45 +231,28 @@ class _RelayRowCache:
     render), the call arguments, the page values, and for rows that show
     aroi_validation_icon the relay's membership in the page's fingerprint sets.
     """
-
-    MAX_ENTRIES = 1 << 16
-
-    def __init__(self):
-        self._rows = {}
-
-    def head(self, macro, relay, show_validation_icon, validation_icon_type,
-             path_prefix, key, use_bits, validated_fps, unauthorized_fps,
-             misconfigured_fps, security_fps, pending_fps):
-        icon_state = None
-        if show_validation_icon and validation_icon_type not in _FIXED_ROW_ICON_TYPES:
-            fingerprint = relay['fingerprint']
-            icon_state = (
-                bool(security_fps) and fingerprint in security_fps,
-                bool(pending_fps) and fingerprint in pending_fps,
-                fingerprint in validated_fps,
-                fingerprint in unauthorized_fps,
-                fingerprint in misconfigured_fps,
-            )
-        cache_key = (id(relay), show_validation_icon, validation_icon_type,
-                     path_prefix, key, use_bits, icon_state)
-        entry = self._rows.get(cache_key)
-        # The entry holds the relay itself, so its id cannot be reused
-        if entry is not None and entry[0] is relay:
-            return entry[1]
-        if len(self._rows) >= self.MAX_ENTRIES:
-            self._rows.clear()
-        row = macro(relay, show_validation_icon, validation_icon_type)
-        self._rows[cache_key] = (relay, row)
-        return row
+    icon_state = None
+    if show_validation_icon and validation_icon_type not in {
+            'validated', 'unauthorized', 'misconfigured', 'not_configured'}:
+        fingerprint = relay['fingerprint']
+        icon_state = (
+            bool(security_fps) and fingerprint in security_fps,
+            bool(pending_fps) and fingerprint in pending_fps,
+            fingerprint in validated_fps,
+            fingerprint in unauthorized_fps,
+            fingerprint in misconfigured_fps,
+        )
+    cache_key = (id(relay), show_validation_icon, validation_icon_type,
+                 path_prefix, key, use_bits, icon_state)
+    entry = _relay_row_heads.get(cache_key)
+    if entry is None:
+        # Holding the relay keeps its id from being reused while cached
+        entry = _relay_row_heads[cache_key] = (
+            relay, macro(relay, show_validation_icon, validation_icon_type))
+    return entry[1]
 
 
-def _reset_relay_row_cache():
-    """Start a fresh row cache, e.g. before a page set whose relays may have
-    changed since rows were last rendered in this process."""
-    ENV.globals['relay_row_cache'] = _RelayRowCache()
-
-
-_reset_relay_row_cache()
+ENV.globals['relay_row_cache'] = _cached_relay_row_head
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
@@ -444,30 +428,6 @@ def _init_precompute_worker(relay_set):
     }
 
 
-class _RelayRefPickler(pickle.Pickler):
-    """Pickles the shared relay dicts as their index in relay_set.json["relays"]."""
-
-    def __init__(self, file, relay_indexes):
-        super().__init__(file, pickle.HIGHEST_PROTOCOL)
-        self._relay_indexes = relay_indexes
-
-    def persistent_id(self, obj):
-        if type(obj) is dict:
-            return self._relay_indexes.get(id(obj))
-        return None
-
-
-class _RelayRefUnpickler(pickle.Unpickler):
-    """Resolves relay indexes written by _RelayRefPickler to the parent's dicts."""
-
-    def __init__(self, file, relays):
-        super().__init__(file)
-        self._relays = relays
-
-    def persistent_load(self, pid):
-        return self._relays[pid]
-
-
 def _dump_precomputed(result):
     """Serialize a worker's precomputed group data for the parent.
 
@@ -478,13 +438,17 @@ def _dump_precomputed(result):
     families list each member once per member.
     """
     buffer = io.BytesIO()
-    _RelayRefPickler(buffer, _precompute_relay_indexes).dump(result)
+    pickler = pickle.Pickler(buffer, pickle.HIGHEST_PROTOCOL)
+    pickler.persistent_id = lambda obj: _precompute_relay_indexes.get(id(obj)) if type(obj) is dict else None
+    pickler.dump(result)
     return buffer.getvalue()
 
 
-def load_precomputed(data, relays):
+def _load_precomputed(data, relays):
     """Inverse of _dump_precomputed, re-linking to ``relays`` (the parent's list)."""
-    return _RelayRefUnpickler(io.BytesIO(data), relays).load()
+    unpickler = pickle.Unpickler(io.BytesIO(data))
+    unpickler.persistent_load = relays.__getitem__
+    return unpickler.load()
 
 
 def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains):
@@ -1365,7 +1329,7 @@ def write_pages_by_key(relay_set, k):
     
     template = ENV.get_template(k + ".html")
     output_path = os.path.join(relay_set.output_dir, k)
-    _reset_relay_row_cache()
+    _relay_row_heads.clear()
 
     the_prefixed = [
         "Dominican Republic", "Ivory Coast", "Marshall Islands",
@@ -1383,13 +1347,9 @@ def write_pages_by_key(relay_set, k):
     
     # Use multiprocessing for large page sets on systems with fork(). Count
     # output files, not groups: the 12 flags alone span ~300 pages.
-    output_files = sum(
-        max(1, (len(relay_set.json["sorted"][k][v].get("relays", []))
-                + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
-        for v in sorted_values
-    )
-    use_mp = (relay_set.mp_workers > 0 and output_files >= 100 and
-              hasattr(mp, 'get_context'))
+    output_files = sum(max(1, (len(group.get("relays", [])) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+                       for group in relay_set.json["sorted"][k].values())
+    use_mp = relay_set.mp_workers > 0 and output_files >= 100
 
     # Contact pages use dedicated variant-aware renderers (17 by-*.html + index default)
     if k == "contact":
@@ -1772,9 +1732,7 @@ def write_relay_info(relay_set):
 
     # Relay pages are the largest page set (~10k); render them in parallel
     # like the other page types.
-    use_mp = (relay_set.mp_workers > 0 and len(relay_indexes) >= 100 and
-              hasattr(mp, 'get_context'))
-    if use_mp:
+    if relay_set.mp_workers > 0 and len(relay_indexes) >= 100:
         try:
             # ProcessPoolExecutor raises BrokenProcessPool if a worker is
             # killed (e.g. by the OOM killer); multiprocessing.Pool would hang.
@@ -1789,16 +1747,9 @@ def write_relay_info(relay_set):
         except Exception as e:
             relay_set.progress_logger.log_without_increment(
                 f"Relay page multiprocessing failed ({e}), falling back to sequential...")
+            # The pool has shut down; the loop below rewrites every page a
+            # dead worker may have left partial.
             relay_set.mp_workers = 0
-            for retry in range(3):
-                try:
-                    if os.path.exists(output_path):
-                        rmtree(output_path)
-                    os.makedirs(output_path)
-                    break
-                except OSError:
-                    if retry < 2:
-                        time.sleep(0.1)
 
     for index in relay_indexes:
         renderer.write(relay_list[index])

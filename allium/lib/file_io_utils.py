@@ -93,7 +93,7 @@ class FileIOManager:
     
     @handle_file_io_errors("write JSON file", context="")
     def write_json_file(self, filename: str, data: Any, encoding: str = "utf-8",
-                       indent: int = 2, sort_keys: bool = False) -> bool:
+                       indent: Optional[int] = 2, sort_keys: bool = False) -> bool:
         """
         Write data to JSON file with error handling.
         
@@ -112,9 +112,8 @@ class FileIOManager:
         # json.dump always falls back to the pure-Python encoder, which
         # took ~35s for the ~1GB uptime cache. Serializing before opening
         # the temp file also leaves no partial file on failure.
-        separators = (",", ":") if indent is None else None
         serialized = json.dumps(data, indent=indent, sort_keys=sort_keys,
-                                separators=separators)
+                                separators=(",", ":") if indent is None else None)
         # Atomic write: a crash mid-dump must not corrupt the existing file
         tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
         with open(tmp_path, "w", encoding=encoding) as f:

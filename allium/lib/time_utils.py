@@ -42,6 +42,10 @@ PERIOD_DISPLAY_NAMES = {
 ONIONOO_HISTORY_PERIODS = ('1_month', '6_months', '1_year', '5_years')
 
 
+# The same timestamps are parsed over and over (every contact page sort
+# variant formats each relay's dates again, ~1.5M parses per run) and
+# strptime is slow; parsing is pure and datetimes are immutable.
+@functools.lru_cache(maxsize=1 << 16)
 def _parse_onionoo_timestamp(timestamp_str):
     try:
         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
@@ -50,17 +54,10 @@ def _parse_onionoo_timestamp(timestamp_str):
         return None
 
 
-# The same timestamps are parsed over and over (every contact page sort
-# variant formats each relay's dates again, ~1.5M parses per run) and
-# strptime is slow; parsing is pure and datetimes are immutable.
-_parse_onionoo_timestamp_str = functools.lru_cache(maxsize=1 << 16)(_parse_onionoo_timestamp)
-
-
 def parse_onionoo_timestamp(timestamp_str):
     """Parse Onionoo timestamp string into datetime object"""
-    if type(timestamp_str) is str:
-        return _parse_onionoo_timestamp_str(timestamp_str)
-    return _parse_onionoo_timestamp(timestamp_str)
+    # Non-strings (None, unhashable lists) never parse: keep them out of the cache
+    return _parse_onionoo_timestamp(timestamp_str) if isinstance(timestamp_str, str) else None
 
 
 def create_time_thresholds():

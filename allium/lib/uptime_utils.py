@@ -5,8 +5,6 @@ This module provides shared functions for calculating uptime statistics
 to avoid duplication between aroileaders.py and relays.py.
 """
 
-import functools
-import operator
 import statistics
 from .error_handlers import handle_calculation_errors
 from .statistical_utils import StatisticalUtils
@@ -31,17 +29,19 @@ def _compute_uptime_percentage_and_datapoints(uptime_values):
     if not uptime_values:
         return 0.0, 0
     
-    # OPTIMIZATION: filter in a comprehension and add in C (~1.7x faster over
-    # the ~55M values per run). reduce() keeps the left-to-right sum of the
-    # original loop; sum() compensates float rounding on Python 3.12+.
-    valid = [v for v in uptime_values
-             if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
-    count = len(valid)
+    # OPTIMIZATION: Single pass - filter, count, and sum simultaneously
+    total = 0
+    count = 0
+    for v in uptime_values:
+        if v is None:
+            continue
+        if isinstance(v, (int, float)) and 0 <= v <= 999:
+            total += v
+            count += 1
     
     # Early exit for insufficient data
     if count < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0, count
-    total = functools.reduce(operator.add, valid, 0)
     
     # Calculate percentage in single step (inline normalize_uptime_value)
     percentage = (total / count) * (100.0 / 999.0)

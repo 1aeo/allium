@@ -1,13 +1,11 @@
 """Generate canonical-aware crawler discovery files for a static build."""
 
-from concurrent.futures import ProcessPoolExecutor
 from html.parser import HTMLParser
-import os
 from pathlib import Path
 from urllib.parse import quote, urljoin, urlsplit
 import xml.etree.ElementTree as ET
 
-from .seo import public_base_url as normalize_public_base_url
+from .seo import map_html_files, public_base_url as normalize_public_base_url
 
 
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -18,8 +16,6 @@ MAX_BYTES_PER_SITEMAP = 52_428_800
 MAX_HEAD_CHARS = 262_144
 # Generated heads are a few KB: read this much first, the rest only if needed
 _HEAD_PROBE_CHARS = 16_384
-# Below this many pages a worker pool costs more than it saves
-_PARALLEL_MIN_PAGES = 256
 
 ET.register_namespace("", SITEMAP_NAMESPACE)
 
@@ -71,8 +67,8 @@ def _head_signals(html_path):
     with open(html_path, encoding="utf-8") as handle:
         head = handle.read(_HEAD_PROBE_CHARS)
         head_end = head.lower().find("</head>")
-        # Same result as searching a single MAX_HEAD_CHARS read: the first
-        # match lies in this prefix (or the rest of the read is needed).
+        # Same result as one MAX_HEAD_CHARS read. Read on when there is no match,
+        # or when lower() lengthened the text ("İ") so the match ends past the probe.
         if head_end < 0 or head_end + len("</head>") > len(head):
             head += handle.read(MAX_HEAD_CHARS - len(head))
             head_end = head.lower().find("</head>")
@@ -81,17 +77,6 @@ def _head_signals(html_path):
     parser = _HeadSignalsParser()
     parser.feed(head[:head_end + len("</head>")])
     return parser.canonicals, parser.noindex
-
-
-def _iter_head_signals(html_paths):
-    """Yield _head_signals for each path in order, parsing in worker
-    processes for large builds (~30k pages took ~40s sequentially)."""
-    if len(html_paths) < _PARALLEL_MIN_PAGES:
-        yield from map(_head_signals, html_paths)
-        return
-    max_workers = min(8, os.cpu_count() or 1)
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        yield from executor.map(_head_signals, html_paths, chunksize=64)
 
 
 def _canonical_urls_from_html(output_path, base_url):
@@ -109,7 +94,8 @@ def _canonical_urls_from_html(output_path, base_url):
         pages.append((html_path, relative))
 
     # Signals are consumed in page order, so errors name the same first page
-    signals = _iter_head_signals([str(html_path) for html_path, _ in pages])
+    # (~30k heads took ~40s to parse sequentially)
+    signals = map_html_files(_head_signals, [str(html_path) for html_path, _ in pages], 64)
     for (html_path, relative), signal in zip(pages, signals):
         if signal is None:
             raise ValueError(

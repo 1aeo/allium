@@ -161,15 +161,15 @@ if k == "contact":
   results embed the group's relay dicts (validation status entries point at
   them). Workers pickle each shared relay dict as its index in
   `relay_set.json["relays"]` and the parent re-links its own dict
-  (`_dump_precomputed` / `load_precomputed`), as the sequential path stores
+  (`_dump_precomputed` / `_load_precomputed`), as the sequential path stores
   them. Sending copies cost ~29GB of pickles per run, because family groups
   list every member once per member.
 - **The heap is frozen before rendering.** `allium.py` pauses the cyclic GC
   while data is fetched and processed (the data holds almost no cycles), then
   calls `gc.freeze()` before page generation so collections in the parent and
   in forked workers skip the multi-GB data set instead of re-traversing it.
-- **Relay rows are memoized per worker.** `contact-relay-list.html` renders
-  each row as a cached `relay_row_head` (`_RelayRowCache`, keyed on everything
+- **Relay rows are memoized per process.** `contact-relay-list.html` renders
+  each row as a cached `relay_row_head` (`_cached_relay_row_head`, keyed on everything
   the macro reads) plus an uncached `relay_row_tail` holding the cells that
   depend on the current time.
 
@@ -217,8 +217,7 @@ with ctx.Pool(workers, initializer, initargs) as pool:
 If multiprocessing fails or isn't available (Windows), the code falls back to sequential processing:
 
 ```python
-use_mp = (relay_set.mp_workers > 0 and output_files >= 100 and
-          hasattr(mp, 'get_context'))
+use_mp = relay_set.mp_workers > 0 and output_files >= 100
 
 if use_mp:
     write_pages_parallel(...)

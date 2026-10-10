@@ -469,8 +469,8 @@ class TestOnionooUptimeCaching:
                     # cache as no cache and uses the 1200 second (20 min) timeout
                     assert [c[1]['timeout'] for c in mock_urlopen.call_args_list] == [30, 1200]
     
-    def test_preloaded_cache_used_on_timeout(self):
-        """Test that pre-loaded cache is reused on timeout (not loaded twice)"""
+    def test_cache_loaded_once_on_timeout(self):
+        """Test that the cache is loaded once, for the timeout fallback"""
         import socket
         
         mock_cached_data = {
@@ -490,8 +490,7 @@ class TestOnionooUptimeCaching:
                     
                     # Should return cached data on timeout
                     assert result == mock_cached_data
-                    # Cache should be loaded once for validation (pre-loading)
-                    # The pre-loaded data is reused on timeout fallback
+                    # Loaded lazily, only for the fallback
                     mock_load_cache.assert_called_once()
     
     def test_boundary_cache_age_uses_long_timeout(self):

@@ -18,16 +18,8 @@ _HREF_RE = re.compile(
     r"(?P<prefix>\bhref\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']+)(?P=quote)",
     re.IGNORECASE,
 )
-# Every spelling _HREF_RE accepts for "href" (its letters have no non-ASCII
-# case-insensitive equivalents).
-_HREF_SPELLINGS = frozenset(
-    h + r + e + f for h in "hH" for r in "rR" for e in "eE" for f in "fF"
-)
-# ".html" split by tab/CR/LF, which urlsplit strips before checking the path
-_SPLIT_HTML_RE = re.compile(
-    r"\.(?:[\t\r\n]+h[\t\r\n]*t[\t\r\n]*m[\t\r\n]*l"
-    r"|h(?:[\t\r\n]+t[\t\r\n]*m[\t\r\n]*l|t(?:[\t\r\n]+m[\t\r\n]*l|m[\t\r\n]+l)))"
-)
+# ".html", also split by the tab/CR/LF that urlsplit strips from hrefs
+_HTML_SUFFIX_RE = re.compile(r"\.[\t\r\n]*h[\t\r\n]*t[\t\r\n]*m[\t\r\n]*l")
 
 
 def public_base_url(base_url):
@@ -112,75 +104,33 @@ def _clean_route_href(value):
     )
 
 
-def _href_attr_start(html, quote_at):
-    """Return where ``\\bhref\\s*=\\s*`` ends right before ``html[quote_at]``, else -1.
+def _href_match_before(html, index):
+    """Return the ``_HREF_RE`` match opening at the last quote before ``index``, else ``None``.
 
-    Mirrors the prefix of ``_HREF_RE`` backwards (``\\s`` and ``\\b`` follow
-    ``str.isspace`` and ``str.isalnum``, as the regex engine does).
+    Walks back from that quote over ``\\s*=\\s*`` (``\\s`` follows
+    ``str.isspace``, as the regex engine does) to where ``href`` must start
+    and lets the regex check the rest.
     """
-    end = quote_at
+    # Bound the search for the (rare) single quote by the nearest double quote
+    double = html.rfind('"', 0, index)
+    end = max(double, html.rfind("'", max(double, 0), index))
     while end > 0 and html[end - 1].isspace():
         end -= 1
-    if end == 0 or html[end - 1] != "=":
-        return -1
+    if end <= 0 or html[end - 1] != "=":
+        return None
     end -= 1
     while end > 0 and html[end - 1].isspace():
         end -= 1
-    start = end - 4
-    if start < 0 or html[start:end] not in _HREF_SPELLINGS:
-        return -1
-    if start > 0 and (html[start - 1].isalnum() or html[start - 1] == "_"):
-        return -1
-    return start
+    return _HREF_RE.match(html, end - 4) if end >= 4 else None
 
 
-def _last_quote_before(html, index):
-    # Bound the search for the (rare) single quote by the nearest double quote
-    double = html.rfind('"', 0, index)
-    return max(double, html.rfind("'", max(double, 0), index))
+def rewrite_internal_links(html):
+    """Return ``(html, changed_links)`` with internal ``.html`` hrefs in clean-route form.
 
-
-def _first_quote_from(html, index):
-    double = html.find('"', index)
-    single = html.find("'", index, double if double >= 0 else len(html))
-    return single if single >= 0 else double
-
-
-def _internal_html_href_spans(html):
-    """Return the ``(start, quote_at, end)`` spans ``_HREF_RE`` would match
-    whose value contains ``.html``, or ``None`` when a value could swallow a
-    following attribute and only a full scan is exact.
-
-    A match's value holds no quotes, so the match covering a ``.html`` must
-    open at the last quote before it and close at the first one after it.
-    Pages carry few ``.html`` links but thousands of other hrefs, so this
-    skips the per-href work of a full scan.
+    Pages carry few ``.html`` links but thousands of other hrefs, so only the
+    ``_HREF_RE`` match around each ``.html`` is rewritten: a match's value
+    holds no quotes, so it opens at the last quote before the ``.html``.
     """
-    spans = []
-    index = html.find(".html")
-    while index >= 0:
-        next_index = index + 5
-        quote_at = _last_quote_before(html, index)
-        if quote_at >= 0:
-            quote_char = html[quote_at]
-            close_at = _first_quote_from(html, index)
-            start = (_href_attr_start(html, quote_at)
-                     if close_at >= 0 and html[close_at] == quote_char else -1)
-            if start >= 0:
-                # A value ending in "href=" would make the regex consume this
-                # attribute's opening quote as its closing one.
-                earlier_quote = _last_quote_before(html, start)
-                if (earlier_quote >= 0 and html[earlier_quote] == quote_char
-                        and _href_attr_start(html, earlier_quote) >= 0):
-                    return None
-                if not spans or spans[-1][0] != start:
-                    spans.append((start, quote_at, close_at + 1))
-                next_index = close_at + 1
-        index = html.find(".html", next_index)
-    return spans
-
-
-def _rewrite_internal_links_full_scan(html):
     changed_links = 0
 
     def replacement(match):
@@ -192,32 +142,36 @@ def _rewrite_internal_links_full_scan(html):
         quote_char = match.group("quote")
         return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
 
-    return _HREF_RE.sub(replacement, html), changed_links
-
-
-def rewrite_internal_links(html):
-    """Return ``(html, changed_links)`` with internal ``.html`` hrefs in clean-route form."""
-    spans = (None if _SPLIT_HTML_RE.search(html)
-             else _internal_html_href_spans(html))
-    if spans is None:
-        return _rewrite_internal_links_full_scan(html)
     parts = []
-    changed_links = 0
     position = 0
-    for start, quote_at, end in spans:
-        rewritten = _clean_route_href(html[quote_at + 1:end - 1])
-        if rewritten is None:
-            continue
-        quote_char = html[quote_at]
-        parts.append(html[position:quote_at + 1])
-        parts.append(rewritten)
-        parts.append(quote_char)
-        position = end
-        changed_links += 1
-    if not changed_links:
-        return html, 0
+    found = _HTML_SUFFIX_RE.search(html)
+    while found:
+        match = _href_match_before(html, found.start())
+        if match:
+            if _href_match_before(html, match.start()):
+                # A value ending in "href=" makes the regex consume this
+                # attribute's opening quote as its closing one: scan it all.
+                changed_links = 0
+                return _HREF_RE.sub(replacement, html), changed_links
+            parts += (html[position:match.start()], replacement(match))
+            position = match.end()
+        found = _HTML_SUFFIX_RE.search(html, (match or found).end())
     parts.append(html[position:])
     return "".join(parts), changed_links
+
+
+# Below this many files a worker pool costs more than it saves
+_PARALLEL_MIN_FILES = 256
+
+
+def map_html_files(function, html_paths, chunksize):
+    """Yield ``function(path)`` for each path in order, in worker processes
+    for large builds."""
+    if len(html_paths) < _PARALLEL_MIN_FILES:
+        yield from map(function, html_paths)
+        return
+    with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
+        yield from executor.map(function, html_paths, chunksize=chunksize)
 
 
 def _rewrite_html_file(html_path):
@@ -245,15 +199,10 @@ def rewrite_internal_html_links(output_dir, modified_before=None):
         if path.is_file()
         and (modified_before is None or path.stat().st_mtime < modified_before)
     ]
-    if not html_paths:
-        return {"changed_files": 0, "changed_links": 0}
     changed_files = changed_links = 0
-    max_workers = min(8, os.cpu_count() or 1)
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for file_count, link_count in executor.map(
-                _rewrite_html_file, html_paths, chunksize=24):
-            changed_files += file_count
-            changed_links += link_count
+    for file_count, link_count in map_html_files(_rewrite_html_file, html_paths, 24):
+        changed_files += file_count
+        changed_links += link_count
     return {"changed_files": changed_files, "changed_links": changed_links}
 
 
