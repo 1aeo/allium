@@ -253,3 +253,38 @@ def test_size_guard_reports_only_oversized_html(temp_dir):
     assert oversized_html_files(temp_dir, max_bytes=300) == [
         ("large.html", os.path.getsize(os.path.join(temp_dir, "large.html")))
     ]
+
+
+_PARENT_PID = os.getpid()
+
+
+def _upper_unless_poisoned(path):
+    """Dies like an OOM-killed worker on a poisoned path; the parent survives."""
+    if path.endswith("poison") and os.getpid() != _PARENT_PID:
+        os._exit(1)
+    return path.upper()
+
+
+def _fails_on_bad(path):
+    if path.endswith("bad"):
+        raise ValueError(path)
+    return path
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="needs fork()")
+def test_map_html_files_finishes_sequentially_when_a_worker_dies(monkeypatch, caplog):
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", 2)
+    paths = [f"p{i:02d}" for i in range(40)]
+    paths[25] = "p25-poison"
+
+    assert list(seo.map_html_files(_upper_unless_poisoned, paths, 4)) == [p.upper() for p in paths]
+    assert "worker pool failed" in caplog.text
+
+
+def test_map_html_files_still_raises_the_first_error_in_path_order(monkeypatch):
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", 2)
+    paths = [f"p{i:02d}" for i in range(40)]
+    paths[9], paths[30] = "p09-bad", "p30-bad"
+
+    with pytest.raises(ValueError, match="p09-bad"):
+        list(seo.map_html_files(_fails_on_bad, paths, 4))
