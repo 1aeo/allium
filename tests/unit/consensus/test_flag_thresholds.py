@@ -43,7 +43,6 @@ class TestConstants:
     def test_guard_bw_guarantee(self):
         """AuthDirGuardBWGuarantee "2 MB" (2,097,152 bytes) is compared as 2097 KB/s."""
         # voteflags.c: routerbw_kb >= AuthDirGuardBWGuarantee / 1000
-        assert GUARD_BW_GUARANTEE == (2 * 1024 * 1024) // 1000 * 1000
         assert GUARD_BW_GUARANTEE == 2_097_000
     
     def test_guard_tk_default(self):
@@ -68,7 +67,6 @@ class TestConstants:
     def test_fast_bw_guarantee(self):
         """AuthDirFastGuarantee "100 KB" caps fast-speed at 102 KB/s, as votes publish it."""
         # voteflags.c: fast_bandwidth_kb capped at AuthDirFastGuarantee / 1000; votes print kb * 1000
-        assert FAST_BW_GUARANTEE == (100 * 1024) // 1000 * 1000
         assert FAST_BW_GUARANTEE == 102_000
 
 

@@ -756,14 +756,6 @@ class TestIssueSectionAnchors:
         assert by_title['Guard: bandwidth below threshold'] == 'flag-guard-bandwidth'
         assert by_title['HSDir: requires Fast flag'] == 'flag-hsdir-prereq-fast'
 
-    def test_fast_issue_links_to_fast_row(self):
-        """A relay most authorities withhold Fast from links to the Fast row's measurements."""
-        issues = self._issues(flag_eligibility={'fast': {'details': [
-            {'authority': 'bastet', 'assigned': False, 'speed_value': 50_000,
-             'speed_threshold': 102_000, 'speed_source': 'measured'}]}})
-        by_title = {i['title']: i['section'] for i in issues}
-        assert by_title['Not getting the Fast flag'] == 'flag-fast-speed'
-
     def test_reachability_issues_link_to_running_rows(self):
         """IPv4 and IPv6 reachability issues link to the Running flag rows."""
         issues = self._issues(reachability={
@@ -931,65 +923,48 @@ class TestReachabilityAfterAuthorityRemoval:
 class TestFastFlagIssue:
     """forest44's real votes (tests/conftest.py): why it lacks Fast, and the rows that show it."""
 
+    @staticmethod
+    def _issues(fetcher, flags=('Running', 'Valid', 'V2Dir', 'Stable'), **kwargs):
+        return {issue['title']: issue for issue in generate_issues_from_consensus(
+            fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9), current_flags=list(flags), **kwargs)}
+
     def test_example_relay_issues_link_to_flag_and_consensus_weight_details(self, forest44_fetcher):
         """forest44's real votes: missing Fast, low Guard bandwidth, uneven Cons Wt."""
-        issues = generate_issues_from_consensus(
-            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
-            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'],
-            observed_bandwidth=854_738,
-            version='0.4.9.13',
-            recommended_version=True,
-        )
-        by_title = {issue['title']: issue for issue in issues}
-        assert by_title['Not getting the Fast flag']['section'] == 'flag-fast-speed'
-        assert by_title['Guard: requires Fast flag']['section'] == 'flag-guard-prereq-fast'
-        assert by_title['Guard: bandwidth below threshold']['section'] == 'flag-guard-bandwidth'
-        assert by_title['HSDir: requires Fast flag']['section'] == 'flag-hsdir-prereq-fast'
-        assert by_title['High consensus weight deviation']['section'] == 'col-cons-wt'
-        real = [issue['title'] for issue in issues if issue['severity'] != 'info']
-        assert real == [
-            'Not getting the Fast flag',
-            'Guard: requires Fast flag',
-            'Guard: bandwidth below threshold',
-            'HSDir: requires Fast flag',
-            'High consensus weight deviation',
+        issues = self._issues(forest44_fetcher, observed_bandwidth=854_738, version='0.4.9.13',
+                              recommended_version=True)
+        assert [(title, issue['section']) for title, issue in issues.items() if issue['severity'] != 'info'] == [
+            ('Not getting the Fast flag', 'flag-fast-speed'),
+            ('Guard: requires Fast flag', 'flag-guard-prereq-fast'),
+            ('Guard: bandwidth below threshold', 'flag-guard-bandwidth'),
+            ('HSDir: requires Fast flag', 'flag-hsdir-prereq-fast'),
+            ('High consensus weight deviation', 'col-cons-wt'),
         ]
 
     def test_fast_issue_explains_the_shortfall_like_the_votes(self, forest44_fetcher):
         """The Fast issue reports what the votes show: 4/9 Fast, low bwauth measurements."""
-        issues = generate_issues_from_consensus(
-            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
-            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'],
-        )
-        fast = next(issue for issue in issues if issue['title'] == 'Not getting the Fast flag')
+        issues = self._issues(forest44_fetcher)
+        fast = issues['Not getting the Fast flag']
         assert fast['description'] == (
             "Only 4/9 authorities vote Fast (5 needed). bastet, dannenberg, gabelmoo, moria1 and tor26 "
-            "measured this relay at 32.0 KB/s – 230.0 KB/s, below each one's own Fast threshold "
+            "measured this relay at 32.0 KB/s – 230.0 KB/s, below the Fast threshold "
             "(102.0 KB/s; moria1: 1.0 MB/s). Its consensus weight, the median of the 5 "
             "bandwidth-scanner measurements, is 68.0 KB/s.")
         assert 'underperforming compared with other relays that report a similar speed' in fast['suggestion']
-        guard_bw = next(issue for issue in issues if issue['title'] == 'Guard: bandwidth below threshold')
-        assert guard_bw['description'].startswith(
+        guard_bw = issues['Guard: bandwidth below threshold']['description']
+        assert guard_bw.startswith(
             "0/9 authorities credit this relay with enough bandwidth for Guard (5 needed): "
             "at least 2.1 MB/s (AuthDirGuardBWGuarantee) or a place in their top 25% (10.0 MB/s – 35.0 MB/s).")
-        assert 'dizum, longclaw and maatuska use the relay-reported 854.0 KB/s.' in guard_bw['description']
+        assert 'dizum, longclaw and maatuska used the relay-reported 854.0 KB/s.' in guard_bw
 
     def test_fast_issue_in_bits(self, forest44_fetcher):
-        issues = generate_issues_from_consensus(
-            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
-            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'], use_bits=True,
-        )
-        fast = next(issue for issue in issues if issue['title'] == 'Not getting the Fast flag')
-        assert '256.0 Kbit/s – 1.8 Mbit/s' in fast['description']
-        assert '(816.0 Kbit/s; moria1: 8.4 Mbit/s)' in fast['description']
-        assert fast['description'].endswith('is 544.0 Kbit/s.')
+        description = self._issues(forest44_fetcher, use_bits=True)['Not getting the Fast flag']['description']
+        assert '256.0 Kbit/s – 1.8 Mbit/s' in description
+        assert '(816.0 Kbit/s; moria1: 8.4 Mbit/s)' in description
+        assert description.endswith('is 544.0 Kbit/s.')
 
     def test_no_fast_issue_when_relay_has_fast(self, forest44_fetcher):
-        issues = generate_issues_from_consensus(
-            forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9),
-            current_flags=['Fast', 'Running', 'Valid', 'V2Dir', 'Stable'],
-        )
-        assert 'Not getting the Fast flag' not in {issue['title'] for issue in issues}
+        assert 'Not getting the Fast flag' not in self._issues(
+            forest44_fetcher, flags=('Fast', 'Running', 'Valid', 'V2Dir', 'Stable'))
 
     def test_fast_issue_names_authorities_that_count_relay_as_zero(self):
         details = [
@@ -1008,13 +983,15 @@ class TestFastFlagIssue:
             'in_consensus': True,
             'authority_votes': [],
             'reachability': {},
-            'flag_eligibility': {'fast': {'details': details}},
+            'flag_eligibility': {'fast': {'details': details, 'assigned_count': 1}},
         }, current_flags=['Running', 'Valid'])
         fast = next(issue for issue in issues if issue['title'] == 'Not getting the Fast flag')
-        assert 'tor26 lists it as Sybil (more relays on its IP address than allowed), which clears all its flags.' \
+        assert fast['description'].startswith('Only 1/9 authorities vote Fast (5 needed). ')
+        assert 'tor26 listed it as Sybil (more relays on its IP address than allowed), which clears all flags.' \
             in fast['description']
-        assert 'bastet has no current measurement for this relay and counts it as 0.' in fast['description']
-        assert 'gabelmoo does not vote Fast although its vote shows enough bandwidth.' in fast['description']
-        assert 'faravahar decides from measurements it does not publish.' in fast['description']
+        assert 'bastet counted this relay as 0 (no measurement, relay-reported bandwidth ignored).' \
+            in fast['description']
+        assert 'gabelmoo did not vote Fast despite enough bandwidth.' in fast['description']
+        assert 'faravahar judged it by bandwidth not shown in the votes.' in fast['description']
         assert 'measured this relay' not in fast['description']
         assert 'consensus weight' not in fast['description']
