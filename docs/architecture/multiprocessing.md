@@ -31,8 +31,8 @@ The multiprocessing implementation uses a two-phase approach for contact pages:
 │                     DATA PROCESSING PHASE                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Parallel Contact Precomputation                             │
-│     ├── Worker Pool (fork context)                              │
-│     ├── imap_unordered for streaming results                    │
+│     ├── ProcessPoolExecutor (fork context)                      │
+│     ├── Results streamed from chunked executor.map              │
 │     └── Store directly on contact_data (flat storage)           │
 │                                                                 │
 │  Precomputed data:                                              │
@@ -48,7 +48,7 @@ The multiprocessing implementation uses a two-phase approach for contact pages:
 │                     PAGE GENERATION PHASE                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  2. Parallel Page Rendering                                     │
-│     ├── Worker Pool (fork context)                              │
+│     ├── ProcessPoolExecutor (fork context)                      │
 │     ├── Shared template and relay data via fork()               │
 │     └── Each worker renders and writes pages independently      │
 │                                                                 │
@@ -64,7 +64,7 @@ Contact pages require expensive calculations (rankings, reliability stats) that 
 
 1. **Avoid redundant computation** - Each worker doesn't recalculate rankings
 2. **Enable parallel rendering** - Workers just read precomputed data
-3. **Reduce peak memory** - imap_unordered streams results instead of buffering
+3. **Reduce peak memory** - results are applied as they stream back instead of buffering
 
 ---
 
@@ -114,22 +114,22 @@ def _precompute_contact_worker(args):
     })
 ```
 
-### Streaming with imap_unordered
+### Streaming Results
 
-Uses `imap_unordered` for lower peak memory and progress reporting:
+Iterates the chunked `executor.map()` as results arrive, for lower peak memory
+and progress reporting:
 
 ```python
 def _precompute_contacts_parallel(self, contact_hashes, ...):
-    ctx = mp.get_context('fork')
     chunk_size = max(50, total_contacts // (self.mp_workers * 4))
     
-    with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-        for contact_hash, precomputed_data in pool.imap_unordered(
+    with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
+        for contact_hash, precomputed_data in executor.map(
             _precompute_contact_worker, worker_args, chunksize=chunk_size
         ):
-            # Apply results as they complete (streaming)
+            # Apply results as each chunk arrives (streaming)
             if precomputed_data:
-                for key, value in precomputed_data.items():
+                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
                     contact_data[key] = value
             
             # Progress reporting every 500 contacts
@@ -196,7 +196,7 @@ python3 allium.py --out ./www --workers 0
 |---------|---------|-------------|
 | `--workers` | 4 | Number of parallel workers |
 | Page threshold | 100 | Minimum output files to trigger parallel processing |
-| Chunk size | 50+ | Minimum chunk size for imap_unordered |
+| Chunk size | 50+ | Minimum chunk size for contact/family precomputation |
 
 ---
 
@@ -204,12 +204,18 @@ python3 allium.py --out ./www --workers 0
 
 ### Fork Context (Linux/macOS)
 
-The implementation uses `fork()` context for efficient copy-on-write memory sharing:
+The implementation uses `fork()` context for efficient copy-on-write memory sharing.
+`_fork_executor()` (in `page_writer.py`) builds every pool; `initargs` reach the
+workers through fork and are never pickled:
 
 ```python
-ctx = mp.get_context('fork')
-with ctx.Pool(workers, initializer, initargs) as pool:
-    pool.map(worker_func, args)
+def _fork_executor(workers, initializer, initargs):
+    return ProcessPoolExecutor(workers, mp_context=mp.get_context('fork'),
+                               initializer=initializer, initargs=initargs)
+
+with _fork_executor(workers, initializer, initargs) as executor:
+    for _ in executor.map(worker_func, args, chunksize=chunksize):
+        pass
 ```
 
 ### Fallback Behavior
@@ -227,9 +233,13 @@ else:
         ...
 ```
 
-Relay info pages use a `ProcessPoolExecutor` instead of a `Pool`, so a worker
-killed mid-run (e.g. by the OOM killer) raises `BrokenProcessPool` and triggers
-the same sequential fallback instead of hanging.
+Every pool is a `ProcessPoolExecutor` rather than a `multiprocessing.Pool`. A
+`Pool` replaces a worker that dies abruptly (OOM killer, segfault) without
+failing its task, so `map()` / `imap_unordered()` would wait forever. The
+executor raises `BrokenProcessPool` instead, which triggers the same
+sequential fallback: every page of the set is rendered again, or every group
+precomputed again. Tests in `tests/unit/test_relay_page_parallel.py` and
+`tests/integration/test_parallel_generation.py` kill a worker in each pool.
 
 ---
 

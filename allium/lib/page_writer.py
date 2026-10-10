@@ -333,6 +333,24 @@ def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, vali
     _mp_output_root = output_root
 
 
+def _fork_executor(workers, initializer, initargs):
+    """Process pool whose workers fork from this process and run initializer(*initargs).
+
+    Fork hands initargs (the multi-GB relay set) to workers copy-on-write
+    instead of pickling them. A ProcessPoolExecutor raises BrokenProcessPool
+    when a worker dies (OOM killer, segfault), so callers can fall back to
+    sequential work; multiprocessing.Pool replaces the worker and waits
+    forever for the task it was running.
+    """
+    return ProcessPoolExecutor(workers, mp_context=mp.get_context('fork'),
+                               initializer=initializer, initargs=initargs)
+
+
+def _pool_map_chunksize(item_count, workers):
+    """multiprocessing.Pool.map's default chunksize: ceil(items / (4 * workers))."""
+    return max(1, -(-item_count // (workers * 4)))
+
+
 def _render_page_mp(args):
     """Render single page in worker process.
     
@@ -1280,33 +1298,25 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
         os.makedirs(dir_path, exist_ok=True)
         page_args.append((dir_path, v))
 
-    pool = None
     try:
-        ctx = mp.get_context('fork')
-        pool = ctx.Pool(
+        # Leaving the with block waits for the workers, so none still writes
+        # when the fallback below clears the partial output.
+        with _fork_executor(
             relay_set.mp_workers,
             _init_mp_worker,
             (relay_set, template, "contact", the_prefixed, validated_aroi_domains, output_root),
-        )
-        rendered_counts = pool.map(_render_contact_batch_mp, page_args)
-        pool.close()
-        pool.join()
+        ) as executor:
+            total_files = sum(executor.map(
+                _render_contact_batch_mp, page_args,
+                chunksize=_pool_map_chunksize(len(page_args), relay_set.mp_workers)))
 
         total_time = time.time() - start_time
-        total_files = sum(rendered_counts)
         relay_set.progress_logger.log(
             f"contact page generation complete - Generated {len(page_args)} contacts, {total_files} files in {total_time:.2f}s"
         )
         if relay_set.progress and total_files:
             print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/total_files*1000:.1f}ms/rendered file avg")
     except Exception as e:
-        if pool is not None:
-            try:
-                pool.terminate()
-                pool.join()
-            except Exception:
-                pass
-
         relay_set.progress_logger.log_without_increment(f"Contact multiprocessing failed ({e}), falling back to sequential...")
         relay_set.mp_workers = 0
         for retry in range(3):
@@ -1601,15 +1611,15 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
                 (html_path, v, page_number, total_pages, output_filename)
             )
     
-    pool = None
     try:
-        ctx = mp.get_context('fork')
-        # Initialize workers with page_type and shared data for building template args
-        pool = ctx.Pool(relay_set.mp_workers, _init_mp_worker, 
-                       (relay_set, template, k, the_prefixed, validated_aroi_domains))
-        pool.map(_render_page_mp, page_args)
-        pool.close()
-        pool.join()
+        # Initialize workers with page_type and shared data for building template args.
+        # Leaving the with block waits for the workers, so none still writes
+        # when the fallback below clears the partial output.
+        with _fork_executor(relay_set.mp_workers, _init_mp_worker,
+                            (relay_set, template, k, the_prefixed, validated_aroi_domains)) as executor:
+            for _ in executor.map(_render_page_mp, page_args,
+                                  chunksize=_pool_map_chunksize(len(page_args), relay_set.mp_workers)):
+                pass
 
         total_time = time.time() - start_time
         relay_set.progress_logger.log(
@@ -1619,14 +1629,6 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         if relay_set.progress:
             print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
     except Exception as e:
-        # Ensure pool is properly terminated before fallback
-        if pool is not None:
-            try:
-                pool.terminate()
-                pool.join()
-            except Exception:
-                pass  # Ignore cleanup errors
-        
         relay_set.progress_logger.log_without_increment(f"Multiprocessing failed ({e}), falling back to sequential...")
         relay_set.mp_workers = 0
         
@@ -1734,12 +1736,9 @@ def write_relay_info(relay_set):
     # like the other page types.
     if relay_set.mp_workers > 0 and len(relay_indexes) >= 100:
         try:
-            # ProcessPoolExecutor raises BrokenProcessPool if a worker is
-            # killed (e.g. by the OOM killer); multiprocessing.Pool would hang.
             chunksize = max(1, len(relay_indexes) // (relay_set.mp_workers * 16))
-            with ProcessPoolExecutor(relay_set.mp_workers, mp_context=mp.get_context('fork'),
-                                     initializer=_init_relay_page_worker,
-                                     initargs=(renderer,)) as executor:
+            with _fork_executor(relay_set.mp_workers, _init_relay_page_worker,
+                                (renderer,)) as executor:
                 for _ in executor.map(_render_relay_page_mp, relay_indexes,
                                       chunksize=chunksize):
                     pass
