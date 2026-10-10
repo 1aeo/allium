@@ -34,11 +34,13 @@ def calculate_network_bandwidth_percentiles(bandwidth_data, relay_set):
         return None
         
     try:
-        from .bandwidth_utils import extract_operator_daily_bandwidth_totals
+        from .bandwidth_utils import build_bandwidth_map, extract_operator_daily_bandwidth_totals
         import statistics
         
         contacts = relay_set.json['sorted']['contact']
         operator_bandwidth_values = []
+        # Build the fingerprint map once, not once per contact (~3,000 rebuilds)
+        bandwidth_map = build_bandwidth_map(bandwidth_data)
         
         # Calculate 6-month average bandwidth for each operator
         for contact_hash, contact_data in contacts.items():
@@ -49,7 +51,7 @@ def calculate_network_bandwidth_percentiles(bandwidth_data, relay_set):
             
             # Use daily totals calculation (matches AROI leaderboard logic)
             daily_totals_result = extract_operator_daily_bandwidth_totals(
-                operator_relays, bandwidth_data, '6_months'
+                operator_relays, bandwidth_data, '6_months', bandwidth_map=bandwidth_map
             )
             
             if daily_totals_result['daily_totals']:

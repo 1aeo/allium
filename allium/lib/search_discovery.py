@@ -5,12 +5,17 @@ from pathlib import Path
 from urllib.parse import quote, urljoin, urlsplit
 import xml.etree.ElementTree as ET
 
-from .seo import public_base_url as normalize_public_base_url
+from .seo import map_html_files, public_base_url as normalize_public_base_url
 
 
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 MAX_URLS_PER_SITEMAP = 50_000
 MAX_BYTES_PER_SITEMAP = 52_428_800
+# SEO signals are head-only; bounding the read keeps discovery fast even when
+# a rendered relay table is very large.
+MAX_HEAD_CHARS = 262_144
+# Generated heads are a few KB: read this much first, the rest only if needed
+_HEAD_PROBE_CHARS = 16_384
 
 ET.register_namespace("", SITEMAP_NAMESPACE)
 
@@ -56,40 +61,59 @@ class _HeadSignalsParser(HTMLParser):
                 self.noindex = self.noindex or "noindex" in directives
 
 
+def _head_signals(html_path):
+    """Return ``(canonicals, noindex)`` from a page head, or ``None`` when no
+    complete ``<head>`` occurs within the first MAX_HEAD_CHARS characters."""
+    with open(html_path, encoding="utf-8") as handle:
+        head = handle.read(_HEAD_PROBE_CHARS)
+        head_end = head.lower().find("</head>")
+        # Same result as one MAX_HEAD_CHARS read. Read on when there is no match,
+        # or when lower() lengthened the text ("İ") so the match ends past the probe.
+        if head_end < 0 or head_end + len("</head>") > len(head):
+            head += handle.read(MAX_HEAD_CHARS - len(head))
+            head_end = head.lower().find("</head>")
+    if head_end < 0:
+        return None
+    parser = _HeadSignalsParser()
+    parser.feed(head[:head_end + len("</head>")])
+    return parser.canonicals, parser.noindex
+
+
 def _canonical_urls_from_html(output_path, base_url):
     """Collect unique, same-origin canonicals from rendered HTML heads."""
     urls = set()
     html_count = noindex_count = 0
     expected_origin = urlsplit(base_url)
+    pages = []
     for html_path in sorted(output_path.rglob("*.html")):
         if not html_path.is_file():
             continue
         relative = html_path.relative_to(output_path)
         if _route_for_html(relative) is None:
             continue
+        pages.append((html_path, relative))
 
-        parser = _HeadSignalsParser()
-        # SEO signals are head-only. Bounding the read keeps discovery fast
-        # even when a rendered relay table is very large.
-        with html_path.open(encoding="utf-8") as handle:
-            head = handle.read(262_144)
-        head_end = head.lower().find("</head>")
-        if head_end < 0:
+    # Signals are consumed in page order, so the first page without one head
+    # and one canonical is the one reported (a read error in a worker surfaces
+    # with its 64-page chunk). ~30k heads took ~40s to parse sequentially.
+    signals = map_html_files(_head_signals, [str(html_path) for html_path, _ in pages], 64)
+    for (html_path, relative), signal in zip(pages, signals):
+        if signal is None:
             raise ValueError(
-                f"{relative.as_posix()} has no complete <head> within 262144 bytes"
+                f"{relative.as_posix()} has no complete <head> within {MAX_HEAD_CHARS} characters"
             )
-        parser.feed(head[:head_end + len("</head>")])
+        canonicals, noindex = signal
         html_count += 1
-        if len(parser.canonicals) != 1:
+        if len(canonicals) != 1:
             raise ValueError(
                 f"{relative.as_posix()} must contain exactly one canonical link; "
-                f"found {len(parser.canonicals)}"
+                f"found {len(canonicals)}"
             )
-        if parser.noindex:
+        if noindex:
             noindex_count += 1
             continue
 
-        canonical = urljoin(f"{base_url}/", parser.canonicals[0])
+        canonical = urljoin(f"{base_url}/", canonicals[0])
         parsed = urlsplit(canonical)
         if (parsed.scheme, parsed.netloc) != (
                 expected_origin.scheme, expected_origin.netloc):

@@ -1,6 +1,7 @@
 """SEO URL helpers and crawler discovery files for generated sites."""
 
 from concurrent.futures import ProcessPoolExecutor
+import functools
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -17,6 +18,8 @@ _HREF_RE = re.compile(
     r"(?P<prefix>\bhref\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']+)(?P=quote)",
     re.IGNORECASE,
 )
+# ".html", also split by the tab/CR/LF that urlsplit strips from hrefs
+_HTML_SUFFIX_RE = re.compile(r"\.[\t\r\n]*h[\t\r\n]*t[\t\r\n]*m[\t\r\n]*l")
 
 
 def public_base_url(base_url):
@@ -84,51 +87,122 @@ def clean_href(path):
     return path[:-5]
 
 
-def _rewrite_html_file(html_path):
-    """Rewrite one HTML file and return changed-file and changed-link counts."""
+@functools.lru_cache(maxsize=1 << 17)
+def _clean_route_href(value):
+    """Return the clean-route form of an internal ``.html`` href, else ``None``.
+
+    Cached because the same links (navigation, relay/AS/country links) repeat
+    across thousands of generated pages.
+    """
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+        return None
+    if not parsed.path.endswith(".html"):
+        return None
+    return urlunsplit(
+        ("", "", clean_href(parsed.path), parsed.query, parsed.fragment)
+    )
+
+
+def _href_match_before(html, index):
+    """Return the ``_HREF_RE`` match opening at the last quote before ``index``, else ``None``.
+
+    Walks back from that quote over ``\\s*=\\s*`` (``\\s`` follows
+    ``str.isspace``, as the regex engine does) to where ``href`` must start
+    and lets the regex check the rest.
+    """
+    # Bound the search for the (rare) single quote by the nearest double quote
+    double = html.rfind('"', 0, index)
+    end = max(double, html.rfind("'", max(double, 0), index))
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    if end <= 0 or html[end - 1] != "=":
+        return None
+    end -= 1
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    return _HREF_RE.match(html, end - 4) if end >= 4 else None
+
+
+def rewrite_internal_links(html):
+    """Return ``(html, changed_links)`` with internal ``.html`` hrefs in clean-route form.
+
+    Pages carry few ``.html`` links but thousands of other hrefs, so only the
+    ``_HREF_RE`` match around each ``.html`` is rewritten: a match's value
+    holds no quotes, so it opens at the last quote before the ``.html``.
+    """
     changed_links = 0
 
     def replacement(match):
         nonlocal changed_links
-        value = match.group("value")
-        parsed = urlsplit(value)
-        if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+        rewritten = _clean_route_href(match.group("value"))
+        if rewritten is None:
             return match.group(0)
-        if not parsed.path.endswith(".html"):
-            return match.group(0)
-        rewritten = urlunsplit(
-            ("", "", clean_href(parsed.path), parsed.query, parsed.fragment)
-        )
         changed_links += 1
         quote_char = match.group("quote")
         return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
 
+    parts = []
+    position = 0
+    found = _HTML_SUFFIX_RE.search(html)
+    while found:
+        match = _href_match_before(html, found.start())
+        if match:
+            if _href_match_before(html, match.start()):
+                # A value ending in "href=" makes the regex consume this
+                # attribute's opening quote as its closing one: scan it all.
+                changed_links = 0
+                return _HREF_RE.sub(replacement, html), changed_links
+            parts += (html[position:match.start()], replacement(match))
+            position = match.end()
+        found = _HTML_SUFFIX_RE.search(html, (match or found).end())
+    parts.append(html[position:])
+    return "".join(parts), changed_links
+
+
+# Below this many files a worker pool costs more than it saves
+_PARALLEL_MIN_FILES = 256
+
+
+def map_html_files(function, html_paths, chunksize):
+    """Yield ``function(path)`` for each path in order, in worker processes
+    for large builds."""
+    if len(html_paths) < _PARALLEL_MIN_FILES:
+        yield from map(function, html_paths)
+        return
+    with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
+        yield from executor.map(function, html_paths, chunksize=chunksize)
+
+
+def _rewrite_html_file(html_path):
+    """Rewrite one HTML file and return changed-file and changed-link counts."""
     path = Path(html_path)
     original = path.read_text(encoding="utf-8")
-    rewritten = _HREF_RE.sub(replacement, original)
+    rewritten, changed_links = rewrite_internal_links(original)
     if rewritten == original:
         return 0, changed_links
     path.write_text(rewritten, encoding="utf-8")
     return 1, changed_links
 
 
-def rewrite_internal_html_links(output_dir):
-    """Rewrite internal ``.html`` hrefs to their public clean-route forms."""
+def rewrite_internal_html_links(output_dir, modified_before=None):
+    """Rewrite internal ``.html`` hrefs to their public clean-route forms.
+
+    ``modified_before`` (a POSIX timestamp) limits the pass to files last
+    written before it. Pages rendered by the current run are already
+    rewritten as they are written, so only older leftovers need a pass.
+    """
     output_path = Path(output_dir)
     html_paths = [
         str(path)
         for path in sorted(output_path.rglob("*.html"))
         if path.is_file()
+        and (modified_before is None or path.stat().st_mtime < modified_before)
     ]
-    if not html_paths:
-        return {"changed_files": 0, "changed_links": 0}
     changed_files = changed_links = 0
-    max_workers = min(8, os.cpu_count() or 1)
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for file_count, link_count in executor.map(
-                _rewrite_html_file, html_paths, chunksize=24):
-            changed_files += file_count
-            changed_links += link_count
+    for file_count, link_count in map_html_files(_rewrite_html_file, html_paths, 24):
+        changed_files += file_count
+        changed_links += link_count
     return {"changed_files": changed_files, "changed_links": changed_links}
 
 

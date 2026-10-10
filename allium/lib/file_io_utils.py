@@ -17,6 +17,9 @@ from typing import Any, Dict, Optional, Union
 from .error_handlers import handle_file_io_errors, handle_json_errors
 
 
+_WRITE_SLICE_CHARS = 1 << 24
+
+
 class FileIOManager:
     """Base file I/O manager with consistent error handling patterns."""
     
@@ -90,7 +93,7 @@ class FileIOManager:
     
     @handle_file_io_errors("write JSON file", context="")
     def write_json_file(self, filename: str, data: Any, encoding: str = "utf-8",
-                       indent: int = 2, sort_keys: bool = False) -> bool:
+                       indent: Optional[int] = 2, sort_keys: bool = False) -> bool:
         """
         Write data to JSON file with error handling.
         
@@ -98,17 +101,25 @@ class FileIOManager:
             filename: Name of JSON file to write
             data: Data to serialize as JSON
             encoding: Text encoding (default: utf-8)
-            indent: JSON indentation (default: 2)
+            indent: JSON indentation (default: 2; None writes compact JSON)
             sort_keys: Whether to sort object keys for deterministic output
             
         Returns:
             bool: True if successful, False if error
         """
         file_path = self.get_file_path(filename)
+        # json.dumps (one-shot) without indent runs CPython's C encoder;
+        # json.dump always falls back to the pure-Python encoder, which
+        # took ~35s for the ~1GB uptime cache. Serializing before opening
+        # the temp file also leaves no partial file on failure.
+        serialized = json.dumps(data, indent=indent, sort_keys=sort_keys,
+                                separators=(",", ":") if indent is None else None)
         # Atomic write: a crash mid-dump must not corrupt the existing file
         tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
         with open(tmp_path, "w", encoding=encoding) as f:
-            json.dump(data, f, indent=indent, sort_keys=sort_keys)
+            # Slices keep the encoded copy small (the uptime cache is ~240MB)
+            for start in range(0, len(serialized), _WRITE_SLICE_CHARS):
+                f.write(serialized[start:start + _WRITE_SLICE_CHARS])
         tmp_path.replace(file_path)
         return True
     
@@ -132,7 +143,9 @@ class CacheManager(FileIOManager):
             bool: True if successful, False if error
         """
         cache_filename = f"{cache_key}.json"
-        return self.write_json_file(cache_filename, data, sort_keys=True)
+        # Compact output: caches are machine-read only, and the indented
+        # form was ~4.5x larger (1.1GB vs 240MB for uptime) to write and load.
+        return self.write_json_file(cache_filename, data, indent=None, sort_keys=True)
     
     def load_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """

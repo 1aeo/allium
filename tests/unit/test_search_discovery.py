@@ -1,12 +1,15 @@
 """Tests for robots.txt and sitemap generation."""
 
 import os
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
 
+from allium.lib import search_discovery, seo
 from allium.lib.search_discovery import (
     SITEMAP_NAMESPACE,
+    _canonical_urls_from_html,
     _pack_sitemap_urls,
     _route_for_html,
     _serialize_xml,
@@ -176,3 +179,51 @@ def test_non_public_base_urls_are_rejected_or_skipped(temp_dir, base_url):
     else:
         with pytest.raises(ValueError):
             generate_search_discovery(temp_dir, base_url)
+
+
+def _page(root, relative, head_padding=0, canonical="https://metrics.1aeo.com/x/"):
+    destination = os.path.join(root, relative)
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    with open(destination, "w", encoding="utf-8") as handle:
+        handle.write(
+            "<!doctype html><html><head>"
+            f'<link rel="canonical" href="{canonical}">'
+            f"<meta name=\"description\" content=\"{'x' * head_padding}\">"
+            "</HEAD><body>" + "y" * 300_000 + "</body></html>"
+        )
+
+
+@pytest.mark.parametrize("padding", [
+    0,
+    search_discovery._HEAD_PROBE_CHARS - 100,  # </HEAD> straddles the probe
+    search_discovery._HEAD_PROBE_CHARS + 5_000,
+    search_discovery.MAX_HEAD_CHARS - 200,
+])
+def test_head_is_found_wherever_it_ends_within_the_limit(temp_dir, padding):
+    _page(temp_dir, "index.html", head_padding=padding)
+
+    urls, html_count, noindex_count = _canonical_urls_from_html(
+        Path(temp_dir), "https://metrics.1aeo.com")
+
+    assert (urls, html_count, noindex_count) == (
+        ["https://metrics.1aeo.com/x/"], 1, 0)
+
+
+def test_head_beyond_the_limit_is_rejected(temp_dir):
+    _page(temp_dir, "index.html", head_padding=search_discovery.MAX_HEAD_CHARS)
+
+    with pytest.raises(ValueError, match="no complete <head> within 262144 characters"):
+        _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
+
+
+def test_parallel_head_parsing_matches_sequential(temp_dir, monkeypatch):
+    for index in range(12):
+        _page(temp_dir, f"p{index:02d}/index.html",
+              canonical=f"https://metrics.1aeo.com/p{index % 5}/")
+    sequential = _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
+
+    monkeypatch.setattr(seo, "_PARALLEL_MIN_FILES", 2)
+    parallel = _canonical_urls_from_html(Path(temp_dir), "https://metrics.1aeo.com")
+
+    assert parallel == sequential
+    assert sequential[1] == 12 and len(sequential[0]) == 5

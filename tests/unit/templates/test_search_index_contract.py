@@ -105,5 +105,4 @@ def test_cache_manager_writes_sorted_json_keys(
     assert cache_manager.save_cache('deterministic', sorted_json_cache_payload)
 
     rendered = (tmp_path / 'deterministic.json').read_text(encoding='utf-8')
-    assert rendered.index('"a"') < rendered.index('"z"')
-    assert rendered.index('"b"') < rendered.index('"d"')
+    assert rendered == '{"a":{"b":2,"d":4},"z":1}'  # sorted keys, compact separators
