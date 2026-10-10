@@ -260,7 +260,7 @@ def generate_issues_from_consensus(
     # =========================================================================
     has_fast = 'Fast' in current_flags
     fast_details = flag_eligibility.get('fast', {}).get('details', [])
-    fast_votes = sum(1 for d in fast_details if d.get('assigned'))
+    fast_votes = flag_eligibility.get('fast', {}).get('assigned_count', 0)
     if not has_fast and fast_details and fast_votes < majority_threshold:
         issues.append({
             'severity': 'warning',
@@ -284,10 +284,8 @@ def generate_issues_from_consensus(
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
     guard_details = flag_eligibility.get('guard', {}).get('details', [])
-    guard_bw_known = [d for d in guard_details if 'bw_met' in d]
-    guard_bw_votes = sum(1 for d in guard_bw_known
-                         if d.get('bw_met') or (d.get('bw_met') is None and d.get('assigned')))
-    if guard_bw_known:
+    guard_bw_votes = sum(1 for d in guard_details if d.get('bw_met'))
+    if guard_details:
         guard_bw_eligible = guard_bw_votes >= majority_threshold
     else:
         guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
@@ -322,11 +320,11 @@ def generate_issues_from_consensus(
         # as a separate diagnostic — V2Dir is almost always present (default on)
         
         # Metric thresholds
-        if not guard_bw_eligible and (guard_bw_known or observed_bandwidth):
+        if not guard_bw_eligible and (guard_details or observed_bandwidth):
             guarantee = _format_rate(GUARD_BW_GUARANTEE, use_bits, decimal_places=1)
-            if guard_bw_known:
+            if guard_details:
                 description = _describe_guard_bw_shortfall(
-                    guard_bw_known, guard_bw_votes, auth_count, majority_threshold, use_bits)
+                    guard_details, guard_bw_votes, auth_count, majority_threshold, use_bits)
             else:
                 description = (f"Observed bandwidth {_format_rate(observed_bandwidth, use_bits)} is below "
                                f"the {guarantee} AuthDirGuardBWGuarantee")
@@ -836,7 +834,7 @@ def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int,
     top = [d['bw_top25_threshold'] for d in details if d.get('bw_top25_threshold') is not None]
     if top:
         lead += f" or a place in their top 25% ({_rate_range(top, use_bits)})"
-    short = [d for d in details if d.get('bw_met') is False]
+    short = [d for d in details if not d.get('bw_met')]
     return ' '.join([lead + '.'] + _bandwidth_source_sentences(short, 'bw_value', 'bw_source', use_bits))
 
 

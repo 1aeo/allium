@@ -1073,8 +1073,6 @@ class CollectorFetcher:
             
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
-            credible_bw, credible_bw_source = (self._credible_bandwidth(auth_name, vote_info)
-                                               if voted else (None, None))
             
             authority_votes.append({
                 'authority': auth_name,
@@ -1083,8 +1081,6 @@ class CollectorFetcher:
                 'flags': flags,
                 'bandwidth': vote_info.get('bandwidth'),
                 'measured': vote_info.get('measured'),
-                'credible_bw': credible_bw,
-                'credible_bw_source': credible_bw_source,
                 'wfu': vote_info.get('wfu'),
                 'wfu_display': f"{vote_info.get('wfu', 0) * 100:.1f}%" if vote_info.get('wfu') else 'N/A',
                 'tk': vote_info.get('tk'),
@@ -1165,18 +1161,12 @@ class CollectorFetcher:
             guard_prereqs_met = has_fast and has_stable and has_v2dir
             has_guard_flag = 'Guard' in auth_flags
             
-            # Guard BW: credible bandwidth >= AuthDirGuardBWGuarantee OR >= top-25% cutoff
+            # Guard BW: bandwidth >= AuthDirGuardBWGuarantee OR >= its top-25% cutoff
             if relay_bw is None:
-                guard_bw_meets_guarantee = guard_bw_in_top25 = guard_bw_eligible = None
+                guard_bw_eligible = guard_eligible = has_guard_flag
             else:
-                guard_bw_meets_guarantee = relay_bw >= AUTH_DIR_GUARD_BW_GUARANTEE
-                guard_bw_in_top25 = (guard_bw_top25_threshold is not None
-                                     and relay_bw >= guard_bw_top25_threshold)
-                guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
-            
-            if guard_bw_eligible is None:
-                guard_eligible = has_guard_flag
-            else:
+                guard_bw_eligible = relay_bw >= AUTH_DIR_GUARD_BW_GUARANTEE or (
+                    guard_bw_top25_threshold is not None and relay_bw >= guard_bw_top25_threshold)
                 guard_eligible = (
                     guard_prereqs_met and
                     relay_wfu >= guard_wfu_threshold and
@@ -1208,13 +1198,11 @@ class CollectorFetcher:
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
-                # BW requirement (bytes/s; bw_value None = not published by this authority)
+                # BW requirement (bytes/s; bw_value None: not in the vote, so bw_met is its Guard vote)
                 'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,
                 'bw_top25_threshold': guard_bw_top25_threshold,
                 'bw_value': relay_bw,
                 'bw_source': relay_bw_source,
-                'bw_meets_guarantee': guard_bw_meets_guarantee,
-                'bw_in_top25': guard_bw_in_top25,
                 'bw_met': guard_bw_eligible,
             })
             
@@ -1244,14 +1232,12 @@ class CollectorFetcher:
                 'mtbf_value': relay_mtbf,
             })
             
-            # Fast flag eligibility: credible bandwidth >= this authority's fast-speed.
-            # A relay it lists as Sybil gets no flags at all (dirvote.c
-            # clear_status_flags_on_sybil).
+            # Fast flag eligibility: bandwidth >= this authority's fast-speed. Its actual vote
+            # also stands in for a relay it lists as Sybil, which loses every flag
+            # (dirvote.c clear_status_flags_on_sybil).
             fast_speed = thresholds.get('fast-speed')
             is_sybil = 'Sybil' in auth_flags
-            if is_sybil:
-                fast_eligible = False
-            elif relay_bw is None or fast_speed is None:
+            if relay_bw is None or fast_speed is None or is_sybil:
                 fast_eligible = has_fast
             else:
                 fast_eligible = relay_bw >= fast_speed

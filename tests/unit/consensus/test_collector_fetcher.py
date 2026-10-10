@@ -1489,8 +1489,9 @@ class TestVoteBandwidthForest44:
 
     def test_no_authority_credits_enough_bandwidth_for_guard(self, forest44_fetcher):
         guard = self._details(forest44_fetcher, 'guard')
-        assert (guard['faravahar']['bw_value'], guard['faravahar']['bw_met']) == (None, None)
-        assert all(d['bw_met'] is False for name, d in guard.items() if name != 'faravahar')
+        # faravahar's bandwidth isn't in its vote, so its Guard vote (none) stands in
+        assert guard['faravahar']['bw_value'] is None
+        assert all(d['bw_met'] is False for d in guard.values())
         assert guard['dannenberg']['bw_top25_threshold'] == 35_000_000  # MIN(inc 36M, exc 35M)
         assert guard['bastet']['bw_guarantee'] == 2_097_000
 
