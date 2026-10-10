@@ -7,6 +7,11 @@ from .identity import peers_word
 ALL_PERIOD = {"1m": "all month", "6m": "all 6 months", "1y": "all year", "5y": "all 5 years"}
 
 
+def mbit(value):
+    """``45,790`` / ``4.1`` / ``0.74``: whole Mbit/s from 10 up, two significant digits below."""
+    return "{:,.0f}".format(value) if value >= 10 else "{:.2g}".format(value)
+
+
 def format_day(dt, year=False):
     """``Jul 22`` (``Jul 22 '25`` with ``year``) without a leading zero. Portable (no ``%-d``)."""
     return "{} {}{}".format(dt.strftime("%b"), dt.day, dt.strftime(" '%y") if year else "")
@@ -87,7 +92,7 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
 
     span = format_day_span([row[0] for row in invest], timedelta(seconds=interval or 86400),
                            year=period in ("1y", "5y"))
-    util_bit = "{:.0f} Mbit/s".format(mean_write)
+    util_bit = mbit(mean_write) + " Mbit/s"
     if util is not None:
         util_bit += " ({:.0f}% of advertised)".format(util)
     if thru == "spike":
@@ -101,10 +106,7 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
     days = {row[0].date() for row in invest}
     ts = [row[0] for row in rows]
     peers = peers_word(bands["role"])
-    if span and "," not in span:
-        when = " " + span
-    else:
-        when = " " + ALL_PERIOD[period] if persistent else (" " + span if span else "")
+    when = " " + span if span else ""
     if not invest:
         ratio = ""
     elif _left_typical(ts, overlays.get("role", {}), bands, days):

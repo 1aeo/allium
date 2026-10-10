@@ -5,8 +5,11 @@ DejaVu Sans, light text, and green / blue / orange / red / purple / cyan series.
 """
 
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from html import escape
+
+from .outcome import format_day
 
 BG = "#1e1e1e"
 LEGEND_BG = "#242424"
@@ -22,6 +25,8 @@ RED = "#ff6b6b"
 PURPLE = "#b48cff"
 CYAN = "#38bdf8"
 DASHED, DOTTED, DASHDOT = "7 4", "1.5 3", "9 3.5 2 3.5"
+# Characters XML 1.0 forbids; operator-controlled contact strings could carry them.
+_CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 # DejaVu Sans advance widths in 1/100 em for " " .. "~" (Verdana, the usual
 # fallback, is about as wide), so layouts hold in either font.
@@ -54,7 +59,7 @@ class Svg(object):
             ' text-anchor="%s"' % anchor if anchor != "start" else "",
             ' font-weight="bold"' if bold else "",
             ' transform="rotate(-90 %.1f %.1f)"' % (x, y) if rotate else "",
-            escape(text, quote=False).replace("  ", "&#160;&#160;")))  # keep double spaces
+            escape(_CONTROL.sub("", text), quote=False).replace("  ", "&#160;&#160;")))  # keep double spaces
 
     def line(self, x1, y1, x2, y2, color, width=1.0, dash=None, opacity=None):
         self.parts.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%g"%s/>' % (
@@ -89,24 +94,37 @@ def _month_starts(start, end, every):
         year, month = (year + 1, 1) if month == 12 else (year, month + 1)
 
 
-def date_ticks(period, start, end, crosses_year):
-    """Tick datetimes and labels: weekly (Tuesdays) for 1M, monthly 6M, bimonthly 1Y, yearly 5Y."""
+def date_ticks(period, ts, end):
+    """Tick datetimes and labels: weekly (Tuesdays) for 1M, monthly 6M, bimonthly 1Y, yearly 5Y.
+
+    A history too short to reach two of those dates gets its first and last day labelled.
+    """
+    start = ts[0]
     if period == "1m":
         day = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
         day += timedelta(days=(1 - day.weekday()) % 7)
-        ticks = [day + timedelta(days=7 * i) for i in range(int((end - day).days // 7) + 1)]
-        return [(t, t.strftime("%b %d")) for t in ticks if start <= t <= end]
-    if period == "5y":
-        return [(datetime(y, 1, 1, tzinfo=timezone.utc), str(y)) for y in range(start.year + 1, end.year + 1)]
-    fmt = "%b '%y" if crosses_year else "%b"
-    return [(t, t.strftime(fmt)) for t in _month_starts(start, end, 2 if period == "1y" else 1)]
+        ticks = [(day + timedelta(days=7 * i), None) for i in range((end - day).days // 7 + 1)]
+        ticks = [(t, format_day(t)) for t, _ in ticks if t <= end]
+    elif period == "5y":
+        ticks = [(datetime(y, 1, 1, tzinfo=timezone.utc), str(y)) for y in range(start.year + 1, end.year + 1)]
+    else:
+        fmt = "%b '%y" if start.year != ts[-1].year else "%b"
+        ticks = [(t, t.strftime(fmt)) for t in _month_starts(start, end, 2 if period == "1y" else 1)]
+    if len(ticks) < 2:
+        ticks = [(t, format_day(t, year=period in ("1y", "5y"))) for t in (ts[0], ts[-1])]
+    return ticks
 
 
 def nice_ticks(top, most=6):
     """0, step, 2*step ... up to ``top`` with a 1/2/2.5/5 x 10^n step."""
     step = 10 ** math.floor(math.log10(top / most))
     step *= next(m for m in (1, 2, 2.5, 5, 10) if top / (m * step) <= most)
-    return [round(i * step, 6) for i in range(int(top / step + 1e-9) + 1)]
+    return [i * step for i in range(int(top / step + 1e-9) + 1)]
+
+
+def view_end(ts):
+    """The time axis ends 3% past the last point."""
+    return ts[-1] + (ts[-1] - ts[0]) * 0.03
 
 
 class Panel(object):
@@ -115,10 +133,9 @@ class Panel(object):
     def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi):
         self.svg, self.clip = svg, clip_id
         self.left, self.top, self.width, self.height = left, top, width, height
-        self.t0 = ts[0].timestamp()
-        self.tspan = (ts[-1].timestamp() - self.t0) * 1.03 or 1.0  # 3% right pad
+        self.t0, self.end = ts[0].timestamp(), view_end(ts)
+        self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
-        self.end = datetime.fromtimestamp(self.t0 + self.tspan, timezone.utc)
         svg.parts.append('<clipPath id="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f"/></clipPath>' % (
             clip_id, left, top, width, height))
 
@@ -129,14 +146,17 @@ class Panel(object):
         return self.top + self.height - (value - self.ylo) / self.yspan * self.height
 
     def series(self, ts, values, color, width, dash=None):
-        """Polyline that breaks at None / NaN values."""
-        d, pen = [], "M"
+        """Polyline that breaks at None / NaN values and across missing history (gaps over two steps)."""
+        gap = 2 * min((b - a for a, b in zip(ts, ts[1:])), default=timedelta(0))
+        d, pen, last = [], "M", None
         for t, v in zip(ts, values):
             if v is None or v != v:
                 pen = "M"
                 continue
+            if last and t - last > gap:
+                pen = "M"
             d.append("%s%.1f %.1f" % (pen, self.x(t), self.y(v)))
-            pen = "L"
+            pen, last = "L", t
         self.svg.path("".join(d), color, width, dash, clip=self.clip)
 
     def hband(self, lo, hi, color, opacity):
@@ -152,21 +172,19 @@ class Panel(object):
 
     def yaxis(self, ticks, label, size=13, styles=None):
         """Grid lines and labels; ``styles`` maps a tick to ``(text, color, bold)``."""
-        widest = 0
         for tick in ticks:
             y = self.y(tick)
-            text, color, bold = (styles or {}).get(tick) or ("%g" % tick, MUTED, False)
+            text, color, bold = (styles or {}).get(tick) or ("{:,g}".format(tick), MUTED, False)
             self.svg.line(self.left, y, self.left + self.width, y, GRID, 1)
             self.svg.text(self.left - 8, y + size * 0.35, text, size - bold, color, "end", bold)
-            widest = max(widest, text_width(text, size - bold, bold))
-        self.svg.text(self.left - widest - 22, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
+        self.svg.text(12 + size, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
 
     def xaxis(self, period, ts, labels=True, size=13):
+        """Date gridlines with their labels, then the left and bottom axis lines."""
         bottom = self.top + self.height
-        crosses = ts[0].year != ts[-1].year
-        for tick, text in date_ticks(period, ts[0], self.end, crosses):
+        for tick, text in date_ticks(period, ts, self.end):
             x = self.x(tick)
-            self.svg.line(x, bottom, x, bottom + 5, AXIS, 1)
+            self.svg.line(x, self.top, x, bottom + 5, GRID, 1)
             if labels:
                 self.svg.text(x, bottom + 8 + size, text, size, MUTED, "middle")
         self.svg.line(self.left, self.top, self.left, bottom, AXIS, 1)
@@ -176,8 +194,8 @@ class Panel(object):
 def legend(svg, x, y, rows, size=11.5, right=None):
     """Framed rows of ``(kind, color, style, label)`` entries. Returns the height.
 
-    ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity),
-    ``marker`` (a diamond) or ``blank`` (label only). A legend wider than
+    ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity)
+    or ``marker`` (a diamond). A legend wider than
     the room up to ``right`` moves left.
     """
     pad, swatch, gap, row_h = 8, 22, 16, size * 1.55

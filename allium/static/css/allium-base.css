@@ -656,6 +656,10 @@ th[title]::after {
     flex: 0 1 25%;
     border-radius: 4px;
     outline: 1px solid transparent;
+    color: var(--aeo-text-dim);
+    font-size: 12px;
+    text-align: center;
+    text-decoration: none;
 }
 .chart-spark:hover,
 .chart-spark:focus {

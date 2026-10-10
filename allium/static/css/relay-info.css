@@ -54,8 +54,9 @@
     color: var(--color-primary);
 }
 
-/* Highlight section when targeted (outline avoids layout shift/overlap) */
-:target {
+/* Highlight section when targeted (outline avoids layout shift/overlap);
+   history charts use :target to switch periods, not to highlight */
+:target:not(.chart-hero) {
     scroll-margin-top: 72px;
     background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;

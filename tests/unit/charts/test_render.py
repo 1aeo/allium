@@ -47,29 +47,30 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     lines = texts(tmp_path / "bandwidth-1m.svg")
     for line in ("relayA  ·  example.com", "Throughput · last 30 days  ·  Guard", "Write (outbound)",
                  "Advertised  2 Mbit/s", "Last restarted  Sep 10", "Write / read · last 30 days  ·  Guard",
-                 "This relay", "Typical  1.01–1.17  ·  p10–p90", "Sep 08", "4,444 Guards · baseline 15 Aug 2026"):
+                 "This relay", "Typical  1.01–1.17  ·  p10–p90", "Sep 8", "4,444 Guards · baseline 15 Aug 2026"):
         assert line in lines
-    assert "Average  99.5%" in texts(tmp_path / "uptime-1m.svg")
+    assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
-def test_longer_periods_need_the_1m_history_and_the_period_window(tmp_path):
-    stale = history([100] * 30, first="2026-06-01 12:00:00")  # stopped updating months ago
+def test_each_period_only_shows_its_own_window(tmp_path):
+    stale = history([100] * 30, first="2026-06-01 12:00:00")  # 1M stopped updating months ago
     longer = history([100] * 60, key="6_months", first="2026-08-01 12:00:00")
     charts = writer([relay("A")], {"A": dict(stale, **{k: dict(stale[k], **longer[k]) for k in stale})})
-    assert charts.relay(relay("A"), str(tmp_path)) == ((), ())
-    assert os.listdir(tmp_path) == []
+    assert charts.relay(relay("A"), str(tmp_path)) == (("6m",), ())
+    assert os.listdir(tmp_path) == ["bandwidth-6m.svg"]
 
 
 def test_overload_legend_and_spike_callout(tmp_path):
     write = [100] * 10 + [400] + [100] * 10
     hit = int(datetime(2026, 9, 29, 22, tzinfo=timezone.utc).timestamp() * 1000)
-    busy = relay("A", stability_is_overloaded=True,
+    busy = relay("A", stability_is_overloaded=True, last_restarted="2026-09-21 20:00:00",  # after the last point
                  overload_ratelimits={"timestamp": hit, "write-count": 3, "read-count": 0})
     charts = writer([busy], {"A": history(write, [100] * 21)})
     charts.relay(busy, str(tmp_path))
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert "currently overloaded · last report Sep 29, 22:00 UTC" in lines
     assert "Sep 11 · write/read 4.00 · off the 1.70 scale" in lines
+    assert "Last restarted  Sep 21" in lines  # inside the axis' right margin, so still marked
 
 
 def test_a_malformed_history_skips_that_chart(tmp_path):
@@ -92,21 +93,25 @@ def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
     assert charts.contact([3], str(tmp_path / "none")) == ()
 
 
-def test_svg_escapes_text_and_breaks_lines_at_gaps():
+def test_svg_text_is_escaped_and_valid_xml():
     svg = Svg(100)
-    svg.text(0, 0, "<b>&  x", 10)
+    svg.text(0, 0, "<b>&  x\x01", 10)  # contact strings are operator-controlled
     doc = svg.document(50)
-    assert "&lt;b&gt;&amp;&#160;&#160;x" in doc
+    assert "&lt;b&gt;&amp;&#160;&#160;x<" in doc
     ET.fromstring(doc)
 
 
 def test_axis_ticks():
-    start, end = datetime(2026, 9, 1, tzinfo=timezone.utc), datetime(2026, 10, 1, tzinfo=timezone.utc)
-    assert [label for _t, label in date_ticks("1m", start, end, False)] == [
-        "Sep 01", "Sep 08", "Sep 15", "Sep 22", "Sep 29"]  # Tuesdays
-    start = datetime(2025, 11, 5, tzinfo=timezone.utc)
-    assert [label for _t, label in date_ticks("6m", start, end, True)][:3] == ["Dec '25", "Jan '26", "Feb '26"]
-    assert [label for _t, label in date_ticks("5y", datetime(2022, 3, 1, tzinfo=timezone.utc), end, True)] == [
-        "2023", "2024", "2025", "2026"]
+    def labels(period, start, end):
+        return [label for _t, label in date_ticks(period, [start, end], end)]
+
+    def day(*ymd):
+        return datetime(*ymd, tzinfo=timezone.utc)
+
+    assert labels("1m", day(2026, 9, 1), day(2026, 10, 1)) == ["Sep 1", "Sep 8", "Sep 15", "Sep 22", "Sep 29"]
+    assert labels("6m", day(2025, 11, 5), day(2026, 3, 1))[:3] == ["Dec '25", "Jan '26", "Feb '26"]
+    assert labels("5y", day(2022, 3, 1), day(2026, 10, 1)) == ["2023", "2024", "2025", "2026"]
+    # Too short to reach two ticks: label the ends instead.
+    assert labels("5y", day(2026, 2, 1), day(2026, 9, 20)) == ["Feb 1 '26", "Sep 20 '26"]
     assert nice_ticks(126) == [0, 25, 50, 75, 100, 125]
-    assert nice_ticks(1.3) == [0, 0.25, 0.5, 0.75, 1.0, 1.25]
+    assert ["%g" % tick for tick in nice_ticks(1.3)] == ["0", "0.25", "0.5", "0.75", "1", "1.25"]
