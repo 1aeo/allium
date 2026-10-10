@@ -111,6 +111,7 @@ def _die_in_worker(monkeypatch, name, poisoned):
     parent_pid = os.getpid()
 
     def dying(*args, **kwargs):
+        """Exit at once in a worker called for a poisoned item; otherwise call the original."""
         if os.getpid() != parent_pid and poisoned(*args):
             os._exit(1)  # simulate a worker killed by the OOM killer
         return original(*args, **kwargs)
@@ -123,6 +124,7 @@ def _die_in_worker(monkeypatch, name, poisoned):
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="parallel generation needs fork()")
 @pytest.mark.parametrize("key", ["family", "contact"])
 def test_page_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, key):
+    """A page worker killed mid-run leads to a sequential re-render with every page intact."""
     sequential = _build(tmp_path / "sequential", mp_workers=0)
     page_writer.write_pages_by_key(sequential, key)
 
@@ -149,6 +151,7 @@ def test_page_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, key):
     ("family", "_compute_family_predata", "_precompute_single_family"),
 ])
 def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, group, compute, sequential_step):
+    """A precompute worker killed mid-run leads to every group being precomputed sequentially."""
     sequential = _build(tmp_path / "sequential", mp_workers=0)
     poisoned = list(sequential.json["sorted"][group])[7]
     _die_in_worker(monkeypatch, compute, lambda _relay_set, group_hash, *_args: group_hash == poisoned)
@@ -157,6 +160,7 @@ def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, gr
     original_step = getattr(Relays, sequential_step)
 
     def recording_step(self, group_hash, *args):
+        """Note each group the sequential fallback recomputes, then run the real step."""
         recomputed.append(group_hash)
         return original_step(self, group_hash, *args)
 
