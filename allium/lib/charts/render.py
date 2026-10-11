@@ -117,7 +117,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     # Headroom for the legend (two rows when overloaded) and, with a spike, its callout below it.
     high = [row for row in rows if row[3] > bands["invest_hi"]]
     headroom = (1.45 if overload else 1.34) if high else (1.28 if overload else 1.26)
-    top = Panel(svg, "t", LEFT, y, PLOT_WIDTH, 290, ts, 0, ceiling * headroom, end)
+    top = Panel(svg, "t", LEFT, y, PLOT_WIDTH, 290, ts, 0, ceiling * headroom, end, interval)
     top.yaxis(nice_ticks(top.yspan), "Throughput (Mbit/s)")
     top.xaxis(period, labels=False)
     entries = [("line", GREEN, None, "Write (outbound)"), ("line", BLUE, None, "Read (inbound)")]
@@ -143,7 +143,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     bands_row = [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]), ("patch", RED, 0.22, labels[2])]
     y += 6 + legend(svg, LEFT, y, [entries + restarted, bands_row])
     tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
-    strip = Panel(svg, "r", LEFT, y, PLOT_WIDTH, 150, ts, ylo, yhi, end)
+    strip = Panel(svg, "r", LEFT, y, PLOT_WIDTH, 150, ts, ylo, yhi, end, interval)
     for lo, hi, color, opacity in ((ylo, ilo, RED, 0.08), (ilo, tlo, ORANGE, 0.07), (tlo, thi, GREEN, 0.14),
                                    (thi, ihi, ORANGE, 0.07), (ihi, yhi, RED, 0.08)):
         strip.hband(lo, hi, color, opacity)
@@ -200,7 +200,7 @@ def uptime_chart(period, ts, percent, interval, identity, restart, end=None):
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
     restarted = _restart_entry(restart, ts, end)
     y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
-    panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105, end)
+    panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105, end, interval)
     panel.yaxis(range(0, 101, 20), "Uptime (%)")
     panel.xaxis(period)
     if restarted:

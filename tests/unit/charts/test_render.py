@@ -236,6 +236,10 @@ def test_a_line_breaks_where_a_slot_is_missing():
     ts = [T0 + timedelta(days=day) for day in (0, 1, 3, 4)]  # no Sep 3
     Panel(svg, "p", 0, 0, 100, 100, ts, 0, 10).series([1, 2, 3, 4], GREEN, 2)
     assert svg.ops[-1][1].count("M") == 2
+    # With the sampling interval known, a history missing every other slot breaks at each gap too.
+    ts = [T0 + timedelta(days=day) for day in (0, 2, 4)]
+    Panel(svg, "q", 0, 0, 100, 100, ts, 0, 10, interval=86400).series([1, 2, 3], GREEN, 2)
+    assert svg.ops[-1][1].count("M") == 3
 
 
 def test_svg_text_is_escaped_and_valid_xml():
@@ -258,10 +262,14 @@ def test_axis_ticks():
     assert labels("1m", T0, day(2026, 10, 1))[0] == "Sep 8"
     assert labels("6m", day(2025, 11, 5), day(2026, 3, 1))[:3] == ["Dec '25", "Jan '26", "Feb '26"]
     assert labels("5y", day(2022, 3, 1), day(2026, 10, 1)) == ["2023", "2024", "2025", "2026"]
-    # Too short to reach two ticks: label the ends instead, the last only on another day with room for both.
+    # Too short to reach two ticks: 1M ticks daily; otherwise the ends are labelled too, with the hour on one day,
+    # and the year on month ticks of an axis that runs into the next year.
     assert labels("5y", day(2026, 2, 1), day(2026, 9, 20)) == ["Feb 1 '26", "Sep 20 '26"]
-    assert labels("1m", day(2026, 10, 6, 10), day(2026, 10, 6, 14)) == ["Oct 6"]
+    assert labels("5y", day(2025, 5, 7), day(2026, 9, 20)) == ["May 7 '25", "2026", "Sep 20 '26"]
     assert [label for _t, label in date_ticks("1m", [day(2026, 10, 4, 22), day(2026, 10, 5, 2)], day(2026, 10, 7))] == [
-        "Oct 4"]
+        "Oct 5", "Oct 6", "Oct 7"]
+    assert labels("1m", day(2026, 10, 6, 10), day(2026, 10, 6, 14)) == ["Oct 6 10:00", "Oct 6 14:00"]
+    assert [label for _t, label in date_ticks("1y", [day(2025, 9, 1), day(2025, 12, 1)], day(2026, 2, 1))] == [
+        "Sep '25", "Nov '25", "Jan '26"]
     assert nice_ticks(126) == [0, 25, 50, 75, 100, 125]
     assert ["%g" % tick for tick in nice_ticks(1.3)] == ["0", "0.25", "0.5", "0.75", "1", "1.25"]

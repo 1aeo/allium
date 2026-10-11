@@ -105,27 +105,36 @@ class Svg(object):
 
 
 def date_ticks(period, ts, end):
-    """Tick datetimes and labels: weekly (Tuesdays) for 1M, monthly 6M, bimonthly 1Y, yearly 5Y.
+    """Tick datetimes and labels up to the axis' ``end``: weekly (Tuesdays) for 1M, monthly 6M, bimonthly 1Y,
+    yearly 5Y.
 
-    A history too short to reach two of those dates gets its first day labelled, and its last when that is
-    another day, far enough along the axis for both labels to fit.
+    Under two of those, 1M ticks daily; past that, the first and last points are labelled too (with the hour
+    when they share a day), each only where it keeps an eighth of the axis clear of the other labels.
     """
     start = ts[0]
     if period == "1m":
-        day = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
-        day += timedelta(days=(1 - day.weekday()) % 7)
-        ticks = [(t, format_day(t)) for t in (day + timedelta(weeks=i) for i in range((end - day).days // 7 + 1))
+        midnight = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+        tuesday = midnight + timedelta(days=(1 - midnight.weekday()) % 7)
+        ticks = [(t, format_day(t)) for t in (tuesday + timedelta(weeks=i) for i in range((end - tuesday).days // 7 + 1))
                  if t >= start]
+        if len(ticks) < 2:
+            ticks = [(t, format_day(t)) for t in (midnight + timedelta(days=i) for i in range((end - midnight).days + 1))
+                     if t >= start]
     elif period == "5y":
         ticks = [(datetime(y, 1, 1, tzinfo=timezone.utc), str(y)) for y in range(start.year + 1, end.year + 1)]
     else:  # month starts, every other month on 1Y
-        fmt, every = "%b '%y" if start.year != ts[-1].year else "%b", 2 if period == "1y" else 1
+        fmt, every = "%b '%y" if start.year != end.year else "%b", 2 if period == "1y" else 1
         months = (datetime(m // 12, m % 12 + 1, 1, tzinfo=timezone.utc)
                   for m in range(start.year * 12 + start.month - 1, end.year * 12 + end.month) if m % 12 % every == 0)
         ticks = [(t, t.strftime(fmt)) for t in months if t >= start]
     if len(ticks) < 2:
-        first, last = ((t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1]))
-        ticks = [first] + ([last] if last[1] != first[1] and (last[0] - start) * 8 >= end - start else [])
+        ends = [(t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1])]
+        if ends[0][1] == ends[1][1]:
+            ends = [(t, "{} {:%H:%M}".format(label, t)) for t, label in ends]
+        for t, label in ends:
+            if all(abs(t - tick) * 8 >= end - start for tick, _label in ticks):
+                ticks.append((t, label))
+        ticks.sort()
     return ticks
 
 
@@ -146,17 +155,17 @@ def view_end(ts, end=None):
 class Panel(object):
     """A plot area with a UTC-time x axis and a linear y axis."""
 
-    def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi, end=None):
+    def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi, end=None, interval=0):
         self.svg, self.clip, self.ts = svg, clip_id, ts
         self.left, self.top, self.width, self.height = left, top, width, height
         self.t0, self.end = ts[0].timestamp(), view_end(ts, end)
         self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
-        # Every series shares the times: place them once, and break lines across missing history
-        # (steps over 1.5 times the shortest, so one missing slot breaks them too).
+        # Every series shares the times: place them once, and break lines across missing history, even one
+        # slot (a step over 1.5 sampling intervals, or 1.5 times the shortest step when the interval is unknown).
         self.xs = [self.x(t) for t in ts]
         steps = [b - a for a, b in zip(ts, ts[1:])]
-        gap = 1.5 * min(steps, default=timedelta(0))
+        gap = 1.5 * (timedelta(seconds=interval) if interval else min(steps, default=timedelta(0)))
         self.breaks = [True] + [step > gap for step in steps]
         svg.clip(clip_id, left, top, width, height)
 
