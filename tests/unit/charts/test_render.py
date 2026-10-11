@@ -25,14 +25,14 @@ def history(write, read=None, key="1_month", **kwargs):
     return bandwidth_row(write, read or write, key, **kwargs)
 
 
-def writer(relays, bandwidth, uptime=None, image_format="svg"):
+def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None):
     return ChartWriter(SimpleNamespace(
         json={"relays": relays},
         bandwidth_data={"relays_published": PUBLISHED, "relays": [dict(row, fingerprint=fp) for fp, row in bandwidth.items()]},
         uptime_data={"relays_published": PUBLISHED, "relays": [
             {"fingerprint": fp, "uptime": {"1_month": block(values, interval=14400, factor=1 / 999.0)}}
             for fp, values in (uptime or {}).items()]},
-    ), image_format)
+    ), image_format, cache_dir)
 
 
 def texts(path):
@@ -58,25 +58,58 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
-def test_png_charts_are_the_svg_rasterized(tmp_path):
+def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_path):
     try:
-        import cairosvg  # noqa: F401
-    except (ImportError, OSError):  # optional: also needs the cairo library
-        pytest.skip("CairoSVG is not installed")
-    charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 180}, "png")
-    bandwidth, uptime = charts.relay(relay("A"), str(tmp_path))
-    assert sorted(os.listdir(tmp_path)) == ["bandwidth-1m.png", "uptime-1m.png"]
-    png = (tmp_path / "bandwidth-1m.png").read_bytes()
-    assert png[:8] == b"\x89PNG\r\n\x1a\n"  # IHDR: the SVG's own size
-    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")) == (1080, bandwidth["1m"])
+        from allium.lib.charts import raster  # noqa: F401
+    except (ImportError, OSError):  # needs cairocffi, numpy and zlib-ng, and the cairo library
+        pytest.skip("PNG charts need cairocffi, numpy, zlib-ng and the cairo library")
+    first, second, root = tmp_path / "first", tmp_path / "second", tmp_path / "cache"
+    first.mkdir()
+    second.mkdir()
+    root.mkdir()
+    (root / "old-drawing").mkdir()  # cached by another drawing version: never hit again
+    history_a = {"A": history([100 + i for i in range(30)])}
+    charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
+    assert os.listdir(root) == [os.path.basename(charts.cache)]
+    bandwidth, uptime = charts.relay(relay("A"), str(first))
+    assert sorted(os.listdir(first)) == ["bandwidth-1m.png", "uptime-1m.png"]
+    png = (first / "bandwidth-1m.png").read_bytes()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"  # IHDR: twice the page's size, sharp on HiDPI screens
+    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")) == (2160, 2 * bandwidth["1m"])
+    # The next build links charts that did not change instead of drawing them again, and keeps their
+    # modification time so rsync and HTTP caches see them unchanged.
+    os.utime(first / "bandwidth-1m.png", (1, 1))
+    charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
+    charts.raster = SimpleNamespace(VERSION=charts.raster.VERSION, png=lambda svg: 1 / 0)
+    assert charts.relay(relay("A"), str(second)) == (bandwidth, uptime)
+    assert os.stat(second / "bandwidth-1m.png").st_ino == os.stat(first / "bandwidth-1m.png").st_ino
+    assert os.stat(second / "bandwidth-1m.png").st_mtime == 1
+    # A page written again in place (the sequential retry after a worker died) replaces its links:
+    # a different chart there must not be written through the old link into the cache.
+    changed = writer([relay("A")], {"A": history([200 + i for i in range(30)])}, {"A": [500] * 180}, "png", str(root))
+    cache = changed.cache
+    before = {name: open(os.path.join(cache, name), "rb").read() for name in os.listdir(cache)}
+    assert list(changed.relay(relay("A"), str(second))[0]) == ["1m"]
+    assert all(open(os.path.join(cache, name), "rb").read() == data for name, data in before.items())
+    # sweep() keeps what this build used and drops the rest; an SVG build uses none of it.
+    stale = os.path.join(cache, "stale.png")
+    open(stale, "wb").close()
+    os.utime(stale, (0, 0))
+    changed.sweep()
+    assert len(os.listdir(cache)) == 4 and not os.path.exists(stale)
+    writer([relay("A")], history_a, cache_dir=str(root)).sweep()
+    assert not root.exists()
 
 
 def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
+    out, cache = tmp_path / "out", tmp_path / "cache"
+    out.mkdir()
+    cache.mkdir()
     charts = writer([relay("A")], {"A": history([100] * 30)})
-    charts.ext = "png"
-    charts.png = lambda bytestring: 1 / 0  # e.g. a broken cairo on the build host
-    assert charts.relay(relay("A"), str(tmp_path)) == ({}, {})
-    assert os.listdir(tmp_path) == [] and "PNG conversion failed" in caplog.text
+    charts.ext, charts.cache = "png", str(cache)
+    charts.raster = SimpleNamespace(VERSION=b"test", png=lambda svg: 1 / 0)  # e.g. a broken cairo on the build host
+    assert charts.relay(relay("A"), str(out)) == ({}, {})
+    assert os.listdir(out) == os.listdir(cache) == [] and "PNG conversion failed" in caplog.text
 
 
 def test_each_period_only_shows_its_own_window(tmp_path):
@@ -123,7 +156,7 @@ def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
 def test_svg_text_is_escaped_and_valid_xml():
     svg = Svg(100)
     svg.text(0, 0, "<b>&  x\x01", 10)  # contact strings are operator-controlled
-    doc = svg.document(50)
+    doc = svg.finish(50).document()
     assert "&lt;b&gt;&amp;&#160;&#160;x<" in doc
     ET.fromstring(doc)
 

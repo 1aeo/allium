@@ -48,6 +48,7 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 pip install -r config/requirements.txt
+sudo apt install libcairo2 fonts-dejavu-core  # PNG charts (Debian/Ubuntu); without them charts are SVG
 cd allium && python3 allium.py --progress
 cd www && python3 -m http.server 8000
 # Visit http://localhost:8000
@@ -92,7 +93,7 @@ cd www && python3 -m http.server 8000
 - Multiprocessing page generation (configurable via `--workers`)
 - Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
-- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages: static SVG (or PNG), no JavaScript, no extra dependency for SVG (skip with `--no-charts`). Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
+- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages: PNG drawn at 2x by default, so they show at Tor Browser's Safest level (which turns SVG off), or SVG with `--chart-format svg`; no JavaScript (skip with `--no-charts`). Unchanged charts are reused from `data/cache/charts`, so only the first build pays for drawing them all. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
 </details>
 
@@ -184,7 +185,7 @@ Pre-computed analysis attached to contact pages:
 | `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
-| `--chart-format` | `svg` | Chart images: `svg` or `png`. PNG renders where SVG is off (Tor Browser's Safest level) but needs `pip install cairosvg`, the cairo library and the DejaVu Sans font, takes ~30 ms per chart vs ~1 ms, is ~6x larger, and is drawn at 1080 px (soft on HiDPI screens) |
+| `--chart-format` | `png` | Chart images. `png`: 2x (2160 px), shows at Tor Browser's Safest level; needs cairocffi, numpy and zlib-ng (in `config/requirements.txt`) and the cairo library and DejaVu Sans (`apt install libcairo2 fonts-dejavu-core`), else SVG is written with a warning; ~11 ms and ~140 KB per new chart, cached across builds. `svg`: ~1 ms and ~9 KB per chart, no extra packages, blank at Safest |
 
 **Examples**:
 

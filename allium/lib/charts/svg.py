@@ -47,40 +47,55 @@ def _dash(dash):
 
 
 class Svg(object):
-    """Collects SVG elements; ``str()`` gives the finished document."""
+    """Collects SVG elements. ``document()`` gives the SVG text and ``ops`` the same drawing for ``raster.png``."""
 
     def __init__(self, width):
-        self.width = width
-        self.parts = []
+        self.width, self.height = width, 0
+        self.parts, self.ops = [], []
 
     def text(self, x, y, text, size, color=TEXT, anchor="start", bold=False, rotate=False):
+        text = _CONTROL.sub("", text)
+        self.ops.append(("text", x, y, text, size, color, anchor, bold, rotate))
         self.parts.append('<text x="%.1f" y="%.1f" font-size="%g" fill="%s"%s%s%s>%s</text>' % (
             x, y, size, color,
             ' text-anchor="%s"' % anchor if anchor != "start" else "",
             ' font-weight="bold"' if bold else "",
             ' transform="rotate(-90 %.1f %.1f)"' % (x, y) if rotate else "",
-            escape(_CONTROL.sub("", text), quote=False).replace("  ", "&#160;&#160;")))  # keep double spaces
+            escape(text, quote=False).replace("  ", "&#160;&#160;")))  # keep double spaces
 
     def line(self, x1, y1, x2, y2, color, width=1.0, dash=None):
+        self.ops.append(("line", x1, y1, x2, y2, color, width, dash))
         self.parts.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%g"%s/>' % (
             x1, y1, x2, y2, color, width, _dash(dash)))
 
     def rect(self, x, y, w, h, fill, opacity=None, stroke=None, rx=0):
+        self.ops.append(("rect", x, y, w, h, fill, opacity, stroke, rx))
         self.parts.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s"%s%s%s/>' % (
             x, y, w, h, fill, ' opacity="%g"' % opacity if opacity else "",
             ' stroke="%s"' % stroke if stroke else "", ' rx="%g"' % rx if rx else ""))
 
     def path(self, d, color, width, dash=None, fill="none", clip=None):
+        """``d`` uses M, L, l, h and z only, which ``raster`` replays."""
         if d:
+            self.ops.append(("path", d, color, width, dash, fill, clip))
             self.parts.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%g" stroke-linejoin="round"%s%s/>' % (
                 d, fill, color, width, _dash(dash), ' clip-path="url(#%s)"' % clip if clip else ""))
 
-    def document(self, height):
+    def clip(self, clip_id, x, y, w, h):
+        self.ops.append(("clip", clip_id, x, y, w, h))
+        self.parts.append('<clipPath id="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f"/></clipPath>' % (
+            clip_id, x, y, w, h))
+
+    def finish(self, height):
+        self.height = int(round(height))
+        return self
+
+    def document(self):
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h:.0f}" viewBox="0 0 {w} {h:.0f}" '
+            '<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
             'font-family="DejaVu Sans, Verdana, sans-serif"><rect width="100%" height="100%" fill="{bg}"/>'
             '{body}</svg>\n'
-        ).format(w=self.width, h=height, bg=BG, body="".join(self.parts))
+        ).format(w=self.width, h=self.height, bg=BG, body="".join(self.parts))
 
 
 def date_ticks(period, ts, end):
@@ -127,8 +142,7 @@ class Panel(object):
         self.t0, self.end = ts[0].timestamp(), view_end(ts)
         self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
-        svg.parts.append('<clipPath id="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f"/></clipPath>' % (
-            clip_id, left, top, width, height))
+        svg.clip(clip_id, left, top, width, height)
 
     def x(self, t):
         return self.left + (t.timestamp() - self.t0) / self.tspan * self.width

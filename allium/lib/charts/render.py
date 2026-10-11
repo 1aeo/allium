@@ -1,8 +1,11 @@
-"""Relay and operator history charts, written as SVG next to their HTML pages."""
+"""Relay and operator history charts, written as PNG (or SVG) next to their HTML pages."""
 
+import errno
+import hashlib
 import logging
 import os
-import re
+import shutil
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -21,7 +24,6 @@ from .svg import (
 
 WIDTH, LEFT = 1080, 138
 PLOT_WIDTH = WIDTH - LEFT - 24
-SVG_HEIGHT = re.compile(r'<svg [^>]*? height="(\d+)"')
 logger = logging.getLogger(__name__)
 
 
@@ -159,7 +161,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
             svg.path("M%.1f %.1fl5 %gh-10z" % (x, edge, 8 if r > yhi else -8), RED, 1, fill=RED)
     if restarted:
         strip.vline(restart, PURPLE, 1.4, DASHDOT)
-    return svg.document(_footer(svg, strip, period, interval, census_footnote(bands)))
+    return svg.finish(_footer(svg, strip, period, interval, census_footnote(bands)))
 
 
 def uptime_chart(period, ts, percent, interval, identity, restart, average):
@@ -175,7 +177,7 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average):
     if restarted:
         panel.vline(restart, PURPLE, 1.4, DASHDOT)
     panel.series(ts, percent, GREEN, 2.2)
-    return svg.document(_footer(svg, panel, period, interval))
+    return svg.finish(_footer(svg, panel, period, interval))
 
 
 def _overload_text(relay):
@@ -197,15 +199,36 @@ class ChartWriter(object):
 
     Built once in the parent process (the peer medians need every relay),
     then shared with the forked page workers.
+
+    PNG charts are kept in ``cache_dir`` under a hash of their SVG text, which
+    describes the whole drawing: a chart that did not change since the last
+    build (most 6M/1Y/5Y charts, and 1M ones between Onionoo's 4-hourly
+    points) is hard-linked from there instead of drawn again. A hit marks
+    the file's access time and keeps its modification time, so ``rsync -a``
+    and HTTP caches see an unchanged chart as unchanged. ``sweep()`` drops
+    the ones this build did not use (all of them in an SVG build).
     """
 
-    def __init__(self, relay_set, image_format="svg"):
+    _copy_warned = False
+
+    def __init__(self, relay_set, image_format="png", cache_dir=None):
         from ..operator_analysis import history_maps
-        # PNG charts are the same SVG rasterized at its own size by the optional CairoSVG.
-        self.ext, self.png = image_format, None
+        from ..workers import CACHE_DIR
+        self.ext, self.raster, self.started = image_format, None, time.time()
+        self.cache_root = self.cache = cache_dir or os.path.join(CACHE_DIR, "charts")
         if image_format == "png":
-            from cairosvg import svg2png
-            self.png = svg2png
+            from . import raster  # cairocffi, numpy, zlib-ng
+            self.raster = raster
+            # One directory per drawing (code, cairo and fonts): the others can never be hit again, so they go
+            # now, before this build fills its own.
+            self.cache = os.path.join(self.cache_root, hashlib.blake2b(raster.VERSION, digest_size=8).hexdigest())
+            os.makedirs(self.cache, exist_ok=True)
+            for entry in os.scandir(self.cache_root):
+                if entry.is_dir():
+                    if entry.path != self.cache:
+                        shutil.rmtree(entry.path, ignore_errors=True)
+                else:
+                    os.remove(entry.path)
         self.relays = relay_set.json["relays"]
         self.uptime, self.bandwidth = history_maps(relay_set)
         published = parse_onionoo_timestamp(
@@ -218,21 +241,58 @@ class ChartWriter(object):
         the space). No drawable history, or a malformed one, skips that chart instead of failing the page."""
         path = os.path.join(directory, "%s.%s" % (name, self.ext))
         try:
-            svg = draw(*args) or ""
-            data = svg.encode("utf-8")
+            svg = draw(*args)
+            text = svg.document().encode("utf-8") if svg else b""
         except Exception:  # noqa: BLE001
             return 0
-        if data and self.png:
-            try:
-                data = self.png(bytestring=data)
-            except Exception as error:  # noqa: BLE001 -- unlike odd history, this is the build host's problem
-                logger.warning("PNG conversion failed for %s: %s", path, error)
-                return 0
-        if not data:
+        if not text:
             return 0
-        with open(path, "wb") as handle:
-            handle.write(data)
-        return int(SVG_HEIGHT.match(svg).group(1))
+        if not self.raster:
+            with open(path, "wb") as handle:
+                handle.write(text)
+            return svg.height
+        try:
+            self._png(svg, text, path)
+        except Exception as error:  # noqa: BLE001 -- unlike odd history, this is the build host's problem
+            logger.warning("PNG conversion failed for %s: %s", path, error)
+            return 0
+        return svg.height
+
+    def _png(self, svg, text, path):
+        cached = os.path.join(self.cache, hashlib.blake2b(text + self.raster.VERSION, digest_size=16).hexdigest() + ".png")
+        try:  # a hit: mark it used for sweep() in the access time, keep the modification time
+            os.utime(cached, ns=(time.time_ns(), os.stat(cached).st_mtime_ns))
+        except FileNotFoundError:
+            data, partial = self.raster.png(svg), "%s.%d" % (cached, os.getpid())
+            with open(partial, "wb") as handle:
+                handle.write(data)
+            os.replace(partial, cached)
+        # A page written again (e.g. by the sequential retry after a worker died) finds its old link here:
+        # remove it, never write through it into a cache file.
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        try:
+            os.link(cached, path)
+        except OSError as error:  # e.g. the output is on another filesystem
+            if error.errno == errno.EXDEV and not ChartWriter._copy_warned:
+                ChartWriter._copy_warned = True
+                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~10 GB) instead of "
+                               "linking it; build next to it to save that", self.cache_root)
+            shutil.copy2(cached, path)
+
+    def sweep(self):
+        """Delete cached PNGs no chart of this build used (call once every page is written)."""
+        if not self.raster:
+            shutil.rmtree(self.cache_root, ignore_errors=True)
+            return
+        for entry in os.scandir(self.cache):
+            try:  # another build sharing the cache may remove or rename files meanwhile
+                if entry.stat().st_atime < self.started - 60:
+                    os.remove(entry.path)
+            except FileNotFoundError:
+                pass
 
     def relay(self, relay, directory):
         """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts; return ``{period: height}`` for each."""

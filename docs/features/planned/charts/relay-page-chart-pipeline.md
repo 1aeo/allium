@@ -1,17 +1,38 @@
 # Relay and operator history charts
 
-Build-time SVG charts on relay and contact pages: throughput over a write/read
+Build-time charts on relay and contact pages: throughput over a write/read
 strip for 1M / 6M / 1Y / 5Y, Running-flag uptime for the same periods, and the
-summed throughput of an operator's relays. No JavaScript and no extra
-dependency: `allium/lib/charts/svg.py` writes the SVG text directly. Colors and
+summed throughput of an operator's relays. No JavaScript. `allium/lib/charts/svg.py`
+draws each chart as SVG text and records the same drawing calls. Colors and
 type follow the 1aeo.com/blog charts (dark `#1e1e1e` canvas, DejaVu Sans).
 
-`--chart-format png` writes the same SVG rasterized at its own size (1080 px
-wide) by the optional CairoSVG instead, for browsers with SVG off (Tor
-Browser's Safest level). It needs `pip install cairosvg`, the cairo library
-and the DejaVu Sans font (`allium.py` checks before fetching anything), and
-costs about 30 ms and 58 KB per chart (about 4 GB for the network) against
-about 1 ms and 9 KB for SVG.
+PNG is the default, because Tor Browser's Safest level turns SVG off.
+`charts/raster.py` replays the recorded calls with cairo at 2x (2160 px wide,
+sharp on HiDPI screens) and writes the PNG itself: every row "Up"-filtered with
+numpy, then deflated with zlib-ng. That is about 11 ms and 140 KB per chart,
+against about 70 ms to rasterize the SVG text with CairoSVG at the same size,
+and about 1 ms and 9 KB for SVG (`--chart-format svg`).
+
+PNGs are cached in `data/cache/charts` under a hash of their SVG text, which
+describes the whole drawing, and hard-linked next to their page. A chart that
+did not change since the last build is linked, not drawn: most 6M/1Y/5Y charts,
+and 1M charts between Onionoo's 4-hourly points (about 85% of all charts an
+hour apart). `ChartWriter.sweep()` then deletes what the build did not use, so
+the cache holds one copy of the current charts (about 9.4 GB). On 4 cores a
+full build took 4m05s-4m30s with an empty cache, then 1m31s an hour later, or
+1m56s when Onionoo had added a 4-hourly point (SVG: about 1m45s; PNG drawn at
+1x by CairoSVG took 9m41s).
+
+The cost is page weight: a relay page with all eight charts loads about 1.1 MB
+of PNG against 72 KB of SVG, and with JavaScript off (Tor Browser's Safest)
+`loading="lazy"` is ignored, so all of it loads with the page. Thumbnails use
+the same files. Deflate tuning saves under 5%; only lossy palette quantization
+(about -60%) would cut it much.
+
+PNG needs cairocffi, numpy and zlib-ng (`config/requirements.txt`) plus the
+cairo library and DejaVu Sans (`apt install libcairo2 fonts-dejavu-core`).
+`allium.py` checks before fetching anything: without them it writes SVG and
+says so, or stops when `--chart-format png` was asked for.
 
 ## Where they are written
 
@@ -25,8 +46,7 @@ about 1 ms and 9 KB for SVG.
   so a page only references charts that were written. They return
   `{period: height}` (one per chart type) so the page reserves every image's
   box before it loads.
-- About 68k charts for the whole network take under a minute of CPU in those
-  existing workers (about 1-3 ms each, about 9 KB each).
+- About 68k charts for the whole network, drawn in those existing workers.
 - A section shows its first period; the thumbnails link to `#bandwidth-6m`
   and so on, and CSS `:target` swaps the chart in place, so no page is
   copied per period and no JavaScript runs. `#1m`/`#6m`/`#1y`/`#5y` switch

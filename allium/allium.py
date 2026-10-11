@@ -263,26 +263,33 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--chart-format",
-        choices=("svg", "png"),
-        default="svg",
-        help="history chart images (default: svg); png needs CairoSVG (pip install cairosvg) and is slower",
+        choices=("png", "svg"),
+        help="history chart images: png (default, drawn at 2x; shows at Tor Browser's Safest level, which "
+             "turns SVG off) or svg (smaller and faster, needs no extra package)",
     )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
 
-    # PNG charts need the optional CairoSVG and the cairo library: check before fetching anything.
-    if args.charts and args.chart_format == "png":
+    # PNG charts need cairocffi, numpy and zlib-ng (config/requirements.txt) and the cairo library: check
+    # before fetching anything. Asked for, they are required; by default, SVG stands in with a warning.
+    if args.charts and args.chart_format != "svg":
         try:
-            import cairosvg  # noqa: F401
+            from lib.charts import raster  # noqa: F401
         except (ImportError, OSError) as e:
-            sys.exit(f"❌ --chart-format png needs CairoSVG and the cairo library (pip install cairosvg): {e}")
-        # CairoSVG draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
-        if shutil.which("fc-match") and "DejaVu Sans" not in subprocess.run(
-                ["fc-match", "DejaVu Sans"], capture_output=True, text=True).stdout:
-            print("⚠️ --chart-format png: DejaVu Sans is not installed (e.g. apt install fonts-dejavu-core), "
-                  "so chart text falls back to another font")
+            if args.chart_format == "png":
+                sys.exit(f"❌ --chart-format png needs cairocffi, numpy and zlib-ng "
+                         f"(pip install -r config/requirements.txt) and the cairo library: {e}")
+            print(f"⚠️ PNG charts need cairocffi, numpy and zlib-ng and the cairo library ({e}): writing SVG")
+            args.chart_format = "svg"
+        else:
+            args.chart_format = "png"
+            # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
+            if shutil.which("fc-match") and "DejaVu Sans" not in subprocess.run(
+                    ["fc-match", "DejaVu Sans"], capture_output=True, text=True).stdout:
+                print("⚠️ PNG charts: DejaVu Sans is not installed (e.g. apt install fonts-dejavu-core), "
+                      "so chart text falls back to another font")
 
     start_time = time.time()
     
@@ -374,6 +381,8 @@ if __name__ == "__main__":
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
+    if getattr(RELAY_SET, "chart_writer", None):
+        RELAY_SET.chart_writer.sweep()
 
     # The relay set holds several GB of small objects, and freeing them one
     # by one at interpreter shutdown took ~40s. Every output file is closed
