@@ -21,17 +21,6 @@
 }
 .subsection-card dl { margin-bottom: 0; }
 
-/* Subsection headers - Level 2 in information hierarchy */
-.subsection-header {
-    margin-top: 0;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--color-text-dark);
-    border-bottom: 2px solid var(--color-border-light);
-}
-
 .section-header {
     position: relative;
     display: inline-block;

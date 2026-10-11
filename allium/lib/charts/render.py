@@ -224,7 +224,7 @@ class ChartWriter(object):
         self.scale, self.colors = scale, colors
         self.cache_root = self.cache = cache_dir or os.path.join(CACHE_DIR, "charts")
         if image_format == "png":
-            from . import raster  # cairocffi, numpy, zlib-ng
+            from . import raster  # cairocffi and numpy (zlib-ng if installed)
             self.raster = raster
             if colors != "full":
                 raster.lookup()  # built once here, then shared with the forked page workers
@@ -291,7 +291,7 @@ class ChartWriter(object):
         except OSError as error:  # e.g. the output is on another filesystem
             if error.errno == errno.EXDEV and not ChartWriter._copy_warned:
                 ChartWriter._copy_warned = True
-                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~3.5 GB at the "
+                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~3.4 GB at the "
                                "defaults) instead of linking it; build next to it to save that", self.cache_root)
             shutil.copy2(cached, path)
 

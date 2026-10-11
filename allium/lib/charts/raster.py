@@ -1,12 +1,12 @@
 """PNG charts: an ``Svg``'s own drawing replayed with cairo (2x by default), then PNG-encoded.
 
-About 12 ms a chart at 2x, against about 70 ms to rasterize the SVG text
+About 10.5 ms a chart at 2x, against about 70 ms to rasterize the SVG text
 with CairoSVG at the same size: there is no SVG to parse, and the encoders
 below (numpy, deflate with zlib-ng) are several times faster than libpng.
 
 By default every pixel is then snapped to PALETTE, 64 colors fixed in
 advance, through a lookup table built once: an 8-bit palette PNG is about a
-third of the full-color one (~48 KB against ~150 KB at 2x) and looks the
+third of the full-color one (~50 KB against ~150 KB at 2x) and looks the
 same, at about the same speed. ``colors="full"`` keeps every shade.
 """
 

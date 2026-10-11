@@ -84,13 +84,15 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=SECONDS_P
     else:
         throughput = util_bit
 
+    left = {key: _left_typical(invest_ts, overlays.get(key, {}), bands) for key in ("role", "family")}
     if not invest:
         ratio = "" if typical else "Write/read {:.2f} · inside the {} band with other {}".format(mean_ratio, role, peers)
-    elif _left_typical(invest_ts, overlays.get("role", {}), bands):
+    elif left["role"]:
         ratio = "Outside the band with other {}{}".format(peers, when)
-    elif _left_typical(invest_ts, overlays.get("family", {}), bands):
+    elif left["family"]:
         ratio = "Outside the {} band{} with the family · other {} stayed".format(role, when, peers)
     else:
-        # Family and peer lines are only drawn (and only checked) on 1M relay charts.
-        ratio = "Outside the {} band{}{}".format(role, when, " · family and peers stayed" if overlays else "")
+        # Name only the lines drawn (family and peer medians: 1M relay charts) and checked on those days.
+        stayed = " and ".join(word for key, word in (("family", "family"), ("role", "peers")) if left[key] is False)
+        ratio = "Outside the {} band{}{}".format(role, when, " · {} stayed".format(stayed) if stayed else "")
     return throughput, ratio

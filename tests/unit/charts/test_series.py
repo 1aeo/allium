@@ -41,7 +41,7 @@ def test_operator_throughput_sums_members_on_the_common_interval():
     (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
     assert [r["fingerprint"] for r in summed] == ["A", "B"]
     assert ts == [T0, T0 + timedelta(days=1)] and interval == DAY
-    assert [round(v / MBIT) for v in write] == [11000, 22000]
+    assert [round(v / MBIT) for v in write] == [11000, 2000]  # B has no read on day 2, so it sits that day out
     assert [round(v / MBIT) for v in read] == [11000, 2000]
     assert operator_throughput(members[3:], bandwidth_map, "1_month") == (None, [])
 
@@ -63,3 +63,9 @@ def test_peer_medians_by_role_and_family_skip_quiet_relays():
     assert set(roles) == {"Guard"}
     assert roles["Guard"][T0] == pytest.approx(1.1)  # median of 1.1, 1.3, 1.0
     assert families == {("A", "B"): (2, pytest.approx({T0: 1.2, T0 + timedelta(days=1): 1.3}))}
+    # Effective families are mutual declarations, so they can differ by member: A's family is A, B and C even
+    # though C does not list B. Its median is over those members, not over the relays listing the same set.
+    relays[:3] = [relay("A", effective_family=["A", "B", "C"]), relay("B", effective_family=["A", "B"]),
+                  relay("C", effective_family=["A", "C"])]
+    _roles, families = peer_medians(relays, bandwidth_map)
+    assert families[("A", "B", "C")] == (3, pytest.approx({T0: 1.1, T0 + timedelta(days=1): 1.2}))

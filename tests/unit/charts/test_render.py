@@ -117,8 +117,10 @@ def test_overload_legend_and_spike_callout(tmp_path):
 
 
 def test_a_malformed_history_skips_that_chart(tmp_path):
-    charts = writer([relay("A")], {"A": history(["x", "y", "z"])})
-    assert charts.relay(relay("A"), str(tmp_path)) == ({}, {})
+    # Non-numeric slots leave nothing to draw; a malformed interval raises inside the drawing (and, for the
+    # 1M history, inside the peer medians too): neither may fail the page, or the build.
+    charts = writer([relay("A"), relay("B")], {"A": history(["x", "y", "z"]), "B": history([100] * 30, interval="x")})
+    assert charts.relay(relay("A"), str(tmp_path)) == charts.relay(relay("B"), str(tmp_path)) == ({}, {})
     assert os.listdir(tmp_path) == []
 
 

@@ -37,7 +37,10 @@ def test_write_spike_names_its_days():
     assert thru == "Write spiked Sep 6–7 · 69 Mbit/s (69% of advertised)"
     # Family and peer medians are not drawn here, so the copy claims nothing about them.
     assert ratio == "Outside the Guard band Sep 6–7"
-    assert subtitles(spike, 100.0, {"role": {}}, GUARD)[1] == \
+    inside = {row[0]: 1.05 for row in spike}
+    assert subtitles(spike, 100.0, {"role": {}}, GUARD)[1] == "Outside the Guard band Sep 6–7"  # nothing to check
+    assert subtitles(spike, 100.0, {"role": inside}, GUARD)[1] == "Outside the Guard band Sep 6–7 · peers stayed"
+    assert subtitles(spike, 100.0, {"role": inside, "family": inside}, GUARD)[1] == \
         "Outside the Guard band Sep 6–7 · family and peers stayed"
 
 

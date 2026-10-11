@@ -183,8 +183,20 @@
 }
 
 /* verified-hostname, unverified-hostname, status classes,
-   section-box, subsection-card, subsection-header, and
-   status-note moved to relay-info.html (only consumer) */
+   section-box, subsection-card and status-note moved to
+   relay-info.css (only consumer) */
+
+/* Subsection headers - Level 2 in information hierarchy (relay pages, and the
+   history charts' heading on contact pages too) */
+.subsection-header {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid var(--color-border-light);
+}
 
 /* ========== 6. CONTACT & TEXT TRUNCATION ========== */
 .contact-text {

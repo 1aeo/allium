@@ -77,8 +77,10 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     interval, rows = max(by_interval.items(), key=lambda item: len(item[1]))
     write, read = Counter(), Counter()
     for w, r, _relay in rows:
-        write.update(points(w, MBIT, since))
-        read.update(points(r, MBIT, since))
+        w, r = points(w, MBIT, since), points(r, MBIT, since)
+        # As on a member's own chart, only days with both directions: a one-sided day would skew write/read.
+        write.update({t: v for t, v in w.items() if t in r})
+        read.update({t: r[t] for t in w if t in r})
     return _aligned(write, read, interval), [row[2] for row in rows]
 
 
@@ -94,18 +96,16 @@ def peer_medians(relays, bandwidth_map, since=None):
     Returns ``({role: {ts: median}}, {family: (n, {ts: median})})``. A relay
     only counts on days its mean throughput reaches ``MIN_OVERLAY_MBIT``.
     """
-    by_role, by_family = {}, {}
+    by_role, by_fp = {}, {}
     for relay in relays:
-        series = throughput(bandwidth_map.get(relay["fingerprint"]), "1_month", since)
-        if not series:
+        try:
+            series = throughput(bandwidth_map.get(relay["fingerprint"]), "1_month", since)
+        except Exception:  # noqa: BLE001 -- a malformed history: ChartWriter._save skips that relay's charts too
             continue
-        daily = {t: w / r for t, w, r in zip(*series[:3]) if r and (w + r) / 2 >= MIN_OVERLAY_MBIT}
-        if not daily:
-            continue
-        by_role.setdefault(role_from_flags(relay.get("flags")), []).append(daily)
-        key = family_key(relay)
-        if key:
-            by_family.setdefault(key, []).append(daily)
+        daily = {t: w / r for t, w, r in zip(*series[:3]) if r and (w + r) / 2 >= MIN_OVERLAY_MBIT} if series else {}
+        if daily:
+            by_role.setdefault(role_from_flags(relay.get("flags")), []).append(daily)
+            by_fp[relay["fingerprint"]] = daily
 
     def medians(dailies):
         days = {}
@@ -114,7 +114,11 @@ def peer_medians(relays, bandwidth_map, since=None):
                 days.setdefault(t, []).append(ratio)
         return {t: median(ratios) for t, ratios in days.items()}
 
-    return (
-        {role: medians(dailies) for role, dailies in by_role.items()},
-        {key: (len(dailies), medians(dailies)) for key, dailies in by_family.items() if len(dailies) >= 2},
-    )
+    # A family's median is over its members, as the relay page lists them: effective families are not always
+    # the same from each member's side, so the relays sharing one family tuple are not the whole family.
+    families = {}
+    for key in dict.fromkeys(filter(None, map(family_key, relays))):
+        dailies = [by_fp[fp] for fp in key if fp in by_fp]
+        if len(dailies) >= 2:
+            families[key] = (len(dailies), medians(dailies))
+    return {role: medians(dailies) for role, dailies in by_role.items()}, families
