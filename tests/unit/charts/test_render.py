@@ -1,11 +1,12 @@
 """SVG history charts: drawing helpers and the relay / operator chart writer."""
 
 import os
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from allium.lib.charts.svg import GREEN, Svg, date_ticks, nice_ticks
+from allium.lib.charts.svg import GREEN, RED, TEXT, Svg, date_ticks, nice_ticks
 
 from .fixtures import OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -119,6 +120,31 @@ def test_family_and_peer_medians_are_drawn_on_1m_only(tmp_path):
     charts.relay(relay("A", effective_family=family), str(tmp_path))
     assert {"Operator Family (median, n=3)", "Peers (network median)"} <= set(texts(tmp_path / "bandwidth-1m.svg"))
     assert not {"Operator Family (median, n=3)", "Peers (network median)"} & set(texts(tmp_path / "bandwidth-6m.svg"))
+
+
+def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
+    # Guard's p2–p98 is 0.99–1.58: day 10 (1.65) leaves it alone, days 20 and 21 together. Day 26 sits between
+    # two days without read, so it has no neighbour to join.
+    write, read = [110] * 30, [100] * 30
+    write[10] = write[20] = write[21] = 165
+    read[25] = read[27] = 0
+    drawn = []
+    charts = writer([relay("A")], {"A": history(write, read)})
+    charts._save = lambda directory, name, draw, *args: drawn.append(draw(*args)) or 0
+    charts.relay(relay("A"), None)
+    paths = [op for op in drawn[0].ops if op[0] == "path"]
+    line = next(d for _kind, d, color, width, *_rest in paths if (color, width) == (TEXT, 2.2))
+    points = re.findall(r"[ML]([\d.]+ [\d.]+)", line)  # days 0-24, 26 (as a dash), 28 and 29
+    assert len(points) == 28 and re.search(r"M[\d.]+ [\d.]+h4.4", line)
+    # The line's segments at out-of-band days, drawn again in red where they leave the band.
+    red = {clip: d for _kind, d, color, _width, _dash, fill, clip in paths if color == RED and fill == "none"}
+    assert set(red) == {"ri", "rl"} and all(points[day] in red["ri"] for day in (9, 10, 11, 19, 20, 21, 22))
+    assert not any(points[day] in red["ri"] for day in (5, 15, 25))
+    # Alone, day 10's red is only a tip: it gets a dot too.
+    dots = [d for _kind, d, color, _width, _dash, fill, _clip in paths if fill == RED and d.count("L") == 11]
+    assert len(dots) == 1
+    xs, ys = zip(*(map(float, point.split()) for point in re.findall(r"[ML]([\d.]+ [\d.]+)", dots[0])))
+    assert "%.1f %.1f" % (sum(xs) / 12, sum(ys) / 12) == points[10]
 
 
 def test_overload_legend_and_spike_callout(tmp_path):

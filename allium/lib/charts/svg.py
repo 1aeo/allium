@@ -82,6 +82,11 @@ class Svg(object):
             self.parts.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%g" stroke-linejoin="round"%s%s/>' % (
                 d, fill, color, width, _dash(dash), ' clip-path="url(#%s)"' % clip if clip else ""))
 
+    def dot(self, x, y, r, color):
+        """A filled dot, drawn as a 12-sided path (``raster`` replays paths, not circles)."""
+        self.path("M" + "L".join("%.1f %.1f" % (x + r * math.cos(a * math.pi / 6), y + r * math.sin(a * math.pi / 6))
+                                 for a in range(12)) + "z", color, 1, fill=color)
+
     def clip(self, clip_id, x, y, w, h):
         self.ops.append(("clip", clip_id, x, y, w, h))
         self.parts.append('<clipPath id="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f"/></clipPath>' % (
@@ -157,16 +162,26 @@ class Panel(object):
     def y(self, value):
         return self.top + self.height - (value - self.ylo) / self.yspan * self.height
 
-    def series(self, values, color, width, dash=None):
-        """Polyline of ``values`` over the panel's times; breaks at None / NaN values and across missing history."""
-        d, pen = [], "M"
-        for x, v, brk in zip(self.xs, values, self.breaks):
+    def runs(self, values):
+        """Indexes of ``values`` in the runs a line joins: it breaks at None / NaN values and across missing history."""
+        runs = []
+        for i, (v, brk) in enumerate(zip(values, self.breaks)):
             if v is None or v != v:
-                pen = "M"
                 continue
-            d.append("%s%.1f %.1f" % ("M" if brk else pen, x, self.y(v)))
-            pen = "L"
-        self.svg.path("".join(d), color, width, dash, clip=self.clip)
+            if brk or not runs or runs[-1][-1] != i - 1:
+                runs.append([])
+            runs[-1].append(i)
+        return runs
+
+    def series(self, values, color, width, dash=None, clip=None):
+        """Polyline of ``values`` over the panel's times, one per run; a point with no neighbour to join is a short
+        dash, so it still shows."""
+        d = []
+        for run in self.runs(values):
+            points = [(self.xs[i], self.y(values[i])) for i in run]
+            d.append("M%.1f %.1f" % points[0] + "".join("L%.1f %.1f" % point for point in points[1:]) if run[1:] else
+                     "M%.1f %.1fh%g" % (points[0][0] - width, points[0][1], 2 * width))
+        self.svg.path("".join(d), color, width, dash, clip=clip or self.clip)
 
     def hband(self, lo, hi, color, opacity):
         lo, hi = max(lo, self.ylo), min(hi, self.ylo + self.yspan)

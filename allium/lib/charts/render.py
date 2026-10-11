@@ -158,7 +158,17 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
             strip.series([overlays[key].get(t) for t in ts], color, 1.4, dash)
     clipped = [None if v is None else min(max(v, ylo), yhi) for v in ratios]
     strip.series(clipped, TEXT, 2.2)
-    strip.series([v if r is not None and not ilo <= r <= ihi else None for v, r in zip(clipped, ratios)], RED, 2.4)
+    # Red where the line leaves this role's p2–p98: the line's segments at an out-of-band day, drawn again clipped
+    # to the strip above ihi and below ilo; and a dot on a day out of band alone, as its red is only a short tip.
+    out = [r is not None and not ilo <= r <= ihi for r in ratios]
+    if any(out):
+        near = [v if any(out[max(i - 1, 0):i + 2]) else None for i, v in enumerate(clipped)]
+        for clip, top, bottom in (("ri", strip.top, strip.y(ihi)), ("rl", strip.y(ilo), strip.top + strip.height)):
+            svg.clip(clip, strip.left, top, strip.width, bottom - top)
+            strip.series(near, RED, 2.4, clip=clip)
+    for run in strip.runs([v if o else None for v, o in zip(ratios, out)]):
+        if not run[1:] and ylo <= ratios[run[0]] <= yhi:  # off the scale, the edge marker below shows it
+            svg.dot(strip.xs[run[0]], strip.y(ratios[run[0]]), 3.5, RED)
     for x, r in zip(strip.xs, ratios):
         if r is not None and not ylo <= r <= yhi:
             edge = strip.y(yhi if r > yhi else ylo)
