@@ -64,27 +64,53 @@ def throughput(bandwidth_row, key, since=None):
     return _aligned(points(write, MBIT, since), points(read, MBIT, since), int(write.get("interval") or 0))
 
 
+def _slotted(pts, step, interval):
+    """``pts``, ``step`` seconds apart, averaged into ``interval``-long slots, whole slots only. Onionoo's slots
+    start at multiples of their interval since the epoch, with their point mid-slot, so shorter ones nest."""
+    if step == interval:
+        return pts
+    slots = {}
+    for t, v in pts.items():
+        slots.setdefault(t - timedelta(seconds=t.timestamp() % interval - interval / 2), []).append(v)
+    return {t: sum(vs) / len(vs) for t, vs in slots.items() if len(vs) * step == interval}
+
+
 def operator_throughput(members, bandwidth_map, key, since=None):
     """Members' write and read summed per timestamp, like ``throughput``, plus the members summed.
 
-    Only members on the most common sampling interval are summed, so 1-day and
-    2-day histories never mix.
+    Sums on the period's most common sampling interval. Onionoo leaves out a
+    relay's period when a shorter one holds its whole history, so a member
+    without this period is summed from its next shorter one, averaged into this
+    period's slots; members on other intervals are left out. Members' histories
+    reach the newest slot at different times, so the sum stops at the newest slot
+    every member still reporting has reached, not on a partial sum.
     """
-    by_interval = {}
+    histories = []
     for relay in members:
-        write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), key)
-        if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
-            by_interval.setdefault(int(write.get("interval") or 0), []).append((write, read, relay))
-    if not by_interval:
+        for k in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:  # this period, then shorter ones
+            write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), k)
+            if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
+                histories.append((k == key, int(write.get("interval") or 0), write, read, relay))
+                break
+    own = Counter(step for native, step, *_rest in histories if native)
+    if not own:
         return None, []
-    interval, rows = max(by_interval.items(), key=lambda item: len(item[1]))
-    write, read = Counter(), Counter()
-    for w, r, _relay in rows:
-        w, r = points(w, MBIT, since), points(r, MBIT, since)
+    interval = own.most_common(1)[0][0]
+    write, read, summed, lasts = Counter(), Counter(), [], []
+    for _native, step, w, r, relay in histories:
+        if not step or interval % step:
+            continue
+        w, r = (_slotted(points(block, MBIT, since), step, interval) for block in (w, r))
         # As on a member's own chart, only days with both directions: a one-sided day would skew write/read.
-        write.update({t: v for t, v in w.items() if t in r})
-        read.update({t: r[t] for t in w if t in r})
-    return _aligned(write, read, interval), [row[2] for row in rows]
+        both = w.keys() & r.keys()
+        if both:
+            write.update({t: w[t] for t in both})
+            read.update({t: r[t] for t in both})
+            summed.append(relay)
+            lasts.append(max(w.keys() | r.keys()))
+    reporting = [last for last in lasts if max(lasts) - last <= timedelta(seconds=2 * interval)]
+    end = min(reporting, default=None)
+    return _aligned({t: v for t, v in write.items() if t <= end}, read, interval) if end else None, summed
 
 
 def family_key(relay):

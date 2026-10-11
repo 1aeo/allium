@@ -46,6 +46,23 @@ def test_operator_throughput_sums_members_on_the_common_interval():
     assert operator_throughput(members[3:], bandwidth_map, "1_month") == (None, [])
 
 
+def test_operator_throughput_fills_in_members_without_the_period_and_stops_where_all_have_reported():
+    year = dict(key="1_year", interval=2 * DAY)  # 2-day slots, centred on Sep 3, 5, 7 ... 00:00 UTC
+    bandwidth_map = {
+        "A": history([100] * 3, first="2026-09-03 00:00:00", **year),
+        # Younger than 6 months: Onionoo gives no 1-year history, its 6-month one holds it whole. Its days are
+        # averaged in pairs into the 1-year slots; Sep 8 alone is not a whole slot.
+        "B": history([10, 30, 10, 10, 10, 10, 99], key="6_months", first="2026-09-02 12:00:00"),
+        "L": history([50] * 2, first="2026-09-03 00:00:00", **year),  # still reporting, not yet at Sep 7
+        "O": history([5] * 2, first="2026-08-26 00:00:00", **year),  # stopped long before
+    }
+    members = [{"fingerprint": fp} for fp in "ABLO"]
+    (ts, write, _read, interval), summed = operator_throughput(members, bandwidth_map, "1_year")
+    assert [r["fingerprint"] for r in summed] == list("ABLO") and interval == 2 * DAY
+    # Sep 7 would sum A and B without L: the sum stops at Sep 5 instead of ending on a false drop.
+    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
+
+
 def test_family_key_is_the_effective_family_when_it_has_other_members():
     assert family_key({"effective_family": ["A", "B"]}) == ("A", "B")
     assert family_key({"effective_family": ["A"]}) is None

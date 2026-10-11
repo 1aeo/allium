@@ -100,4 +100,8 @@ when fontconfig's `fc-match` is installed to check.
 - Operator charts sum members on the most common sampling interval, on days
   each member has both directions (as its own chart does), compare write/read
   with the members' most common role, and are skipped for the group of relays
-  without contact info.
+  without contact info. Onionoo gives a relay no 1Y (or 5Y) history when its
+  shorter one holds it whole, so such a member is summed from that shorter
+  history, averaged into the period's slots (whole slots only). Members'
+  histories reach the newest day at different times, so the sum stops at the
+  newest slot every member still reporting (within two slots) has reached.
