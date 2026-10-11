@@ -217,10 +217,16 @@ Two `ProcessPoolExecutor` pitfalls are handled there:
 
 - Chunks of the items themselves could fill the call queue's 64 KiB pipe. A
   worker death then hangs Python 3.9/3.10 (CPython gh-94777) instead of
-  raising `BrokenProcessPool`.
+  raising `BrokenProcessPool`. Chunk sizes are capped so that chunks of
+  indexes stay below it too.
 - Executor workers wait forever when their parent dies, each holding its
   copy of the relay set. A watchdog thread in every worker exits it once the
   parent is gone, as `multiprocessing.Pool` workers did.
+
+One case still hangs on every Python version: a worker killed while its result
+is only partly written to the result pipe (precompute chunk results are up to a
+few MB) leaves the executor waiting for the rest of that message instead of
+raising `BrokenProcessPool`. Killing the hung build still stops its workers.
 
 ### Fallback Behavior
 

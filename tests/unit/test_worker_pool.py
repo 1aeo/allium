@@ -47,6 +47,12 @@ def test_dead_worker_raises_even_with_items_larger_than_the_call_queue_pipe():
         list(fork_map(2, _die_in_worker, ["x" * 70_000] * 6, 1))
 
 
+def test_dead_worker_raises_even_with_chunks_of_indexes_larger_than_the_call_queue_pipe():
+    """Chunks of 7,500 indexes (~37 KiB each) would fill the 64 KiB pipe again."""
+    with pytest.raises(BrokenProcessPool):
+        list(fork_map(2, _die_in_worker, list(range(60_000)), 7_500))
+
+
 def _live_parent(pid):
     """Parent PID of process ``pid``, or None once it has exited (Linux /proc)."""
     try:

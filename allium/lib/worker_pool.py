@@ -41,6 +41,8 @@ def fork_map(workers, fn, items, chunksize, initializer=None, initargs=()):
     BrokenProcessPool, which callers use to fall back to sequential work.
     The pool is shut down before any of its errors reach the caller.
     """
+    # Queued chunks of indexes (up to ~7 bytes each) must not fill that pipe either
+    chunksize = max(1, min(chunksize, 8192 // (workers + 1)))
     with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork"), initializer=_init_worker,
                              initargs=(os.getpid(), fn, items, initializer, initargs)) as executor:
         yield from executor.map(_call, range(len(items)), chunksize=chunksize)
