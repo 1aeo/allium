@@ -7,6 +7,9 @@ This directory tracks feature behavior that is already implemented in the codeba
 - `collector-descriptor-freshness-policy.md`
   Freshness and downgrade-protection policy for CollecTor server-descriptor-based
   Happy Families classification.
+- `history-charts.md`
+  Build-time bandwidth and uptime history charts on relay and contact pages: PNG/SVG
+  drawing, the chart cache, CLI options and CSS period switching.
 
 ## Purpose
 

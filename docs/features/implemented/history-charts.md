@@ -15,7 +15,8 @@ shades that cover the most pixels in real charts (`scripts/chart_palette.py`
 picks them; `tests/unit/charts/test_raster.py` fails when a chart draws a color
 the palette lacks). A 16 MB lookup table, built once before the page workers
 fork, maps each pixel, a block of rows at a time so the work stays in the CPU
-cache; the indexes are deflated with zlib-ng into an 8-bit palette PNG. In
+cache; the indexes are deflated (with zlib-ng when installed) into an 8-bit
+palette PNG. In
 ~1,250 real charts 97.8% of pixels keep their exact color and 99% move by at
 most 4 levels (of 255); a few antialiased edge pixels move further, so it looks
 the same. `--chart-colors full` keeps every shade instead
@@ -25,13 +26,17 @@ Per chart at 2x with 4 workers busy: about 10.5 ms and 50 KB (full color: 10 ms
 and 150 KB), against about 70 ms to rasterize the SVG text with CairoSVG at the
 same size, and about 1 ms and 9 KB for SVG (`--chart-format svg`).
 
-PNGs are cached in `data/cache/charts` under a hash of their SVG text, which
-describes the whole drawing, and hard-linked next to their page. A chart that
-did not change since the last build is linked, not drawn: most 6M/1Y/5Y charts,
-and 1M charts between Onionoo's 4-hourly points (about 85% of all charts an
-hour apart). `ChartWriter.sweep()` then deletes what the build did not use, so
-the cache holds one copy of the current charts (about 3.4 GB; 9.4 GB in full
-color). The scale and colors are part of the cache key. On 4 cores a full build
+PNGs are cached in `data/cache/charts` under a hash of their drawing calls
+(`Svg.ops`, exactly what cairo replays; the SVG text rounds them to 0.1 px), the
+scale and the colors, and hard-linked next to their page. A chart that did not
+change since the last build is linked, not drawn: most 6M/1Y/5Y charts, and 1M
+charts between Onionoo's 4-hourly points (about 85% of all charts an hour
+apart). A hit keeps the file's modification time, so `rsync -a` and HTTP caches
+see it unchanged. `ChartWriter.sweep()` then deletes what the build did not
+use, so the cache holds one copy of the current charts (about 3.4 GB; 9.4 GB in
+full color); an SVG build (`--chart-format svg`) deletes it all. The cache
+folder is named after `raster.VERSION` (replay code, background, palette, cairo
+version, fonts found), so a change there starts a fresh cache. On 4 cores a full build
 took 4m30s with an empty cache, then 1m31s-1m33s an hour later, or 1m56s when
 Onionoo had added a 4-hourly point (SVG: about 1m45s; full-color 1x PNG drawn
 by CairoSVG took 9m41s).
@@ -43,10 +48,11 @@ Thumbnails use the same files: separate small thumbnails would cut the first
 view with JavaScript on, but add bytes at Safest, where hidden `<img>`s load
 anyway.
 
-PNG needs cairocffi, numpy and zlib-ng (`config/requirements.txt`) plus the
-cairo library and DejaVu Sans (`apt install libcairo2 fonts-dejavu-core`).
+PNG needs cairocffi and numpy (`config/requirements.txt`, where zlib-ng makes
+deflate ~4x faster) plus the cairo library (`apt install libcairo2`).
 `allium.py` checks before fetching anything: without them it writes SVG and
-says so, or stops when `--chart-format png` was asked for.
+says so, or stops when `--chart-format png` was asked for. Without DejaVu Sans
+(`fonts-dejavu-core`) it warns and cairo draws the text in another font.
 
 ## Where they are written
 
@@ -72,10 +78,14 @@ says so, or stops when `--chart-format png` was asked for.
 ## Content rules
 
 - Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
-  frozen role bands in `data/role_ratio_bands.json` (do not recompute from the
-  live dump).
+  frozen role bands in `data/role_ratio_bands.json` (`bands.py`; do not
+  recompute from the live dump).
 - Each period only shows its own window, ending at Onionoo's `relays_published`.
-- Family and peer medians are 1M only.
-- Operator charts sum members on the most common sampling interval, compare
-  write/read with the members' most common role, and are skipped for the
-  group of relays without contact info.
+- Family and peer medians are 1M only. A family's median is over the members
+  of the relay's effective family (Onionoo's families are mutual declarations,
+  so members can list different sets); the subtitle names only the lines drawn
+  and checked on the out-of-band days.
+- Operator charts sum members on the most common sampling interval, on days
+  each member has both directions (as its own chart does), compare write/read
+  with the members' most common role, and are skipped for the group of relays
+  without contact info.

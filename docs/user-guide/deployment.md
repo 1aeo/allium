@@ -10,7 +10,7 @@
 cd allium
 (
   set -eu
-  staging_dir="$(mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
+  staging_dir="$(mkdir -p data && mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
   trap 'rm -rf -- "$staging_dir"' EXIT
   python3 allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
