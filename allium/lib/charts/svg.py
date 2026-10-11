@@ -9,11 +9,12 @@ import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from .outcome import format_day
+from .outcome import YEAR_PERIODS, format_day
 
 BG = "#1e1e1e"
 LEGEND_BG = "#242424"
 LEGEND_EDGE = "#3c3c3c"
+CALLOUT_BG = "#161a20"
 GRID = "#323232"
 AXIS = "#555555"
 TEXT = "#e6e6e6"
@@ -31,16 +32,15 @@ _CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
 # DejaVu Sans advance widths in 1/100 em for " " .. "~" (Verdana, the usual
 # fallback, is about as wide), so layouts hold in either font.
-_WIDTHS = [int(w) for w in (
+_WIDTHS = dict(zip(map(chr, range(32, 127)), map(int, (
     "32 40 46 84 64 95 78 27 39 39 50 84 32 36 32 34 64 64 64 64 64 64 64 64 64 64 34 34 84 84 84 53 "
     "100 68 69 70 77 63 58 77 75 29 29 66 56 86 75 79 60 79 69 63 61 73 68 99 69 61 69 39 34 39 84 50 "
     "50 61 63 55 63 62 35 63 63 28 28 58 28 97 63 61 63 63 41 52 39 63 59 82 59 59 52 64 34 64 84"
-).split()]
+).split())))
 
 
 def text_width(text, size, bold=False):
-    em = sum(_WIDTHS[ord(c) - 32] if 32 <= ord(c) < 127 else 60 for c in text)
-    return em * size / (89.0 if bold else 100.0)
+    return sum(_WIDTHS.get(c, 60) for c in text) * size / (89.0 if bold else 100.0)
 
 
 def _dash(dash):
@@ -76,7 +76,7 @@ class Svg(object):
             ' stroke="%s"' % stroke if stroke else "", ' rx="%g"' % rx if rx else ""))
 
     def path(self, d, color, width, dash=None, fill="none", clip=None):
-        """``d`` uses M, L, l, h and z only, which ``raster`` replays."""
+        """``d`` uses M, L, l, h and z only, each with its own coordinates, which ``raster`` replays."""
         if d:
             self.ops.append(("path", d, color, width, dash, fill, clip))
             self.parts.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%g" stroke-linejoin="round"%s%s/>' % (
@@ -108,8 +108,8 @@ def date_ticks(period, ts, end):
     if period == "1m":
         day = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
         day += timedelta(days=(1 - day.weekday()) % 7)
-        ticks = [(t, format_day(t)) for t in (day + timedelta(days=7 * i) for i in range((end - day).days // 7 + 1))
-                 if start <= t <= end]
+        ticks = [(t, format_day(t)) for t in (day + timedelta(weeks=i) for i in range((end - day).days // 7 + 1))
+                 if t >= start]
     elif period == "5y":
         ticks = [(datetime(y, 1, 1, tzinfo=timezone.utc), str(y)) for y in range(start.year + 1, end.year + 1)]
     else:  # month starts, every other month on 1Y
@@ -118,7 +118,7 @@ def date_ticks(period, ts, end):
                   for m in range(start.year * 12 + start.month - 1, end.year * 12 + end.month) if m % 12 % every == 0)
         ticks = [(t, t.strftime(fmt)) for t in months if t >= start]
     if len(ticks) < 2:
-        ticks = [(t, format_day(t, year=period in ("1y", "5y"))) for t in (ts[0], ts[-1])]
+        ticks = [(t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1])]
     return ticks
 
 
@@ -138,11 +138,17 @@ class Panel(object):
     """A plot area with a UTC-time x axis and a linear y axis."""
 
     def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi):
-        self.svg, self.clip = svg, clip_id
+        self.svg, self.clip, self.ts = svg, clip_id, ts
         self.left, self.top, self.width, self.height = left, top, width, height
         self.t0, self.end = ts[0].timestamp(), view_end(ts)
         self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
+        # Every series shares the times: place them once, and break lines across missing history
+        # (steps over twice the shortest).
+        self.xs = [self.x(t) for t in ts]
+        steps = [b - a for a, b in zip(ts, ts[1:])]
+        gap = 2 * min(steps, default=timedelta(0))
+        self.breaks = [True] + [step > gap for step in steps]
         svg.clip(clip_id, left, top, width, height)
 
     def x(self, t):
@@ -151,18 +157,15 @@ class Panel(object):
     def y(self, value):
         return self.top + self.height - (value - self.ylo) / self.yspan * self.height
 
-    def series(self, ts, values, color, width, dash=None):
-        """Polyline that breaks at None / NaN values and across missing history (gaps over two steps)."""
-        gap = 2 * min((b - a for a, b in zip(ts, ts[1:])), default=timedelta(0))
-        d, pen, last = [], "M", None
-        for t, v in zip(ts, values):
+    def series(self, values, color, width, dash=None):
+        """Polyline of ``values`` over the panel's times; breaks at None / NaN values and across missing history."""
+        d, pen = [], "M"
+        for x, v, brk in zip(self.xs, values, self.breaks):
             if v is None or v != v:
                 pen = "M"
                 continue
-            if last and t - last > gap:
-                pen = "M"
-            d.append("%s%.1f %.1f" % (pen, self.x(t), self.y(v)))
-            pen, last = "L", t
+            d.append("%s%.1f %.1f" % ("M" if brk else pen, x, self.y(v)))
+            pen = "L"
         self.svg.path("".join(d), color, width, dash, clip=self.clip)
 
     def hband(self, lo, hi, color, opacity):
@@ -179,16 +182,15 @@ class Panel(object):
     def yaxis(self, ticks, label, size=13, styles=None):
         """Grid lines and labels; ``styles`` maps a tick to ``(text, color, bold)``."""
         for tick in ticks:
-            y = self.y(tick)
             text, color, bold = (styles or {}).get(tick) or ("{:,g}".format(tick), MUTED, False)
-            self.svg.line(self.left, y, self.left + self.width, y, GRID, 1)
-            self.svg.text(self.left - 8, y + size * 0.35, text, size - bold, color, "end", bold)
+            self.hline(tick, GRID, 1)
+            self.svg.text(self.left - 8, self.y(tick) + size * 0.35, text, size - 1 if bold else size, color, "end", bold)
         self.svg.text(12 + size, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
 
-    def xaxis(self, period, ts, labels=True, size=13):
+    def xaxis(self, period, labels=True, size=13):
         """Date gridlines with their labels, then the left and bottom axis lines."""
         bottom = self.top + self.height
-        for tick, text in date_ticks(period, ts, self.end):
+        for tick, text in date_ticks(period, self.ts, self.end):
             x = self.x(tick)
             self.svg.line(x, self.top, x, bottom + 5, GRID, 1)
             if labels:

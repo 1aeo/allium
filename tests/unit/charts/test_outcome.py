@@ -1,17 +1,21 @@
 """Chart copy: outcome subtitles, frozen role bands and chart identity."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
-from allium.lib.charts.bands import CATALOG, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi
-from allium.lib.charts.identity import chart_identity, operator_from_contact, peers_word, role_from_flags
+from allium.lib.charts.bands import (
+    CATALOG, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags,
+)
+from allium.lib.charts.identity import chart_identity, operator_from_contact
 from allium.lib.charts.outcome import format_day_span, subtitles
 
+from .fixtures import T0
+
 GUARD = bands_for_role("Guard")
-T0 = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
 
 
-def rows(ratios, write=50.0):
-    return [(T0 + timedelta(days=i), write * r, write, r) for i, r in enumerate(ratios)]
+def rows(ratios, read=50.0):
+    """Daily ``(t, write, read, write/read)`` rows from Sep 1 with a steady read."""
+    return [(T0 + timedelta(days=i), read * r, read, r) for i, r in enumerate(ratios)]
 
 
 def test_format_day_span_joins_runs_and_collapses_long_lists():
@@ -28,20 +32,21 @@ def test_all_clear_has_no_subtitles():
 
 
 def test_write_spike_names_its_days():
-    thru, ratio = subtitles(rows([1.05] * 5 + [3.0, 3.1] + [1.05] * 5), 100.0, {}, GUARD)
+    spike = rows([1.05] * 5 + [3.0, 3.1] + [1.05] * 5)
+    thru, ratio = subtitles(spike, 100.0, {}, GUARD)
     assert thru == "Write spiked Sep 6–7 · 69 Mbit/s (69% of advertised)"
     # Family and peer medians are not drawn here, so the copy claims nothing about them.
     assert ratio == "Outside the Guard band Sep 6–7"
-    _, ratio = subtitles(rows([1.05] * 5 + [3.0, 3.1] + [1.05] * 5), 100.0, {"role": {}}, GUARD)
-    assert ratio == "Outside the Guard band Sep 6–7 · family and peers stayed"
+    assert subtitles(spike, 100.0, {"role": {}}, GUARD)[1] == \
+        "Outside the Guard band Sep 6–7 · family and peers stayed"
 
 
 def test_low_throughput_is_only_a_drop_when_low_against_advertised():
-    assert subtitles(rows([1.05] * 10, write=10.0), 10.0, {}, GUARD)[0] == ""  # small but at capacity
-    assert subtitles(rows([1.05] * 10, write=10.0), 100.0, {}, GUARD)[0] == \
+    small = rows([1.05] * 10, read=10.0)
+    assert subtitles(small, 10.0, {}, GUARD)[0] == ""  # small but at capacity
+    assert subtitles(small, 100.0, {}, GUARD)[0] == \
         "Write and read both dropped all month · 10 Mbit/s (10% of advertised)"
-    assert subtitles(rows([1.05] * 10, write=10.0), 100.0, {}, GUARD, period="6m")[0].startswith(
-        "Write and read both dropped all 6 months")
+    assert subtitles(small, 100.0, {}, GUARD, period="6m")[0].startswith("Write and read both dropped all 6 months")
 
 
 def test_peers_outside_the_band_take_the_blame():
@@ -51,7 +56,8 @@ def test_peers_outside_the_band_take_the_blame():
 
 
 def test_frozen_bands_and_copy():
-    assert CATALOG["frozen_from"] and GUARD["role"] == "Guard"
+    assert set(CATALOG["roles"]) == {"Exit+Guard", "Exit", "Guard", "Middle"}  # every role role_from_flags gives
+    assert GUARD["role"] == "Guard"
     exit_guard = bands_for_role("Exit+Guard")
     assert ratio_strip_data_hi(exit_guard) > exit_guard["invest_hi"] > 1.70
     assert ratio_strip_data_hi(GUARD) == 1.70
@@ -66,4 +72,4 @@ def test_identity_and_roles():
     assert chart_identity("1aeo.com", "1AEO.com") == "1aeo.com"
     assert [role_from_flags(f) for f in (["Exit", "Guard"], ["Exit"], ["Guard"], [])] == \
         ["Exit+Guard", "Exit", "Guard", "Middle"]
-    assert peers_word("Middle") == "middle relays" and peers_word("") == "relays"
+    assert bands_for_role("Middle")["peers"] == "middle relays"

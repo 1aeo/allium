@@ -216,11 +216,10 @@ def history_maps(relay_set):
     rebuilt these ~10k-entry maps. Lazy, so it also works per-process in
     forked mp workers.
     """
-    if getattr(relay_set, '_uptime_fp_map', None) is None:
-        relay_set._uptime_fp_map = build_uptime_map(getattr(relay_set, 'uptime_data', None))
-    if getattr(relay_set, '_bandwidth_fp_map', None) is None:
-        relay_set._bandwidth_fp_map = build_bandwidth_map(getattr(relay_set, 'bandwidth_data', None))
-    return relay_set._uptime_fp_map, relay_set._bandwidth_fp_map
+    if getattr(relay_set, '_history_maps', None) is None:
+        relay_set._history_maps = (build_uptime_map(getattr(relay_set, 'uptime_data', None)),
+                                   build_bandwidth_map(getattr(relay_set, 'bandwidth_data', None)))
+    return relay_set._history_maps
 
 
 def calculate_operator_reliability(contact_hash, operator_relays, relay_set):

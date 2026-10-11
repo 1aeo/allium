@@ -285,16 +285,18 @@ if __name__ == "__main__":
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
 
-    # PNG charts need cairocffi, numpy and zlib-ng (config/requirements.txt) and the cairo library: check
-    # before fetching anything. Asked for, they are required; by default, SVG stands in with a warning.
-    if args.charts and args.chart_format != "svg":
+    # PNG charts need cairocffi and numpy (config/requirements.txt) and the cairo library: check before
+    # fetching anything. Asked for, they are required; by default, SVG stands in with a warning. Charts
+    # only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
+    if args.charts and args.enabled_apis == "all" and args.chart_format != "svg":
         try:
             from lib.charts import raster  # noqa: F401
         except (ImportError, OSError) as e:
+            needs = ("PNG charts need cairocffi and numpy (pip install -r config/requirements.txt) "
+                     f"and the cairo library: {e}")
             if args.chart_format == "png":
-                sys.exit(f"❌ --chart-format png needs cairocffi, numpy and zlib-ng "
-                         f"(pip install -r config/requirements.txt) and the cairo library: {e}")
-            print(f"⚠️ PNG charts need cairocffi, numpy and zlib-ng and the cairo library ({e}): writing SVG")
+                sys.exit("❌ " + needs)
+            print(f"⚠️ {needs}; writing SVG")
             args.chart_format = "svg"
         else:
             args.chart_format = "png"

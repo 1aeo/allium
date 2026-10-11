@@ -1,5 +1,6 @@
 """History chart markup: one chart per period, switched in place without JavaScript."""
 
+from allium.lib.charts.series import PERIODS
 from allium.lib.contact_sorting import adjust_vanity_paths
 from allium.lib.page_writer import ENV
 
@@ -25,16 +26,11 @@ def test_page_wide_period_links_fall_back_to_the_default_chart():
     assert 'class="chart-hero chart-on-6m chart-on-1m chart-on-5y"' in html
     assert 'class="chart-spark chart-on-6m chart-spark-default chart-on-1m chart-on-5y"' in html
     anchors = ENV.from_string('{% from "macros.html" import chart_period_anchors %}{{ chart_period_anchors() }}')
-    assert [a for a in ("1m", "6m", "1y", "5y") if 'id="%s" class="chart-period"' % a in anchors.render()] == [
-        "1m", "6m", "1y", "5y"]
+    assert anchors.render() == "".join('<span id="%s" class="chart-period"></span>' % period for _key, period in PERIODS)
 
 
 def test_charts_use_the_chart_format():
-    ENV.globals["chart_ext"] = "png"
-    try:
-        html = MACRO.render(name="uptime", periods={"1m": 418, "6m": 418}, src="")
-    finally:
-        ENV.globals["chart_ext"] = "svg"
+    html = MACRO.render(name="uptime", periods={"1m": 418, "6m": 418}, src="", chart_ext="png")
     assert ".svg" not in html and html.count('uptime-1m.png"') == 3
 
 

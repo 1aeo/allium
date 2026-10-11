@@ -4,10 +4,8 @@ import json
 import os
 
 from ..time_utils import parse_onionoo_timestamp
-from .identity import peers_word
 
-# Global fallbacks used only if a role is missing from the catalog.
-_DEFAULT_BANDS = {"typical_lo": 0.90, "typical_hi": 1.15, "invest_lo": 0.80, "invest_hi": 1.50, "n": 0}
+PEERS = {"Guard": "Guards", "Exit": "Exits", "Exit+Guard": "Exit+Guards", "Middle": "middle relays"}
 # Write/read strip display scale. Always reserve a top Investigate shelf.
 RATIO_SCALE_LO = 0.50
 RATIO_SCALE_HI = 1.70
@@ -17,28 +15,39 @@ RAISED_TOP_INVESTIGATE = 0.18
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "role_ratio_bands.json"),
           encoding="utf-8") as _handle:
     CATALOG = json.load(_handle)
+# The census day, for the footnote ("15 Aug 2026").
+BASELINE = "{0.day} {0:%b %Y}".format(parse_onionoo_timestamp(CATALOG["frozen_from"]))
+
+
+def role_from_flags(flags):
+    """The catalog role for a relay's Onionoo flags: Exit+Guard, Exit, Guard or Middle."""
+    flags = flags or ()
+    if "Exit" in flags:
+        return "Exit+Guard" if "Guard" in flags else "Exit"
+    return "Guard" if "Guard" in flags else "Middle"
 
 
 def bands_for_role(role):
-    """Typical / uncommon / investigate row for one role (``role_from_flags``)."""
-    return dict(CATALOG["roles"].get(role) or _DEFAULT_BANDS, role=role)
+    """The catalog's typical / investigate limits and census size for one role, with ``role`` and ``peers``."""
+    return dict(CATALOG["roles"][role], role=role, peers=PEERS[role])
 
 
 def ratio_strip_data_hi(bands):
-    """Display-scale top of the write/read strip.
+    """Top of the write/read strip's scale.
 
-    Always reserves a visible Investigate band above this role's p98.
-    Exit+Guard p98 is 1.71, so the 1.70 clip is raised rather than
-    leaving a hairline of red.
+    RATIO_SCALE_HI, unless that leaves under MIN_TOP_INVESTIGATE of red above
+    this role's p98 (Middle 1.60, Exit+Guard 1.71): then the top Investigate
+    shelf is made as tall as the bottom one (invest_lo - RATIO_SCALE_LO, at
+    least RAISED_TOP_INVESTIGATE), so Middle tops out at 1.97 and Exit+Guard at 2.14.
     """
-    ihi = float(bands["invest_hi"])
+    ihi = bands["invest_hi"]
     if RATIO_SCALE_HI - ihi + 1e-9 >= MIN_TOP_INVESTIGATE:
         return RATIO_SCALE_HI
-    return ihi + max(float(bands["invest_lo"]) - RATIO_SCALE_LO, RAISED_TOP_INVESTIGATE)
+    return ihi + max(bands["invest_lo"] - RATIO_SCALE_LO, RAISED_TOP_INVESTIGATE)
 
 
 def band_legend_labels(bands):
-    """Locked range_pct copy: judgment + numeric range + percentile."""
+    """Legend text for the typical, uncommon and investigate patches: verdict, write/read range, census percentiles."""
     tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     return (
         "Typical  {:.2f}–{:.2f}  ·  p10–p90".format(tlo, thi),
@@ -49,7 +58,4 @@ def band_legend_labels(bands):
 
 def census_footnote(bands):
     """``4,444 Guards · baseline 15 Aug 2026``."""
-    peers = peers_word(bands["role"])
-    head = "{:,} {}".format(bands["n"], peers) if bands["n"] else peers
-    frozen = parse_onionoo_timestamp(CATALOG.get("frozen_from"))
-    return "{} · baseline {} {:%b %Y}".format(head, frozen.day, frozen) if frozen else head
+    return "{:,} {} · baseline {}".format(bands["n"], bands["peers"], BASELINE)

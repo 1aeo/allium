@@ -5,7 +5,7 @@ Draws the charts of a random sample of relays and operators from the cached
 Onionoo data (allium/data/cache, written by a build with --apis all) in full
 color, then keeps:
 
-- every color the drawing calls name (svg.py's colors, the callout box), exact;
+- every color the drawing calls name (svg.py's colors), exact;
 - the most common other colors (the translucent bands and legend swatches
   blended over the background), exact, up to 28 in all;
 - for the rest, the weighted means (k-means) of the remaining edge shades.
@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import sys
 from types import SimpleNamespace
 
@@ -58,34 +59,23 @@ def sample_charts(relay_count, contact_count):
 def main():
     relay_count, contact_count = (int(arg) for arg in (sys.argv[1:] + ["300", "100"])[:2])
     charts = sample_charts(relay_count, contact_count)
-    named = set()
-    for svg in charts:
-        for op in svg.ops:
-            if op[0] in ("text", "line", "rect"):
-                named.add(op[5])
-            if op[0] == "rect" and op[7]:
-                named.add(op[7])
-            if op[0] == "path":
-                named.update(c for c in (op[2], op[5]) if c != "none")
-    colors, counts = [], []
+    # Every color a drawing call names, whatever the op ("none" and dash patterns are not colors).
+    named = {v for svg in charts for op in svg.ops for v in op
+             if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v)}
+    census = []
     for svg in charts:
         surface, rows, _width, _height = raster.render(svg, 2)
-        found, found_counts = np.unique(np.ascontiguousarray(rows).view("<u4") & 0xFFFFFF, return_counts=True)
+        census.append(np.unique(np.ascontiguousarray(rows).view("<u4") & 0xFFFFFF, return_counts=True))
         surface.finish()
-        colors.append(found)
-        counts.append(found_counts)
-    colors, inverse = np.unique(np.concatenate(colors), return_inverse=True)
-    counts = np.bincount(inverse, np.concatenate(counts))
+    colors, inverse = np.unique(np.concatenate([found for found, _counts in census]), return_inverse=True)
+    counts = np.bincount(inverse, np.concatenate([found_counts for _found, found_counts in census]))
     rgb = np.stack([colors & 255, (colors >> 8) & 255, colors >> 16], 1).astype(np.float64)
-    pinned = [np.array([int(c[i:i + 2], 16) for i in (1, 3, 5)], np.float64) for c in sorted(named)]
+    pinned = [np.array(list(bytes.fromhex(c[1:])), np.float64) for c in sorted(named)]
+    named_rgb, extra = {tuple(p) for p in pinned}, max(0, EXACT - len(pinned))
     order = np.argsort(-counts)
-    for i in order:
-        if len(pinned) >= EXACT:
-            break
-        if all(np.abs(rgb[i] - p).max() > 0 for p in pinned):
-            pinned.append(rgb[i])
-    exact = {tuple(p) for p in pinned}
-    rest = np.array([i for i in order if tuple(rgb[i]) not in exact])
+    rest = [i for i in order if tuple(rgb[i]) not in named_rgb]  # the most common first
+    pinned += [rgb[i] for i in rest[:extra]]
+    rest = np.array(rest[extra:])
     free = []
     for i in rest:  # start from the most frequent remaining shades, not too close to a chosen color
         if all(np.abs(rgb[i] - p).max() > 12 for p in pinned + free):

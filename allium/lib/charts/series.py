@@ -1,21 +1,32 @@
 """Onionoo history series for the relay and operator charts."""
 
+import functools
+from bisect import bisect_left
 from collections import Counter
 from datetime import timedelta
 from statistics import median
 
 from ..time_utils import ONIONOO_HISTORY_PERIODS, PERIOD_SHORT_NAMES, parse_onionoo_timestamp
-from .identity import role_from_flags
+from .bands import role_from_flags
 
-# Onionoo graph-history key -> chart period id ("1_month" -> "1m"). 1M is the relay page's own period.
+# Onionoo graph-history key -> chart period id ("1_month" -> "1m"), in page order: a chart section shows its first.
 PERIODS = tuple((key, PERIOD_SHORT_NAMES[key].lower()) for key in ONIONOO_HISTORY_PERIODS)
 PERIOD_SPAN = {"1m": "last 30 days", "6m": "last 6 months", "1y": "last year", "5y": "last 5 years"}
 # A history that stopped updating keeps its old slots; charts only show the period's own window.
 WINDOW = {"1m": timedelta(days=31), "6m": timedelta(days=183), "1y": timedelta(days=366),
           "5y": timedelta(days=1827)}
 MBIT = 8e-6  # bytes/s -> Mbit/s
-# Relays below this mean throughput are left out of the family and peer medians.
+# Days a relay's mean of write and read is below this (50 KB/s, the band census's cut) are left out of the
+# family and peer medians.
 MIN_OVERLAY_MBIT = 50000 * MBIT
+
+
+@functools.lru_cache(maxsize=1 << 12)
+def _slots(first, interval, count):
+    """The ``count`` slot times of a history block from ``first`` (``()`` without it). The network's blocks
+    share about 2,000 (first, interval, length) layouts, so each is built once per process."""
+    step = timedelta(seconds=interval)
+    return tuple(first + i * step for i in range(count)) if first else ()
 
 
 def points(block, scale=1.0, since=None):
@@ -24,14 +35,12 @@ def points(block, scale=1.0, since=None):
     Values are multiplied by the block's ``factor`` and ``scale``: bandwidth
     blocks then give bytes/s * scale, uptime blocks (factor 1/999) fractions.
     """
-    first = parse_onionoo_timestamp((block or {}).get("first"))
-    if first is None:
-        return {}
-    step = timedelta(seconds=int(block.get("interval") or 0))
+    block = block or {}
+    values = block.get("values") or ()
+    times = _slots(parse_onionoo_timestamp(block.get("first")), int(block.get("interval") or 0), len(values))
     scale *= float(block.get("factor") or 1)
-    out = {first + i * step: v * scale for i, v in enumerate(block.get("values") or ())
-           if isinstance(v, (int, float))}
-    return {t: v for t, v in out.items() if t >= since} if since else out
+    start = bisect_left(times, since) if since else 0
+    return {t: v * scale for t, v in zip(times[start:], values[start:]) if isinstance(v, (int, float))}
 
 
 def _aligned(write, read, interval):
@@ -41,6 +50,7 @@ def _aligned(write, read, interval):
 
 
 def _blocks(bandwidth_row, key):
+    """The write and read history blocks of one Onionoo period, ``{}`` when missing."""
     return (((bandwidth_row or {}).get("write_history") or {}).get(key) or {},
             ((bandwidth_row or {}).get("read_history") or {}).get(key) or {})
 
@@ -57,20 +67,19 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     Only members on the most common sampling interval are summed, so 1-day and
     2-day histories never mix.
     """
-    rows = []
+    by_interval = {}
     for relay in members:
         write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), key)
         if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
-            rows.append((int(write["interval"] or 0), write, read, relay))
-    if not rows:
+            by_interval.setdefault(int(write.get("interval") or 0), []).append((write, read, relay))
+    if not by_interval:
         return None, []
-    interval = Counter(row[0] for row in rows).most_common(1)[0][0]
-    rows = [row for row in rows if row[0] == interval]
+    interval, rows = max(by_interval.items(), key=lambda item: len(item[1]))
     write, read = Counter(), Counter()
-    for _interval, w, r, _relay in rows:
+    for w, r, _relay in rows:
         write.update(points(w, MBIT, since))
         read.update(points(r, MBIT, since))
-    return _aligned(write, read, interval), [row[3] for row in rows]
+    return _aligned(write, read, interval), [row[2] for row in rows]
 
 
 def family_key(relay):

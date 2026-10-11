@@ -1,8 +1,6 @@
-"""Chart identity: contact ``url:`` host, not ``aroi_domain``."""
+"""Chart identity line: the relay nickname and its contact's ``url:`` host (not ``aroi_domain``)."""
 
 from ..string_utils import URL_FIELD_TOKEN_RE
-
-PEERS = {"Guard": "Guards", "Exit": "Exits", "Exit+Guard": "Exit+Guards", "Middle": "middle relays"}
 
 
 def operator_from_contact(contact):
@@ -19,14 +17,3 @@ def chart_identity(nickname, operator=""):
     if op and nick and op.lower() != nick.lower():
         return "{}  ·  {}".format(nick, op)
     return nick or op
-
-
-def role_from_flags(flags):
-    flags = flags or ()
-    if "Exit" in flags:
-        return "Exit+Guard" if "Guard" in flags else "Exit"
-    return "Guard" if "Guard" in flags else "Middle"
-
-
-def peers_word(role):
-    return PEERS.get(role, role or "relays")

@@ -646,6 +646,7 @@
         {% endif %}
     </div>
 </div>
+{# The charts live in contact/<hash>/: a src from the site root keeps them resolving from the vanity-domain copy of this page #}
 {% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
 {{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ 'contact/' ~ value ~ '/', ext=chart_ext) }}
 {% endblock %}

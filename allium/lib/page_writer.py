@@ -35,6 +35,7 @@ from .bandwidth_formatter import (
     format_data_volume_with_unit,
 )
 from .aroi_validation import get_contact_validation_status
+from .charts.series import PERIOD_SPAN
 from .intelligence_engine import IntelligenceEngine
 from .ip_utils import safe_parse_ip_address
 from .operator_analysis import (
@@ -253,6 +254,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
 ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status

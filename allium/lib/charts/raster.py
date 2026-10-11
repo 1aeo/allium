@@ -10,6 +10,8 @@ third of the full-color one (~48 KB against ~150 KB at 2x) and looks the
 same, at about the same speed. ``colors="full"`` keeps every shade.
 """
 
+import functools
+import math
 import re
 import struct
 import sys
@@ -29,7 +31,7 @@ except ImportError:  # pragma: no cover
 # outside the ops, the palette, the cairo version and the fonts found): change it
 # when the replay or the encoding changes. The drawing itself keys each file.
 _DRAWING = b"cairo-4"
-# The chart's own named colors first (svg.py, and the spike callout's box), so
+# The chart's own named colors first (svg.py), so
 # they stay exact, then the flat and edge shades that cover the most pixels in
 # ~1,250 real charts. scripts/chart_palette.py chose them; run it again after
 # adding a color to the charts (tests/unit/charts/test_raster.py checks this).
@@ -43,7 +45,8 @@ PALETTE = (
     "108f50 6c8176 1cdfa3 0aca6a 8a6dbe 1b4c34 8e4547 41322a "
     "30c7ca 3e8ac4 0cb763 2c4c64 4d6a5b 346a8f 5d7669 7a9085"
 ).split()
-_PATH = re.compile(r"[MLlhz]|-?[\d.]+")
+_PLTE = bytes.fromhex("".join(PALETTE))  # R, G, B of each PALETTE color: the PNG's PLTE chunk
+_PATH = re.compile(r"([MLlhz])([^MLlhz]*)")  # a command and its coordinates
 # Cairo keeps ARGB32 pixels as native-endian words: B, G, R, A in memory on
 # little-endian machines. Drawing with red and blue swapped leaves them in
 # PNG's R, G, B, A order with no copy. The swap is exact because _FONT_OPTIONS
@@ -56,24 +59,17 @@ _FONT_OPTIONS = cairo.FontOptions()
 _FONT_OPTIONS.set_antialias(cairo.ANTIALIAS_GRAY)
 _FONT_OPTIONS.set_hint_style(cairo.HINT_STYLE_NONE)
 _FONT_OPTIONS.set_hint_metrics(cairo.HINT_METRICS_OFF)
-_FACES = {}
-_COLORS = {}
 
 
+@functools.lru_cache(maxsize=None)
 def _color(hex_color):
-    rgb = _COLORS.get(hex_color)
-    if rgb is None:
-        r, g, b = (int(hex_color[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
-        rgb = _COLORS[hex_color] = (b, g, r) if _SWAP else (r, g, b)
-    return rgb
+    r, g, b = (v / 255.0 for v in bytes.fromhex(hex_color[1:]))
+    return (b, g, r) if _SWAP else (r, g, b)
 
 
+@functools.lru_cache(maxsize=None)
 def _face(bold):
-    face = _FACES.get(bold)
-    if face is None:
-        face = _FACES[bold] = cairo.ToyFontFace(
-            "DejaVu Sans", weight=cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL)
-    return face
+    return cairo.ToyFontFace("DejaVu Sans", weight=cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL)
 
 
 def _fonts():
@@ -90,25 +86,23 @@ def _fonts():
 
 
 VERSION = b"/".join((_DRAWING, BG.encode(), " ".join(PALETTE).encode(), cairo.cairo_version_string().encode(), _fonts()))
-_LUT = []
 
 
+@functools.lru_cache(maxsize=None)
 def lookup():
     """Palette index for every 24-bit color (index = R | G << 8 | B << 16): the nearest PALETTE color on a
     6-bit-per-channel grid, and each PALETTE color for itself. 16 MB, built once (~0.4 s), before forking."""
-    if not _LUT:
-        pal = np.array([[int(c[i:i + 2], 16) for i in (0, 2, 4)] for c in PALETTE], np.int32)
-        grid = np.arange(1 << 18)
-        centres = np.stack([grid & 63, (grid >> 6) & 63, grid >> 12], 1) * 4 + 2
-        nearest = np.empty(1 << 18, np.uint8)
-        for start in range(0, 1 << 18, 1 << 14):
-            part = centres[start:start + (1 << 14), None, :] - pal[None]
-            nearest[start:start + (1 << 14)] = (part * part).sum(-1).argmin(1)
-        # Each grid cell covers 4 values of each channel: blue (high bits) outermost, red innermost.
-        lut = nearest.reshape(64, 64, 64).repeat(4, 0).repeat(4, 1).repeat(4, 2).ravel()
-        lut[pal[:, 0] | pal[:, 1] << 8 | pal[:, 2] << 16] = np.arange(len(PALETTE))
-        _LUT.append(lut)
-    return _LUT[0]
+    pal = np.frombuffer(_PLTE, np.uint8).reshape(-1, 3).astype(np.int32)
+    grid = np.arange(1 << 18)
+    centres = np.stack([grid & 63, (grid >> 6) & 63, grid >> 12], 1) * 4 + 2
+    nearest = np.empty(1 << 18, np.uint8)
+    for start in range(0, 1 << 18, 1 << 14):
+        part = centres[start:start + (1 << 14), None, :] - pal[None]
+        nearest[start:start + (1 << 14)] = (part * part).sum(-1).argmin(1)
+    # Each grid cell covers 4 values of each channel: blue (high bits) outermost, red innermost.
+    lut = nearest.reshape(64, 64, 64).repeat(4, 0).repeat(4, 1).repeat(4, 2).ravel()
+    lut[pal[:, 0] | pal[:, 1] << 8 | pal[:, 2] << 16] = np.arange(len(PALETTE))
+    return lut
 
 
 def _stroke(ctx, color, width, dash):
@@ -119,85 +113,81 @@ def _stroke(ctx, color, width, dash):
 
 
 def _trace(ctx, d):
-    cmd = None
-    tokens = _PATH.findall(d)
-    i = 0
-    while i < len(tokens):
-        if tokens[i] in "MLlhz":
-            cmd = tokens[i]
-            i += 1
-            if cmd == "z":
-                ctx.close_path()
-                continue
-        if cmd == "h":
-            ctx.rel_line_to(float(tokens[i]), 0)
-            i += 1
-            continue
-        x, y = float(tokens[i]), float(tokens[i + 1])
-        i += 2
-        (ctx.move_to if cmd == "M" else ctx.line_to if cmd == "L" else ctx.rel_line_to)(x, y)
+    for cmd, args in _PATH.findall(d):
+        if cmd == "z":
+            ctx.close_path()
+        elif cmd == "h":
+            ctx.rel_line_to(float(args), 0)
+        else:
+            x, y = args.split()
+            (ctx.move_to if cmd == "M" else ctx.line_to if cmd == "L" else ctx.rel_line_to)(float(x), float(y))
 
 
-def _rect(ctx, x, y, w, h, rx):
+def _rect_path(ctx, x, y, w, h, rx):
     if not rx:
         ctx.rectangle(x, y, w, h)
         return
     ctx.new_sub_path()
     for cx, cy, start in ((x + w - rx, y + rx, -0.5), (x + w - rx, y + h - rx, 0),
                           (x + rx, y + h - rx, 0.5), (x + rx, y + rx, 1)):
-        ctx.arc(cx, cy, rx, start * 3.141592653589793, (start + 0.5) * 3.141592653589793)
+        ctx.arc(cx, cy, rx, start * math.pi, (start + 0.5) * math.pi)
     ctx.close_path()
+
+
+def _text(ctx, x, y, text, size, color, anchor, bold, rotate):
+    ctx.save()
+    ctx.set_font_face(_face(bold))
+    ctx.set_font_size(size)
+    if rotate:
+        ctx.translate(x, y)
+        ctx.rotate(-math.pi / 2)
+        ctx.translate(-x, -y)
+    if anchor != "start":
+        advance = ctx.text_extents(text)[4]
+        x -= advance if anchor == "end" else advance / 2
+    ctx.move_to(x, y)
+    ctx.set_source_rgb(*_color(color))
+    ctx.show_text(text)
+    ctx.restore()
+
+
+def _rect(ctx, x, y, w, h, fill, opacity, stroke, rx):
+    if not stroke:
+        _rect_path(ctx, x, y, w, h, rx)
+        ctx.set_source_rgba(*_color(fill), opacity or 1.0)
+        ctx.fill()
+        return
+    if opacity:  # like SVG, the opacity applies to the fill and stroke together
+        ctx.save()
+        ctx.rectangle(x - 1, y - 1, w + 2, h + 2)  # keeps the group as small as the rect
+        ctx.clip()
+        ctx.push_group()
+    _rect_path(ctx, x, y, w, h, rx)
+    ctx.set_source_rgb(*_color(fill))
+    ctx.fill_preserve()
+    _stroke(ctx, stroke, 1.0, None)
+    if opacity:
+        ctx.pop_group_to_source()
+        ctx.paint_with_alpha(opacity)
+        ctx.restore()
 
 
 def _draw(ctx, svg):
     ctx.set_source_rgb(*_color(BG))
     ctx.paint()
     clips = {}
-    for op in svg.ops:
-        kind = op[0]
+    for kind, *args in svg.ops:
         if kind == "text":
-            _, x, y, text, size, color, anchor, bold, rotate = op
-            ctx.save()
-            ctx.set_font_face(_face(bold))
-            ctx.set_font_size(size)
-            if rotate:
-                ctx.translate(x, y)
-                ctx.rotate(-1.5707963267948966)
-                ctx.translate(-x, -y)
-            if anchor != "start":
-                advance = ctx.text_extents(text)[4]
-                x -= advance if anchor == "end" else advance / 2
-            ctx.move_to(x, y)
-            ctx.set_source_rgb(*_color(color))
-            ctx.show_text(text)
-            ctx.restore()
+            _text(ctx, *args)
+        elif kind == "rect":
+            _rect(ctx, *args)
         elif kind == "line":
-            _, x1, y1, x2, y2, color, width, dash = op
+            x1, y1, x2, y2, color, width, dash = args
             ctx.move_to(x1, y1)
             ctx.line_to(x2, y2)
             _stroke(ctx, color, width, dash)
-        elif kind == "rect":
-            _, x, y, w, h, fill, opacity, stroke, rx = op
-            if not stroke:
-                _rect(ctx, x, y, w, h, rx)
-                ctx.set_source_rgba(*(_color(fill) + (opacity or 1.0,)))
-                ctx.fill()
-                continue
-            if opacity:  # like SVG, the opacity applies to the fill and stroke together
-                ctx.save()
-                ctx.rectangle(x - 1, y - 1, w + 2, h + 2)  # keeps the group as small as the rect
-                ctx.clip()
-                ctx.push_group()
-            _rect(ctx, x, y, w, h, rx)
-            ctx.set_source_rgb(*_color(fill))
-            ctx.fill_preserve()
-            _stroke(ctx, stroke, 1.0, None)
-            if opacity:
-                ctx.pop_group_to_source()
-                ctx.paint_with_alpha(opacity)
-                ctx.restore()
         elif kind == "path":
-            _, d, color, width, dash, fill, clip = op
+            d, color, width, dash, fill, clip = args
             ctx.save()
             if clip:
                 ctx.rectangle(*clips[clip])
@@ -210,7 +200,7 @@ def _draw(ctx, svg):
             _stroke(ctx, color, width, dash)
             ctx.restore()
         elif kind == "clip":
-            clips[op[1]] = op[2:]
+            clips[args[0]] = args[1:]
 
 
 def _chunk(kind, data):
@@ -248,8 +238,8 @@ def encode_palette(rows, width, height, block=64):
     for top in range(0, height, block):
         part = words[top:top + block]
         np.bitwise_and(part, 0xFFFFFF, out=key[:len(part)], casting="unsafe")
-        lut.take(key[:len(part)], out=filtered[top:top + block, 1:], mode="wrap")
-    return _png(width, height, 3, deflate.compress(filtered, 6), bytes.fromhex("".join(PALETTE)))
+        lut.take(key[:len(part)], out=filtered[top:top + block, 1:], mode="wrap")  # keys < 2**24; "raise" buffers out
+    return _png(width, height, 3, deflate.compress(filtered, 6), _PLTE)
 
 
 def render(svg, scale):

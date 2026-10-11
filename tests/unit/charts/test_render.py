@@ -5,34 +5,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-import pytest
-
-from allium.lib.charts.render import ChartWriter
 from allium.lib.charts.svg import GREEN, Svg, date_ticks, nice_ticks
 
-from .test_series import bandwidth_row, block
-
-PUBLISHED = "2026-09-30 12:00:00"
-
-
-def relay(fp, contact="url:example.com", flags=("Guard", "Running"), **extra):
-    return dict({"fingerprint": fp, "nickname": "relay" + fp, "contact": contact, "flags": list(flags),
-                 "advertised_bandwidth": 250000, "last_restarted": "2026-09-10 08:00:00",
-                 "effective_family": [fp], "uptime_percentages": {"1_month": 99.5}}, **extra)
-
-
-def history(write, read=None, key="1_month", **kwargs):
-    return bandwidth_row(write, read or write, key, **kwargs)
-
-
-def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None, **options):
-    return ChartWriter(SimpleNamespace(
-        json={"relays": relays},
-        bandwidth_data={"relays_published": PUBLISHED, "relays": [dict(row, fingerprint=fp) for fp, row in bandwidth.items()]},
-        uptime_data={"relays_published": PUBLISHED, "relays": [
-            {"fingerprint": fp, "uptime": {"1_month": block(values, interval=14400, factor=1 / 999.0)}}
-            for fp, values in (uptime or {}).items()]},
-    ), image_format, cache_dir, **options)
+from .fixtures import OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
 
 def texts(path):
@@ -58,24 +33,19 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
+@needs_png
 def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_path):
-    try:
-        from allium.lib.charts import raster  # noqa: F401
-    except (ImportError, OSError):  # needs cairocffi, numpy and zlib-ng, and the cairo library
-        pytest.skip("PNG charts need cairocffi, numpy, zlib-ng and the cairo library")
-    first, second, root = tmp_path / "first", tmp_path / "second", tmp_path / "cache"
-    first.mkdir()
-    second.mkdir()
-    root.mkdir()
-    (root / "old-drawing").mkdir()  # cached by another drawing version: never hit again
+    first, second, third, root = (tmp_path / name for name in ("first", "second", "third", "cache"))
+    for directory in (first, second, third):
+        directory.mkdir()
+    (root / "old-drawing").mkdir(parents=True)  # cached by another drawing version: never hit again
     history_a = {"A": history([100 + i for i in range(30)])}
     charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
     assert os.listdir(root) == [os.path.basename(charts.cache)]
     bandwidth, uptime = charts.relay(relay("A"), str(first))
     assert sorted(os.listdir(first)) == ["bandwidth-1m.png", "uptime-1m.png"]
-    png = (first / "bandwidth-1m.png").read_bytes()
-    assert png[:8] == b"\x89PNG\r\n\x1a\n"  # IHDR: twice the page's size, sharp on HiDPI screens
-    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")) == (2160, 2 * bandwidth["1m"])
+    # Twice the page's size, sharp on HiDPI screens, in the 64-color palette (3 channels once decoded).
+    assert decode((first / "bandwidth-1m.png").read_bytes()).shape == (2 * bandwidth["1m"], 2160, 3)
     # The next build links charts that did not change instead of drawing them again, and keeps their
     # modification time so rsync and HTTP caches see them unchanged.
     os.utime(first / "bandwidth-1m.png", (1, 1))
@@ -87,35 +57,28 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     # A page written again in place (the sequential retry after a worker died) replaces its links:
     # a different chart there must not be written through the old link into the cache.
     changed = writer([relay("A")], {"A": history([200 + i for i in range(30)])}, {"A": [500] * 180}, "png", str(root))
-    cache = changed.cache
-    before = {name: open(os.path.join(cache, name), "rb").read() for name in os.listdir(cache)}
+    cache = root / os.path.basename(changed.cache)
+    before = {path: path.read_bytes() for path in cache.iterdir()}
     assert list(changed.relay(relay("A"), str(second))[0]) == ["1m"]
-    assert all(open(os.path.join(cache, name), "rb").read() == data for name, data in before.items())
+    assert all(path.read_bytes() == data for path, data in before.items())
     # sweep() keeps what this build used and drops the rest; an SVG build uses none of it.
-    stale = os.path.join(cache, "stale.png")
-    open(stale, "wb").close()
+    stale = cache / "stale.png"
+    stale.touch()
     os.utime(stale, (0, 0))
     changed.sweep()
-    assert len(os.listdir(cache)) == 4 and not os.path.exists(stale)
+    assert len(os.listdir(cache)) == 4 and not stale.exists()
     writer([relay("A")], history_a, cache_dir=str(root)).sweep()
     assert not root.exists()
-    # --chart-scale 1.5 draws 1620 px wide, in a cache of its own.
+    # --chart-scale 1.5 draws 1620 px wide; --chart-colors full writes RGBA.
     smaller = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root), scale=1.5, colors="full")
-    third = tmp_path / "third"
-    third.mkdir()
     bandwidth, _uptime = smaller.relay(relay("A"), str(third))
-    png = (third / "bandwidth-1m.png").read_bytes()
-    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big"), png[25]) == (
-        1620, round(1.5 * bandwidth["1m"]), 6)  # 8-bit RGBA: full color
+    assert decode((third / "bandwidth-1m.png").read_bytes()).shape == (round(1.5 * bandwidth["1m"]), 1620, 4)
 
 
+@needs_png
 def test_a_png_is_drawn_from_its_own_drawing_not_one_with_the_same_svg_text(tmp_path):
     """The SVG text rounds to 0.1 px and the PNG is drawn at full precision: two charts whose text matches
     (e.g. restarts minutes apart on a 1Y chart) must not share a cached PNG, or builds vary."""
-    try:
-        from allium.lib.charts import raster  # noqa: F401
-    except (ImportError, OSError):  # needs cairocffi, numpy and zlib-ng, and the cairo library
-        pytest.skip("PNG charts need cairocffi, numpy, zlib-ng and the cairo library")
     charts = writer([], {}, image_format="png", cache_dir=str(tmp_path / "cache"))
     for y in (60.01, 60.04):  # both written as y2="60.0"
         svg = Svg(100)
@@ -138,17 +101,14 @@ def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
 def test_each_period_only_shows_its_own_window(tmp_path):
     stale = history([100] * 30, first="2026-06-01 12:00:00")  # 1M stopped updating months ago
     longer = history([100] * 60, key="6_months", first="2026-08-01 12:00:00")
-    charts = writer([relay("A")], {"A": dict(stale, **{k: dict(stale[k], **longer[k]) for k in stale})})
+    charts = writer([relay("A")], {"A": {k: dict(stale[k], **longer[k]) for k in stale}})
     assert [list(drawn) for drawn in charts.relay(relay("A"), str(tmp_path))] == [["6m"], []]
     assert os.listdir(tmp_path) == ["bandwidth-6m.svg"]
 
 
 def test_overload_legend_and_spike_callout(tmp_path):
-    write = [100] * 10 + [400] + [100] * 10
-    hit = int(datetime(2026, 9, 29, 22, tzinfo=timezone.utc).timestamp() * 1000)
-    busy = relay("A", stability_is_overloaded=True, last_restarted="2026-09-21 20:00:00",  # after the last point
-                 overload_ratelimits={"timestamp": hit, "write-count": 3, "read-count": 0})
-    charts = writer([busy], {"A": history(write, [100] * 21)})
+    busy = relay("A", last_restarted="2026-09-21 20:00:00", **OVERLOADED)  # restarted after the last point
+    charts = writer([busy], {"A": history(SPIKE, [100] * 21)})
     charts.relay(busy, str(tmp_path))
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert "currently overloaded · last report Sep 29, 22:00 UTC" in lines
@@ -193,8 +153,7 @@ def test_axis_ticks():
 
     assert labels("1m", day(2026, 9, 1), day(2026, 10, 1)) == ["Sep 1", "Sep 8", "Sep 15", "Sep 22", "Sep 29"]
     # Onionoo's daily points sit at noon: no tick at the Tuesday midnight before the first one.
-    noon = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
-    assert labels("1m", noon, day(2026, 10, 1))[0] == "Sep 8"
+    assert labels("1m", T0, day(2026, 10, 1))[0] == "Sep 8"
     assert labels("6m", day(2025, 11, 5), day(2026, 3, 1))[:3] == ["Dec '25", "Jan '26", "Feb '26"]
     assert labels("5y", day(2022, 3, 1), day(2026, 10, 1)) == ["2023", "2024", "2025", "2026"]
     # Too short to reach two ticks: label the ends instead.

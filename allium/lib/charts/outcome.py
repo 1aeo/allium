@@ -1,10 +1,12 @@
-"""Locked C outcome subtitles. Empty on thin history or all-clear."""
+"""Bandwidth chart subtitles: what stood out in throughput and in write/read. Empty on thin history or all-clear."""
 
 from datetime import timedelta
 
-from .identity import peers_word
+from ..time_utils import SECONDS_PER_DAY
 
 ALL_PERIOD = {"1m": "all month", "6m": "all 6 months", "1y": "all year", "5y": "all 5 years"}
+# Dates on these periods' charts carry the year: their windows can hold the same month and day twice.
+YEAR_PERIODS = ("1y", "5y")
 
 
 def mbit(value):
@@ -40,23 +42,22 @@ def format_day_span(dates, step=timedelta(days=1), year=False):
     return ", ".join(span(start, end) for start, end in runs)
 
 
-def _left_typical(ts, overlay, bands, days):
-    """True if the overlay is outside typical on most of those days, None without values."""
-    hits = [not bands["typical_lo"] <= overlay[t] <= bands["typical_hi"]
-            for t in ts if t.date() in days and overlay.get(t) is not None]
-    return sum(hits) >= max(1, (len(hits) + 1) // 2) if hits else None
+def _left_typical(times, overlay, bands):
+    """True if the overlay is outside typical at half or more of ``times``, None without values there."""
+    hits = [not bands["typical_lo"] <= overlay[t] <= bands["typical_hi"] for t in times if overlay.get(t) is not None]
+    return sum(hits) >= (len(hits) + 1) // 2 if hits else None
 
 
-def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
+def subtitles(rows, advertised, overlays, bands, period="1m", interval=SECONDS_PER_DAY):
     """``(throughput, write/read)`` subtitles for ``rows`` of ``(t, write, read, ratio)``."""
     if len(rows) < 3:
         return "", ""
-    role = bands["role"] or "relay"
-    tlo, thi = bands["typical_lo"], bands["typical_hi"]
-    invest = [row for row in rows if not bands["invest_lo"] <= row[3] <= bands["invest_hi"]]
+    role, peers = bands["role"], bands["peers"]
+    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
+    invest = [row for row in rows if not ilo <= row[3] <= ihi]
     mean_write, mean_read, mean_ratio = (sum(column) / len(rows) for column in list(zip(*rows))[1:])
     typical = tlo <= mean_ratio <= thi
-    outside = not bands["invest_lo"] <= mean_ratio <= bands["invest_hi"]
+    outside = not ilo <= mean_ratio <= ihi
     write_heavy = [row[3] for row in invest if row[3] > thi]
     read_heavy = [row[3] for row in invest if row[3] < tlo]
     util = 100.0 * mean_write / advertised if advertised else None
@@ -72,25 +73,22 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=86400):
     if not (spiked or dropped or invest) and typical:
         return "", ""
 
-    span = format_day_span([row[0] for row in invest], timedelta(seconds=interval or 86400),
-                           year=period in ("1y", "5y"))
+    invest_ts = [row[0] for row in invest]
+    span = format_day_span(invest_ts, timedelta(seconds=interval or SECONDS_PER_DAY), year=period in YEAR_PERIODS)
+    when = " " + span if span else ""
     util_bit = mbit(mean_write) + " Mbit/s" + (" ({:.0f}% of advertised)".format(util) if util is not None else "")
     if spiked:
-        throughput = "{} spiked{} · {}".format(spike, " " + span if span else "", util_bit)
+        throughput = "{} spiked{} · {}".format(spike, when, util_bit)
     elif dropped:
         throughput = "Write and read both dropped {} · {}".format(span or ALL_PERIOD[period], util_bit)
     else:
         throughput = util_bit
 
-    days = {row[0].date() for row in invest}
-    ts = [row[0] for row in rows]
-    peers = peers_word(bands["role"])
-    when = " " + span if span else ""
     if not invest:
         ratio = "" if typical else "Write/read {:.2f} · inside the {} band with other {}".format(mean_ratio, role, peers)
-    elif _left_typical(ts, overlays.get("role", {}), bands, days):
+    elif _left_typical(invest_ts, overlays.get("role", {}), bands):
         ratio = "Outside the band with other {}{}".format(peers, when)
-    elif _left_typical(ts, overlays.get("family", {}), bands, days):
+    elif _left_typical(invest_ts, overlays.get("family", {}), bands):
         ratio = "Outside the {} band{} with the family · other {} stayed".format(role, when, peers)
     else:
         # Family and peer lines are only drawn (and only checked) on 1M relay charts.
