@@ -64,6 +64,15 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
 
 
+def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():
+    # B's first day (Sep 3 noon) is half of the 2-day slot centred on Sep 3: that slot sums A alone.
+    bandwidth_map = {"A": history([100] * 3, key="1_year", interval=2 * DAY, first="2026-09-03 00:00:00"),
+                     "B": history([30, 10, 10, 10, 10], key="6_months", first="2026-09-03 12:00:00")}
+    (ts, write, _read, _interval), _summed = operator_throughput([{"fingerprint": "A"}, {"fingerprint": "B"}],
+                                                                 bandwidth_map, "1_year")
+    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(3, 100), (5, 110), (7, 110)]
+
+
 def test_family_key_is_the_effective_family_when_it_has_other_members():
     assert family_key({"effective_family": ["A", "B"]}) == ("A", "B")
     assert family_key({"effective_family": ["A"]}) is None
@@ -75,7 +84,7 @@ def test_peer_medians_by_role_and_family_skip_quiet_relays():
         "A": history([110, 120, 150], [100, 100, 100]),  # alone on the third day
         "B": history([130, 140], [100, 100]),
         "C": history([100, 100]),
-        "Q": history([1, 1], [2, 2]),  # under MIN_OVERLAY_MBIT: not a peer
+        "Q": history([1, 1], [2, 2]),  # under MIN_ACTIVE_MBIT: not a peer
     }
     roles, families = peer_medians(relays, bandwidth_map)
     assert set(roles) == {"Guard"}

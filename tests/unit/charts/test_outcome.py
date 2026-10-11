@@ -38,14 +38,23 @@ def test_throughput_subtitle_states_the_mean_its_share_and_the_peak():
         "Write avg 80 Mbit/s (40% of advertised), peak 170 Mbit/s Sep 3"
     # A period's mean over what the relay advertises today is no share of it.
     assert throughput_subtitle(ts, [40, 60, 170, 50], 50.0, "1y") == "Write avg 80 Mbit/s, peak 170 Mbit/s Sep 3 '26"
+    # Readable at the small end: no exponents, no "0%" for a share that is not 0, no peak when nothing flowed.
+    assert throughput_subtitle(ts, [4.7e-6, 1.6e-5, 0, 0], 0.4) == \
+        "Write avg <0.01 Mbit/s (<1% of advertised), peak <0.01 Mbit/s Sep 2"
+    assert throughput_subtitle(ts, [0, 0, 0, 0], 0.4) == "Write avg 0 Mbit/s"
 
 
 def test_ratio_subtitle_gives_the_overall_band_and_the_days_beyond_p2_p98_on_each_side():
     assert ratio_subtitle(rows([1.05] * 10), {}, GUARD) == "Write/read 1.05 overall (typical) · inside p2–p98 throughout"
     assert ratio_subtitle([], {}, GUARD) == "Under 50 KB/s throughout: too little traffic to compare"
-    # Overall is the ratio of sums, as in the band census: (5 x 1.05 + 3.0 + 3.1 + 0.5) / 8.
     assert ratio_subtitle(rows([1.05] * 5 + [3.0, 3.1, 0.5]), {}, GUARD) == \
         "Write/read 1.48 overall (uncommon) · above p98 Sep 6–7 · below p2 Sep 8"
+    # Overall is the ratio of sums, as in the band census: 400 / 150, not the mean of the daily ratios (3.50).
+    assert ratio_subtitle([(T0, 100.0, 100.0, 1.0), (T0 + timedelta(days=1), 300.0, 50.0, 6.0)], {}, GUARD).startswith(
+        "Write/read 2.67 overall")
+    # On 1Y, points two days apart run together.
+    two_day = [(T0 + timedelta(days=2 * i), 50.0 * r, 50.0, r) for i, r in enumerate([1.05] * 3 + [3.0] * 3 + [1.05] * 4)]
+    assert ratio_subtitle(two_day, {}, GUARD, "1y", 2 * 86400).endswith("above p98 Sep 7 '26–Sep 11 '26")
     scattered = rows([3.0 if i % 2 else 1.05 for i in range(10)])
     assert ratio_subtitle(scattered, {}, GUARD) == "Write/read 2.02 overall (investigate) · above p98 Sep 2–10 (5 of 10 days)"
     assert ratio_subtitle(rows([1.05, 3.0]), {}, GUARD, most=0) == \
@@ -64,6 +73,8 @@ def test_ratio_subtitle_says_whether_family_and_peers_left_the_band_on_the_same_
     assert ratio_subtitle(spike, {"role": inside, "family": above}, GUARD) == base + " · out with the family · peers stayed in"
     assert ratio_subtitle(spike, {"role": above}, GUARD) == base + " · out with other Guards"
     assert ratio_subtitle(spike, {"role": below}, GUARD) == base + " · peers stayed in"  # out, but the other way
+    half = {**inside, spike[5][0]: 3.0}  # out with the relay on one of its two days: half is enough
+    assert ratio_subtitle(spike, {"role": half}, GUARD) == base + " · out with other Guards"
     # A median a hair under the typical band is still inside p2–p98.
     assert ratio_subtitle(spike, {"role": {t: 1.009 for t in inside}}, GUARD) == base + " · peers stayed in"
 

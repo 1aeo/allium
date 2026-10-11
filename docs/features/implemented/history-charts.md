@@ -72,7 +72,8 @@ when fontconfig's `fc-match` is installed to check.
   `#bandwidth-6m` and so on, and CSS `:target` swaps the chart in place, so no
   page is copied per period and no JavaScript runs. The thumbnails follow the
   charts in the HTML (the `~` selectors need that) but show above them, so the
-  row stays in view when a click scrolls to the chart. `#1m`/`#6m`/`#1y`/`#5y` switch
+  row stays in view when a click scrolls to the chart (keyboard and screen
+  readers meet the chart first, then its thumbnails). `#1m`/`#6m`/`#1y`/`#5y` switch
   every chart on the page (empty `.chart-period` anchors placed before the
   chart sections, `chart_period_anchors`); a chart without that period keeps
   its default. These fragments are the deep links.
@@ -94,17 +95,22 @@ when fontconfig's `fc-match` is installed to check.
   count past three runs, or when the line would not fit), then `out with the
   family` / `out with other Guards` when that median was beyond p2–p98 on the
   relay's side on at least half of those days, or `family and peers stayed in`.
-- Write/read is judged only on days with enough traffic to compare: a mean of
-  write and read of 50 KB/s or more, the band census's cut (also the family and
-  peer medians'). Quieter days leave the write/read line, its red, the spike
-  callout and the subtitle, and stay in the throughput panel; a relay under
-  50 KB/s all period says so instead of drawing a line.
+- Write/read is judged only on days with enough traffic to compare: some read,
+  and a mean of write and read of 50 KB/s or more, the band census's cut (also
+  the family and peer medians'). Other days leave the write/read line, its red,
+  the spike callout and the subtitle, and stay in the throughput panel; a relay
+  under 50 KB/s all period says so instead of drawing a line or the medians.
+- The strip's 0.5 / 1.0 / 1.5 grid lines keep plain labels; `p10–p90` and
+  `>p98` are named inside their own bands (beside the grid label where a band
+  is too thin to clear it).
 - Each period only shows its own window, ending at its Onionoo document's
-  `relays_published` (allium caches bandwidth for longer than uptime), and its
-  time axis runs to that end: a history that stopped (an offline relay) shows
-  as a gap, not as a line reaching the right edge. Onionoo adds no points while
-  a relay is out of the consensus, so the uptime average counts the whole slots
-  in that gap as down (`Average 89.2% · down since Oct 7`).
+  `relays_published` (allium caches bandwidth for longer than uptime). Onionoo
+  adds no points once a relay is out of the consensus: for a relay no longer
+  running (an operator with none running), the time axis runs on to that end,
+  so the outage shows as a gap rather than a line reaching the right edge, and
+  the uptime average counts the whole slots from its `last_seen` as down
+  (`Average 89.2% · down since Oct 7`). A running relay's history only lags
+  Onionoo's by a day or so; its axis ends just past its last point.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day out of band alone is a red tip, marked with a red dot too. A

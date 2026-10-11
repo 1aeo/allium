@@ -109,7 +109,8 @@ def date_ticks(period, ts, end):
     yearly 5Y.
 
     Under two of those, 1M ticks daily; past that, the first and last points are labelled too (with the hour
-    when they share a day), each only where it keeps an eighth of the axis clear of the other labels.
+    when one shares its day with another label), each only where it keeps an eighth of the axis clear of the
+    other labels.
     """
     start = ts[0]
     if period == "1m":
@@ -129,7 +130,8 @@ def date_ticks(period, ts, end):
         ticks = [(t, t.strftime(fmt)) for t in months if t >= start]
     if len(ticks) < 2:
         ends = [(t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1])]
-        if ends[0][1] == ends[1][1]:
+        days = [label for _t, label in ticks + ends]
+        if len(set(days)) < len(days):
             ends = [(t, "{} {:%H:%M}".format(label, t)) for t, label in ends]
         for t, label in ends:
             if all(abs(t - tick) * 8 >= end - start for tick, _label in ticks):

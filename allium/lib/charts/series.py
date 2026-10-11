@@ -16,10 +16,11 @@ PERIOD_SPAN = {"1m": "last 30 days", "6m": "last 6 months", "1y": "last year", "
 WINDOW = {"1m": timedelta(days=31), "6m": timedelta(days=183), "1y": timedelta(days=366),
           "5y": timedelta(days=1827)}
 MBIT = 8e-6  # bytes/s -> Mbit/s
-# Days a relay's mean of write and read is below this (50 KB/s, the band census's cut) are left out of the
-# family and peer medians.
-MIN_OVERLAY_MBIT = 50000 * MBIT
-# Fewest family members counted (see MIN_OVERLAY_MBIT) for a family median: the median includes the relay
+# Write/read is compared only on days with traffic both ways and a mean of write and read of at least this
+# (the band census's cut): quieter days leave the relay's write/read strip and the family and peer medians.
+MIN_ACTIVE_KBYTES = 50
+MIN_ACTIVE_MBIT = MIN_ACTIVE_KBYTES * 1000 * MBIT
+# Fewest family members counted (see active_ratio) for a family median: the median includes the relay
 # itself, so with two members it is the mean of this relay and the other, and moves half as far as this relay.
 MIN_FAMILY = 3
 
@@ -56,6 +57,11 @@ def _blocks(bandwidth_row, key):
     """The write and read history blocks of one Onionoo period, ``{}`` when missing."""
     return (((bandwidth_row or {}).get("write_history") or {}).get(key) or {},
             ((bandwidth_row or {}).get("read_history") or {}).get(key) or {})
+
+
+def active_ratio(write, read):
+    """Write/read on a day with traffic enough to compare (``MIN_ACTIVE_MBIT``), else None."""
+    return write / read if read and (write + read) / 2 >= MIN_ACTIVE_MBIT else None
 
 
 def throughput(bandwidth_row, key, since=None):
@@ -124,7 +130,7 @@ def peer_medians(relays, bandwidth_map, since=None):
     """Daily write/read medians per role and per effective family, from every relay's 1M history.
 
     Returns ``({role: {ts: median}}, {family: (n, {ts: median})})``. A relay
-    only counts on days its mean throughput reaches ``MIN_OVERLAY_MBIT``.
+    only counts on days with an ``active_ratio``.
     """
     by_role, by_fp = {}, {}
     for relay in relays:
@@ -132,7 +138,8 @@ def peer_medians(relays, bandwidth_map, since=None):
             series = throughput(bandwidth_map.get(relay["fingerprint"]), "1_month", since)
         except Exception:  # noqa: BLE001 -- a malformed history: ChartWriter._save skips that relay's charts too
             continue
-        daily = {t: w / r for t, w, r in zip(*series[:3]) if r and (w + r) / 2 >= MIN_OVERLAY_MBIT} if series else {}
+        ratios = ((t, active_ratio(w, r)) for t, w, r in zip(*series[:3])) if series else ()
+        daily = {t: ratio for t, ratio in ratios if ratio is not None}
         if daily:
             by_role.setdefault(role_from_flags(relay.get("flags")), []).append(daily)
             by_fp[relay["fingerprint"]] = daily

@@ -3,13 +3,16 @@
 from datetime import timedelta
 
 from ..time_utils import SECONDS_PER_DAY
+from .series import MIN_ACTIVE_KBYTES
 
 # Dates on these periods' charts carry the year: their windows can hold the same month and day twice.
 YEAR_PERIODS = ("1y", "5y")
 
 
 def mbit(value):
-    """``45,790`` / ``4.1`` / ``0.74``: whole Mbit/s from 10 up, two significant digits below."""
+    """``45,790`` / ``4.1`` / ``0.74`` / ``<0.01``: whole Mbit/s from 10 up, two significant digits below."""
+    if 0 < value < 0.01:
+        return "<0.01"
     return "{:,.0f}".format(value) if value >= 10 else "{:.2g}".format(value)
 
 
@@ -57,12 +60,13 @@ def ratio_text(value, *edges):
 
 def throughput_subtitle(ts, write, advertised, period="1m"):
     """``Write avg 48 Mbit/s (44% of advertised), peak 170 Mbit/s Sep 16``: the share of today's advertised
-    bandwidth only up to 100% (a long period's mean can exceed what a relay advertises now)."""
+    bandwidth only up to 100% (a long period's mean can exceed what a relay advertises now), no peak at 0."""
     mean = sum(write) / len(write)
     peak_t, peak = max(zip(ts, write), key=lambda point: point[1])
-    share = " ({:.0f}% of advertised)".format(100.0 * mean / advertised) if 0 < mean <= advertised else ""
-    return "Write avg {} Mbit/s{}, peak {} Mbit/s {}".format(
-        mbit(mean), share, mbit(peak), format_day(peak_t, year=period in YEAR_PERIODS))
+    share = 100.0 * mean / advertised if 0 < mean <= advertised else None
+    return "Write avg {} Mbit/s{}{}".format(
+        mbit(mean), "" if share is None else " ({} of advertised)".format("<1%" if share < 0.5 else "%.0f%%" % share),
+        ", peak {} Mbit/s {}".format(mbit(peak), format_day(peak_t, year=period in YEAR_PERIODS)) if peak else "")
 
 
 def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY, most=3):
@@ -73,7 +77,7 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
     half of those days. ``most`` runs of days are listed per side before they collapse (``format_day_span``).
     """
     if not rows:
-        return "Under 50 KB/s throughout: too little traffic to compare"
+        return "Under {} KB/s throughout: too little traffic to compare".format(MIN_ACTIVE_KBYTES)
     tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     overall = sum(row[1] for row in rows) / sum(row[2] for row in rows)
     band = "typical" if tlo <= overall <= thi else "uncommon" if ilo <= overall <= ihi else "investigate"
