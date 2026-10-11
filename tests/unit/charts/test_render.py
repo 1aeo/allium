@@ -203,6 +203,13 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     assert len(dots) == 1
     xs, ys = zip(*(map(float, point.split()) for point in re.findall(r"[ML]([\d.]+ [\d.]+)", dots[0])))
     assert "%.1f %.1f" % (sum(xs) / 12, sum(ys) / 12) == points[10]
+    # Days just past the band edge (0.985 under p2 0.99: 0.6 px) are a sliver of red: each gets a dot.
+    write[3:5] = [98.5, 98.5]
+    drawn.clear()
+    charts = writer([relay("A")], {"A": history(write, read)})
+    charts._save = lambda directory, name, draw, *args: drawn.append(draw(*args)) or 0
+    charts.relay(relay("A"), None)
+    assert len([op for op in drawn[0].ops if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 3
 
 
 def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():
