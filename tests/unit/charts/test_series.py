@@ -39,7 +39,8 @@ def test_operator_throughput_sums_members_on_the_common_interval():
     }
     members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D")]
     (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
-    assert [r["fingerprint"] for r in summed] == ["A", "B"]
+    # Each with the traffic it carried on the days summed (write plus read): B only on day 1.
+    assert [(r["fingerprint"], round(traffic / MBIT)) for r, traffic in summed] == [("A", 6000), ("B", 20000)]
     assert ts == [T0, T0 + timedelta(days=1)] and interval == DAY
     assert [round(v / MBIT) for v in write] == [11000, 2000]  # B has no read on day 2, so it sits that day out
     assert [round(v / MBIT) for v in read] == [11000, 2000]
@@ -58,7 +59,7 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     }
     members = [{"fingerprint": fp} for fp in "ABLO"]
     (ts, write, _read, interval), summed = operator_throughput(members, bandwidth_map, "1_year")
-    assert [r["fingerprint"] for r in summed] == list("ABLO") and interval == 2 * DAY
+    assert [r["fingerprint"] for r, _traffic in summed] == list("ABLO") and interval == 2 * DAY
     # Sep 7 would sum A and B without L: the sum stops at Sep 5 instead of ending on a false drop.
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
 

@@ -76,7 +76,8 @@ def _slotted(pts, step, interval):
 
 
 def operator_throughput(members, bandwidth_map, key, since=None):
-    """Members' write and read summed per timestamp, like ``throughput``, plus the members summed.
+    """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
+    members summed (their write plus read over the window, in Mbit/s per slot).
 
     Sums on the period's most common sampling interval. Onionoo leaves out a
     relay's period when a shorter one holds its whole history, so a member
@@ -106,7 +107,7 @@ def operator_throughput(members, bandwidth_map, key, since=None):
         if both:
             write.update({t: w[t] for t in both})
             read.update({t: r[t] for t in both})
-            summed.append(relay)
+            summed.append((relay, sum(w[t] + r[t] for t in both)))
             lasts.append(max(w.keys() | r.keys()))
     reporting = [last for last in lasts if max(lasts) - last <= timedelta(seconds=2 * interval)]
     end = min(reporting, default=None)

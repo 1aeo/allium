@@ -1,10 +1,9 @@
-"""Bandwidth chart subtitles: what stood out in throughput and in write/read. Empty on thin history or all-clear."""
+"""Bandwidth chart subtitles: facts about what each panel draws, so they hold by construction."""
 
 from datetime import timedelta
 
 from ..time_utils import SECONDS_PER_DAY
 
-ALL_PERIOD = {"1m": "all month", "6m": "all 6 months", "1y": "all year", "5y": "all 5 years"}
 # Dates on these periods' charts carry the year: their windows can hold the same month and day twice.
 YEAR_PERIODS = ("1y", "5y")
 
@@ -19,8 +18,10 @@ def format_day(dt, year=False):
     return "{} {}{}".format(dt.strftime("%b"), dt.day, dt.strftime(" '%y") if year else "")
 
 
-def format_day_span(dates, step=timedelta(days=1), year=False):
-    """``Jul 22–23, Aug 2``: runs of dates at most ``step`` apart, or ``Jul 2–Sep 9 (12 days)`` past three runs."""
+def format_day_span(dates, step=timedelta(days=1), year=False, of=None, most=3):
+    """``Jul 22–23, Aug 2``: runs of dates at most ``step`` apart; past ``most`` runs ``Jul 2–Sep 9 (12 of 30
+    days)``, ``of`` being how many dates there were to pick from (``points`` for steps over a day); with
+    ``most`` below 0 only ``on 12 of 30 days``."""
     dates = sorted(dates)
     runs = []
     for date in dates:
@@ -36,64 +37,67 @@ def format_day_span(dates, step=timedelta(days=1), year=False):
             return "{} {}–{}".format(start.strftime("%b"), start.day, end.day)
         return "{}–{}".format(format_day(start, year), format_day(end, year))
 
-    if len(runs) > 3:
-        unit = "days" if step <= timedelta(days=1) else "times"
-        return "{} ({} {})".format(span(dates[0], dates[-1]), len(dates), unit)
+    count = "{}{} {}".format(len(dates), " of {}".format(of) if of else "", "days" if step <= timedelta(days=1) else "points")
+    if most < 0:
+        return "on " + count
+    if len(runs) > most:
+        return "{} ({})".format(span(dates[0], dates[-1]), count)
     return ", ".join(span(start, end) for start, end in runs)
 
 
-def _left_typical(times, overlay, bands):
-    """True if the overlay is outside typical at half or more of ``times``, None without values there."""
-    hits = [not bands["typical_lo"] <= overlay[t] <= bands["typical_hi"] for t in times if overlay.get(t) is not None]
-    return sum(hits) >= (len(hits) + 1) // 2 if hits else None
+def ratio_text(value, *edges):
+    """``1.12``, with more decimals where two would print one of ``edges`` that the value is not on: ``1.0097``
+    under a band starting at 1.01."""
+    for digits in (2, 3, 4):
+        text = "{:.{}f}".format(value, digits)
+        if not any(text == "{:.{}f}".format(edge, digits) and value != edge for edge in edges):
+            break
+    return text
 
 
-def subtitles(rows, advertised, overlays, bands, period="1m", interval=SECONDS_PER_DAY):
-    """``(throughput, write/read)`` subtitles for ``rows`` of ``(t, write, read, ratio)``."""
-    if len(rows) < 3:
-        return "", ""
-    role, peers = bands["role"], bands["peers"]
+def throughput_subtitle(ts, write, advertised, period="1m"):
+    """``Write avg 48 Mbit/s (44% of advertised), peak 170 Mbit/s Sep 16``: the share of today's advertised
+    bandwidth only up to 100% (a long period's mean can exceed what a relay advertises now)."""
+    mean = sum(write) / len(write)
+    peak_t, peak = max(zip(ts, write), key=lambda point: point[1])
+    share = " ({:.0f}% of advertised)".format(100.0 * mean / advertised) if 0 < mean <= advertised else ""
+    return "Write avg {} Mbit/s{}, peak {} Mbit/s {}".format(
+        mbit(mean), share, mbit(peak), format_day(peak_t, year=period in YEAR_PERIODS))
+
+
+def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY, most=3):
+    """Write/read over ``rows`` of ``(t, write, read, write/read)``, the days with enough traffic to compare.
+
+    The overall ratio (of sums, as the band census) and its band, then the days beyond p2–p98 on each side, then
+    whether the family and peer medians in ``overlays`` (1M relay charts) left it on the same side on at least
+    half of those days. ``most`` runs of days are listed per side before they collapse (``format_day_span``).
+    """
+    if not rows:
+        return "Under 50 KB/s throughout: too little traffic to compare"
     tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
-    invest = [row for row in rows if not ilo <= row[3] <= ihi]
-    mean_write, mean_read, mean_ratio = (sum(column) / len(rows) for column in list(zip(*rows))[1:])
-    typical = tlo <= mean_ratio <= thi
-    outside = not ilo <= mean_ratio <= ihi
-    write_heavy = [row[3] for row in invest if row[3] > thi]
-    read_heavy = [row[3] for row in invest if row[3] < tlo]
-    util = 100.0 * mean_write / advertised if advertised else None
-    # The larger excursion past the typical band names the spike (the callout shows the write side).
-    if write_heavy and (not read_heavy or max(write_heavy) / thi >= tlo / max(min(read_heavy), 1e-9)):
-        spike = "Write"
-    else:
-        spike = "Read" if read_heavy else None
-    persistent = outside and len(invest) >= max(5, len(rows) // 3)
-    spiked = util is not None and spike and not persistent
-    # "Dropped" means low against advertised too, not just a small relay.
-    dropped = util is not None and not spiked and util < 25 and mean_write < 20 and mean_read < 20
-    if not (spiked or dropped or invest) and typical:
-        return "", ""
+    overall = sum(row[1] for row in rows) / sum(row[2] for row in rows)
+    band = "typical" if tlo <= overall <= thi else "uncommon" if ilo <= overall <= ihi else "investigate"
+    parts = ["Write/read {} overall ({})".format(ratio_text(overall, tlo, thi, ilo, ihi), band)]
+    beyond = {row[0]: row[3] > ihi for row in rows if not ilo <= row[3] <= ihi}  # day -> above p98 (or below p2)
+    step, year = timedelta(seconds=interval or SECONDS_PER_DAY), period in YEAR_PERIODS
+    for label, side in (("above p98", True), ("below p2", False)):
+        days = [t for t, high in beyond.items() if high is side]
+        if days:
+            parts.append("{} {}".format(label, format_day_span(days, step, year, len(rows), most)))
+    if not beyond:
+        return parts[0] + " · inside p2–p98 throughout"
 
-    invest_ts = [row[0] for row in invest]
-    span = format_day_span(invest_ts, timedelta(seconds=interval or SECONDS_PER_DAY), year=period in YEAR_PERIODS)
-    when = " " + span if span else ""
-    util_bit = mbit(mean_write) + " Mbit/s" + (" ({:.0f}% of advertised)".format(util) if util is not None else "")
-    if spiked:
-        throughput = "{} spiked{} · {}".format(spike, when, util_bit)
-    elif dropped:
-        throughput = "Write and read both dropped {} · {}".format(span or ALL_PERIOD[period], util_bit)
-    else:
-        throughput = util_bit
+    def shared(overlay):
+        """True if ``overlay`` was beyond p2–p98 on the relay's side on at least half of those days, None
+        without values on them."""
+        hits = [overlay[t] > ihi if high else overlay[t] < ilo for t, high in beyond.items() if overlay.get(t) is not None]
+        return 2 * sum(hits) >= len(hits) if hits else None
 
-    left = {key: _left_typical(invest_ts, overlays.get(key, {}), bands) for key in ("role", "family")}
-    if not invest:
-        ratio = "" if typical else "Write/read {:.2f} · inside the {} band with other {}".format(mean_ratio, role, peers)
-    elif left["role"]:
-        ratio = "Outside the band with other {}{}".format(peers, when)
-    elif left["family"]:
-        stayed = " · other {} stayed".format(peers) if left["role"] is False else ""
-        ratio = "Outside the {} band{} with the family{}".format(role, when, stayed)
-    else:
-        # Name only the lines drawn (family and peer medians: 1M relay charts) and checked on those days.
-        stayed = " and ".join(word for key, word in (("family", "family"), ("role", "peers")) if left[key] is False)
-        ratio = "Outside the {} band{}{}".format(role, when, " · {} stayed".format(stayed) if stayed else "")
-    return throughput, ratio
+    left = {key: shared(overlays.get(key) or {}) for key in ("family", "role")}
+    moved = [word for key, word in (("family", "the family"), ("role", "other " + bands["peers"])) if left[key]]
+    stayed = [word for key, word in (("family", "family"), ("role", "peers")) if left[key] is False]
+    if moved:
+        parts.append("out with " + " and ".join(moved))
+    if stayed:
+        parts.append(" and ".join(stayed) + " stayed in")
+    return " · ".join(parts)

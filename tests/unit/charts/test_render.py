@@ -6,9 +6,11 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from allium.lib.charts.svg import GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks
+from allium.lib.charts.bands import bands_for_role
+from allium.lib.charts.render import PLOT_WIDTH, bandwidth_chart
+from allium.lib.charts.svg import GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
-from .fixtures import OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
+from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
 
 def texts(path):
@@ -120,6 +122,24 @@ def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
     for name in ("bandwidth-1m.svg", "uptime-1m.svg"):
         lines = texts(tmp_path / name)
         assert "Sep 29" in lines and "Last restarted  Sep 25" in lines
+    # Onionoo has no points while it is out of the consensus: the 54 whole 4-hour slots from its last point
+    # (Sep 21 08:00) to relays_published count as down in the average, 120 x 100% / 174.
+    assert "Average 69.0%  ·  down since Sep 21  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+
+
+def test_days_under_50_kb_s_leave_the_write_read_strip(tmp_path):
+    # Days 10-19 carry 5 KB/s each way: a write/read of 3 there is noise, not out of band.
+    write, read = [110] * 30, [100] * 30
+    write[10:20], read[10:20] = [15] * 10, [5] * 10
+    charts = writer([relay("A"), relay("B")], {"A": history(write, read), "B": history([5] * 30)})
+    charts.relay(relay("A"), str(tmp_path))
+    lines = texts(tmp_path / "bandwidth-1m.svg")
+    assert "Write/read 1.10 overall (typical) · inside p2–p98 throughout" in lines
+    strip = [p.get("d") for p in ET.parse(tmp_path / "bandwidth-1m.svg").iter("{http://www.w3.org/2000/svg}path")
+             if (p.get("stroke"), p.get("stroke-width")) == (TEXT, "2.2")]
+    assert len(strip) == 1 and strip[0].count("M") == 2  # the relay's line breaks over them
+    charts.relay(relay("B"), str(tmp_path))
+    assert "Under 50 KB/s throughout: too little traffic to compare" in texts(tmp_path / "bandwidth-1m.svg")
 
 
 def test_family_and_peer_medians_are_drawn_on_1m_only(tmp_path):
@@ -157,6 +177,19 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     assert "%.1f %.1f" % (sum(xs) / 12, sum(ys) / 12) == points[10]
 
 
+def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():
+    # Above and below the Exit+Guard band every third day each, with family and peers out alongside.
+    ts = [T0 + timedelta(days=i) for i in range(30)]
+    ratios = [(3.0, 0.5, 1.05)[i % 3] for i in range(30)]
+    out = dict(zip(ts, ratios))
+    svg = bandwidth_chart("1m", (ts, [10 * r for r in ratios], [10.0] * 30, DAY), 100.0, bands_for_role("Exit+Guard"),
+                          "relay", overlays={"role": out, "family": out}, family_n=3)
+    line = next(op[3] for op in svg.ops if op[0] == "text" and op[3].startswith("Write/read 1"))
+    assert line == ("Write/read 1.52 overall (uncommon) · above p98 on 10 of 30 days · below p2 on 10 of 30 days · "
+                    "out with the family and other Exit+Guards")
+    assert text_width(line, 12) <= PLOT_WIDTH
+
+
 def test_overload_legend_and_spike_callout(tmp_path):
     busy = relay("A", last_restarted="2026-09-21 20:00:00", **OVERLOADED)  # restarted after the last point
     charts = writer([busy], {"A": history(SPIKE, [100] * 21)})
@@ -182,17 +215,18 @@ def test_a_malformed_history_skips_that_chart(tmp_path):
     assert os.listdir(tmp_path) == []
 
 
-def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
+def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp_path):
     members = [relay("A", flags=["Exit"]), relay("B", flags=["Exit"]), relay("C"),
-               relay("N", contact=""), relay("D", flags=["Exit"])]
+               relay("N", contact=""), relay("D", flags=["Exit"]), relay("E")]
     charts = writer(members, {"A": history([100] * 30), "B": history([300] * 30), "C": history([50] * 30),
-                              "N": history([50] * 30)})
-    assert list(charts.contact([2, 0, 1, 4], str(tmp_path))) == ["1m"]  # the Guard first, outvoted by the Exits
+                              "N": history([50] * 30), "E": history([50] * 30)})
+    # Two Guards outnumber the one Exit with history, but the Exit carries three times their traffic.
+    assert list(charts.contact([2, 5, 1, 4], str(tmp_path))) == ["1m"]
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert lines[0] == "example.com" and "This operator" in lines
     # D has no history, so its advertised bandwidth stays out of the sum too.
     assert "Advertised  6 Mbit/s" in lines
-    assert "1,678 Exits · baseline 15 Aug 2026" in lines
+    assert "Write / read · last 30 days  ·  vs Exit band" in lines and "1,678 Exits · baseline 15 Aug 2026" in lines
     # Relays without contact info share one hash, but they are not an operator.
     assert charts.contact([3], str(tmp_path)) == {}
 

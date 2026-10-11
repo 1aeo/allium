@@ -6,7 +6,7 @@ from allium.lib.charts.bands import (
     CATALOG, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags,
 )
 from allium.lib.charts.identity import chart_identity, operator_from_contact
-from allium.lib.charts.outcome import format_day_span, subtitles
+from allium.lib.charts.outcome import format_day_span, ratio_subtitle, ratio_text, throughput_subtitle
 
 from .fixtures import T0
 
@@ -21,47 +21,51 @@ def rows(ratios, read=50.0):
 def test_format_day_span_joins_runs_and_collapses_long_lists():
     days = [date(2026, 7, d) for d in (22, 23, 25)]
     assert format_day_span(days) == "Jul 22–23, Jul 25"
-    assert format_day_span([date(2026, 7, d) for d in (1, 3, 5, 7, 9)]) == "Jul 1–9 (5 days)"
+    assert format_day_span([date(2026, 7, d) for d in (1, 3, 5, 7, 9)], of=30) == "Jul 1–9 (5 of 30 days)"
+    assert format_day_span(days, most=0) == "Jul 22–25 (3 days)" and format_day_span(days, of=9, most=-1) == "on 3 of 9 days"
     assert format_day_span([date(2025, 12, 1), date(2025, 12, 11)], timedelta(days=10), year=True) == \
         "Dec 1 '25–Dec 11 '25"
 
 
-def test_all_clear_has_no_subtitles():
-    assert subtitles(rows([1.05] * 10), 100.0, {}, GUARD) == ("", "")
-    assert subtitles(rows([1.05, 1.05]), 100.0, {}, GUARD) == ("", "")  # thin history
+def test_ratio_text_never_prints_a_band_edge_the_value_is_not_on():
+    assert ratio_text(1.123, 1.01) == "1.12" and ratio_text(1.01, 1.01) == "1.01"
+    assert ratio_text(1.0097, 1.01) == "1.0097" and ratio_text(1.973, 1.97) == "1.973"
 
 
-def test_write_spike_names_its_days():
+def test_throughput_subtitle_states_the_mean_its_share_and_the_peak():
+    ts = [T0 + timedelta(days=i) for i in range(4)]
+    assert throughput_subtitle(ts, [40, 60, 170, 50], 200.0) == \
+        "Write avg 80 Mbit/s (40% of advertised), peak 170 Mbit/s Sep 3"
+    # A period's mean over what the relay advertises today is no share of it.
+    assert throughput_subtitle(ts, [40, 60, 170, 50], 50.0, "1y") == "Write avg 80 Mbit/s, peak 170 Mbit/s Sep 3 '26"
+
+
+def test_ratio_subtitle_gives_the_overall_band_and_the_days_beyond_p2_p98_on_each_side():
+    assert ratio_subtitle(rows([1.05] * 10), {}, GUARD) == "Write/read 1.05 overall (typical) · inside p2–p98 throughout"
+    assert ratio_subtitle([], {}, GUARD) == "Under 50 KB/s throughout: too little traffic to compare"
+    # Overall is the ratio of sums, as in the band census: (5 x 1.05 + 3.0 + 3.1 + 0.5) / 8.
+    assert ratio_subtitle(rows([1.05] * 5 + [3.0, 3.1, 0.5]), {}, GUARD) == \
+        "Write/read 1.48 overall (uncommon) · above p98 Sep 6–7 · below p2 Sep 8"
+    scattered = rows([3.0 if i % 2 else 1.05 for i in range(10)])
+    assert ratio_subtitle(scattered, {}, GUARD) == "Write/read 2.02 overall (investigate) · above p98 Sep 2–10 (5 of 10 days)"
+    assert ratio_subtitle(rows([1.05, 3.0]), {}, GUARD, most=0) == \
+        "Write/read 2.02 overall (investigate) · above p98 Sep 2 (1 of 2 days)"
+
+
+def test_ratio_subtitle_says_whether_family_and_peers_left_the_band_on_the_same_side():
     spike = rows([1.05] * 5 + [3.0, 3.1] + [1.05] * 5)
-    thru, ratio = subtitles(spike, 100.0, {}, GUARD)
-    assert thru == "Write spiked Sep 6–7 · 69 Mbit/s (69% of advertised)"
-    # Family and peer medians are not drawn here, so the copy claims nothing about them.
-    assert ratio == "Outside the Guard band Sep 6–7"
+    base = ratio_subtitle(spike, {}, GUARD)
+    assert base == "Write/read 1.38 overall (uncommon) · above p98 Sep 6–7"
     inside = {row[0]: 1.05 for row in spike}
-    assert subtitles(spike, 100.0, {"role": {}}, GUARD)[1] == "Outside the Guard band Sep 6–7"  # nothing to check
-    assert subtitles(spike, 100.0, {"role": inside}, GUARD)[1] == "Outside the Guard band Sep 6–7 · peers stayed"
-    assert subtitles(spike, 100.0, {"role": inside, "family": inside}, GUARD)[1] == \
-        "Outside the Guard band Sep 6–7 · family and peers stayed"
-    # The family left the band too: say so, and that the peers stayed only when their line was checked.
-    outside = {t: 3.0 for t in inside}
-    assert subtitles(spike, 100.0, {"role": inside, "family": outside}, GUARD)[1] == \
-        "Outside the Guard band Sep 6–7 with the family · other Guards stayed"
-    assert subtitles(spike, 100.0, {"role": {}, "family": outside}, GUARD)[1] == \
-        "Outside the Guard band Sep 6–7 with the family"
-
-
-def test_low_throughput_is_only_a_drop_when_low_against_advertised():
-    small = rows([1.05] * 10, read=10.0)
-    assert subtitles(small, 10.0, {}, GUARD)[0] == ""  # small but at capacity
-    assert subtitles(small, 100.0, {}, GUARD)[0] == \
-        "Write and read both dropped all month · 10 Mbit/s (10% of advertised)"
-    assert subtitles(small, 100.0, {}, GUARD, period="6m")[0].startswith("Write and read both dropped all 6 months")
-
-
-def test_peers_outside_the_band_take_the_blame():
-    spike = rows([1.05] * 5 + [3.0] + [1.05] * 5)
-    role = {row[0]: 2.0 for row in spike}
-    assert subtitles(spike, 100.0, {"role": role}, GUARD)[1] == "Outside the band with other Guards Sep 6"
+    above, below = ({t: v for t in inside} for v in (3.0, 0.5))
+    assert ratio_subtitle(spike, {"role": {}}, GUARD) == base  # not drawn: nothing to say
+    assert ratio_subtitle(spike, {"role": inside}, GUARD) == base + " · peers stayed in"
+    assert ratio_subtitle(spike, {"role": inside, "family": inside}, GUARD) == base + " · family and peers stayed in"
+    assert ratio_subtitle(spike, {"role": inside, "family": above}, GUARD) == base + " · out with the family · peers stayed in"
+    assert ratio_subtitle(spike, {"role": above}, GUARD) == base + " · out with other Guards"
+    assert ratio_subtitle(spike, {"role": below}, GUARD) == base + " · peers stayed in"  # out, but the other way
+    # A median a hair under the typical band is still inside p2–p98.
+    assert ratio_subtitle(spike, {"role": {t: 1.009 for t in inside}}, GUARD) == base + " · peers stayed in"
 
 
 def test_frozen_bands_and_copy():

@@ -81,9 +81,25 @@ when fontconfig's `fc-match` is installed to check.
 - Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
-- Each period only shows its own window, ending at Onionoo's `relays_published`,
-  and its time axis runs to that end: a history that stopped (an offline relay)
-  shows as a gap, not as a line reaching the right edge.
+- Subtitles state facts about what the panel draws, so they hold by
+  construction. Throughput: `Write avg 48 Mbit/s (44% of advertised), peak 170
+  Mbit/s Sep 16` (the share only up to 100%: a period's mean is compared with
+  today's advertised bandwidth). Write/read: the overall ratio (of sums, as the
+  census) and its band, the days above p98 and below p2 listed per side (as a
+  count past three runs, or when the line would not fit), then `out with the
+  family` / `out with other Guards` when that median was beyond p2–p98 on the
+  relay's side on at least half of those days, or `family and peers stayed in`.
+- Write/read is judged only on days with enough traffic to compare: a mean of
+  write and read of 50 KB/s or more, the band census's cut (also the family and
+  peer medians'). Quieter days leave the write/read line, its red, the spike
+  callout and the subtitle, and stay in the throughput panel; a relay under
+  50 KB/s all period says so instead of drawing a line.
+- Each period only shows its own window, ending at its Onionoo document's
+  `relays_published` (allium caches bandwidth for longer than uptime), and its
+  time axis runs to that end: a history that stopped (an offline relay) shows
+  as a gap, not as a line reaching the right edge. Onionoo adds no points while
+  a relay is out of the consensus, so the uptime average counts the whole slots
+  in that gap as down (`Average 89.2% · down since Oct 7`).
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day out of band alone is a red tip, marked with a red dot too. A
@@ -95,12 +111,12 @@ when fontconfig's `fc-match` is installed to check.
   least 50 KB/s, as for the peer median, and the line is drawn only on days
   with 3 or more members counted. The median includes the relay itself,
   so with two members it would be the mean of this relay and the other, moving
-  half as far as this relay. The subtitle names only the lines drawn and checked on the
-  out-of-band days.
+  half as far as this relay.
 - Operator charts sum members on the most common sampling interval, on days
   each member has both directions (as its own chart does), compare write/read
-  with the members' most common role, and are skipped for the group of relays
-  without contact info. Onionoo gives a relay no 1Y (or 5Y) history when its
+  with the role whose members carried the most traffic in the period (named in
+  the strip's title, `vs Exit+Guard band`), and are skipped for the group of
+  relays without contact info. Onionoo gives a relay no 1Y (or 5Y) history when its
   shorter one holds it whole, so such a member is summed from that shorter
   history, averaged into the period's slots (whole slots only). Members'
   histories reach the newest day at different times, so the sum stops at the
