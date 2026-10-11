@@ -138,10 +138,13 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
         entries.append(("line", MUTED, DOTTED, "Operator Family (median, n={})".format(family_n)))
     if overlays.get("role"):
         entries.append(("line", CYAN, DASHED, "Peers (network median)"))
+    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
+    out = [r is not None and not ilo <= r <= ihi for r in ratios]
+    if any(out):
+        entries.append(("dot", RED, None, "Outside p2–p98"))
     labels = band_legend_labels(bands)
     bands_row = [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]), ("patch", RED, 0.22, labels[2])]
     y += 6 + legend(svg, LEFT, y, [row for row in (entries + restarted, bands_row) if row])
-    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     strip = Panel(svg, "r", LEFT, y, PLOT_WIDTH, 150, ts, ylo, yhi, end, interval)
     for lo, hi, color, opacity in ((ylo, ilo, RED, 0.08), (ilo, tlo, ORANGE, 0.07), (tlo, thi, GREEN, 0.14),
                                    (thi, ihi, ORANGE, 0.07), (ihi, yhi, RED, 0.08)):
@@ -162,7 +165,6 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     # Red where the line leaves this role's p2–p98: the line's segments at an out-of-band day, drawn again clipped
     # to the strip above ihi and below ilo; and a dot where that red is only a tip or a sliver: on a day out of band
     # alone, and on a day under 2 px past the band edge.
-    out = [r is not None and not ilo <= r <= ihi for r in ratios]
     if any(out):
         near = [v if any(out[max(i - 1, 0):i + 2]) else None for i, v in enumerate(clipped)]
         for clip, clip_top, clip_bottom in (("ri", strip.top, strip.y(ihi)), ("rl", strip.y(ilo), strip.top + strip.height)):

@@ -35,6 +35,7 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
                  "Advertised  2 Mbit/s", "Last restarted  Sep 10", "Write / read · last 30 days  ·  Guard",
                  "This relay", "Typical  1.01–1.17  ·  p10–p90", "Sep 8", "4,444 Guards · baseline 15 Aug 2026"):
         assert line in lines
+    assert "Outside p2–p98" not in lines  # nothing red to explain
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
@@ -183,7 +184,11 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     charts = writer([relay("A")], {"A": history(write, read)})
     charts._save = lambda directory, name, draw, *args: drawn.append(draw(*args)) or 0
     charts.relay(relay("A"), None)
-    paths = [op for op in drawn[0].ops if op[0] == "path"]
+
+    def strip_paths(ops):  # drawn after the strip's clip, so not the legend's swatches
+        return [op for op in ops[[op[:2] for op in ops].index(("clip", "r")):] if op[0] == "path"]
+
+    paths = strip_paths(drawn[0].ops)
     line = next(d for _kind, d, color, width, *_rest in paths if (color, width) == (TEXT, 2.2))
     points = re.findall(r"[ML]([\d.]+ [\d.]+)", line)  # days 0-24, 26 (as a dash), 28 and 29
     assert len(points) == 28 and re.search(r"M[\d.]+ [\d.]+h4.4", line)
@@ -198,6 +203,8 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     # The 1.0 line is the strip's grid line in the axis gray, with no green dashed line.
     assert not [op for op in drawn[0].ops if op[0] == "line" and op[5:8] == (GREEN, 1.0, "7 4")]
     assert not any(points[day] in red["ri"] for day in (5, 15, 25))
+    # The legend says what the red means, on charts that draw it only.
+    assert "Outside p2–p98" in [op[3] for op in drawn[0].ops if op[0] == "text"]
     # Alone, day 10's red is only a tip: it gets a dot too.
     dots = [d for _kind, d, color, _width, _dash, fill, _clip in paths if fill == RED and d.count("L") == 11]
     assert len(dots) == 1
@@ -209,7 +216,7 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     charts = writer([relay("A")], {"A": history(write, read)})
     charts._save = lambda directory, name, draw, *args: drawn.append(draw(*args)) or 0
     charts.relay(relay("A"), None)
-    assert len([op for op in drawn[0].ops if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 3
+    assert len([op for op in strip_paths(drawn[0].ops) if op[5] == RED and op[1].count("L") == 11]) == 3
 
 
 def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():

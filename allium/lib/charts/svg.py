@@ -248,8 +248,9 @@ class Panel(object):
 def legend(svg, x, y, rows, size=11.5):
     """Framed rows of ``(kind, color, style, label)`` entries. Returns the height.
 
-    ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity)
-    or ``marker`` (a diamond). A legend too wide for the canvas moves left.
+    ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity), ``marker``
+    (a diamond) or ``dot`` (a line with a dot, as the write/read strip's red marks).
+    A legend too wide for the canvas moves left.
     """
     pad, swatch, gap, row_h = 8, 22, 16, size * 1.55
     widths = [[swatch + 6 + text_width(entry[3], size) for entry in row] for row in rows]
@@ -266,6 +267,9 @@ def legend(svg, x, y, rows, size=11.5):
                 svg.rect(cx, cy - size * 0.4, swatch, size * 0.8, color, style, stroke=color)
             elif kind == "marker":
                 svg.path("M%.1f %.1fl5 -5l5 5l-5 5z" % (cx + swatch / 2 - 5, cy), color, 1, fill=color)
+            elif kind == "dot":
+                svg.line(cx, cy, cx + swatch, cy, color, 2.4)
+                svg.dot(cx + swatch / 2, cy, 3.5, color)
             svg.text(cx + swatch + 6, cy + size * 0.35, label, size)
             cx += width + gap
     return height

@@ -114,7 +114,9 @@ when fontconfig's `fc-match` is installed to check.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day out of band alone is a red tip, marked with a red dot too, as
-  is a day less than 2 px past the band edge, where the red is only a sliver. A
+  is a day less than 2 px past the band edge, where the red is only a sliver.
+  A red line-and-dot legend entry, `Outside p2–p98`, explains them on the
+  charts that draw them. A
   point with no neighbour to join (between gaps) is drawn as a short dash.
 - Family and peer medians are 1M only. A family's median is over the members
   of the relay's effective family (Onionoo's families are mutual declarations,
