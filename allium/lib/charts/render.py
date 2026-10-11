@@ -195,8 +195,13 @@ class ChartWriter(object):
     then shared with the forked page workers.
     """
 
-    def __init__(self, relay_set):
+    def __init__(self, relay_set, image_format="svg"):
         from ..operator_analysis import history_maps
+        # PNG charts are the same SVG rasterized at its own size by the optional CairoSVG.
+        self.ext, self.png = image_format, None
+        if image_format == "png":
+            from cairosvg import svg2png
+            self.png = svg2png
         self.relays = relay_set.json["relays"]
         self.uptime, self.bandwidth = history_maps(relay_set)
         published = parse_onionoo_timestamp(
@@ -204,29 +209,30 @@ class ChartWriter(object):
         self.since = {period: published - WINDOW[period] if published else None for _key, period in PERIODS}
         self.role_medians, self.family_medians = peer_medians(self.relays, self.bandwidth, self.since["1m"])
 
-    @staticmethod
-    def _save(directory, name, draw, *args):
-        """Write one chart. No drawable history, or a malformed one, skips that chart instead of failing the page."""
+    def _save(self, directory, name, draw, *args):
+        """Write ``name`` plus the format's extension. No drawable history, or a malformed one, skips that chart
+        instead of failing the page."""
         try:
-            svg = draw(*args)
+            data = (draw(*args) or "").encode("utf-8")
+            data = self.png(bytestring=data) if data and self.png else data
         except Exception:  # noqa: BLE001
-            svg = None
-        if svg:
-            with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
-                handle.write(svg)
-        return bool(svg)
+            data = None
+        if data:
+            with open(os.path.join(directory, "%s.%s" % (name, self.ext)), "wb") as handle:
+                handle.write(data)
+        return bool(data)
 
     def relay(self, relay, directory):
-        """Write ``bandwidth-<period>.svg`` and ``uptime-<period>.svg``; return the periods drawn for each."""
+        """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts; return the periods drawn for each."""
         common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT,
                       bands=bands_for_role(role_from_flags(relay.get("flags"))),
                       identity=chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact"))),
                       restart=parse_onionoo_timestamp(relay.get("last_restarted")), overload=_overload_text(relay))
         bandwidth, uptime = [], []
         for key, period in PERIODS:
-            if self._save(directory, "bandwidth-%s.svg" % period, self._relay_bandwidth, relay, key, period, common):
+            if self._save(directory, "bandwidth-" + period, self._relay_bandwidth, relay, key, period, common):
                 bandwidth.append(period)
-            if self._save(directory, "uptime-%s.svg" % period, self._relay_uptime, relay, key, period, common):
+            if self._save(directory, "uptime-" + period, self._relay_uptime, relay, key, period, common):
                 uptime.append(period)
         return tuple(bandwidth), tuple(uptime)
 
@@ -256,7 +262,7 @@ class ChartWriter(object):
                             common["restart"], average if len(percent) >= 30 and average > 1.0 else 0)
 
     def contact(self, member_indexes, directory):
-        """Write ``bandwidth-<period>.svg`` for an operator's summed members; return the periods drawn."""
+        """Write ``bandwidth-<period>`` charts for an operator's summed members; return the periods drawn."""
         members = [self.relays[i] for i in member_indexes]
         # Relays without contact info share one hash, but they are not an operator.
         if not any((relay.get("contact") or "").strip() for relay in members):
@@ -266,7 +272,7 @@ class ChartWriter(object):
         bands = bands_for_role(Counter(role_from_flags(r.get("flags")) for r in members).most_common(1)[0][0])
         identity = operator or "Operator"
         return tuple(period for key, period in PERIODS if self._save(
-            directory, "bandwidth-%s.svg" % period, self._contact_bandwidth, members, key, period, bands, identity))
+            directory, "bandwidth-" + period, self._contact_bandwidth, members, key, period, bands, identity))
 
     def _contact_bandwidth(self, members, key, period, bands, identity):
         series, summed = operator_throughput(members, self.bandwidth, key, self.since[period])

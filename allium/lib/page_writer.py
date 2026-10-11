@@ -253,6 +253,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
+ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status

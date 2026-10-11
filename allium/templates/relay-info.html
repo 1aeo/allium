@@ -1,5 +1,5 @@
 {% extends "skeleton.html" -%}
-{% from "macros.html" import navigation, aroi_validation_badge, chart_history -%}
+{% from "macros.html" import navigation, aroi_validation_badge, chart_history, chart_period_anchors -%}
 {# DRY macro: format bandwidth value with auto-detected unit #}
 {%- macro bw(value) -%}
 {% set unit = value|determine_unit(relays.use_bits) -%}
@@ -36,6 +36,7 @@
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/relay-info.css">{% endblock -%}
 {% block body -%}
 <div id="content">
+{% if bandwidth_periods or uptime_periods %}{{ chart_period_anchors() }}{% endif %}
 <h1 id="nickname" class="page-title">View Relay "{{ relay['nickname'] }}"</h1>
 {{ navigation('', page_ctx) }}
 {# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
@@ -785,7 +786,7 @@ Country: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read') }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1027,7 +1028,7 @@ Country: unknown
 </div>
 {% endif %}
 
-{{ chart_history('uptime', uptime_periods, 'Uptime') }}
+{{ chart_history('uptime', uptime_periods, 'Uptime', ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}

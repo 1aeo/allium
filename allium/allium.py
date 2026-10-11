@@ -259,10 +259,23 @@ if __name__ == "__main__":
         action="store_false",
         help="skip the bandwidth and uptime history charts on relay and contact pages",
     )
+    parser.add_argument(
+        "--chart-format",
+        choices=("svg", "png"),
+        default="svg",
+        help="history chart images (default: svg); png needs CairoSVG (pip install cairosvg) and is slower",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
+
+    # PNG charts need the optional CairoSVG and the cairo library: check before fetching anything.
+    if args.charts and args.chart_format == "png":
+        try:
+            import cairosvg  # noqa: F401
+        except (ImportError, OSError) as e:
+            sys.exit(f"❌ --chart-format png needs CairoSVG and the cairo library (pip install cairosvg): {e}")
 
     start_time = time.time()
     
@@ -341,7 +354,9 @@ if __name__ == "__main__":
     # peer medians need every relay, so build the writer before forking.
     if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
         from lib.charts.render import ChartWriter
-        RELAY_SET.chart_writer = ChartWriter(RELAY_SET)
+        from lib.page_writer import ENV
+        RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format)
+        ENV.globals["chart_ext"] = args.chart_format
 
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid

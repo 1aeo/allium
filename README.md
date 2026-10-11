@@ -92,7 +92,7 @@ cd www && python3 -m http.server 8000
 - Multiprocessing page generation (configurable via `--workers`)
 - Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
-- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages: static SVG, no JavaScript, no extra dependency (skip with `--no-charts`)
+- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages: static SVG (or PNG), no JavaScript, no extra dependency for SVG (skip with `--no-charts`). Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
 </details>
 
@@ -184,6 +184,7 @@ Pre-computed analysis attached to contact pages:
 | `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
+| `--chart-format` | `svg` | Chart images: `svg` or `png` (PNG needs `pip install cairosvg` and the cairo library, and takes longer: ~30 ms per chart vs ~1 ms) |
 
 **Examples**:
 

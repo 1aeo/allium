@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from allium.lib.charts.render import ChartWriter
 from allium.lib.charts.svg import Svg, date_ticks, nice_ticks
 
@@ -23,14 +25,14 @@ def history(write, read=None, key="1_month", **kwargs):
     return bandwidth_row(write, read or write, key, **kwargs)
 
 
-def writer(relays, bandwidth, uptime=None):
+def writer(relays, bandwidth, uptime=None, image_format="svg"):
     return ChartWriter(SimpleNamespace(
         json={"relays": relays},
         bandwidth_data={"relays_published": PUBLISHED, "relays": [dict(row, fingerprint=fp) for fp, row in bandwidth.items()]},
         uptime_data={"relays_published": PUBLISHED, "relays": [
             {"fingerprint": fp, "uptime": {"1_month": block(values, interval=14400, factor=1 / 999.0)}}
             for fp, values in (uptime or {}).items()]},
-    ))
+    ), image_format)
 
 
 def texts(path):
@@ -48,6 +50,18 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
                  "This relay", "Typical  1.01–1.17  ·  p10–p90", "Sep 8", "4,444 Guards · baseline 15 Aug 2026"):
         assert line in lines
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+
+
+def test_png_charts_are_the_svg_rasterized(tmp_path):
+    try:
+        import cairosvg  # noqa: F401
+    except (ImportError, OSError):  # optional: also needs the cairo library
+        pytest.skip("CairoSVG is not installed")
+    charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 180}, "png")
+    assert charts.relay(relay("A"), str(tmp_path)) == (("1m",), ("1m",))
+    assert sorted(os.listdir(tmp_path)) == ["bandwidth-1m.png", "uptime-1m.png"]
+    png = (tmp_path / "bandwidth-1m.png").read_bytes()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and png[16:20] == (1080).to_bytes(4, "big")  # IHDR width
 
 
 def test_each_period_only_shows_its_own_window(tmp_path):

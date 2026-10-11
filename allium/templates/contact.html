@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, aroi_v2v3_pills, family_support_inline, dns_health_bullet, overload_bullet, chart_history %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, aroi_v2v3_pills, family_support_inline, dns_health_bullet, overload_bullet, chart_history, chart_period_anchors %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}
@@ -22,6 +22,7 @@
 {{ navigation('contacts', page_ctx) }}
 {% endblock -%}
 {% block description %}
+{% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
 {# Set aroi_domain for use in this block #}
 {% set aroi_domain = relay_subset[0]['aroi_domain'] if relay_subset[0]['aroi_domain'] else 'none' %}
 {# Option 1: Two-Column Layout (60/40 Split) - Final Version #}
@@ -646,7 +647,7 @@
         {% endif %}
     </div>
 </div>
-{{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ 'contact/' ~ value ~ '/') }}
+{{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ 'contact/' ~ value ~ '/', ext=chart_ext) }}
 {% endblock %}
 
 {# AROI Validation Issues are now integrated into the 4-section relay tables #}

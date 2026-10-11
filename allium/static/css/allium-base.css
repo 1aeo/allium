@@ -640,9 +640,24 @@ th[title]::after {
     display: block;
     scroll-margin-top: 80px;
 }
+.chart-history .chart-hero:focus {
+    outline: 1px solid var(--aeo-green);  /* a deep link focuses its chart: ring it like its thumbnail */
+    outline-offset: -1px;
+}
 .chart-history .chart-hero:not(:last-of-type):not(:target),
 .chart-history .chart-hero:target ~ .chart-hero {
     display: none;
+}
+/* #1m/#6m/#1y/#5y (chart_period_anchors) switch every chart on the page, like a
+   period page would: hide all, then show each chart's chart-on-<period>. */
+.chart-period:target ~ * .chart-hero {
+    display: none;
+}
+.chart-period[id="1m"]:target ~ * .chart-hero.chart-on-1m,
+.chart-period[id="6m"]:target ~ * .chart-hero.chart-on-6m,
+.chart-period[id="1y"]:target ~ * .chart-hero.chart-on-1y,
+.chart-period[id="5y"]:target ~ * .chart-hero.chart-on-5y {
+    display: block;
 }
 .chart-sparks {
     display: flex;
@@ -661,4 +676,22 @@ th[title]::after {
 .chart-spark:hover,
 .chart-spark:focus {
     outline-color: var(--aeo-green);
+}
+/* The thumbnail of the chart showing: the default until a link targets another. */
+.chart-spark-default,
+.chart-hero.chart-on-1m:target ~ .chart-sparks .chart-on-1m,
+.chart-hero.chart-on-6m:target ~ .chart-sparks .chart-on-6m,
+.chart-hero.chart-on-1y:target ~ .chart-sparks .chart-on-1y,
+.chart-hero.chart-on-5y:target ~ .chart-sparks .chart-on-5y,
+.chart-period[id="1m"]:target ~ * .chart-spark.chart-on-1m,
+.chart-period[id="6m"]:target ~ * .chart-spark.chart-on-6m,
+.chart-period[id="1y"]:target ~ * .chart-spark.chart-on-1y,
+.chart-period[id="5y"]:target ~ * .chart-spark.chart-on-5y {
+    box-shadow: 0 0 0 1px var(--aeo-green);
+    color: var(--aeo-green);
+}
+.chart-hero:target ~ .chart-sparks .chart-spark-default,
+.chart-period:target ~ * .chart-spark-default {
+    box-shadow: none;
+    color: var(--aeo-text-dim);
 }

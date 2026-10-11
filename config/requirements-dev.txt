@@ -10,3 +10,4 @@ bandit>=1.7.0
 safety>=1.10.0
 djlint>=1.0.0
 memory-profiler>=0.60.0
+cairosvg>=2.5.0  # optional: --chart-format png (needs the cairo library)
