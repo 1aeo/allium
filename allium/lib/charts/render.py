@@ -147,18 +147,12 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     for lo, hi, color, opacity in ((ylo, ilo, RED, 0.08), (ilo, tlo, ORANGE, 0.07), (tlo, thi, GREEN, 0.14),
                                    (thi, ihi, ORANGE, 0.07), (ihi, yhi, RED, 0.08)):
         strip.hband(lo, hi, color, opacity)
-    # Name the typical band at 1.0 (or its own tick) and the top Investigate shelf (at 1.5 or above it).
-    styles = {ylo: ("%.1f" % ylo, MUTED, False), 1.0: ("1.0", MUTED, False), 1.5: ("1.5", MUTED, False)}
-    if abs((tlo + thi) / 2 - 1.0) < 0.10:
-        styles[1.0] = ("1.0   p10–p90", GREEN, True)
-    else:
-        styles[(tlo + thi) / 2] = ("p10–p90", GREEN, True)
-    p98 = min(yhi - 0.06, max(ihi + 0.05, (ihi + yhi) / 2))
-    if ihi <= 1.5 or abs(p98 - 1.5) <= 0.12:
-        styles[1.5] = ("1.5   >p98", RED, True)
-    elif p98 > 1.5:
-        styles[p98] = (">p98", RED, True)
-    strip.yaxis(sorted(styles), "Write / read", styles=styles)
+    # Plain labels on the fixed grid lines; the typical band and the top Investigate shelf are named in their own
+    # ranges (beside a grid label where the range is too narrow to clear it).
+    ticks = (ylo, 1.0, 1.5)
+    strip.yaxis(ticks, "Write / read", fmt="{:.1f}")
+    strip.band_label("p10–p90", tlo, thi, GREEN, ticks)
+    strip.band_label(">p98", ihi, yhi, RED, ticks)
     strip.xaxis(period)
     strip.hline(1.0, AXIS, 1.0)  # write = read: its grid line, drawn brighter
     for key, color, dash in (("role", CYAN, DASHED), ("family", MUTED, DOTTED)):

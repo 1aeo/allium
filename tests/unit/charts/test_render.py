@@ -190,6 +190,21 @@ def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():
     assert text_width(line, 12) <= PLOT_WIDTH
 
 
+def test_band_names_sit_in_their_own_ranges_beside_plain_grid_labels():
+    ts = [T0 + timedelta(days=i) for i in range(5)]
+
+    def labels(role):
+        svg = bandwidth_chart("1m", (ts, [10.0] * 5, [10.0] * 5, DAY), 100.0, bands_for_role(role), "relay")
+        return {op[3]: op[1:3] for op in svg.ops if op[0] == "text" and op[3] in ("1.0", "p10–p90")}
+
+    # Guard's typical band (1.01–1.17) lies above 1.0: its name goes inside it, clear of the "1.0" grid label.
+    guard = labels("Guard")
+    assert guard["p10–p90"][0] == guard["1.0"][0] and guard["1.0"][1] - guard["p10–p90"][1] >= 13
+    # Exit's (0.96–1.02) is too thin to clear it, and holds 1.0: its name goes beside the label.
+    exits = labels("Exit")
+    assert abs(exits["p10–p90"][1] - exits["1.0"][1]) < 1 and exits["p10–p90"][0] < exits["1.0"][0] - 20
+
+
 def test_overload_legend_and_spike_callout(tmp_path):
     busy = relay("A", last_restarted="2026-09-21 20:00:00", **OVERLOADED)  # restarted after the last point
     charts = writer([busy], {"A": history(SPIKE, [100] * 21)})

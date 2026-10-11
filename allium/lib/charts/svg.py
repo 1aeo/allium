@@ -207,13 +207,29 @@ class Panel(object):
     def vline(self, t, color, width, dash=None):
         self.svg.line(self.x(t), self.top, self.x(t), self.top + self.height, color, width, dash)
 
-    def yaxis(self, ticks, label, size=13, styles=None):
-        """Grid lines and labels; ``styles`` maps a tick to ``(text, color, bold)``."""
+    def yaxis(self, ticks, label, size=13, fmt="{:,g}"):
+        """Grid lines and their labels."""
         for tick in ticks:
-            text, color, bold = (styles or {}).get(tick) or ("{:,g}".format(tick), MUTED, False)
             self.hline(tick, GRID, 1)
-            self.svg.text(self.left - 8, self.y(tick) + size * 0.35, text, size - 1 if bold else size, color, "end", bold)
+            self.svg.text(self.left - 8, self.y(tick) + size * 0.35, fmt.format(tick), size, MUTED, "end")
         self.svg.text(12 + size, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
+
+    def band_label(self, text, lo, hi, color, ticks, fmt="{:.1f}", size=12, room=13):
+        """Name the y range ``lo``–``hi`` beside the axis, inside the range: at its middle, or the spot nearest the
+        middle ``room`` px clear of the ``yaxis`` labels of ``ticks``; in a range too narrow for that, beside the
+        label of its tick nearest the middle."""
+        top, bottom = self.y(min(hi, self.ylo + self.yspan)), self.y(max(lo, self.ylo))
+        mid, marks = (top + bottom) / 2, {tick: self.y(tick) for tick in ticks}
+        spots = [y for y in [mid] + [mark + step for mark in marks.values() for step in (-room, room)]
+                 if top <= y <= bottom and all(abs(y - mark) >= room for mark in marks.values())]
+        inside = [tick for tick in ticks if lo <= tick <= hi]
+        x = self.left - 8
+        if spots or not inside:
+            y = min(spots or [mid], key=lambda spot: abs(spot - mid))
+        else:
+            tick = min(inside, key=lambda tick: abs(marks[tick] - mid))
+            y, x = marks[tick], x - text_width(fmt.format(tick), 13) - 8  # 13: yaxis' label size
+        self.svg.text(x, y + size * 0.35, text, size, color, "end", bold=True)
 
     def xaxis(self, period, labels=True, size=13):
         """Date gridlines with their labels, then the left and bottom axis lines."""
