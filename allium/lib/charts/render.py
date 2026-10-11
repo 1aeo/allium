@@ -20,7 +20,7 @@ from .series import (
     MBIT, PERIOD_SPAN, PERIODS, WINDOW, family_key, operator_throughput, peer_medians, points, throughput,
 )
 from .svg import (
-    BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
+    AXIS, BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
     Panel, Svg, legend, nice_ticks, text_width, view_end,
 )
 
@@ -153,7 +153,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
         styles[p98] = (">p98", RED, True)
     strip.yaxis(sorted(styles), "Write / read", styles=styles)
     strip.xaxis(period)
-    strip.hline(1.0, GREEN, 1.0, DASHED)
+    strip.hline(1.0, AXIS, 1.0)  # write = read: its grid line, drawn brighter
     for key, color, dash in (("role", CYAN, DASHED), ("family", MUTED, DOTTED)):
         if overlays.get(key):
             strip.series([overlays[key].get(t) for t in ts], color, 1.4, dash)
