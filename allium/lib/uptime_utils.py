@@ -55,7 +55,9 @@ def _compute_uptime_percentage_and_datapoints(uptime_values, factor=None):
     
     if factor is None:
         factor = DEFAULT_UPTIME_FACTOR
-    percentage = (total / count) * factor * 100.0
+    # factor * 999.0 is exactly 1.0 for factor 1/999, so those blocks keep
+    # their figures bit for bit (UP x% truncates: 57.99999 would show 57%).
+    percentage = (total / count) * (100.0 / 999.0) * (factor * 999.0)
     
     # Exclude essentially offline relays (≤1% uptime)
     if percentage <= 1.0:

@@ -88,8 +88,14 @@ class TestUptimeFactor(unittest.TestCase):
         values = [950 + i for i in range(35)]
         self.assertEqual(_compute_uptime_percentage_and_datapoints(values),
                          _compute_uptime_percentage_and_datapoints(values, None))
-        self.assertAlmostEqual(_compute_uptime_percentage_and_datapoints(values, 1 / 999)[0],
-                               _compute_uptime_percentage_and_datapoints(values)[0], places=12)
+
+    def test_one_999th_factor_matches_old_formula_exactly(self):
+        # 87 x 999 and 63 x 0 is exactly 58%; a float a hair below would show "UP 57%"
+        values = [999] * 87 + [0] * 63
+        factor = float('0.001001001001001001')  # 1/999 as Onionoo writes it
+        self.assertEqual(_compute_uptime_percentage_and_datapoints(values, factor), (58.0, 150))
+        self.assertEqual(_compute_uptime_percentage_and_datapoints(values, factor),
+                         _compute_uptime_percentage_and_datapoints(values))
 
     def test_factor_applied_before_low_uptime_gate(self):
         # 999 on the 0-999 scale, but the best interval was only 0.9% running
