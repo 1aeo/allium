@@ -639,7 +639,7 @@ th[title]::after {
 .chart-history {
     max-width: 1094px;  /* the chart's own 1080 px (+ padding and border): a PNG is not upscaled, and a
                            deep-linked chart fits Tor Browser's default 1400x900 window */
-    margin: 12px 0 0;
+    margin: 12px 0;  /* clear of what follows: on contact pages, the "Last updated" line */
     padding: 6px;
     background: var(--aeo-dark-surface);
     border: 1px solid var(--aeo-dark-border);
@@ -685,6 +685,9 @@ th[title]::after {
 }
 /* .chart-sparks prefixes outrank Bootstrap's a:hover/a:focus color, underline and outline. */
 .chart-sparks .chart-spark {
+    display: flex;  /* the row stretches every link to the tallest chart: keep each label at the bottom */
+    flex-direction: column;
+    justify-content: space-between;
     flex: 0 1 25%;
     border-radius: 4px;
     outline: 1px solid transparent;

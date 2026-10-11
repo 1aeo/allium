@@ -17,6 +17,8 @@ def test_every_period_has_a_target_and_a_thumbnail_link():
     # The default (first) period comes last so "a targeted chart ~ chart" can hide it.
     assert html.index('id="uptime-6m"') < html.index('id="uptime-1m"') < html.index("chart-sparks")
     assert 'href="#uptime-1m"' in html and 'href="#uptime-6m"' in html
+    # A thumbnail's accessible name holds its visible label (WCAG 2.5.3), so "click 1M" finds it.
+    assert 'aria-label="1M: show the last 30 days"' in html
 
 
 def test_page_wide_period_links_fall_back_to_the_default_chart():

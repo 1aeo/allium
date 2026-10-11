@@ -637,7 +637,7 @@
     {% if periods|length > 1 %}
     <div class="chart-sparks">
         {% for period in order %}
-        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="Show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
+        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="{{ period|upper }}: show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
         {% endfor %}
     </div>
     {% endif %}
