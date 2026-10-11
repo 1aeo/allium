@@ -52,8 +52,9 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
     charts.raster = SimpleNamespace(png=lambda *args: 1 / 0)
     assert charts.relay(relay("A"), str(second)) == (bandwidth, uptime)
-    assert os.stat(second / "bandwidth-1m.png").st_ino == os.stat(first / "bandwidth-1m.png").st_ino
-    assert os.stat(second / "bandwidth-1m.png").st_mtime == 1
+    hit = os.stat(second / "bandwidth-1m.png")
+    assert hit.st_ino == os.stat(first / "bandwidth-1m.png").st_ino and hit.st_mtime == 1
+    assert hit.st_atime >= charts.started - 60  # marked as used, so sweep() keeps it
     # A page written again in place (the sequential retry after a worker died) replaces its links:
     # a different chart there must not be written through the old link into the cache.
     changed = writer([relay("A")], {"A": history([200 + i for i in range(30)])}, {"A": [500] * 180}, "png", str(root))
@@ -67,12 +68,15 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     os.utime(stale, (0, 0))
     changed.sweep()
     assert len(os.listdir(cache)) == 4 and not stale.exists()
+    # --chart-scale 1.5 draws 1620 px wide and --chart-colors full writes RGBA. Each option is part of each
+    # file's key: neither reuses the 2x, 64-color PNG of this drawing cached above.
+    for scale, colors, width, channels in ((1.5, "64", 1620, 3), (2, "full", 2160, 4)):
+        options = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root), scale=scale, colors=colors)
+        bandwidth, _uptime = options.relay(relay("A"), str(third))
+        assert decode((third / "bandwidth-1m.png").read_bytes()).shape == (
+            round(scale * bandwidth["1m"]), width, channels)
     writer([relay("A")], history_a, cache_dir=str(root)).sweep()
     assert not root.exists()
-    # --chart-scale 1.5 draws 1620 px wide; --chart-colors full writes RGBA.
-    smaller = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root), scale=1.5, colors="full")
-    bandwidth, _uptime = smaller.relay(relay("A"), str(third))
-    assert decode((third / "bandwidth-1m.png").read_bytes()).shape == (round(1.5 * bandwidth["1m"]), 1620, 4)
 
 
 @needs_png
@@ -106,6 +110,16 @@ def test_each_period_only_shows_its_own_window(tmp_path):
     assert os.listdir(tmp_path) == ["bandwidth-6m.svg"]
 
 
+def test_family_and_peer_medians_are_drawn_on_1m_only(tmp_path):
+    family = ["A", "B"]
+    month, longer = history([100 + i for i in range(30)], [100] * 30), history([100] * 60, key="6_months")
+    charts = writer([relay(fp, effective_family=family) for fp in family],
+                    {fp: {k: dict(month[k], **longer[k]) for k in month} for fp in family})
+    charts.relay(relay("A", effective_family=family), str(tmp_path))
+    assert {"Operator Family (median, n=2)", "Peers (network median)"} <= set(texts(tmp_path / "bandwidth-1m.svg"))
+    assert not {"Operator Family (median, n=2)", "Peers (network median)"} & set(texts(tmp_path / "bandwidth-6m.svg"))
+
+
 def test_overload_legend_and_spike_callout(tmp_path):
     busy = relay("A", last_restarted="2026-09-21 20:00:00", **OVERLOADED)  # restarted after the last point
     charts = writer([busy], {"A": history(SPIKE, [100] * 21)})
@@ -127,23 +141,24 @@ def test_a_malformed_history_skips_that_chart(tmp_path):
 def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
     members = [relay("A", flags=["Exit"]), relay("B", flags=["Exit"]), relay("C"),
                relay("N", contact=""), relay("D", flags=["Exit"])]
-    charts = writer(members, {"A": history([100] * 30), "B": history([300] * 30), "C": history([50] * 30)})
-    assert list(charts.contact([0, 1, 2, 4], str(tmp_path))) == ["1m"]
+    charts = writer(members, {"A": history([100] * 30), "B": history([300] * 30), "C": history([50] * 30),
+                              "N": history([50] * 30)})
+    assert list(charts.contact([2, 0, 1, 4], str(tmp_path))) == ["1m"]  # the Guard first, outvoted by the Exits
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert lines[0] == "example.com" and "This operator" in lines
     # D has no history, so its advertised bandwidth stays out of the sum too.
     assert "Advertised  6 Mbit/s" in lines
     assert "1,678 Exits · baseline 15 Aug 2026" in lines
     # Relays without contact info share one hash, but they are not an operator.
-    assert charts.contact([3], str(tmp_path / "none")) == {}
+    assert charts.contact([3], str(tmp_path)) == {}
 
 
 def test_svg_text_is_escaped_and_valid_xml():
     svg = Svg(100)
-    svg.text(0, 0, "<b>&  x\x01", 10)  # contact strings are operator-controlled
+    svg.text(0, 0, "<b>&  x\x01\ud800\ufffe\U0001f600", 10)  # contact strings are operator-controlled
     doc = svg.finish(50).document()
-    assert "&lt;b&gt;&amp;&#160;&#160;x<" in doc
-    ET.fromstring(doc)
+    assert "&lt;b&gt;&amp;&#160;&#160;x\U0001f600<" in doc
+    ET.fromstring(doc.encode("utf-8"))
 
 
 def test_axis_ticks():

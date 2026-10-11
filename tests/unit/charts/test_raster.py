@@ -55,7 +55,7 @@ def test_every_color_the_charts_name_or_cover_an_area_with_is_in_the_palette():
     assert len(drawn) == 3
     # Every color svg.py defines or a drawing call names...
     fields = [*vars(svg_module).values(), *(field for svg in drawn for op in svg.ops for field in op)]
-    named = {v[1:] for v in fields if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v)}
+    named = {v[1:].lower() for v in fields if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v, re.I)}
     assert len(named) >= 14 and sorted(named - set(raster.PALETTE)) == []
     # ...and every blend that covers an area (translucent bands and legend swatches).
     for svg in drawn:

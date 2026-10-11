@@ -42,6 +42,12 @@ def test_write_spike_names_its_days():
     assert subtitles(spike, 100.0, {"role": inside}, GUARD)[1] == "Outside the Guard band Sep 6–7 · peers stayed"
     assert subtitles(spike, 100.0, {"role": inside, "family": inside}, GUARD)[1] == \
         "Outside the Guard band Sep 6–7 · family and peers stayed"
+    # The family left the band too: say so, and that the peers stayed only when their line was checked.
+    outside = {t: 3.0 for t in inside}
+    assert subtitles(spike, 100.0, {"role": inside, "family": outside}, GUARD)[1] == \
+        "Outside the Guard band Sep 6–7 with the family · other Guards stayed"
+    assert subtitles(spike, 100.0, {"role": {}, "family": outside}, GUARD)[1] == \
+        "Outside the Guard band Sep 6–7 with the family"
 
 
 def test_low_throughput_is_only_a_drop_when_low_against_advertised():

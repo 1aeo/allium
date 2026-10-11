@@ -37,9 +37,11 @@ SIZE, EXACT = 64, 28
 
 
 def sample_charts(relay_count, contact_count):
-    cache = os.path.join(ROOT, "allium", "data", "cache")
-    data = {name: json.load(open(os.path.join(cache, "onionoo_%s.json" % name)))
-            for name in ("details", "bandwidth", "uptime")}
+    def load(name):
+        with open(os.path.join(ROOT, "allium", "data", "cache", "onionoo_%s.json" % name), encoding="utf-8") as handle:
+            return json.load(handle)
+
+    data = {name: load(name) for name in ("details", "bandwidth", "uptime")}
     relays = data["details"]["relays"]
     groups = {}
     for index, relay in enumerate(relays):
@@ -60,8 +62,8 @@ def main():
     relay_count, contact_count = (int(arg) for arg in (sys.argv[1:] + ["300", "100"])[:2])
     charts = sample_charts(relay_count, contact_count)
     # Every color a drawing call names, whatever the op ("none" and dash patterns are not colors).
-    named = {v for svg in charts for op in svg.ops for v in op
-             if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v)}
+    named = {v.lower() for svg in charts for op in svg.ops for v in op
+             if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v, re.I)}
     census = []
     for svg in charts:
         surface, rows, _width, _height = raster.render(svg, 2)

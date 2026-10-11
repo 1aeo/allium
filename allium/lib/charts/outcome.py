@@ -90,7 +90,8 @@ def subtitles(rows, advertised, overlays, bands, period="1m", interval=SECONDS_P
     elif left["role"]:
         ratio = "Outside the band with other {}{}".format(peers, when)
     elif left["family"]:
-        ratio = "Outside the {} band{} with the family · other {} stayed".format(role, when, peers)
+        stayed = " · other {} stayed".format(peers) if left["role"] is False else ""
+        ratio = "Outside the {} band{} with the family{}".format(role, when, stayed)
     else:
         # Name only the lines drawn (family and peer medians: 1M relay charts) and checked on those days.
         stayed = " and ".join(word for key, word in (("family", "family"), ("role", "peers")) if left[key] is False)

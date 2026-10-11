@@ -52,7 +52,8 @@ PNG needs cairocffi and numpy (`config/requirements.txt`, where zlib-ng makes
 deflate ~4x faster) plus the cairo library (`apt install libcairo2`).
 `allium.py` checks before fetching anything: without them it writes SVG and
 says so, or stops when `--chart-format png` was asked for. Without DejaVu Sans
-(`fonts-dejavu-core`) it warns and cairo draws the text in another font.
+(`fonts-dejavu-core`) cairo draws the text in another font; `allium.py` warns
+when fontconfig's `fc-match` is installed to check.
 
 ## Where they are written
 
@@ -78,7 +79,7 @@ says so, or stops when `--chart-format png` was asked for. Without DejaVu Sans
 ## Content rules
 
 - Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
-  frozen role bands in `data/role_ratio_bands.json` (`bands.py`; do not
+  frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Each period only shows its own window, ending at Onionoo's `relays_published`.
 - Family and peer medians are 1M only. A family's median is over the members

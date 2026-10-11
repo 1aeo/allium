@@ -285,10 +285,11 @@ if __name__ == "__main__":
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
 
+    # Charts only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
+    args.charts = args.charts and args.enabled_apis == "all"
     # PNG charts need cairocffi and numpy (config/requirements.txt) and the cairo library: check before
-    # fetching anything. Asked for, they are required; by default, SVG stands in with a warning. Charts
-    # only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
-    if args.charts and args.enabled_apis == "all" and args.chart_format != "svg":
+    # fetching anything. Asked for, they are required; by default, SVG stands in with a warning.
+    if args.charts and args.chart_format != "svg":
         try:
             from lib.charts import raster  # noqa: F401
         except (ImportError, OSError) as e:
