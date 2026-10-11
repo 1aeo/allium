@@ -101,11 +101,12 @@ def test_parallel_and_sequential_generation_write_identical_pages(tmp_path, monk
     assert mismatch == [] and errors == []
 
 
-def _die_in_worker(monkeypatch, name, poisoned):
+def _die_in_worker(monkeypatch, name, poisoned, died):
     """Make a pool worker exit abruptly when page_writer.<name> is called for a poisoned item.
 
     Workers look the function up in their forked copy of page_writer; the
-    parent's sequential fallback never dies.
+    parent's sequential fallback never dies. The worker creates ``died``
+    first, so a test can tell that its death is what broke the pool.
     """
     original = getattr(page_writer, name)
     parent_pid = os.getpid()
@@ -113,6 +114,7 @@ def _die_in_worker(monkeypatch, name, poisoned):
     def dying(*args, **kwargs):
         """Exit at once in a worker called for a poisoned item; otherwise call the original."""
         if os.getpid() != parent_pid and poisoned(*args):
+            died.touch()
             os._exit(1)  # simulate a worker killed by the OOM killer
         return original(*args, **kwargs)
 
@@ -131,12 +133,13 @@ def test_page_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, key):
     relay_set = _build(tmp_path / "parallel", mp_workers=2)
     relay_set.timestamp = sequential.timestamp  # rendered into every page
     poisoned_dir = page_writer._sanitize_path_component(list(relay_set.json["sorted"][key])[7])
+    died = tmp_path / "worker_died"
     _die_in_worker(monkeypatch, "_write_html",
-                   lambda path, _html: os.path.basename(os.path.dirname(path)) == poisoned_dir)
+                   lambda path, _html: os.path.basename(os.path.dirname(path)) == poisoned_dir, died)
 
     page_writer.write_pages_by_key(relay_set, key)
 
-    assert relay_set.mp_workers == 0  # the pool broke and the pages were rendered sequentially
+    assert died.exists() and relay_set.mp_workers == 0  # a worker died; pages were rendered sequentially
     files = _tree(tmp_path / "parallel")
     assert files == _tree(tmp_path / "sequential")
     assert any(name.startswith(os.path.join(key, poisoned_dir) + os.sep) for name in files)
@@ -154,7 +157,8 @@ def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, gr
     """A precompute worker killed mid-run leads to every group being precomputed sequentially."""
     sequential = _build(tmp_path / "sequential", mp_workers=0)
     poisoned = list(sequential.json["sorted"][group])[7]
-    _die_in_worker(monkeypatch, compute, lambda _relay_set, group_hash, *_args: group_hash == poisoned)
+    died = tmp_path / "worker_died"
+    _die_in_worker(monkeypatch, compute, lambda _relay_set, group_hash, *_args: group_hash == poisoned, died)
 
     recomputed = []
     original_step = getattr(Relays, sequential_step)
@@ -168,7 +172,8 @@ def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, gr
 
     relay_set = _build(tmp_path / "parallel", mp_workers=2)
 
-    # The pool broke and every group was precomputed again sequentially,
+    # A worker died and every group was precomputed again sequentially,
     # ending up exactly as the sequential path leaves it.
+    assert died.exists()
     assert sorted(recomputed) == sorted(sequential.json["sorted"][group])
     assert relay_set.json["sorted"][group] == sequential.json["sorted"][group]

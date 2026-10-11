@@ -1,12 +1,13 @@
 """SEO URL helpers and crawler discovery files for generated sites."""
 
-from concurrent.futures import ProcessPoolExecutor
 import functools
 import logging
 import os
 from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import quote, urlsplit, urlunsplit
+
+from .worker_pool import fork_map
 
 logger = logging.getLogger(__name__)
 
@@ -173,9 +174,8 @@ def map_html_files(function, html_paths, chunksize):
     done = 0
     if len(html_paths) >= _PARALLEL_MIN_FILES:
         try:
-            with ProcessPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
-                for done, result in enumerate(executor.map(function, html_paths, chunksize=chunksize), 1):
-                    yield result
+            for done, result in enumerate(fork_map(min(8, os.cpu_count() or 1), function, html_paths, chunksize), 1):
+                yield result
         except Exception as exc:
             logger.warning("HTML file worker pool failed (%s), processing %d of %d files sequentially",
                            exc, len(html_paths) - done, len(html_paths))
