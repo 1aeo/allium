@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from allium.lib.charts.bands import (
     CATALOG, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags,
 )
-from allium.lib.charts.identity import chart_identity, operator_from_contact
+from allium.lib.charts.identity import chart_identity, operator_from_contact, operator_identity
 from allium.lib.charts.outcome import format_day_span, ratio_subtitle, ratio_text, throughput_subtitle
 
 from .fixtures import T0
@@ -83,6 +83,14 @@ def test_identity_and_roles():
     assert operator_from_contact("url:localhost") == operator_from_contact(None) == ""
     assert chart_identity("jeangrae", "1aeo.com") == "jeangrae  ·  1aeo.com"
     assert chart_identity("1aeo.com", "1AEO.com") == "1aeo.com"
+    # An operator: its AROI domain, else its url: host, else its contact text (cut at a word past 50 characters),
+    # and its relay count.
+    host, aroi = {"contact": "url:https://www.1AEO.com/about"}, {"contact": "x", "aroi_domain": "example.org"}
+    assert operator_identity([{"contact": "tor@kllx.eu", "aroi_domain": "none"}, host]) == "1aeo.com  ·  2 relays"
+    assert operator_identity([host, aroi, {}]) == "example.org  ·  3 relays"
+    assert operator_identity([{}, {"contact": "  tor@kllx.eu\n"}]) == "tor@kllx.eu  ·  2 relays"
+    assert operator_identity([{"contact": "email:tor-node+shdrt06[]hobi.one abuse:tor-node+shdrt06[]hobi.one up"}]) == \
+        "email:tor-node+shdrt06[]hobi.one…  ·  1 relay"
     assert [role_from_flags(f) for f in (["Exit", "Guard"], ["Exit"], ["Guard"], [])] == \
         ["Exit+Guard", "Exit", "Guard", "Middle"]
     assert bands_for_role("Middle")["peers"] == "middle relays"

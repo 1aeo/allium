@@ -80,7 +80,10 @@ when fontconfig's `fc-match` is installed to check.
 
 ## Content rules
 
-- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
+- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`; for
+  an operator its AROI domain, else its `url:` host, else its contact text cut
+  past 50 characters as in the contact page's title, and its relay count:
+  `tor@kllx.eu · 64 relays`),
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Subtitles state facts about what the panel draws, so they hold by

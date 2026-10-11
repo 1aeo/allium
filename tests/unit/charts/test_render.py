@@ -223,7 +223,7 @@ def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp
     # Two Guards outnumber the one Exit with history, but the Exit carries three times their traffic.
     assert list(charts.contact([2, 5, 1, 4], str(tmp_path))) == ["1m"]
     lines = texts(tmp_path / "bandwidth-1m.svg")
-    assert lines[0] == "example.com" and "This operator" in lines
+    assert lines[0] == "example.com  ·  4 relays" and "This operator" in lines
     # D has no history, so its advertised bandwidth stays out of the sum too.
     assert "Advertised  6 Mbit/s" in lines
     assert "Write / read · last 30 days  ·  vs Exit band" in lines and "1,678 Exits · baseline 15 Aug 2026" in lines

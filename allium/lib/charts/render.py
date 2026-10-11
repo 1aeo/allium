@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from ..stability_utils import evaluate_overload
 from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
 from .bands import RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags
-from .identity import chart_identity, operator_from_contact
+from .identity import chart_identity, operator_from_contact, operator_identity
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, ratio_subtitle, ratio_text, throughput_subtitle
 from .series import (
     MBIT, MIN_OVERLAY_MBIT, PERIOD_SPAN, PERIODS, WINDOW, family_key, operator_throughput, peer_medians, points,
@@ -384,8 +384,7 @@ class ChartWriter(object):
         # Relays without contact info share one hash, but they are not an operator.
         if not any((relay.get("contact") or "").strip() for relay in members):
             return {}
-        identity = next(filter(None, (operator_from_contact(r.get("contact")) for r in members)), "Operator")
-        return self._charts(directory, "bandwidth", self._contact_bandwidth, members, identity)
+        return self._charts(directory, "bandwidth", self._contact_bandwidth, members, operator_identity(members))
 
     def _contact_bandwidth(self, members, identity, key, period):
         series, summed = operator_throughput(members, self.bandwidth, key, self._since("bandwidth", period))
