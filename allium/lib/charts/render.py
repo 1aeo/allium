@@ -5,6 +5,7 @@ import hashlib
 import logging
 import marshal
 import os
+import re
 import shutil
 import time
 from collections import Counter
@@ -236,11 +237,7 @@ class ChartWriter(object):
             # under each other (sweep() still drops the charts this build did not use).
             self.cache = os.path.join(self.cache_root, hashlib.blake2b(raster.VERSION, digest_size=8).hexdigest())
             os.makedirs(self.cache, exist_ok=True)
-            for entry in os.scandir(self.cache_root):
-                if not entry.is_dir():
-                    os.remove(entry.path)
-                elif entry.path != self.cache:
-                    shutil.rmtree(entry.path, ignore_errors=True)
+            self._drop_versions(keep=self.cache)
         self.relays = relay_set.json["relays"]
         self.uptime, self.bandwidth = history_maps(relay_set)
         published = parse_onionoo_timestamp(
@@ -297,10 +294,17 @@ class ChartWriter(object):
                                "defaults) instead of linking it; build next to it to save that", self.cache_root)
             shutil.copy2(cached, path)
 
+    def _drop_versions(self, keep=None):
+        """Delete the cache's drawing-version folders but ``keep``; nothing else under ``cache_root``."""
+        if os.path.isdir(self.cache_root):
+            for entry in os.scandir(self.cache_root):
+                if entry.is_dir() and entry.path != keep and re.fullmatch("[0-9a-f]{16}", entry.name):
+                    shutil.rmtree(entry.path, ignore_errors=True)
+
     def sweep(self):
         """Delete cached PNGs no chart of this build used (call once every page is written)."""
         if not self.raster:
-            shutil.rmtree(self.cache_root, ignore_errors=True)
+            self._drop_versions()
             return
         for entry in os.scandir(self.cache):
             try:  # another build sharing the cache may remove or rename files meanwhile

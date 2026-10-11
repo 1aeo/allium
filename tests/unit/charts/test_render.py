@@ -38,10 +38,11 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     first, second, third, root = (tmp_path / name for name in ("first", "second", "third", "cache"))
     for directory in (first, second, third):
         directory.mkdir()
-    (root / "old-drawing").mkdir(parents=True)  # cached by another drawing version: never hit again
+    (root / "0123456789abcdef").mkdir(parents=True)  # cached by another drawing version: never hit again
+    (root / "notes").mkdir()  # not a drawing version: left alone
     history_a = {"A": history([100 + i for i in range(30)])}
     charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
-    assert os.listdir(root) == [os.path.basename(charts.cache)]
+    assert sorted(os.listdir(root)) == sorted([os.path.basename(charts.cache), "notes"])
     bandwidth, uptime = charts.relay(relay("A"), str(first))
     assert sorted(os.listdir(first)) == ["bandwidth-1m.png", "uptime-1m.png"]
     # Twice the page's size, sharp on HiDPI screens, in the 64-color palette (3 channels once decoded).
@@ -76,7 +77,7 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
         assert decode((third / "bandwidth-1m.png").read_bytes()).shape == (
             round(scale * bandwidth["1m"]), width, channels)
     writer([relay("A")], history_a, cache_dir=str(root)).sweep()
-    assert not root.exists()
+    assert os.listdir(root) == ["notes"]
 
 
 @needs_png

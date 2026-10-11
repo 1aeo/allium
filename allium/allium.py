@@ -12,7 +12,6 @@ Default output directory: ./www
 import argparse
 import gc
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -302,8 +301,11 @@ if __name__ == "__main__":
         else:
             args.chart_format = "png"
             # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
-            if shutil.which("fc-match") and "DejaVu Sans" not in subprocess.run(
-                    ["fc-match", "DejaVu Sans"], capture_output=True, text=True).stdout:
+            try:  # fontconfig's fc-match tells; when it is missing or fails, stay quiet
+                font = subprocess.run(["fc-match", "DejaVu Sans"], capture_output=True, text=True, timeout=10).stdout
+            except (OSError, subprocess.SubprocessError):
+                font = "DejaVu Sans"
+            if "DejaVu Sans" not in font:
                 print("⚠️ PNG charts: DejaVu Sans is not installed (e.g. apt install fonts-dejavu-core), "
                       "so chart text falls back to another font")
 

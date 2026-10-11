@@ -34,7 +34,7 @@ charts between Onionoo's 4-hourly points (about 85% of all charts an hour
 apart). A hit keeps the file's modification time, so `rsync -a` and HTTP caches
 see it unchanged. `ChartWriter.sweep()` then deletes what the build did not
 use, so the cache holds one copy of the current charts (about 3.4 GB; 9.4 GB in
-full color); an SVG build (`--chart-format svg`) deletes it all. The cache
+full color); an SVG build (`--chart-format svg`) deletes all of them. The cache
 folder is named after `raster.VERSION` (replay code, background, palette, cairo
 version, fonts found), so a change there starts a fresh cache. On 4 cores a full build
 took 4m30s with an empty cache, then 1m31s-1m33s an hour later, or 1m56s when
