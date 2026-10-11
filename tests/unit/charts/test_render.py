@@ -128,6 +128,13 @@ def test_overload_legend_and_spike_callout(tmp_path):
     assert "currently overloaded · last report Sep 29, 22:00 UTC" in lines
     assert "Sep 11 · write/read 4.00 · off the 1.70 scale" in lines
     assert "Last restarted  Sep 21" in lines  # inside the axis' right margin, so still marked
+    # A newer rate-limit report where no limit was hit does not count toward the verdict, nor its time.
+    quiet = dict(OVERLOADED["overload_ratelimits"], **{"write-count": 0, "timestamp": OVERLOADED[
+        "overload_ratelimits"]["timestamp"] + 86400000})
+    busy = relay("A", overload_ratelimits=quiet, overload_fd_exhausted={"timestamp": quiet["timestamp"] - 2 * 86400000},
+                 stability_is_overloaded=True)
+    charts.relay(busy, str(tmp_path))
+    assert "currently overloaded · last report Sep 28, 22:00 UTC" in texts(tmp_path / "bandwidth-1m.svg")
 
 
 def test_a_malformed_history_skips_that_chart(tmp_path):
