@@ -97,6 +97,15 @@ class TestAnchorLinks:
         
         # Check for highlight properties
         assert 'background-color:' in css_content, "Missing background color for target highlighting"
+
+    def test_column_links_highlight_the_whole_column(self, template_content):
+        """A #col-* link highlights the column's cells (headers="col-*"), not just its header cell"""
+        css_content = (Path(__file__).parents[3] / "allium" / "static" / "css" / "relay-info.css").read_text()
+        columns = re.findall(r'<th id="(col-[\w-]+)"', template_content)
+        assert len(columns) >= 5
+        for column in columns:
+            assert f'<td headers="{column}"' in template_content, f"No cells tagged for {column}"
+            assert f'table:has(#{column}:target) [headers="{column}"]' in css_content, f"No highlight rule for {column}"
     
     def test_anchor_accessibility(self, template_content):
         """Test that anchor links are accessible"""

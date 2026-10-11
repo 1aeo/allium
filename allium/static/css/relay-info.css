@@ -71,6 +71,14 @@ dt:target {
 th:target {
     outline-offset: 0;  /* header cells sit in a scrolling table that clips outlines drawn outside them */
 }
+/* A column link (#col-*) highlights the whole column, not just its header cell */
+table:has(#col-running:target) [headers="col-running"],
+table:has(#col-flags:target) [headers="col-flags"],
+table:has(#col-fast:target) [headers="col-fast"],
+table:has(#col-desc-published:target) [headers="col-desc-published"],
+table:has(#col-cons-wt:target) [headers="col-cons-wt"] {
+    background-color: var(--color-highlight-bg);
+}
 
 /* Backward-compat anchor aliases: invisible but still scrollable */
 .compat-anchor {
