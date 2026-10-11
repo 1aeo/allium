@@ -153,10 +153,10 @@ class Panel(object):
         self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
         # Every series shares the times: place them once, and break lines across missing history
-        # (steps over twice the shortest).
+        # (steps over 1.5 times the shortest, so one missing slot breaks them too).
         self.xs = [self.x(t) for t in ts]
         steps = [b - a for a, b in zip(ts, ts[1:])]
-        gap = 2 * min(steps, default=timedelta(0))
+        gap = 1.5 * min(steps, default=timedelta(0))
         self.breaks = [True] + [step > gap for step in steps]
         svg.clip(clip_id, left, top, width, height)
 

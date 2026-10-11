@@ -3,10 +3,10 @@
 import os
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from allium.lib.charts.svg import GREEN, RED, TEXT, Svg, date_ticks, nice_ticks
+from allium.lib.charts.svg import GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks
 
 from .fixtures import OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -195,6 +195,13 @@ def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
     assert "1,678 Exits · baseline 15 Aug 2026" in lines
     # Relays without contact info share one hash, but they are not an operator.
     assert charts.contact([3], str(tmp_path)) == {}
+
+
+def test_a_line_breaks_where_a_slot_is_missing():
+    svg = Svg(100)
+    ts = [T0 + timedelta(days=day) for day in (0, 1, 3, 4)]  # no Sep 3
+    Panel(svg, "p", 0, 0, 100, 100, ts, 0, 10).series([1, 2, 3, 4], GREEN, 2)
+    assert svg.ops[-1][1].count("M") == 2
 
 
 def test_svg_text_is_escaped_and_valid_xml():
