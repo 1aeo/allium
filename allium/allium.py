@@ -242,7 +242,10 @@ if __name__ == "__main__":
         dest="filter_downtime_days",
         type=int,
         default=7,
-        help="filter out relays offline for more than N days (default: 7, use 0 to disable)",
+        help=(
+            "filter out relays not seen for more than N days, even if Onionoo still marks "
+            "them running (default: 7, use 0 to disable)"
+        ),
         required=False,
     )
     parser.add_argument(
