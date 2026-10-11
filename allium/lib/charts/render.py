@@ -3,6 +3,7 @@
 import errno
 import hashlib
 import logging
+import marshal
 import os
 import shutil
 import time
@@ -200,10 +201,11 @@ class ChartWriter(object):
     Built once in the parent process (the peer medians need every relay),
     then shared with the forked page workers.
 
-    PNG charts are kept in ``cache_dir`` under a hash of their SVG text, which
-    describes the whole drawing: a chart that did not change since the last
-    build (most 6M/1Y/5Y charts, and 1M ones between Onionoo's 4-hourly
-    points) is hard-linked from there instead of drawn again. A hit marks
+    PNG charts are kept in ``cache_dir`` under a hash of their drawing calls
+    (``Svg.ops``, which cairo replays at full precision; the SVG text rounds
+    them to 0.1 px): a chart that did not change since the last build (most
+    6M/1Y/5Y charts, and 1M ones between Onionoo's 4-hourly points) is
+    hard-linked from there instead of drawn again. A hit marks
     the file's access time and keeps its modification time, so ``rsync -a``
     and HTTP caches see an unchanged chart as unchanged. ``sweep()`` drops
     the ones this build did not use (all of them in an SVG build).
@@ -222,12 +224,11 @@ class ChartWriter(object):
             self.raster = raster
             if colors != "full":
                 raster.lookup()  # built once here, then shared with the forked page workers
-            # One directory per drawing version (code, palette, cairo, fonts): the others can never be hit again,
-            # so they go now, before this build fills its own. --chart-scale and --chart-colors are part of
-            # each file's key instead, so builds with other options do not delete this folder under each
-            # other (sweep() still drops the charts this build did not use).
+            # One directory per drawing version (code, background, palette, cairo, fonts): the others can never
+            # be hit again, so they go now, before this build fills its own. --chart-scale and --chart-colors
+            # are part of each file's key instead, so builds with other options do not delete this folder
+            # under each other (sweep() still drops the charts this build did not use).
             self.cache = os.path.join(self.cache_root, hashlib.blake2b(raster.VERSION, digest_size=8).hexdigest())
-            self.key = ("/%gx/%s" % (scale, colors)).encode() + raster.VERSION
             os.makedirs(self.cache, exist_ok=True)
             for entry in os.scandir(self.cache_root):
                 if entry.is_dir():
@@ -248,24 +249,26 @@ class ChartWriter(object):
         path = os.path.join(directory, "%s.%s" % (name, self.ext))
         try:
             svg = draw(*args)
-            text = svg.document().encode("utf-8") if svg else b""
+            text = svg.document().encode("utf-8") if svg and not self.raster else b""
         except Exception:  # noqa: BLE001
             return 0
-        if not text:
+        if not svg:
             return 0
         if not self.raster:
             with open(path, "wb") as handle:
                 handle.write(text)
             return svg.height
         try:
-            self._png(svg, text, path)
+            self._png(svg, path)
         except Exception as error:  # noqa: BLE001 -- unlike odd history, this is the build host's problem
             logger.warning("PNG conversion failed for %s: %s", path, error)
             return 0
         return svg.height
 
-    def _png(self, svg, text, path):
-        cached = os.path.join(self.cache, hashlib.blake2b(text + self.key, digest_size=16).hexdigest() + ".png")
+    def _png(self, svg, path):
+        # Keyed on what cairo replays, by value (marshal format 2 has no identity-based references).
+        drawing = marshal.dumps((self.scale, self.colors, svg.width, svg.height, svg.ops), 2)
+        cached = os.path.join(self.cache, hashlib.blake2b(drawing, digest_size=16).hexdigest() + ".png")
         try:  # a hit: mark it used for sweep() in the access time, keep the modification time
             os.utime(cached, ns=(time.time_ns(), os.stat(cached).st_mtime_ns))
         except FileNotFoundError:

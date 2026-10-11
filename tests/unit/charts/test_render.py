@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from allium.lib.charts.render import ChartWriter
-from allium.lib.charts.svg import Svg, date_ticks, nice_ticks
+from allium.lib.charts.svg import GREEN, Svg, date_ticks, nice_ticks
 
 from .test_series import bandwidth_row, block
 
@@ -80,7 +80,7 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     # modification time so rsync and HTTP caches see them unchanged.
     os.utime(first / "bandwidth-1m.png", (1, 1))
     charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
-    charts.raster = SimpleNamespace(VERSION=charts.raster.VERSION, png=lambda *args: 1 / 0)
+    charts.raster = SimpleNamespace(png=lambda *args: 1 / 0)
     assert charts.relay(relay("A"), str(second)) == (bandwidth, uptime)
     assert os.stat(second / "bandwidth-1m.png").st_ino == os.stat(first / "bandwidth-1m.png").st_ino
     assert os.stat(second / "bandwidth-1m.png").st_mtime == 1
@@ -109,15 +109,30 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
         1620, round(1.5 * bandwidth["1m"]), 6)  # 8-bit RGBA: full color
 
 
+def test_a_png_is_drawn_from_its_own_drawing_not_one_with_the_same_svg_text(tmp_path):
+    """The SVG text rounds to 0.1 px and the PNG is drawn at full precision: two charts whose text matches
+    (e.g. restarts minutes apart on a 1Y chart) must not share a cached PNG, or builds vary."""
+    try:
+        from allium.lib.charts import raster  # noqa: F401
+    except (ImportError, OSError):  # needs cairocffi, numpy and zlib-ng, and the cairo library
+        pytest.skip("PNG charts need cairocffi, numpy, zlib-ng and the cairo library")
+    charts = writer([], {}, image_format="png", cache_dir=str(tmp_path / "cache"))
+    for y in (60.01, 60.04):  # both written as y2="60.0"
+        svg = Svg(100)
+        svg.line(10, 20, 90, y, GREEN, 4)
+        charts._save(str(tmp_path), "chart-%g" % y, svg.finish, 100)
+        assert (tmp_path / ("chart-%g.png" % y)).read_bytes() == charts.raster.png(svg)
+
+
 def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
     out, cache = tmp_path / "out", tmp_path / "cache"
     out.mkdir()
     cache.mkdir()
     charts = writer([relay("A")], {"A": history([100] * 30)})
     charts.ext, charts.cache = "png", str(cache)
-    charts.raster = SimpleNamespace(VERSION=b"test", png=lambda *args: 1 / 0)  # e.g. a broken cairo on the build host
+    charts.raster = SimpleNamespace(png=lambda *args: 1 / 0)  # e.g. a broken cairo on the build host
     assert charts.relay(relay("A"), str(out)) == ({}, {})
-    assert os.listdir(out) == os.listdir(cache) == [] and "PNG conversion failed" in caplog.text
+    assert os.listdir(out) == os.listdir(cache) == [] and "bandwidth-1m.png: division by zero" in caplog.text
 
 
 def test_each_period_only_shows_its_own_window(tmp_path):

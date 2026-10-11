@@ -25,8 +25,9 @@ RED = "#ff6b6b"
 PURPLE = "#b48cff"
 CYAN = "#38bdf8"
 DASHED, DOTTED, DASHDOT = "7 4", "1.5 3", "9 3.5 2 3.5"
-# Characters XML 1.0 forbids; operator-controlled contact strings could carry them.
-_CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+# Characters XML 1.0 forbids, and lone surrogates (UTF-8 cannot encode them):
+# operator-controlled contact strings could carry them.
+_CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
 # DejaVu Sans advance widths in 1/100 em for " " .. "~" (Verdana, the usual
 # fallback, is about as wide), so layouts hold in either font.

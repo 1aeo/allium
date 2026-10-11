@@ -25,9 +25,10 @@ try:  # ~4x faster than zlib at the same size; zlib works too
 except ImportError:  # pragma: no cover
     deflate = zlib
 
-# Part of the chart cache key (VERSION, with the palette, the cairo version and
-# the fonts found): change it when the drawing or the encoding changes.
-_DRAWING = b"cairo-3"
+# Names the chart cache's folder (VERSION, with the background, which is painted
+# outside the ops, the palette, the cairo version and the fonts found): change it
+# when the replay or the encoding changes. The drawing itself keys each file.
+_DRAWING = b"cairo-4"
 # The chart's own named colors first (svg.py, and the spike callout's box), so
 # they stay exact, then the flat and edge shades that cover the most pixels in
 # ~1,250 real charts. scripts/chart_palette.py chose them; run it again after
@@ -88,7 +89,7 @@ def _fonts():
     return ",".join(advances).encode()
 
 
-VERSION = b"/".join((_DRAWING, " ".join(PALETTE).encode(), cairo.cairo_version_string().encode(), _fonts()))
+VERSION = b"/".join((_DRAWING, BG.encode(), " ".join(PALETTE).encode(), cairo.cairo_version_string().encode(), _fonts()))
 _LUT = []
 
 
