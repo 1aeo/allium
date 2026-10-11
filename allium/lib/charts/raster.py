@@ -1,9 +1,13 @@
-"""PNG charts: an ``Svg``'s own drawing replayed with cairo at 2x, then PNG-encoded.
+"""PNG charts: an ``Svg``'s own drawing replayed with cairo (2x by default), then PNG-encoded.
 
-About 11 ms a chart, against about 70 ms to rasterize the SVG text with
-CairoSVG at the same size: there is no SVG to parse, and the encoder below
-(PNG "Up" filter with numpy, deflate with zlib-ng) is several times faster
-than libpng at about the same file size.
+About 12 ms a chart at 2x, against about 70 ms to rasterize the SVG text
+with CairoSVG at the same size: there is no SVG to parse, and the encoders
+below (numpy, deflate with zlib-ng) are several times faster than libpng.
+
+By default every pixel is then snapped to PALETTE, 64 colors fixed in
+advance, through a lookup table built once: an 8-bit palette PNG is about a
+third of the full-color one (~48 KB against ~150 KB at 2x) and looks the
+same, at about the same speed. ``colors="full"`` keeps every shade.
 """
 
 import re
@@ -21,10 +25,23 @@ try:  # ~4x faster than zlib at the same size; zlib works too
 except ImportError:  # pragma: no cover
     deflate = zlib
 
-SCALE = 2
-# Part of the chart cache key (VERSION, with the cairo version and the fonts
-# found): change it when the drawing or the encoding changes.
-_DRAWING = b"cairo-2x-2"
+# Part of the chart cache key (VERSION, with the palette, the cairo version and
+# the fonts found): change it when the drawing or the encoding changes.
+_DRAWING = b"cairo-3"
+# The chart's own named colors first (svg.py, and the spike callout's box), so
+# they stay exact, then the flat and edge shades that cover the most pixels in
+# ~1,250 real charts. scripts/chart_palette.py chose them; run it again after
+# adding a color to the charts (tests/unit/charts/test_raster.py checks this).
+PALETTE = (
+    "00ff7f 161a20 242424 323232 38bdf8 3c3c3c 4da6ff 555555 "
+    "9a9a9a b48cff e6e6e6 ff6b6b ffb454 1e1e1e 302424 2d2821 "
+    "1a3d2b 2f2f2f 2e2e2e 262626 303030 222222 313131 2b2b2b "
+    "252525 232323 4c4c4c 363636 0ca458 06d76f 1b5c3a 553333 "
+    "54442e ab7d40 80807f 636265 727173 d5d6d6 8d8d8d 866437 "
+    "753c3d ae5051 b5b8b6 c4c6c5 16683f a6a8a7 137b47 3c594a "
+    "108f50 6c8176 1cdfa3 0aca6a 8a6dbe 1b4c34 8e4547 41322a "
+    "30c7ca 3e8ac4 0cb763 2c4c64 4d6a5b 346a8f 5d7669 7a9085"
+).split()
 _PATH = re.compile(r"[MLlhz]|-?[\d.]+")
 # Cairo keeps ARGB32 pixels as native-endian words: B, G, R, A in memory on
 # little-endian machines. Drawing with red and blue swapped leaves them in
@@ -71,7 +88,26 @@ def _fonts():
     return ",".join(advances).encode()
 
 
-VERSION = b"/".join((_DRAWING, cairo.cairo_version_string().encode(), _fonts()))
+VERSION = b"/".join((_DRAWING, " ".join(PALETTE).encode(), cairo.cairo_version_string().encode(), _fonts()))
+_LUT = []
+
+
+def lookup():
+    """Palette index for every 24-bit color (index = R | G << 8 | B << 16): the nearest PALETTE color on a
+    6-bit-per-channel grid, and each PALETTE color for itself. 16 MB, built once (~0.4 s), before forking."""
+    if not _LUT:
+        pal = np.array([[int(c[i:i + 2], 16) for i in (0, 2, 4)] for c in PALETTE], np.int32)
+        grid = np.arange(1 << 18)
+        centres = np.stack([grid & 63, (grid >> 6) & 63, grid >> 12], 1) * 4 + 2
+        nearest = np.empty(1 << 18, np.uint8)
+        for start in range(0, 1 << 18, 1 << 14):
+            part = centres[start:start + (1 << 14), None, :] - pal[None]
+            nearest[start:start + (1 << 14)] = (part * part).sum(-1).argmin(1)
+        # Each grid cell covers 4 values of each channel: blue (high bits) outermost, red innermost.
+        lut = nearest.reshape(64, 64, 64).repeat(4, 0).repeat(4, 1).repeat(4, 2).ravel()
+        lut[pal[:, 0] | pal[:, 1] << 8 | pal[:, 2] << 16] = np.arange(len(PALETTE))
+        _LUT.append(lut)
+    return _LUT[0]
 
 
 def _stroke(ctx, color, width, dash):
@@ -180,8 +216,14 @@ def _chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
 
 
+def _png(width, height, color_type, idat, palette=b""):
+    header = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    return b"".join((b"\x89PNG\r\n\x1a\n", _chunk(b"IHDR", header), _chunk(b"PLTE", palette) if palette else b"",
+                     _chunk(b"IDAT", idat), _chunk(b"IEND", b"")))
+
+
 def encode(rows, width, height):
-    """PNG bytes for ``height`` rows of ``width`` RGBA pixels (a uint8 array, one row per line).
+    """8-bit RGBA PNG bytes for ``height`` rows of ``width`` RGBA pixels (a uint8 array, one row per line).
 
     Every row gets the "Up" filter (its difference from the row above): a
     chart is mostly flat color, so most of those bytes are zero.
@@ -190,21 +232,44 @@ def encode(rows, width, height):
     filtered[:, 0] = 2
     filtered[0, 1:] = rows[0]
     np.subtract(rows[1:], rows[:-1], out=filtered[1:, 1:])
-    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)  # 8-bit RGBA
-    return b"".join((b"\x89PNG\r\n\x1a\n", _chunk(b"IHDR", header),
-                     _chunk(b"IDAT", deflate.compress(filtered, 3)), _chunk(b"IEND", b"")))
+    return _png(width, height, 6, deflate.compress(filtered, 3))
 
 
-def png(svg):
-    """The chart at ``SCALE`` times its size, as PNG bytes."""
-    width, height = int(svg.width * SCALE), svg.height * SCALE
+def encode_palette(rows, width, height, block=64):
+    """8-bit palette PNG bytes for the same rows, every pixel snapped to PALETTE (rows unfiltered: smaller here).
+
+    Done ``block`` rows at a time so the index arrays stay in the CPU cache: with every core drawing charts,
+    a whole chart at once (3 million 8-byte indices) was a third slower.
+    """
+    lut, filtered = lookup(), np.zeros((height, width + 1), np.uint8)
+    words = np.ascontiguousarray(rows).view("<u4")  # R | G << 8 | B << 16 | A << 24
+    key = np.empty((block, width), np.intp)
+    for top in range(0, height, block):
+        part = words[top:top + block]
+        np.bitwise_and(part, 0xFFFFFF, out=key[:len(part)], casting="unsafe")
+        lut.take(key[:len(part)], out=filtered[top:top + block, 1:], mode="wrap")
+    return _png(width, height, 3, deflate.compress(filtered, 6), bytes.fromhex("".join(PALETTE)))
+
+
+def render(svg, scale):
+    """The chart drawn at ``scale`` times its size: (surface, rows of RGBA bytes, width, height). The rows are
+    the surface's own memory, so keep the surface until they are used."""
+    width, height = int(round(svg.width * scale)), int(round(svg.height * scale))
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
     ctx = cairo.Context(surface)
     ctx.set_font_options(_FONT_OPTIONS)
-    ctx.scale(SCALE, SCALE)
+    ctx.scale(scale, scale)
     _draw(ctx, svg)
     surface.flush()
     rows = np.frombuffer(surface.get_data(), np.uint8).reshape(height, surface.get_stride())[:, :width * 4]
     if not _SWAP:  # big-endian: A, R, G, B in memory
         rows = rows.reshape(height, width, 4)[:, :, [1, 2, 3, 0]].reshape(height, width * 4)
-    return encode(rows, width, height)
+    return surface, rows, width, height
+
+
+def png(svg, scale=2, colors="64"):
+    """The chart at ``scale`` times its size as PNG bytes: snapped to PALETTE, or with ``colors="full"`` not."""
+    surface, rows, width, height = render(svg, scale)
+    data = (encode if colors == "full" else encode_palette)(rows, width, height)
+    surface.finish()
+    return data

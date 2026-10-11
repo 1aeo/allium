@@ -7,27 +7,41 @@ draws each chart as SVG text and records the same drawing calls. Colors and
 type follow the 1aeo.com/blog charts (dark `#1e1e1e` canvas, DejaVu Sans).
 
 PNG is the default, because Tor Browser's Safest level turns SVG off.
-`charts/raster.py` replays the recorded calls with cairo at 2x (2160 px wide,
-sharp on HiDPI screens) and writes the PNG itself: every row "Up"-filtered with
-numpy, then deflated with zlib-ng. That is about 11 ms and 140 KB per chart,
-against about 70 ms to rasterize the SVG text with CairoSVG at the same size,
-and about 1 ms and 9 KB for SVG (`--chart-format svg`).
+`charts/raster.py` replays the recorded calls with cairo at 2x (`--chart-scale`
+1, 1.5 or 2; 2160 px wide, sharp on HiDPI screens) and writes the PNG itself.
+By default every pixel is snapped to `raster.PALETTE`, 64 colors fixed in
+advance: the charts' own named colors exactly, then the blended fills and edge
+shades that cover the most pixels in real charts (`scripts/chart_palette.py`
+picks them; `tests/unit/charts/test_raster.py` fails when a chart draws a color
+the palette lacks). A 16 MB lookup table, built once before the page workers
+fork, maps each pixel, a block of rows at a time so the work stays in the CPU
+cache; the indexes are deflated with zlib-ng into an 8-bit palette PNG. In
+~1,250 real charts 97.8% of pixels keep their exact color and 99% move by at
+most 4 levels (of 255); a few antialiased edge pixels move further, so it looks
+the same. `--chart-colors full` keeps every shade instead
+(RGBA, every row "Up"-filtered with numpy).
+
+Per chart at 2x with 4 workers busy: about 10.5 ms and 50 KB (full color: 10 ms
+and 150 KB), against about 70 ms to rasterize the SVG text with CairoSVG at the
+same size, and about 1 ms and 9 KB for SVG (`--chart-format svg`).
 
 PNGs are cached in `data/cache/charts` under a hash of their SVG text, which
 describes the whole drawing, and hard-linked next to their page. A chart that
 did not change since the last build is linked, not drawn: most 6M/1Y/5Y charts,
 and 1M charts between Onionoo's 4-hourly points (about 85% of all charts an
 hour apart). `ChartWriter.sweep()` then deletes what the build did not use, so
-the cache holds one copy of the current charts (about 9.4 GB). On 4 cores a
-full build took 4m05s-4m30s with an empty cache, then 1m31s an hour later, or
-1m56s when Onionoo had added a 4-hourly point (SVG: about 1m45s; PNG drawn at
-1x by CairoSVG took 9m41s).
+the cache holds one copy of the current charts (about 3.4 GB; 9.4 GB in full
+color). The scale and colors are part of the cache key. On 4 cores a full build
+took 4m30s with an empty cache, then 1m31s-1m33s an hour later, or 1m56s when
+Onionoo had added a 4-hourly point (SVG: about 1m45s; full-color 1x PNG drawn
+by CairoSVG took 9m41s).
 
-The cost is page weight: a relay page with all eight charts loads about 1.1 MB
-of PNG against 72 KB of SVG, and with JavaScript off (Tor Browser's Safest)
-`loading="lazy"` is ignored, so all of it loads with the page. Thumbnails use
-the same files. Deflate tuning saves under 5%; only lossy palette quantization
-(about -60%) would cut it much.
+The cost is page weight: a relay page with all eight charts loads about 405 KB
+of PNG (1.2 MB in full color) against 72 KB of SVG, and with JavaScript off (Tor
+Browser's Safest) `loading="lazy"` is ignored, so all of it loads with the page.
+Thumbnails use the same files: separate small thumbnails would cut the first
+view with JavaScript on, but add bytes at Safest, where hidden `<img>`s load
+anyway.
 
 PNG needs cairocffi, numpy and zlib-ng (`config/requirements.txt`) plus the
 cairo library and DejaVu Sans (`apt install libcairo2 fonts-dejavu-core`).

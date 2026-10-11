@@ -25,14 +25,14 @@ def history(write, read=None, key="1_month", **kwargs):
     return bandwidth_row(write, read or write, key, **kwargs)
 
 
-def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None):
+def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None, **options):
     return ChartWriter(SimpleNamespace(
         json={"relays": relays},
         bandwidth_data={"relays_published": PUBLISHED, "relays": [dict(row, fingerprint=fp) for fp, row in bandwidth.items()]},
         uptime_data={"relays_published": PUBLISHED, "relays": [
             {"fingerprint": fp, "uptime": {"1_month": block(values, interval=14400, factor=1 / 999.0)}}
             for fp, values in (uptime or {}).items()]},
-    ), image_format, cache_dir)
+    ), image_format, cache_dir, **options)
 
 
 def texts(path):
@@ -80,7 +80,7 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     # modification time so rsync and HTTP caches see them unchanged.
     os.utime(first / "bandwidth-1m.png", (1, 1))
     charts = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root))
-    charts.raster = SimpleNamespace(VERSION=charts.raster.VERSION, png=lambda svg: 1 / 0)
+    charts.raster = SimpleNamespace(VERSION=charts.raster.VERSION, png=lambda *args: 1 / 0)
     assert charts.relay(relay("A"), str(second)) == (bandwidth, uptime)
     assert os.stat(second / "bandwidth-1m.png").st_ino == os.stat(first / "bandwidth-1m.png").st_ino
     assert os.stat(second / "bandwidth-1m.png").st_mtime == 1
@@ -99,6 +99,14 @@ def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_
     assert len(os.listdir(cache)) == 4 and not os.path.exists(stale)
     writer([relay("A")], history_a, cache_dir=str(root)).sweep()
     assert not root.exists()
+    # --chart-scale 1.5 draws 1620 px wide, in a cache of its own.
+    smaller = writer([relay("A")], history_a, {"A": [999] * 180}, "png", str(root), scale=1.5, colors="full")
+    third = tmp_path / "third"
+    third.mkdir()
+    bandwidth, _uptime = smaller.relay(relay("A"), str(third))
+    png = (third / "bandwidth-1m.png").read_bytes()
+    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big"), png[25]) == (
+        1620, round(1.5 * bandwidth["1m"]), 6)  # 8-bit RGBA: full color
 
 
 def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
@@ -107,7 +115,7 @@ def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
     cache.mkdir()
     charts = writer([relay("A")], {"A": history([100] * 30)})
     charts.ext, charts.cache = "png", str(cache)
-    charts.raster = SimpleNamespace(VERSION=b"test", png=lambda svg: 1 / 0)  # e.g. a broken cairo on the build host
+    charts.raster = SimpleNamespace(VERSION=b"test", png=lambda *args: 1 / 0)  # e.g. a broken cairo on the build host
     assert charts.relay(relay("A"), str(out)) == ({}, {})
     assert os.listdir(out) == os.listdir(cache) == [] and "PNG conversion failed" in caplog.text
 

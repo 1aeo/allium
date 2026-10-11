@@ -264,8 +264,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--chart-format",
         choices=("png", "svg"),
-        help="history chart images: png (default, drawn at 2x; shows at Tor Browser's Safest level, which "
-             "turns SVG off) or svg (smaller and faster, needs no extra package)",
+        help="history chart images: png (default; shows at Tor Browser's Safest level, which turns SVG "
+             "off) or svg (smaller and faster, needs no extra package)",
+    )
+    parser.add_argument(
+        "--chart-scale",
+        type=float,
+        choices=(1.0, 1.5, 2.0),
+        default=2.0,
+        help="PNG chart resolution: 2 (default, 2160 px wide, sharp on HiDPI screens), 1.5 or 1 (smaller files)",
+    )
+    parser.add_argument(
+        "--chart-colors",
+        choices=("64", "full"),
+        default="64",
+        help="PNG chart colors: 64 (default, a fixed palette: about a third of the size, looks the same) or full",
     )
     args = parser.parse_args()
 
@@ -369,7 +382,8 @@ if __name__ == "__main__":
     if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
         from lib.charts.render import ChartWriter
         from lib.page_writer import ENV
-        RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format)
+        RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format, scale=args.chart_scale,
+                                             colors=args.chart_colors)
         ENV.globals["chart_ext"] = args.chart_format
 
     # Freeze the finished data set so later collections, here and in the

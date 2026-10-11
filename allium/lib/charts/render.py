@@ -211,17 +211,23 @@ class ChartWriter(object):
 
     _copy_warned = False
 
-    def __init__(self, relay_set, image_format="png", cache_dir=None):
+    def __init__(self, relay_set, image_format="png", cache_dir=None, scale=2, colors="64"):
         from ..operator_analysis import history_maps
         from ..workers import CACHE_DIR
         self.ext, self.raster, self.started = image_format, None, time.time()
+        self.scale, self.colors = scale, colors
         self.cache_root = self.cache = cache_dir or os.path.join(CACHE_DIR, "charts")
         if image_format == "png":
             from . import raster  # cairocffi, numpy, zlib-ng
             self.raster = raster
-            # One directory per drawing (code, cairo and fonts): the others can never be hit again, so they go
-            # now, before this build fills its own.
+            if colors != "full":
+                raster.lookup()  # built once here, then shared with the forked page workers
+            # One directory per drawing version (code, palette, cairo, fonts): the others can never be hit again,
+            # so they go now, before this build fills its own. --chart-scale and --chart-colors are part of
+            # each file's key instead, so builds with other options do not delete this folder under each
+            # other (sweep() still drops the charts this build did not use).
             self.cache = os.path.join(self.cache_root, hashlib.blake2b(raster.VERSION, digest_size=8).hexdigest())
+            self.key = ("/%gx/%s" % (scale, colors)).encode() + raster.VERSION
             os.makedirs(self.cache, exist_ok=True)
             for entry in os.scandir(self.cache_root):
                 if entry.is_dir():
@@ -259,11 +265,11 @@ class ChartWriter(object):
         return svg.height
 
     def _png(self, svg, text, path):
-        cached = os.path.join(self.cache, hashlib.blake2b(text + self.raster.VERSION, digest_size=16).hexdigest() + ".png")
+        cached = os.path.join(self.cache, hashlib.blake2b(text + self.key, digest_size=16).hexdigest() + ".png")
         try:  # a hit: mark it used for sweep() in the access time, keep the modification time
             os.utime(cached, ns=(time.time_ns(), os.stat(cached).st_mtime_ns))
         except FileNotFoundError:
-            data, partial = self.raster.png(svg), "%s.%d" % (cached, os.getpid())
+            data, partial = self.raster.png(svg, self.scale, self.colors), "%s.%d" % (cached, os.getpid())
             with open(partial, "wb") as handle:
                 handle.write(data)
             os.replace(partial, cached)
@@ -278,8 +284,8 @@ class ChartWriter(object):
         except OSError as error:  # e.g. the output is on another filesystem
             if error.errno == errno.EXDEV and not ChartWriter._copy_warned:
                 ChartWriter._copy_warned = True
-                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~10 GB) instead of "
-                               "linking it; build next to it to save that", self.cache_root)
+                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~3.5 GB at the "
+                               "defaults) instead of linking it; build next to it to save that", self.cache_root)
             shutil.copy2(cached, path)
 
     def sweep(self):
