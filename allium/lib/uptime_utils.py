@@ -111,21 +111,52 @@ def _compute_uptime_percentage_and_datapoints(uptime_values, factor=None, padded
     return percentage, count
 
 
-def _block_uptime_percentage_and_datapoints(block, period, published):
+def block_window(block, period, published):
     """
-    Uptime percentage and valid datapoint count of one Onionoo history block,
-    over Onionoo's current window.
+    Where an Onionoo history block sits in Onionoo's current window.
 
     Onionoo counts every hour a relay is missing from the consensus as 0%, but
     it only rewrites a relay's uptime document while the relay appears in new
     consensuses, so an offline relay's blocks stop where it was last seen.
-    This adds the slots a block lacks before the window's end back as 0% and
-    leaves out slots from before the window: what Onionoo would publish if it
-    rewrote the document now. The block of a relay in the latest consensus
-    already spans the window and gives the same figure as before.
+    Slots from before the window drop out, and the window slots after the
+    block's last one are the ones Onionoo would add, at 0%, if it rewrote the
+    document now. The block of a relay in the latest consensus spans the
+    window exactly: nothing drops out and nothing is missing.
 
-    Without the document's publish time, or the block's first slot and
-    interval, the whole block is averaged.
+    Args:
+        block (dict): Onionoo history block (first, interval, values)
+        period (str): History key, e.g. '1_month'
+        published (datetime): The uptime document's relays_published, or None
+
+    Returns:
+        tuple: (lo, hi, pad_from, padded): block['values'][lo:hi] lie inside the
+        window, and `padded` slots starting at epoch second `pad_from`, one
+        interval apart, are missing after the block's end. None without the
+        publish time or the block's first slot and interval, or for a block
+        whose slots are not on the window's slot grid (not Onionoo data).
+    """
+    values = block.get('values') or []
+    window = onionoo_uptime_window(published, period) if values else None
+    first = parse_onionoo_timestamp(block.get('first')) if window else None
+    if first is None or block.get('interval') != window[2]:
+        return None
+    start, end, step = window
+    offset, off_grid = divmod(int(first.timestamp()) - start - step // 2, step)  # window slot of values[0]
+    if off_grid:
+        return None
+    slots = (end - start) // step
+    lo = min(max(-offset, 0), len(values))
+    hi = min(max(slots - offset, 0), len(values))
+    covered = min(max(offset + len(values), 0), slots)  # window slots up to the block's last one
+    return lo, hi, start + step // 2 + covered * step, slots - covered
+
+
+def _block_uptime_percentage_and_datapoints(block, period, published):
+    """
+    Uptime percentage and valid datapoint count of one Onionoo history block,
+    over Onionoo's current window (see block_window): what Onionoo would
+    publish if it rewrote the relay's document now. Slots missing after the
+    block's end count as 0%. Without a window the whole block is averaged.
 
     Args:
         block (dict): Onionoo history block (first, interval, factor, values)
@@ -135,19 +166,11 @@ def _block_uptime_percentage_and_datapoints(block, period, published):
     Returns:
         tuple: (percentage, datapoints) as _compute_uptime_percentage_and_datapoints
     """
-    values = block.get('values') or []
-    window = onionoo_uptime_window(published, period) if values else None
-    first = parse_onionoo_timestamp(block.get('first')) if window else None
-    if first is None or block.get('interval') != window[2]:
-        return _compute_uptime_percentage_and_datapoints(values, block.get('factor'))
-    start, end, step = window
-    first = int(first.timestamp())
-    in_window = [v for i, v in enumerate(values) if start <= first + i * step < end]
-    # Window slots up to and including the block's last one; the rest are padding
-    slots = (end - start) // step
-    covered = (first + (len(values) - 1) * step - start - step // 2) // step + 1
-    padded = slots - min(max(covered, 0), slots)
-    return _compute_uptime_percentage_and_datapoints(in_window, block.get('factor'), padded)
+    where = block_window(block, period, published)
+    if where is None:
+        return _compute_uptime_percentage_and_datapoints(block.get('values'), block.get('factor'))
+    lo, hi, _pad_from, padded = where
+    return _compute_uptime_percentage_and_datapoints(block['values'][lo:hi], block.get('factor'), padded)
 
 
 def index_relays_by_fingerprint(relays):

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from allium.lib.uptime_utils import (
     _block_uptime_percentage_and_datapoints,
+    block_window,
     _compute_uptime_percentage_and_datapoints,
     onionoo_uptime_window,
     extract_relay_uptime_for_period,
@@ -199,6 +200,24 @@ class TestOnionooWindow(unittest.TestCase):
         """A relay last seen months ago has no slots in the window"""
         block = onionoo_block(utc(2026, 3, 6, 22), [999] * 186)
         self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED), (0.0, 0))
+
+    def test_block_window_slices_and_padding(self):
+        """block_window gives the slots inside the window and where the missing ones start"""
+        stopped = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)
+        self.assertEqual(block_window(stopped, '1_month', self.PUBLISHED),
+                         (39, 180, int(utc(2026, 10, 5, 10).timestamp()), 39))
+        running = onionoo_block(self.WINDOW_FIRST, [999] * 180)
+        self.assertEqual(block_window(running, '1_month', self.PUBLISHED)[3], 0)
+        gone = onionoo_block(utc(2026, 3, 6, 22), [999] * 186)
+        self.assertEqual(block_window(gone, '1_month', self.PUBLISHED),
+                         (186, 186, int(self.WINDOW_FIRST.timestamp()), 180))
+
+    def test_block_off_the_slot_grid_is_averaged_whole(self):
+        """Slots on 4-hour boundaries instead of midpoints are not Onionoo's grid: no clipping or padding"""
+        block = onionoo_block(utc(2026, 9, 5, 12), [999] * 150 + [0] * 30)
+        self.assertIsNone(block_window(block, '1_month', self.PUBLISHED))
+        self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED),
+                         _compute_uptime_percentage_and_datapoints(block['values'], block['factor']))
 
     def test_without_publish_time_or_slot_times_whole_block(self):
         """No relays_published, or a block without first/interval, averages the whole block as before"""
