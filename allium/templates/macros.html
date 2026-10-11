@@ -621,21 +621,23 @@
     the default chart is last in the DOM so the ~ combinator can hide it. Deep links:
     #<name>-<period> switches this chart, #<period> (chart_period_anchors) every chart on
     the page; chart-on-<period> marks what shows for a period, the default standing in for
-    periods this chart lacks. Each chart links to its full-size image for zooming. Pass
-    ext=chart_ext (a global, which imported macros do not see once cached). -#}
+    periods this chart lacks. Each chart links to its full-size image for zooming. periods
+    maps each drawn period to its chart's height, so the page reserves the image's box.
+    Pass ext=chart_ext (a global, which imported macros do not see once cached). -#}
 {% macro chart_history(name, periods, alt, src='', ext='svg') %}
 {% if periods %}
 {% set spans = {'1m': 'last 30 days', '6m': 'last 6 months', '1y': 'last year', '5y': 'last 5 years'} %}
+{% set order = periods|list %}
 {% set missing %}{% for period in spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
 <h5 class="subsection-header" style="margin-top: 16px;">History</h5>
 <div class="chart-history">
-    {% for period in periods[1:] + periods[:1] %}
-    <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" alt="{{ alt }}, {{ spans[period] }}" loading="lazy"></a>
+    {% for period in order[1:] + order[:1] %}
+    <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="{{ alt }}, {{ spans[period] }}" loading="lazy"></a>
     {% endfor %}
     {% if periods|length > 1 %}
     <div class="chart-sparks">
-        {% for period in periods %}
-        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="Show the {{ spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" alt="" loading="lazy">{{ period|upper }}</a>
+        {% for period in order %}
+        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="Show the {{ spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
         {% endfor %}
     </div>
     {% endif %}

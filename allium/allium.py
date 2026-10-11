@@ -12,6 +12,8 @@ Default output directory: ./www
 import argparse
 import gc
 import os
+import shutil
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -276,6 +278,11 @@ if __name__ == "__main__":
             import cairosvg  # noqa: F401
         except (ImportError, OSError) as e:
             sys.exit(f"❌ --chart-format png needs CairoSVG and the cairo library (pip install cairosvg): {e}")
+        # CairoSVG draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
+        if shutil.which("fc-match") and "DejaVu Sans" not in subprocess.run(
+                ["fc-match", "DejaVu Sans"], capture_output=True, text=True).stdout:
+            print("⚠️ --chart-format png: DejaVu Sans is not installed (e.g. apt install fonts-dejavu-core), "
+                  "so chart text falls back to another font")
 
     start_time = time.time()
     

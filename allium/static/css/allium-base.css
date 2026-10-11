@@ -625,6 +625,8 @@ th[title]::after {
    the default chart (last in the DOM) shows until a thumbnail link targets
    another period; same pure-CSS :target pattern as the AROI pagination. */
 .chart-history {
+    max-width: 1094px;  /* the chart's own 1080 px (+ padding and border): a PNG is not upscaled, and a
+                           deep-linked chart fits Tor Browser's default 1400x900 window */
     margin: 12px 0 0;
     padding: 6px;
     background: var(--aeo-dark-surface);
@@ -639,6 +641,8 @@ th[title]::after {
 .chart-history .chart-hero {
     display: block;
     scroll-margin-top: 80px;
+    color: var(--aeo-text-dim);  /* alt text, e.g. SVG at Tor Browser's Safest level */
+    text-decoration: none;
 }
 .chart-history .chart-hero:focus {
     outline: 1px solid var(--aeo-green);  /* a deep link focuses its chart: ring it like its thumbnail */
@@ -650,6 +654,9 @@ th[title]::after {
 }
 /* #1m/#6m/#1y/#5y (chart_period_anchors) switch every chart on the page, like a
    period page would: hide all, then show each chart's chart-on-<period>. */
+.chart-period {
+    scroll-margin-top: 80px;
+}
 .chart-period:target ~ * .chart-hero {
     display: none;
 }
@@ -664,21 +671,23 @@ th[title]::after {
     gap: 6px;
     margin-top: 6px;
 }
-.chart-spark {
+/* .chart-sparks prefixes outrank Bootstrap's a:hover/a:focus color, underline and outline. */
+.chart-sparks .chart-spark {
     flex: 0 1 25%;
     border-radius: 4px;
     outline: 1px solid transparent;
+    outline-offset: 2px;
     color: var(--aeo-text-dim);
     font-size: 12px;
     text-align: center;
     text-decoration: none;
 }
-.chart-spark:hover,
-.chart-spark:focus {
+.chart-sparks .chart-spark:hover,
+.chart-sparks .chart-spark:focus {
     outline-color: var(--aeo-green);
 }
 /* The thumbnail of the chart showing: the default until a link targets another. */
-.chart-spark-default,
+.chart-sparks .chart-spark-default,
 .chart-hero.chart-on-1m:target ~ .chart-sparks .chart-on-1m,
 .chart-hero.chart-on-6m:target ~ .chart-sparks .chart-on-6m,
 .chart-hero.chart-on-1y:target ~ .chart-sparks .chart-on-1y,

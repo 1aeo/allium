@@ -184,7 +184,7 @@ Pre-computed analysis attached to contact pages:
 | `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
-| `--chart-format` | `svg` | Chart images: `svg` or `png` (PNG needs `pip install cairosvg` and the cairo library, and takes longer: ~30 ms per chart vs ~1 ms) |
+| `--chart-format` | `svg` | Chart images: `svg` or `png`. PNG renders where SVG is off (Tor Browser's Safest level) but needs `pip install cairosvg`, the cairo library and the DejaVu Sans font, takes ~30 ms per chart vs ~1 ms, is ~6x larger, and is drawn at 1080 px (soft on HiDPI screens) |
 
 **Examples**:
 

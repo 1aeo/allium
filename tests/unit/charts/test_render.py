@@ -40,9 +40,15 @@ def texts(path):
     return [t.text.replace("\xa0", " ") for t in ET.parse(path).iter("{http://www.w3.org/2000/svg}text")]
 
 
+def height(path):
+    return int(ET.parse(path).getroot().get("height"))
+
+
 def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 180})
-    assert charts.relay(relay("A"), str(tmp_path)) == (("1m",), ("1m",))
+    # Each drawn period comes with its chart's height, so the page can reserve the image's box.
+    assert charts.relay(relay("A"), str(tmp_path)) == ({"1m": height(tmp_path / "bandwidth-1m.svg")},
+                                                       {"1m": height(tmp_path / "uptime-1m.svg")})
     assert sorted(os.listdir(tmp_path)) == ["bandwidth-1m.svg", "uptime-1m.svg"]
     lines = texts(tmp_path / "bandwidth-1m.svg")
     for line in ("relayA  ·  example.com", "Throughput · last 30 days  ·  Guard", "Write (outbound)",
@@ -58,17 +64,26 @@ def test_png_charts_are_the_svg_rasterized(tmp_path):
     except (ImportError, OSError):  # optional: also needs the cairo library
         pytest.skip("CairoSVG is not installed")
     charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 180}, "png")
-    assert charts.relay(relay("A"), str(tmp_path)) == (("1m",), ("1m",))
+    bandwidth, uptime = charts.relay(relay("A"), str(tmp_path))
     assert sorted(os.listdir(tmp_path)) == ["bandwidth-1m.png", "uptime-1m.png"]
     png = (tmp_path / "bandwidth-1m.png").read_bytes()
-    assert png[:8] == b"\x89PNG\r\n\x1a\n" and png[16:20] == (1080).to_bytes(4, "big")  # IHDR width
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"  # IHDR: the SVG's own size
+    assert (int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")) == (1080, bandwidth["1m"])
+
+
+def test_a_failed_png_conversion_is_reported_not_silent(tmp_path, caplog):
+    charts = writer([relay("A")], {"A": history([100] * 30)})
+    charts.ext = "png"
+    charts.png = lambda bytestring: 1 / 0  # e.g. a broken cairo on the build host
+    assert charts.relay(relay("A"), str(tmp_path)) == ({}, {})
+    assert os.listdir(tmp_path) == [] and "PNG conversion failed" in caplog.text
 
 
 def test_each_period_only_shows_its_own_window(tmp_path):
     stale = history([100] * 30, first="2026-06-01 12:00:00")  # 1M stopped updating months ago
     longer = history([100] * 60, key="6_months", first="2026-08-01 12:00:00")
     charts = writer([relay("A")], {"A": dict(stale, **{k: dict(stale[k], **longer[k]) for k in stale})})
-    assert charts.relay(relay("A"), str(tmp_path)) == (("6m",), ())
+    assert [list(drawn) for drawn in charts.relay(relay("A"), str(tmp_path))] == [["6m"], []]
     assert os.listdir(tmp_path) == ["bandwidth-6m.svg"]
 
 
@@ -87,7 +102,7 @@ def test_overload_legend_and_spike_callout(tmp_path):
 
 def test_a_malformed_history_skips_that_chart(tmp_path):
     charts = writer([relay("A")], {"A": history(["x", "y", "z"])})
-    assert charts.relay(relay("A"), str(tmp_path)) == ((), ())
+    assert charts.relay(relay("A"), str(tmp_path)) == ({}, {})
     assert os.listdir(tmp_path) == []
 
 
@@ -95,14 +110,14 @@ def test_operator_chart_sums_members_and_uses_their_main_role(tmp_path):
     members = [relay("A", flags=["Exit"]), relay("B", flags=["Exit"]), relay("C"),
                relay("N", contact=""), relay("D", flags=["Exit"])]
     charts = writer(members, {"A": history([100] * 30), "B": history([300] * 30), "C": history([50] * 30)})
-    assert charts.contact([0, 1, 2, 4], str(tmp_path)) == ("1m",)
+    assert list(charts.contact([0, 1, 2, 4], str(tmp_path))) == ["1m"]
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert lines[0] == "example.com" and "This operator" in lines
     # D has no history, so its advertised bandwidth stays out of the sum too.
     assert "Advertised  6 Mbit/s" in lines
     assert "1,678 Exits · baseline 15 Aug 2026" in lines
     # Relays without contact info share one hash, but they are not an operator.
-    assert charts.contact([3], str(tmp_path / "none")) == ()
+    assert charts.contact([3], str(tmp_path / "none")) == {}
 
 
 def test_svg_text_is_escaped_and_valid_xml():

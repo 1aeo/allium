@@ -1,6 +1,8 @@
 """Relay and operator history charts, written as SVG next to their HTML pages."""
 
+import logging
 import os
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -19,6 +21,8 @@ from .svg import (
 
 WIDTH, LEFT = 1080, 138
 PLOT_WIDTH = WIDTH - LEFT - 24
+SVG_HEIGHT = re.compile(r'<svg [^>]*? height="(\d+)"')
+logger = logging.getLogger(__name__)
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -210,31 +214,38 @@ class ChartWriter(object):
         self.role_medians, self.family_medians = peer_medians(self.relays, self.bandwidth, self.since["1m"])
 
     def _save(self, directory, name, draw, *args):
-        """Write ``name`` plus the format's extension. No drawable history, or a malformed one, skips that chart
-        instead of failing the page."""
+        """Write ``name`` plus the format's extension; return its height (0 when skipped, so the page can reserve
+        the space). No drawable history, or a malformed one, skips that chart instead of failing the page."""
+        path = os.path.join(directory, "%s.%s" % (name, self.ext))
         try:
-            data = (draw(*args) or "").encode("utf-8")
-            data = self.png(bytestring=data) if data and self.png else data
+            svg = draw(*args) or ""
+            data = svg.encode("utf-8")
         except Exception:  # noqa: BLE001
-            data = None
-        if data:
-            with open(os.path.join(directory, "%s.%s" % (name, self.ext)), "wb") as handle:
-                handle.write(data)
-        return bool(data)
+            return 0
+        if data and self.png:
+            try:
+                data = self.png(bytestring=data)
+            except Exception as error:  # noqa: BLE001 -- unlike odd history, this is the build host's problem
+                logger.warning("PNG conversion failed for %s: %s", path, error)
+                return 0
+        if not data:
+            return 0
+        with open(path, "wb") as handle:
+            handle.write(data)
+        return int(SVG_HEIGHT.match(svg).group(1))
 
     def relay(self, relay, directory):
-        """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts; return the periods drawn for each."""
+        """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts; return ``{period: height}`` for each."""
         common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT,
                       bands=bands_for_role(role_from_flags(relay.get("flags"))),
                       identity=chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact"))),
                       restart=parse_onionoo_timestamp(relay.get("last_restarted")), overload=_overload_text(relay))
-        bandwidth, uptime = [], []
+        bandwidth, uptime = {}, {}
         for key, period in PERIODS:
-            if self._save(directory, "bandwidth-" + period, self._relay_bandwidth, relay, key, period, common):
-                bandwidth.append(period)
-            if self._save(directory, "uptime-" + period, self._relay_uptime, relay, key, period, common):
-                uptime.append(period)
-        return tuple(bandwidth), tuple(uptime)
+            bandwidth[period] = self._save(directory, "bandwidth-" + period, self._relay_bandwidth, relay, key, period,
+                                           common)
+            uptime[period] = self._save(directory, "uptime-" + period, self._relay_uptime, relay, key, period, common)
+        return {p: h for p, h in bandwidth.items() if h}, {p: h for p, h in uptime.items() if h}
 
     def _relay_bandwidth(self, relay, key, period, common):
         series = throughput(self.bandwidth.get(relay["fingerprint"]), key, self.since[period])
@@ -262,17 +273,18 @@ class ChartWriter(object):
                             common["restart"], average if len(percent) >= 30 and average > 1.0 else 0)
 
     def contact(self, member_indexes, directory):
-        """Write ``bandwidth-<period>`` charts for an operator's summed members; return the periods drawn."""
+        """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""
         members = [self.relays[i] for i in member_indexes]
         # Relays without contact info share one hash, but they are not an operator.
         if not any((relay.get("contact") or "").strip() for relay in members):
-            return ()
+            return {}
         operator = next((host for host in (operator_from_contact(r.get("contact")) for r in members) if host), "")
         # Operators mix roles: judge write/read against the members' most common role.
         bands = bands_for_role(Counter(role_from_flags(r.get("flags")) for r in members).most_common(1)[0][0])
         identity = operator or "Operator"
-        return tuple(period for key, period in PERIODS if self._save(
-            directory, "bandwidth-" + period, self._contact_bandwidth, members, key, period, bands, identity))
+        heights = {period: self._save(directory, "bandwidth-" + period, self._contact_bandwidth, members, key, period,
+                                      bands, identity) for key, period in PERIODS}
+        return {period: height for period, height in heights.items() if height}
 
     def _contact_bandwidth(self, members, key, period, bands, identity):
         series, summed = operator_throughput(members, self.bandwidth, key, self.since[period])

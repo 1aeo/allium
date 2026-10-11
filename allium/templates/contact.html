@@ -22,7 +22,6 @@
 {{ navigation('contacts', page_ctx) }}
 {% endblock -%}
 {% block description %}
-{% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
 {# Set aroi_domain for use in this block #}
 {% set aroi_domain = relay_subset[0]['aroi_domain'] if relay_subset[0]['aroi_domain'] else 'none' %}
 {# Option 1: Two-Column Layout (60/40 Split) - Final Version #}
@@ -647,6 +646,7 @@
         {% endif %}
     </div>
 </div>
+{% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
 {{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ 'contact/' ~ value ~ '/', ext=chart_ext) }}
 {% endblock %}
 

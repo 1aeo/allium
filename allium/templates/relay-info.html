@@ -36,7 +36,6 @@
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/relay-info.css">{% endblock -%}
 {% block body -%}
 <div id="content">
-{% if bandwidth_periods or uptime_periods %}{{ chart_period_anchors() }}{% endif %}
 <h1 id="nickname" class="page-title">View Relay "{{ relay['nickname'] }}"</h1>
 {{ navigation('', page_ctx) }}
 {# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
@@ -648,6 +647,7 @@ Country: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
+{% if bandwidth_periods %}{{ chart_period_anchors() }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
 <span id="bandwidth-capacity" class="compat-anchor"></span><span id="network-participation" class="compat-anchor"></span>
@@ -790,6 +790,7 @@ Country: unknown
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
+{% if uptime_periods and not bandwidth_periods %}{{ chart_period_anchors() }}{% endif %}
 <section id="uptime" class="section-box relay-section">
 <span id="first-last-seen" class="compat-anchor"></span>
 <h4 style="margin-top: 0; margin-bottom: 12px;">
