@@ -19,6 +19,9 @@ MBIT = 8e-6  # bytes/s -> Mbit/s
 # Days a relay's mean of write and read is below this (50 KB/s, the band census's cut) are left out of the
 # family and peer medians.
 MIN_OVERLAY_MBIT = 50000 * MBIT
+# Fewest family members with 1M history for a family median: the median includes the relay itself, so with
+# two members it would be half this relay.
+MIN_FAMILY = 3
 
 
 @functools.lru_cache(maxsize=1 << 12)
@@ -119,6 +122,6 @@ def peer_medians(relays, bandwidth_map, since=None):
     families = {}
     for key in dict.fromkeys(filter(None, map(family_key, relays))):
         dailies = [by_fp[fp] for fp in key if fp in by_fp]
-        if len(dailies) >= 2:
+        if len(dailies) >= MIN_FAMILY:
             families[key] = (len(dailies), medians(dailies))
     return {role: medians(dailies) for role, dailies in by_role.items()}, families

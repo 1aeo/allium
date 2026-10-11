@@ -112,13 +112,13 @@ def test_each_period_only_shows_its_own_window(tmp_path):
 
 
 def test_family_and_peer_medians_are_drawn_on_1m_only(tmp_path):
-    family = ["A", "B"]
+    family = ["A", "B", "C"]
     month, longer = history([100 + i for i in range(30)], [100] * 30), history([100] * 60, key="6_months")
     charts = writer([relay(fp, effective_family=family) for fp in family],
                     {fp: {k: dict(month[k], **longer[k]) for k in month} for fp in family})
     charts.relay(relay("A", effective_family=family), str(tmp_path))
-    assert {"Operator Family (median, n=2)", "Peers (network median)"} <= set(texts(tmp_path / "bandwidth-1m.svg"))
-    assert not {"Operator Family (median, n=2)", "Peers (network median)"} & set(texts(tmp_path / "bandwidth-6m.svg"))
+    assert {"Operator Family (median, n=3)", "Peers (network median)"} <= set(texts(tmp_path / "bandwidth-1m.svg"))
+    assert not {"Operator Family (median, n=3)", "Peers (network median)"} & set(texts(tmp_path / "bandwidth-6m.svg"))
 
 
 def test_overload_legend_and_spike_callout(tmp_path):

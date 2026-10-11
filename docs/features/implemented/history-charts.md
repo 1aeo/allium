@@ -84,8 +84,10 @@ when fontconfig's `fc-match` is installed to check.
 - Each period only shows its own window, ending at Onionoo's `relays_published`.
 - Family and peer medians are 1M only. A family's median is over the members
   of the relay's effective family (Onionoo's families are mutual declarations,
-  so members can list different sets); the subtitle names only the lines drawn
-  and checked on the out-of-band days.
+  so members can list different sets), and is drawn only with 3 or more members
+  with 1M history: it includes the relay itself, so with two it would be half
+  this relay. The subtitle names only the lines drawn and checked on the
+  out-of-band days.
 - Operator charts sum members on the most common sampling interval, on days
   each member has both directions (as its own chart does), compare write/read
   with the members' most common role, and are skipped for the group of relays
