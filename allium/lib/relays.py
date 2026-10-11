@@ -582,7 +582,10 @@ class Relays:
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
             self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")
-            self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months')
+            # Only relays the site shows: the uptime document also lists relays the downtime filter dropped
+            kept_fingerprints = {r['fingerprint'] for r in self.json["relays"] if r.get('fingerprint')}
+            self.network_uptime_percentiles = calculate_network_uptime_percentiles(
+                uptime_data, '6_months', kept_fingerprints)
             if self.network_uptime_percentiles:
                 total_relays = self.network_uptime_percentiles.get('total_relays', 0)
                 self.progress_logger.log_without_increment(f"Network percentiles calculated: {total_relays:,} relays analyzed")

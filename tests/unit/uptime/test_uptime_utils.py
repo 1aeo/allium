@@ -13,9 +13,12 @@ Tests cover:
 import statistics
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from allium.lib.uptime_utils import (
+    _block_uptime_percentage_and_datapoints,
     _compute_uptime_percentage_and_datapoints,
+    onionoo_uptime_window,
     extract_relay_uptime_for_period,
     calculate_network_uptime_percentiles,
     calculate_statistical_outliers,
@@ -131,6 +134,121 @@ class TestUptimeFactor(unittest.TestCase):
         consolidated = process_all_uptime_data_consolidated(relays, uptime_data)['relay_uptime_data']['FP0']
         self.assertAlmostEqual(consolidated['uptime_percentages']['1_month'], 25.0)
         self.assertAlmostEqual(consolidated['flag_data']['Running']['1_month']['uptime'], 25.0)
+
+
+def utc(*args):
+    """A UTC datetime, as parse_onionoo_timestamp returns"""
+    return datetime(*args, tzinfo=timezone.utc)
+
+
+def onionoo_block(first, values, interval=14400, factor=1 / 999):
+    """An Onionoo history block whose first slot midpoint is the datetime `first`"""
+    last = first + timedelta(seconds=interval * (len(values) - 1))
+    return {'first': first.strftime('%Y-%m-%d %H:%M:%S'), 'last': last.strftime('%Y-%m-%d %H:%M:%S'),
+            'interval': interval, 'factor': factor, 'count': len(values), 'values': list(values)}
+
+
+class TestOnionooWindow(unittest.TestCase):
+    """Uptime is averaged over Onionoo's current window, offline time after a block ends counting as 0%"""
+
+    # Onionoo uptime document published 2026-10-11 20:00; its 1-month window is
+    # 2026-09-11 20:00 - 2026-10-11 20:00, 180 four-hour slots with midpoints at 22:00, 02:00, ...
+    PUBLISHED = utc(2026, 10, 11, 20)
+    WINDOW_FIRST = utc(2026, 9, 11, 22)
+
+    def test_windows_match_onionoo(self):
+        """Window ends at the latest consensus + 1h and starts one calendar period earlier, both on the slot grid"""
+        expected = {
+            '1_month': (utc(2026, 9, 11, 20), utc(2026, 10, 11, 20), 4 * 3600),
+            '6_months': (utc(2026, 4, 11, 12), utc(2026, 10, 11, 12), 12 * 3600),
+            '1_year': (utc(2025, 10, 9), utc(2026, 10, 10), 2 * 86400),
+            '5_years': (utc(2021, 9, 30), utc(2026, 10, 4), 10 * 86400),
+        }
+        for period, (start, end, step) in expected.items():
+            self.assertEqual(onionoo_uptime_window(self.PUBLISHED, period),
+                             (int(start.timestamp()), int(end.timestamp()), step), period)
+        self.assertIsNone(onionoo_uptime_window(self.PUBLISHED, '3_months'))
+        self.assertIsNone(onionoo_uptime_window(None, '1_month'))
+
+    def test_month_back_clamps_the_day(self):
+        """Like Java's LocalDateTime.minus(Period): 31 Mar minus a month is 28 Feb"""
+        start, end, step = onionoo_uptime_window(utc(2026, 3, 31, 3), '1_month')
+        self.assertEqual((start, end), (int(utc(2026, 2, 28, 4).timestamp()), int(utc(2026, 3, 31, 4).timestamp())))
+        self.assertEqual((end - start) // step, 186)
+
+    def test_running_relay_block_is_unchanged(self):
+        """A block that spans the window (relay in the latest consensus) gives the whole-block figure exactly"""
+        values = [999, 499, 0, 999, 750, 999] * 30
+        block = onionoo_block(self.WINDOW_FIRST, values, factor=0.8 / 999)
+        self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED),
+                         _compute_uptime_percentage_and_datapoints(values, 0.8 / 999))
+
+    def test_offline_relay_is_padded_to_the_window_end(self):
+        """A history that stopped 6.5 days early: older slots drop out, the missing ones count as 0%"""
+        block = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)  # last slot 2026-10-05 06:00
+        percentage, datapoints = _block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED)
+        self.assertEqual(datapoints, 141)  # slots from 2026-09-11 22:00 on
+        self.assertAlmostEqual(percentage, 141 / 180 * 100)  # 39 padded slots
+
+    def test_padding_does_not_count_towards_the_minimum(self):
+        """20 real slots in the window are too few, however many padded ones follow"""
+        block = onionoo_block(self.WINDOW_FIRST, [999] * 20)
+        self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED), (0.0, 20))
+
+    def test_history_that_ended_before_the_window(self):
+        """A relay last seen months ago has no slots in the window"""
+        block = onionoo_block(utc(2026, 3, 6, 22), [999] * 186)
+        self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', self.PUBLISHED), (0.0, 0))
+
+    def test_without_publish_time_or_slot_times_whole_block(self):
+        """No relays_published, or a block without first/interval, averages the whole block as before"""
+        block = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)
+        whole = _compute_uptime_percentage_and_datapoints(block['values'], block['factor'])
+        self.assertEqual(_block_uptime_percentage_and_datapoints(block, '1_month', None), whole)
+        bare = {'values': block['values'], 'factor': block['factor']}
+        self.assertEqual(_block_uptime_percentage_and_datapoints(bare, '1_month', self.PUBLISHED), whole)
+
+    def test_callers_use_the_window_for_uptime_and_flags(self):
+        """Operator extraction, network percentiles and the consolidated uptime and flag paths all pad"""
+        stopped = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)
+        relays = [{'fingerprint': f'FP{i}', 'nickname': f'r{i}', 'flags': ['Running']} for i in range(10)]
+        uptime_data = {'relays_published': '2026-10-11 20:00:00', 'relays': [
+            {'fingerprint': r['fingerprint'], 'uptime': {'1_month': stopped},
+             'flags': {'Running': {'1_month': stopped}}} for r in relays]}
+        expected = 141 / 180 * 100
+
+        extracted = extract_relay_uptime_for_period(relays[:1], uptime_data, '1_month')
+        self.assertAlmostEqual(extracted['uptime_values'][0], expected)
+        self.assertAlmostEqual(calculate_network_uptime_percentiles(uptime_data, '1_month')['median'], expected)
+        consolidated = process_all_uptime_data_consolidated(relays, uptime_data)['relay_uptime_data']['FP0']
+        self.assertAlmostEqual(consolidated['uptime_percentages']['1_month'], expected)
+        self.assertAlmostEqual(consolidated['flag_data']['Running']['1_month']['uptime'], expected)
+
+
+class TestNetworkStatisticsKeptRelays(unittest.TestCase):
+    """Network statistics only count relays the site keeps, not every relay in the uptime document"""
+
+    def setUp(self):
+        """Ten relays at about 98%, plus one at 50% that the downtime filter dropped"""
+        self.relays = [{'fingerprint': f'FP{i}', 'nickname': f'r{i}', 'flags': ['Running']} for i in range(10)]
+        rows = [{'fingerprint': r['fingerprint'], 'uptime': {'6_months': {'values': [979 + i] * 40}},
+                 'flags': {'Running': {'6_months': {'values': [979 + i] * 40}}}} for i, r in enumerate(self.relays)]
+        rows.append({'fingerprint': 'DROPPED', 'uptime': {'6_months': {'values': [499] * 40}},
+                     'flags': {'Running': {'6_months': {'values': [499] * 40}}}})
+        self.uptime_data = {'relays': rows}
+
+    def test_consolidated_statistics_skip_dropped_relays(self):
+        """Uptime and flag statistics count the ten kept relays only"""
+        result = process_all_uptime_data_consolidated(self.relays, self.uptime_data)
+        self.assertEqual(result['network_statistics']['6_months']['count'], 10)
+        self.assertEqual(result['network_flag_statistics']['Running']['6_months']['count'], 10)
+        self.assertGreater(result['network_statistics']['6_months']['two_sigma_low'], 97)
+
+    def test_percentiles_skip_dropped_relays(self):
+        """With the kept fingerprints, the dropped relay is not counted; without them, every relay is"""
+        kept = {r['fingerprint'] for r in self.relays}
+        self.assertEqual(calculate_network_uptime_percentiles(self.uptime_data, '6_months', kept)['total_relays'], 10)
+        self.assertEqual(calculate_network_uptime_percentiles(self.uptime_data, '6_months')['total_relays'], 11)
 
 
 class TestRelayUptimeDataExtraction(unittest.TestCase):
