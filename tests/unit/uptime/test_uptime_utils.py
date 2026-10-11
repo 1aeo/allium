@@ -76,20 +76,24 @@ class TestUptimeFactor(unittest.TestCase):
     VALUES = [999, 0] * 90  # 180 4-hour slots, alternating 50% running and down
 
     def block(self, factor=HALF_FACTOR):
+        """A 1-month Onionoo uptime block holding VALUES with the given factor"""
         return {'first': '2026-09-11 18:00:00', 'last': '2026-10-11 14:00:00', 'interval': 14400,
                 'factor': factor, 'count': len(self.VALUES), 'values': list(self.VALUES)}
 
     def test_factor_applied(self):
+        """Values are scaled by the block's factor, not by 1/999"""
         percentage, datapoints = _compute_uptime_percentage_and_datapoints(self.VALUES, self.HALF_FACTOR)
         self.assertAlmostEqual(percentage, 25.0)  # half the time at 50%, without the factor 50%
         self.assertEqual(datapoints, 180)
 
     def test_missing_factor_is_one_999th(self):
+        """A block without a factor is read on the 1/999 scale"""
         values = [950 + i for i in range(35)]
         self.assertEqual(_compute_uptime_percentage_and_datapoints(values),
                          _compute_uptime_percentage_and_datapoints(values, None))
 
     def test_one_999th_factor_matches_old_formula_exactly(self):
+        """Factor 1/999 gives the old figure bit for bit, so UP x% truncation never drops a point"""
         # 87 x 999 and 63 x 0 is exactly 58%; a float a hair below would show "UP 57%"
         values = [999] * 87 + [0] * 63
         factor = float('0.001001001001001001')  # 1/999 as Onionoo writes it
@@ -98,16 +102,19 @@ class TestUptimeFactor(unittest.TestCase):
                          _compute_uptime_percentage_and_datapoints(values))
 
     def test_factor_applied_before_low_uptime_gate(self):
+        """The <=1% offline gate applies to the factor-applied percentage"""
         # 999 on the 0-999 scale, but the best interval was only 0.9% running
         percentage, datapoints = _compute_uptime_percentage_and_datapoints([999] * 40, 0.009 / 999)
         self.assertEqual(percentage, 0.0)
         self.assertEqual(datapoints, 40)
 
     def test_zero_factor(self):
+        """A zero factor gives 0% and keeps the datapoint count"""
         # Onionoo gives factor 0 to an all-zero block (e.g. a flag the relay never had)
         self.assertEqual(_compute_uptime_percentage_and_datapoints([0] * 180, 0.0), (0.0, 180))
 
     def test_callers_pass_block_factor(self):
+        """Every caller passes its block's factor: operator, network percentile, uptime and flag paths"""
         relays = [{'fingerprint': f'FP{i}', 'nickname': f'r{i}', 'flags': ['Running']} for i in range(10)]
         uptime_data = {'relays': [
             {'fingerprint': r['fingerprint'],
