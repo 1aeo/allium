@@ -19,8 +19,8 @@ MBIT = 8e-6  # bytes/s -> Mbit/s
 # Days a relay's mean of write and read is below this (50 KB/s, the band census's cut) are left out of the
 # family and peer medians.
 MIN_OVERLAY_MBIT = 50000 * MBIT
-# Fewest family members with 1M history for a family median: the median includes the relay itself, so with
-# two members it would be half this relay.
+# Fewest family members counted (see MIN_OVERLAY_MBIT) for a family median: the median includes the relay
+# itself, so with two members it is the mean of this relay and the other, and moves half as far as this relay.
 MIN_FAMILY = 3
 
 
