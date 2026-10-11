@@ -204,9 +204,9 @@ python3 allium.py --out ./www --workers 0
 ### Fork Context (Linux/macOS)
 
 The implementation uses `fork()` context for efficient copy-on-write memory sharing.
-`fork_map()` (in `worker_pool.py`) runs every pool. Items and `initargs` reach
-the workers through fork and are never pickled; only item indexes cross the
-call queue:
+`fork_map()` (in `worker_pool.py`) runs every pool. The function, items and
+`initargs` reach the workers through fork and are never pickled; only item
+indexes cross the call queue:
 
 ```python
 for result in fork_map(workers, worker_func, items, chunksize, initializer, initargs):
@@ -242,8 +242,9 @@ Every pool is a `ProcessPoolExecutor` rather than a `multiprocessing.Pool`. A
 failing its task, so `map()` / `imap_unordered()` would wait forever. The
 executor raises `BrokenProcessPool` instead, which triggers the same
 sequential fallback: every page of the set is rendered again, or every group
-precomputed again. Tests in `tests/unit/test_relay_page_parallel.py`,
-`tests/unit/test_worker_pool.py` and
+precomputed again (the SEO HTML pass instead finishes the remaining files in
+process). Tests in `tests/unit/test_relay_page_parallel.py`,
+`tests/unit/test_seo.py`, `tests/unit/test_worker_pool.py` and
 `tests/integration/test_parallel_generation.py` kill a worker in each pool,
 or the parent of a pool.
 

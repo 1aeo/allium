@@ -47,26 +47,14 @@ def test_dead_worker_raises_even_with_items_larger_than_the_call_queue_pipe():
         list(fork_map(2, _die_in_worker, ["x" * 70_000] * 6, 1))
 
 
-def _live_children(pid):
-    """PIDs of the non-zombie processes whose parent is ``pid`` (Linux /proc)."""
-    children = []
-    for entry in filter(str.isdigit, os.listdir("/proc")):
-        try:
-            with open(f"/proc/{entry}/stat") as stat:
-                state, ppid = stat.read().rsplit(")", 1)[1].split()[:2]
-        except OSError:
-            continue
-        if ppid == str(pid) and state != "Z":
-            children.append(int(entry))
-    return children
-
-
-def _alive(pid):
+def _live_parent(pid):
+    """Parent PID of process ``pid``, or None once it has exited (Linux /proc)."""
     try:
         with open(f"/proc/{pid}/stat") as stat:
-            return stat.read().rsplit(")", 1)[1].split()[0] != "Z"
+            state, ppid = stat.read().rsplit(")", 1)[1].split()[:2]
     except OSError:
-        return False
+        return None
+    return None if state == "Z" else int(ppid)
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads /proc")
@@ -83,16 +71,17 @@ def test_workers_exit_when_the_parent_dies():
         deadline = time.time() + 20
         while len(workers) < 2 and time.time() < deadline:
             time.sleep(0.1)
-            workers = _live_children(parent.pid)
+            workers = [pid for pid in map(int, filter(str.isdigit, os.listdir("/proc")))
+                       if _live_parent(pid) == parent.pid]
     finally:
         parent.kill()
         parent.wait()
     assert len(workers) == 2
 
     deadline = time.time() + 10
-    while any(map(_alive, workers)) and time.time() < deadline:
+    while any(_live_parent(pid) is not None for pid in workers) and time.time() < deadline:
         time.sleep(0.1)
-    orphans = [pid for pid in workers if _alive(pid)]
+    orphans = [pid for pid in workers if _live_parent(pid) is not None]
     for pid in orphans:
         os.kill(pid, signal.SIGKILL)
     assert orphans == []

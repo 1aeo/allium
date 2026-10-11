@@ -1680,27 +1680,10 @@ class _RelayPageRenderer:
         _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 
-_mp_relay_page_renderer = None
-
-
-def _init_relay_page_worker(renderer):
-    """Initialize a relay-page worker with the renderer shared via fork"""
-    global _mp_relay_page_renderer
-    _mp_relay_page_renderer = renderer
-
-
-def _render_relay_page_mp(relay_index):
-    """Render one relay page in a worker (only the index crosses IPC)."""
-    renderer = _mp_relay_page_renderer
-    renderer.write(renderer.relay_set.json["relays"][relay_index])
-    return True
-
-
 def write_relay_info(relay_set):
     """
     Render and write per-relay HTML info documents to disk
     """
-    relay_list = relay_set.json["relays"]
     output_path = os.path.join(relay_set.output_dir, "relay")
 
     if os.path.exists(output_path):
@@ -1708,18 +1691,14 @@ def write_relay_info(relay_set):
     os.makedirs(output_path)
 
     renderer = _RelayPageRenderer(relay_set, output_path)
-    relay_indexes = [
-        index for index, relay in enumerate(relay_list)
-        if relay["fingerprint"].isalnum()
-    ]
+    relays = [relay for relay in relay_set.json["relays"] if relay["fingerprint"].isalnum()]
 
     # Relay pages are the largest page set (~10k); render them in parallel
     # like the other page types.
-    if relay_set.mp_workers > 0 and len(relay_indexes) >= 100:
+    if relay_set.mp_workers > 0 and len(relays) >= 100:
         try:
-            chunksize = max(1, len(relay_indexes) // (relay_set.mp_workers * 16))
-            for _ in fork_map(relay_set.mp_workers, _render_relay_page_mp, relay_indexes, chunksize,
-                              _init_relay_page_worker, (renderer,)):
+            chunksize = max(1, len(relays) // (relay_set.mp_workers * 16))
+            for _ in fork_map(relay_set.mp_workers, renderer.write, relays, chunksize):
                 pass
             return
         except Exception as e:
@@ -1729,5 +1708,5 @@ def write_relay_info(relay_set):
             # dead worker may have left partial.
             relay_set.mp_workers = 0
 
-    for index in relay_indexes:
-        renderer.write(relay_list[index])
+    for relay in relays:
+        renderer.write(relay)

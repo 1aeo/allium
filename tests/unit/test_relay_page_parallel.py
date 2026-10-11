@@ -1,4 +1,4 @@
-"""Tests for parallel relay info page generation."""
+"""Tests for parallel page generation in page_writer."""
 
 import os
 from types import SimpleNamespace

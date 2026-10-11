@@ -1125,7 +1125,7 @@ class Relays:
                 # Store each field directly on contact_data (Sonnet-style simple access)
                 for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
                     contact_data[key] = value
-            
+
             # Progress reporting
             processed += 1
             if processed % 500 == 0:
@@ -1199,7 +1199,7 @@ class Relays:
                 family_data = self.json["sorted"]["family"][family_hash]
                 for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
                     family_data[key] = value
-            
+
             # Progress reporting
             processed += 1
             if processed % 1000 == 0:
