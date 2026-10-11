@@ -55,6 +55,11 @@ def test_correction_propagates_to_relays_sorted_categories():
     fixture = _load_fixture()
     relays = list(fixture.get('relays', []))
     assert len(relays) >= 5, 'fixture must contain at least 5 relays'
+    # The documents below are published 2026-05-13 12:00; the fixture's running
+    # relays were last seen in 2025, which the downtime filter would drop as
+    # stale. Relays in that snapshot's consensus are last seen at its publish time.
+    for relay in relays:
+        relay['last_seen'] = '2026-05-13 12:00:00'
 
     # Use the first 5 relays for our buggy-state synthesis.
     affected = relays[:5]
