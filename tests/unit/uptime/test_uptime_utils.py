@@ -17,6 +17,7 @@ import unittest
 from allium.lib.uptime_utils import (
     _compute_uptime_percentage_and_datapoints,
     extract_relay_uptime_for_period,
+    calculate_network_uptime_percentiles,
     calculate_statistical_outliers,
     process_all_uptime_data_consolidated
 )
@@ -64,6 +65,59 @@ class TestUptimeNormalization(unittest.TestCase):
         # Test low uptime values (<= 1%) - should return 0.0
         low_uptime_values = [9] * 35  # 9/999 = ~0.9% uptime, which is <= 1%
         self.assertEqual(calculate_relay_uptime_average(low_uptime_values), 0.0)
+
+
+class TestUptimeFactor(unittest.TestCase):
+    """Uptime values are multiplied by their block's factor (max fraction / 999)"""
+
+    # A relay whose best 4-hour interval in the month was 50% running:
+    # Onionoo scales that interval to 999 and gives factor 0.5 / 999.
+    HALF_FACTOR = 0.5 / 999
+    VALUES = [999, 0] * 90  # 180 4-hour slots, alternating 50% running and down
+
+    def block(self, factor=HALF_FACTOR):
+        return {'first': '2026-09-11 18:00:00', 'last': '2026-10-11 14:00:00', 'interval': 14400,
+                'factor': factor, 'count': len(self.VALUES), 'values': list(self.VALUES)}
+
+    def test_factor_applied(self):
+        percentage, datapoints = _compute_uptime_percentage_and_datapoints(self.VALUES, self.HALF_FACTOR)
+        self.assertAlmostEqual(percentage, 25.0)  # half the time at 50%, without the factor 50%
+        self.assertEqual(datapoints, 180)
+
+    def test_missing_factor_is_one_999th(self):
+        values = [950 + i for i in range(35)]
+        self.assertEqual(_compute_uptime_percentage_and_datapoints(values),
+                         _compute_uptime_percentage_and_datapoints(values, None))
+        self.assertAlmostEqual(_compute_uptime_percentage_and_datapoints(values, 1 / 999)[0],
+                               _compute_uptime_percentage_and_datapoints(values)[0], places=12)
+
+    def test_factor_applied_before_low_uptime_gate(self):
+        # 999 on the 0-999 scale, but the best interval was only 0.9% running
+        percentage, datapoints = _compute_uptime_percentage_and_datapoints([999] * 40, 0.009 / 999)
+        self.assertEqual(percentage, 0.0)
+        self.assertEqual(datapoints, 40)
+
+    def test_zero_factor(self):
+        # Onionoo gives factor 0 to an all-zero block (e.g. a flag the relay never had)
+        self.assertEqual(_compute_uptime_percentage_and_datapoints([0] * 180, 0.0), (0.0, 180))
+
+    def test_callers_pass_block_factor(self):
+        relays = [{'fingerprint': f'FP{i}', 'nickname': f'r{i}', 'flags': ['Running']} for i in range(10)]
+        uptime_data = {'relays': [
+            {'fingerprint': r['fingerprint'],
+             'uptime': {'1_month': self.block()},
+             'flags': {'Running': {'1_month': self.block()}}}
+            for r in relays]}
+
+        extracted = extract_relay_uptime_for_period(relays[:1], uptime_data, '1_month')
+        self.assertAlmostEqual(extracted['uptime_values'][0], 25.0)
+
+        percentiles = calculate_network_uptime_percentiles(uptime_data, '1_month')
+        self.assertAlmostEqual(percentiles['median'], 25.0)
+
+        consolidated = process_all_uptime_data_consolidated(relays, uptime_data)['relay_uptime_data']['FP0']
+        self.assertAlmostEqual(consolidated['uptime_percentages']['1_month'], 25.0)
+        self.assertAlmostEqual(consolidated['flag_data']['Running']['1_month']['uptime'], 25.0)
 
 
 class TestRelayUptimeDataExtraction(unittest.TestCase):

@@ -11,7 +11,12 @@ from .statistical_utils import StatisticalUtils
 from .time_utils import ONIONOO_HISTORY_PERIODS
 
 
-def _compute_uptime_percentage_and_datapoints(uptime_values):
+# Onionoo's uptime factor when a block's best interval was 100% running: values
+# are normalised to a maximum of 999, and factor = that interval's fraction / 999.
+DEFAULT_UPTIME_FACTOR = 1.0 / 999.0
+
+
+def _compute_uptime_percentage_and_datapoints(uptime_values, factor=None):
     """
     Compute uptime percentage and valid datapoint count in a single pass.
     
@@ -20,6 +25,11 @@ def _compute_uptime_percentage_and_datapoints(uptime_values):
     
     Args:
         uptime_values (list): List of raw uptime values (0-999 scale)
+        factor (float, optional): The history block's ``factor``, which turns
+            a value into the fraction of the interval the relay was running
+            (https://metrics.torproject.org/onionoo.html#uptime). Below
+            DEFAULT_UPTIME_FACTOR when the block's best interval was under
+            100% running; DEFAULT_UPTIME_FACTOR when missing.
         
     Returns:
         tuple: (percentage: float, datapoints: int)
@@ -43,8 +53,9 @@ def _compute_uptime_percentage_and_datapoints(uptime_values):
     if count < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0, count
     
-    # Calculate percentage in single step (inline normalize_uptime_value)
-    percentage = (total / count) * (100.0 / 999.0)
+    if factor is None:
+        factor = DEFAULT_UPTIME_FACTOR
+    percentage = (total / count) * factor * 100.0
     
     # Exclude essentially offline relays (≤1% uptime)
     if percentage <= 1.0:
@@ -129,7 +140,8 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period, u
             period_data = relay_uptime['uptime'].get(time_period, {})
             if period_data.get('values'):
                 # Single-pass average + valid-datapoint count
-                avg_uptime, data_points = _compute_uptime_percentage_and_datapoints(period_data['values'])
+                avg_uptime, data_points = _compute_uptime_percentage_and_datapoints(
+                    period_data['values'], period_data.get('factor'))
                 # Include relays that HAVE data for the period, even at 0%
                 # uptime (excluding them inflated operator averages); skip
                 # only relays with insufficient data (<30 daily points, the
@@ -201,7 +213,8 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
         # OPTIMIZATION: single pass returns both the average and the valid
         # datapoint count, so exclusion reasons are classified without
         # re-filtering the values list a second time.
-        avg_uptime, valid_count = _compute_uptime_percentage_and_datapoints(period_data['values'])
+        avg_uptime, valid_count = _compute_uptime_percentage_and_datapoints(
+            period_data['values'], period_data.get('factor'))
         
         if avg_uptime == 0.0:
             # Could be insufficient data, low uptime, or invalid data
@@ -473,7 +486,8 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             period_data = uptime_section.get(period, {})
             if period_data.get('values'):
                 # Use optimized single-pass calculation that returns both values
-                uptime_percentage, datapoints = _compute_uptime_percentage_and_datapoints(period_data['values'])
+                uptime_percentage, datapoints = _compute_uptime_percentage_and_datapoints(
+                    period_data['values'], period_data.get('factor'))
                 uptime_percentages[period] = uptime_percentage
                 uptime_datapoints[period] = datapoints
                 
@@ -500,7 +514,8 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 for period, data in periods.items():
                     if period in ONIONOO_HISTORY_PERIODS and data.get('values'):
                         # Use optimized single-pass calculation for flag data
-                        avg_uptime, datapoints = _compute_uptime_percentage_and_datapoints(data['values'])
+                        avg_uptime, datapoints = _compute_uptime_percentage_and_datapoints(
+                            data['values'], data.get('factor'))
                         
                         if avg_uptime > 0.0:
                             flag_data[flag][period] = {
