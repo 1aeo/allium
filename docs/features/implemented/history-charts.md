@@ -68,9 +68,11 @@ when fontconfig's `fc-match` is installed to check.
   `{period: height}` (one per chart type) so the page reserves every image's
   box before it loads.
 - About 68k charts for the whole network, drawn in those existing workers.
-- A section shows its first period; the thumbnails link to `#bandwidth-6m`
-  and so on, and CSS `:target` swaps the chart in place, so no page is
-  copied per period and no JavaScript runs. `#1m`/`#6m`/`#1y`/`#5y` switch
+- A section shows its first period; the thumbnails above it link to
+  `#bandwidth-6m` and so on, and CSS `:target` swaps the chart in place, so no
+  page is copied per period and no JavaScript runs. The thumbnails follow the
+  charts in the HTML (the `~` selectors need that) but show above them, so the
+  row stays in view when a click scrolls to the chart. `#1m`/`#6m`/`#1y`/`#5y` switch
   every chart on the page (empty `.chart-period` anchors placed before the
   chart sections, `chart_period_anchors`); a chart without that period keeps
   its default. These fragments are the deep links.

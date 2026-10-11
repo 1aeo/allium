@@ -635,10 +635,13 @@ th[title]::after {
 
 /* History charts (relay and contact pages): dark 1aeo.com/blog cards. Only
    the default chart (last in the DOM) shows until a thumbnail link targets
-   another period; same pure-CSS :target pattern as the AROI pagination. */
+   another period; same pure-CSS :target pattern as the AROI pagination. The
+   thumbnails follow the charts in the DOM (for "a targeted chart ~ ...") but
+   show above them, so they stay in view after a click scrolls to the chart. */
 .chart-history {
-    max-width: 1094px;  /* the chart's own 1080 px (+ padding and border): a PNG is not upscaled, and a
-                           deep-linked chart fits Tor Browser's default 1400x900 window */
+    display: flex;
+    flex-direction: column;
+    max-width: 1094px;  /* the chart's own 1080 px (+ padding and border): a PNG is not upscaled */
     margin: 12px 0;  /* clear of what follows: on contact pages, the "Last updated" line */
     padding: 6px;
     background: var(--aeo-dark-surface);
@@ -652,7 +655,8 @@ th[title]::after {
 }
 .chart-history .chart-hero {
     display: block;
-    scroll-margin-top: 80px;
+    scroll-margin-top: calc(min(14vw, 151px) + 30px);  /* the thumbnail row's height: a deep link lands under it,
+                                                          and a chart under it fits Tor Browser's 1400x900 */
     color: var(--aeo-text-dim);  /* alt text, e.g. SVG at Tor Browser's Safest level */
     text-decoration: none;
 }
@@ -680,15 +684,16 @@ th[title]::after {
 }
 .chart-sparks {
     display: flex;
+    order: -1;
     gap: 6px;
-    margin-top: 6px;
+    margin: 0 0 6px;
 }
 /* .chart-sparks prefixes outrank Bootstrap's a:hover/a:focus color, underline and outline. */
 .chart-sparks .chart-spark {
     display: flex;  /* the row stretches every link to the tallest chart: keep each label at the bottom */
     flex-direction: column;
     justify-content: space-between;
-    flex: 0 1 25%;
+    flex: 0 1 20%;
     border-radius: 4px;
     outline: 1px solid transparent;
     outline-offset: 2px;
