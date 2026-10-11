@@ -107,7 +107,8 @@ class Svg(object):
 def date_ticks(period, ts, end):
     """Tick datetimes and labels: weekly (Tuesdays) for 1M, monthly 6M, bimonthly 1Y, yearly 5Y.
 
-    A history too short to reach two of those dates gets its first and last day labelled.
+    A history too short to reach two of those dates gets its first day labelled, and its last when that is
+    another day, far enough along the axis for both labels to fit.
     """
     start = ts[0]
     if period == "1m":
@@ -123,7 +124,8 @@ def date_ticks(period, ts, end):
                   for m in range(start.year * 12 + start.month - 1, end.year * 12 + end.month) if m % 12 % every == 0)
         ticks = [(t, t.strftime(fmt)) for t in months if t >= start]
     if len(ticks) < 2:
-        ticks = [(t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1])]
+        first, last = ((t, format_day(t, year=period in YEAR_PERIODS)) for t in (start, ts[-1]))
+        ticks = [first] + ([last] if last[1] != first[1] and (last[0] - start) * 8 >= end - start else [])
     return ticks
 
 
@@ -134,18 +136,20 @@ def nice_ticks(top, most=6):
     return [i * step for i in range(int(top / step + 1e-9) + 1)]
 
 
-def view_end(ts):
-    """The time axis ends 3% past the last point."""
-    return ts[-1] + (ts[-1] - ts[0]) * 0.03
+def view_end(ts, end=None):
+    """The time axis ends 3% past the last point, or at ``end`` (the period's window) when that is later, so a
+    history that stopped before then shows as a gap."""
+    last = ts[-1] + (ts[-1] - ts[0]) * 0.03
+    return max(last, end) if end else last
 
 
 class Panel(object):
     """A plot area with a UTC-time x axis and a linear y axis."""
 
-    def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi):
+    def __init__(self, svg, clip_id, left, top, width, height, ts, ylo, yhi, end=None):
         self.svg, self.clip, self.ts = svg, clip_id, ts
         self.left, self.top, self.width, self.height = left, top, width, height
-        self.t0, self.end = ts[0].timestamp(), view_end(ts)
+        self.t0, self.end = ts[0].timestamp(), view_end(ts, end)
         self.tspan = (self.end.timestamp() - self.t0) or 1.0
         self.ylo, self.yspan = ylo, (yhi - ylo) or 1.0
         # Every series shares the times: place them once, and break lines across missing history

@@ -81,7 +81,9 @@ when fontconfig's `fc-match` is installed to check.
 - Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`),
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
-- Each period only shows its own window, ending at Onionoo's `relays_published`.
+- Each period only shows its own window, ending at Onionoo's `relays_published`,
+  and its time axis runs to that end: a history that stopped (an offline relay)
+  shows as a gap, not as a line reaching the right edge.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day out of band alone is a red tip, marked with a red dot too. A

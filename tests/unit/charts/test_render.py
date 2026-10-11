@@ -112,6 +112,16 @@ def test_each_period_only_shows_its_own_window(tmp_path):
     assert os.listdir(tmp_path) == ["bandwidth-6m.svg"]
 
 
+def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
+    # An offline relay: 20 days of history, then nothing until relays_published (Sep 30), and a restart in the gap.
+    offline = relay("A", last_restarted="2026-09-25 08:00:00")
+    charts = writer([offline], {"A": history([100] * 20)}, {"A": [999] * 120})
+    charts.relay(offline, str(tmp_path))
+    for name in ("bandwidth-1m.svg", "uptime-1m.svg"):
+        lines = texts(tmp_path / name)
+        assert "Sep 29" in lines and "Last restarted  Sep 25" in lines
+
+
 def test_family_and_peer_medians_are_drawn_on_1m_only(tmp_path):
     family = ["A", "B", "C"]
     month, longer = history([100 + i for i in range(30)], [100] * 30), history([100] * 60, key="6_months")
@@ -207,7 +217,10 @@ def test_axis_ticks():
     assert labels("1m", T0, day(2026, 10, 1))[0] == "Sep 8"
     assert labels("6m", day(2025, 11, 5), day(2026, 3, 1))[:3] == ["Dec '25", "Jan '26", "Feb '26"]
     assert labels("5y", day(2022, 3, 1), day(2026, 10, 1)) == ["2023", "2024", "2025", "2026"]
-    # Too short to reach two ticks: label the ends instead.
+    # Too short to reach two ticks: label the ends instead, the last only on another day with room for both.
     assert labels("5y", day(2026, 2, 1), day(2026, 9, 20)) == ["Feb 1 '26", "Sep 20 '26"]
+    assert labels("1m", day(2026, 10, 6, 10), day(2026, 10, 6, 14)) == ["Oct 6"]
+    assert [label for _t, label in date_ticks("1m", [day(2026, 10, 4, 22), day(2026, 10, 5, 2)], day(2026, 10, 7))] == [
+        "Oct 4"]
     assert nice_ticks(126) == [0, 25, 50, 75, 100, 125]
     assert ["%g" % tick for tick in nice_ticks(1.3)] == ["0", "0.25", "0.5", "0.75", "1", "1.25"]
