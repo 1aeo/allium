@@ -110,18 +110,19 @@ def peer_medians(relays, bandwidth_map, since=None):
             by_role.setdefault(role_from_flags(relay.get("flags")), []).append(daily)
             by_fp[relay["fingerprint"]] = daily
 
-    def medians(dailies):
+    def medians(dailies, least=1):
         days = {}
         for daily in dailies:
             for t, ratio in daily.items():
                 days.setdefault(t, []).append(ratio)
-        return {t: median(ratios) for t, ratios in days.items()}
+        return {t: median(ratios) for t, ratios in days.items() if len(ratios) >= least}
 
     # A family's median is over its members, as the relay page lists them: effective families are not always
-    # the same from each member's side, so the relays sharing one family tuple are not the whole family.
+    # the same from each member's side, so the relays sharing one family tuple are not the whole family. Each
+    # day needs MIN_FAMILY members counted too, or the median there could be this relay alone.
     families = {}
     for key in dict.fromkeys(filter(None, map(family_key, relays))):
         dailies = [by_fp[fp] for fp in key if fp in by_fp]
         if len(dailies) >= MIN_FAMILY:
-            families[key] = (len(dailies), medians(dailies))
+            families[key] = (len(dailies), medians(dailies, MIN_FAMILY))
     return {role: medians(dailies) for role, dailies in by_role.items()}, families

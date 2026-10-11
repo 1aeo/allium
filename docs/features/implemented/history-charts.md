@@ -92,7 +92,8 @@ when fontconfig's `fc-match` is installed to check.
   of the relay's effective family (Onionoo's families are mutual declarations,
   so members can list different sets), and is drawn only when 3 or more members
   count: a member counts on the 1M days it has both directions averaging at
-  least 50 KB/s, as for the peer median. The median includes the relay itself,
+  least 50 KB/s, as for the peer median, and the line is drawn only on days
+  with 3 or more members counted. The median includes the relay itself,
   so with two members it would be the mean of this relay and the other, moving
   half as far as this relay. The subtitle names only the lines drawn and checked on the
   out-of-band days.

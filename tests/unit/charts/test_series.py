@@ -54,7 +54,7 @@ def test_family_key_is_the_effective_family_when_it_has_other_members():
 def test_peer_medians_by_role_and_family_skip_quiet_relays():
     relays = [relay("A", effective_family=["A", "B"]), relay("B", effective_family=["A", "B"]), relay("C"), relay("Q")]
     bandwidth_map = {
-        "A": history([110, 120], [100, 100]),
+        "A": history([110, 120, 150], [100, 100, 100]),  # alone on the third day
         "B": history([130, 140], [100, 100]),
         "C": history([100, 100]),
         "Q": history([1, 1], [2, 2]),  # under MIN_OVERLAY_MBIT: not a peer
@@ -67,5 +67,5 @@ def test_peer_medians_by_role_and_family_skip_quiet_relays():
     # though C does not list B. Its median is over those members, not over the relays listing the same set.
     relays[:3] = [relay("A", effective_family=["A", "B", "C"]), relay("B", effective_family=["A", "B"]),
                   relay("C", effective_family=["A", "C"])]
-    _roles, families = peer_medians(relays, bandwidth_map)
+    _roles, families = peer_medians(relays, bandwidth_map)  # on days with 3 members, as for the family as a whole
     assert families == {("A", "B", "C"): (3, pytest.approx({T0: 1.1, T0 + timedelta(days=1): 1.2}))}
