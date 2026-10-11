@@ -47,3 +47,11 @@ def test_relay_pages_render_in_parallel_or_fall_back(tmp_path, monkeypatch, pois
     else:  # a worker died: the parent re-rendered every page
         assert writers == {str(os.getpid())}
         assert relay_set.mp_workers == 0
+
+
+@pytest.mark.parametrize("items, workers, chunksize", [
+    (0, 4, 1), (1, 4, 1), (8, 2, 1), (9, 2, 2), (113, 4, 8), (150, 2, 19),
+])
+def test_pool_map_chunksize_matches_pool_map_default(items, workers, chunksize):
+    """Every worker gets several chunks, as multiprocessing.Pool.map chose."""
+    assert page_writer._pool_map_chunksize(items, workers) == chunksize

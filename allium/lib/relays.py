@@ -8,7 +8,6 @@ timestamp
 import bisect
 import functools
 import hashlib
-import multiprocessing as mp
 import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
@@ -18,6 +17,7 @@ from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
+from .worker_pool import fork_map
 from .intelligence_engine import IntelligenceEngine
 from .time_utils import (
     parse_onionoo_timestamp,
@@ -44,7 +44,6 @@ from .aroi_validation import (
 from .page_writer import (
     _compute_contact_predata,
     _compute_family_predata,
-    _fork_executor,
     _init_precompute_worker,
     _precompute_contact_worker,
     _precompute_family_worker,
@@ -1071,8 +1070,7 @@ class Relays:
         validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
         
         # Use multiprocessing if available and beneficial
-        use_mp = (self.mp_workers > 0 and len(contact_hashes) >= 100 and 
-                  hasattr(mp, 'get_context'))
+        use_mp = self.mp_workers > 0 and len(contact_hashes) >= 100
         
         if use_mp:
             try:
@@ -1117,22 +1115,21 @@ class Relays:
         chunk_size = max(50, total_contacts // (self.mp_workers * 4))  # Balance granularity vs overhead
         
         # Initialize workers with self reference (fork shares memory)
-        with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
-            # Stream results chunk by chunk (lower peak memory)
-            for contact_hash, precomputed_data in executor.map(
-                _precompute_contact_worker, worker_args, chunksize=chunk_size
-            ):
-                # Apply result directly to contact data (flat storage pattern)
-                if precomputed_data and contact_hash in self.json["sorted"]["contact"]:
-                    contact_data = self.json["sorted"]["contact"][contact_hash]
-                    # Store each field directly on contact_data (Sonnet-style simple access)
-                    for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
-                        contact_data[key] = value
-                
-                # Progress reporting
-                processed += 1
-                if processed % 500 == 0:
-                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
+        # Stream results chunk by chunk (lower peak memory)
+        for contact_hash, precomputed_data in fork_map(
+            self.mp_workers, _precompute_contact_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+        ):
+            # Apply result directly to contact data (flat storage pattern)
+            if precomputed_data and contact_hash in self.json["sorted"]["contact"]:
+                contact_data = self.json["sorted"]["contact"][contact_hash]
+                # Store each field directly on contact_data (Sonnet-style simple access)
+                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                    contact_data[key] = value
+            
+            # Progress reporting
+            processed += 1
+            if processed % 500 == 0:
+                self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
 
     def _precompute_all_family_page_data(self):
         """
@@ -1154,8 +1151,7 @@ class Relays:
             return
         
         # Use multiprocessing if available and beneficial
-        use_mp = (self.mp_workers > 0 and len(family_hashes) >= 100 and 
-                  hasattr(mp, 'get_context'))
+        use_mp = self.mp_workers > 0 and len(family_hashes) >= 100
         
         if use_mp:
             try:
@@ -1194,21 +1190,20 @@ class Relays:
         chunk_size = max(50, total_families // (self.mp_workers * 4))
         
         # Initialize workers with self reference (fork shares memory)
-        with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
-            # Stream results chunk by chunk
-            for family_hash, precomputed_data in executor.map(
-                _precompute_family_worker, worker_args, chunksize=chunk_size
-            ):
-                # Apply result directly to family data
-                if precomputed_data and family_hash in self.json["sorted"]["family"]:
-                    family_data = self.json["sorted"]["family"][family_hash]
-                    for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
-                        family_data[key] = value
-                
-                # Progress reporting
-                processed += 1
-                if processed % 1000 == 0:
-                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
+        # Stream results chunk by chunk
+        for family_hash, precomputed_data in fork_map(
+            self.mp_workers, _precompute_family_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+        ):
+            # Apply result directly to family data
+            if precomputed_data and family_hash in self.json["sorted"]["family"]:
+                family_data = self.json["sorted"]["family"][family_hash]
+                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                    family_data[key] = value
+            
+            # Progress reporting
+            processed += 1
+            if processed % 1000 == 0:
+                self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
 
     def _generate_aroi_leaderboards(self):
         """

@@ -116,26 +116,25 @@ def _precompute_contact_worker(args):
 
 ### Streaming Results
 
-Iterates the chunked `executor.map()` as results arrive, for lower peak memory
-and progress reporting:
+Iterates `fork_map()` as results arrive, for lower peak memory and progress
+reporting:
 
 ```python
 def _precompute_contacts_parallel(self, contact_hashes, ...):
     chunk_size = max(50, total_contacts // (self.mp_workers * 4))
     
-    with _fork_executor(self.mp_workers, _init_precompute_worker, (self,)) as executor:
-        for contact_hash, precomputed_data in executor.map(
-            _precompute_contact_worker, worker_args, chunksize=chunk_size
-        ):
-            # Apply results as each chunk arrives (streaming)
-            if precomputed_data:
-                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
-                    contact_data[key] = value
-            
-            # Progress reporting every 500 contacts
-            processed += 1
-            if processed % 500 == 0:
-                self._log_progress(f"Pre-computed {processed}/{total} contacts...")
+    for contact_hash, precomputed_data in fork_map(
+        self.mp_workers, _precompute_contact_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+    ):
+        # Apply results as each chunk arrives (streaming)
+        if precomputed_data:
+            for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                contact_data[key] = value
+        
+        # Progress reporting every 500 contacts
+        processed += 1
+        if processed % 500 == 0:
+            self._log_progress(f"Pre-computed {processed}/{total} contacts...")
 ```
 
 ### Flat Storage Pattern
@@ -205,18 +204,23 @@ python3 allium.py --out ./www --workers 0
 ### Fork Context (Linux/macOS)
 
 The implementation uses `fork()` context for efficient copy-on-write memory sharing.
-`_fork_executor()` (in `page_writer.py`) builds every pool; `initargs` reach the
-workers through fork and are never pickled:
+`fork_map()` (in `worker_pool.py`) runs every pool. Items and `initargs` reach
+the workers through fork and are never pickled; only item indexes cross the
+call queue:
 
 ```python
-def _fork_executor(workers, initializer, initargs):
-    return ProcessPoolExecutor(workers, mp_context=mp.get_context('fork'),
-                               initializer=initializer, initargs=initargs)
-
-with _fork_executor(workers, initializer, initargs) as executor:
-    for _ in executor.map(worker_func, args, chunksize=chunksize):
-        pass
+for result in fork_map(workers, worker_func, items, chunksize, initializer, initargs):
+    ...
 ```
+
+Two `ProcessPoolExecutor` pitfalls are handled there:
+
+- Chunks of the items themselves could fill the call queue's 64 KiB pipe. A
+  worker death then hangs Python 3.9/3.10 (CPython gh-94777) instead of
+  raising `BrokenProcessPool`.
+- Executor workers wait forever when their parent dies, each holding its
+  copy of the relay set. A watchdog thread in every worker exits it once the
+  parent is gone, as `multiprocessing.Pool` workers did.
 
 ### Fallback Behavior
 
@@ -238,8 +242,10 @@ Every pool is a `ProcessPoolExecutor` rather than a `multiprocessing.Pool`. A
 failing its task, so `map()` / `imap_unordered()` would wait forever. The
 executor raises `BrokenProcessPool` instead, which triggers the same
 sequential fallback: every page of the set is rendered again, or every group
-precomputed again. Tests in `tests/unit/test_relay_page_parallel.py` and
-`tests/integration/test_parallel_generation.py` kill a worker in each pool.
+precomputed again. Tests in `tests/unit/test_relay_page_parallel.py`,
+`tests/unit/test_worker_pool.py` and
+`tests/integration/test_parallel_generation.py` kill a worker in each pool,
+or the parent of a pool.
 
 ---
 

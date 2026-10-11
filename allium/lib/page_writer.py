@@ -9,8 +9,6 @@ Extracted from relays.py for better modularity.
 
 import io
 import logging
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor
 import os
 import pickle
 import re
@@ -47,6 +45,7 @@ from .operator_analysis import (
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
+from .worker_pool import fork_map
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -331,19 +330,6 @@ def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, vali
     _mp_the_prefixed = the_prefixed if the_prefixed is not None else []
     _mp_validated_aroi_domains = validated_aroi_domains if validated_aroi_domains is not None else set()
     _mp_output_root = output_root
-
-
-def _fork_executor(workers, initializer, initargs):
-    """Process pool whose workers fork from this process and run initializer(*initargs).
-
-    Fork hands initargs (the multi-GB relay set) to workers copy-on-write
-    instead of pickling them. A ProcessPoolExecutor raises BrokenProcessPool
-    when a worker dies (OOM killer, segfault), so callers can fall back to
-    sequential work; multiprocessing.Pool replaces the worker and waits
-    forever for the task it was running.
-    """
-    return ProcessPoolExecutor(workers, mp_context=mp.get_context('fork'),
-                               initializer=initializer, initargs=initargs)
 
 
 def _pool_map_chunksize(item_count, workers):
@@ -1299,16 +1285,12 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
         page_args.append((dir_path, v))
 
     try:
-        # Leaving the with block waits for the workers, so none still writes
-        # when the fallback below clears the partial output.
-        with _fork_executor(
-            relay_set.mp_workers,
-            _init_mp_worker,
-            (relay_set, template, "contact", the_prefixed, validated_aroi_domains, output_root),
-        ) as executor:
-            total_files = sum(executor.map(
-                _render_contact_batch_mp, page_args,
-                chunksize=_pool_map_chunksize(len(page_args), relay_set.mp_workers)))
+        # fork_map stops its workers before an error reaches the fallback
+        # below, so none still writes when it clears the partial output.
+        total_files = sum(fork_map(
+            relay_set.mp_workers, _render_contact_batch_mp, page_args,
+            _pool_map_chunksize(len(page_args), relay_set.mp_workers), _init_mp_worker,
+            (relay_set, template, "contact", the_prefixed, validated_aroi_domains, output_root)))
 
         total_time = time.time() - start_time
         relay_set.progress_logger.log(
@@ -1613,13 +1595,12 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
     
     try:
         # Initialize workers with page_type and shared data for building template args.
-        # Leaving the with block waits for the workers, so none still writes
-        # when the fallback below clears the partial output.
-        with _fork_executor(relay_set.mp_workers, _init_mp_worker,
-                            (relay_set, template, k, the_prefixed, validated_aroi_domains)) as executor:
-            for _ in executor.map(_render_page_mp, page_args,
-                                  chunksize=_pool_map_chunksize(len(page_args), relay_set.mp_workers)):
-                pass
+        # fork_map stops its workers before an error reaches the fallback
+        # below, so none still writes when it clears the partial output.
+        for _ in fork_map(relay_set.mp_workers, _render_page_mp, page_args,
+                          _pool_map_chunksize(len(page_args), relay_set.mp_workers), _init_mp_worker,
+                          (relay_set, template, k, the_prefixed, validated_aroi_domains)):
+            pass
 
         total_time = time.time() - start_time
         relay_set.progress_logger.log(
@@ -1737,11 +1718,9 @@ def write_relay_info(relay_set):
     if relay_set.mp_workers > 0 and len(relay_indexes) >= 100:
         try:
             chunksize = max(1, len(relay_indexes) // (relay_set.mp_workers * 16))
-            with _fork_executor(relay_set.mp_workers, _init_relay_page_worker,
-                                (renderer,)) as executor:
-                for _ in executor.map(_render_relay_page_mp, relay_indexes,
-                                      chunksize=chunksize):
-                    pass
+            for _ in fork_map(relay_set.mp_workers, _render_relay_page_mp, relay_indexes, chunksize,
+                              _init_relay_page_worker, (renderer,)):
+                pass
             return
         except Exception as e:
             relay_set.progress_logger.log_without_increment(
