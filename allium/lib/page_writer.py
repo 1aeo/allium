@@ -1110,14 +1110,11 @@ def get_detail_page_context(relay_set, category, value):
 # Paginated and sorted contact pages: page-N.html, by-<mode>[-page-N].html
 _VANITY_PAGE_NAME = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
 
-# A vanity folder is named after a lowercased, sanitized AROI domain
-_VANITY_DIR_NAME = re.compile(r"^[a-z0-9-][a-z0-9_-]*(?:\.[a-z0-9_-]+)+$")
-
-# Root-level folders the generator owns; never treated as vanity output
-_CORE_OUTPUT_DIRS = frozenset({
-    "as", "contact", "country", "family", "first_seen", "flag", "misc",
-    "platform", "relay", "static",
-})
+# A vanity folder is named after a lowercased, sanitized AROI domain, so it
+# has a dot and a final label starting with a letter. Core site folders
+# (relay, contact, family, as, country, misc, static, ...) have no dot and
+# version-like names such as v1.2 end in a digit, so neither can match.
+_VANITY_DIR_NAME = re.compile(r"^[a-z0-9-][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.[a-z][a-z0-9_-]*$")
 
 
 def _is_vanity_page_file(filename):
@@ -1171,8 +1168,9 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
     stay in the sitemap.
 
     Only folders that look like generated vanity output are removed: named
-    like a sanitized domain, not a core site folder, not a symlink, and
-    holding index.html plus nothing but contact page files. Returns the
+    like a sanitized domain (never a core site folder), not a symlink, and
+    holding contact page files and nothing else. A folder that cannot be
+    read or cleaned is skipped rather than failing the build. Returns the
     number of folders removed.
     """
     # Without a base URL no vanity folders are written, so none are swept
@@ -1184,17 +1182,18 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
 
     removed = 0
     for entry in list(os.scandir(output_root)):
-        if (entry.name in current or entry.name in _CORE_OUTPUT_DIRS
-                or not _VANITY_DIR_NAME.match(entry.name)
+        if (entry.name in current or not _VANITY_DIR_NAME.match(entry.name)
                 or not entry.is_dir(follow_symlinks=False)):
             continue
-        children = list(os.scandir(entry.path))
-        if not any(child.name == "index.html" for child in children):
+        try:
+            children = list(os.scandir(entry.path))
+            if not children or not all(
+                    child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
+                    for child in children):
+                continue
+            _cleanup_vanity_sort_files(entry.path)
+        except OSError:
             continue
-        if not all(child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
-                   for child in children):
-            continue
-        _cleanup_vanity_sort_files(entry.path)
         if not os.path.exists(entry.path):
             removed += 1
     return removed

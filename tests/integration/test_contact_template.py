@@ -1124,8 +1124,10 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             os.path.join("family", "B" * 40, "index.html"),
             os.path.join("misc", "all.html"),
             os.path.join("static", "css", "style.css"),
-            # Only generated-looking files, but not named like a domain
+            # Only generated-looking files, but not named like a domain:
+            # no dot (as with every core site folder), or a version number
             os.path.join("about", "index.html"),
+            os.path.join("v1.2", "index.html"),
             # Named like a domain, but holding a file allium never writes there
             os.path.join("notes.example.com", "index.html"),
             os.path.join("notes.example.com", "README.txt"),
@@ -1148,10 +1150,14 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # Pages left by an earlier, longer listing are generated output too
         self._write_output_file(os.path.join("example.org", "page-2.html"))
         self._write_output_file(os.path.join("example.org", "by-status-page-2.html"))
+        # An interrupted run can leave a vanity folder without index.html
+        half_written = os.path.dirname(
+            self._write_output_file(os.path.join("half.example.org", "by-status.html")))
 
         self._write_validated_contact_pages("example.net")
 
         self.assertFalse(os.path.exists(stale_vanity_dir))
+        self.assertFalse(os.path.exists(half_written))
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "by-status.html")))
         for relative_path in unrelated_paths:
@@ -1159,6 +1165,23 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
                 self.assertEqual(handle.read(), "keep", f"{relative_path} was modified")
         self.assertTrue(os.path.islink(os.path.join(self.temp_dir, "linked.example.com")))
         self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
+
+    def test_contact_page_generation_skips_unreadable_vanity_like_dir(self):
+        """A domain-named folder the sweep cannot read is left alone, not fatal."""
+        unreadable = os.path.dirname(
+            self._write_output_file(os.path.join("locked.example.com", "index.html")))
+        real_scandir = os.scandir
+
+        def scandir(path="."):
+            if path == unreadable:
+                raise PermissionError(13, "Permission denied", path)
+            return real_scandir(path)
+
+        with patch("allium.lib.page_writer.os.scandir", side_effect=scandir):
+            self._write_validated_contact_pages("example.org")
+
+        self.assertTrue(os.path.isfile(os.path.join(unreadable, "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
 
     def test_contact_page_generation_without_base_url_keeps_existing_vanity_dirs(self):
         """Without a base URL no vanity pages are written, and none are swept."""
