@@ -16,7 +16,8 @@ from allium.lib.aroi_validation import (
     get_contact_validation_status,
     _format_timestamp,
     _simplify_error_message,
-    _simplify_and_categorize_errors
+    _simplify_and_categorize_errors,
+    _URI_FALLBACK_ERROR_SPLIT_RE,
 )
 
 
@@ -524,6 +525,104 @@ class TestAROIValidation(unittest.TestCase):
             "DNS-RSA: TXT record has invalid proof content. Expected "
             "'we-run-this-tor-relay', found: v=spf1 mx -all; google-site-verification=x")
         self.assertEqual((msg, proof), ("DNS: TXT record error", 'dns'))
+
+    def test_error_simplification_names_primary_failure_familyid(self):
+        """Joined URI-FamilyID (v3) messages are labelled by their primary failure too."""
+        path = "/.well-known/tor-relay/ed25519-family-id.txt"
+
+        def joined(primary, www):
+            return (f"URI-FamilyID: {primary} d.example at URL: https://d.example{path}; "
+                    f"URI-FamilyID: {www} www.d.example at URL: https://www.d.example{path}")
+
+        cases = [
+            (joined("HTTP error 403 for", "HTTP SSL certificate expired for"),
+             "URI: Access forbidden (403)"),
+            (joined("HTTP SSL certificate expired for", "HTTP error 403 for"),
+             "URI: SSL certificate error"),
+            # A v3 404 reads "proof file not found ... ed25519-family-id.txt": no
+            # '404', and the not-found rule skips messages containing 'txt', so it
+            # has no specific label and the whole message is labelled, as before.
+            (joined("proof file not found at", "HTTP error name resolution failed for"),
+             "URI: Connection error"),
+            (f"URI-FamilyID: proof file not found at d.example at URL: https://d.example{path}"
+             f". Used domain cache after 3 attempts.",
+             "URI: Connection error"),
+        ]
+        for error, expected in cases:
+            self.assertEqual(_simplify_error_message(error), (expected, 'uri'), error)
+
+    def test_error_simplification_splits_only_before_a_uri_label(self):
+        """A '; ' inside one attempt's error does not split the message."""
+        path = "/.well-known/tor-relay/rsa-fingerprint.txt"
+        # The redirect Location is the operator's text and may hold '; '
+        redirect = (f"URI-RSA: HTTP redirect (302) to https://d.example/login; lang=en for "
+                    f"d.example at URL: https://d.example{path} — CIISS spec disallows "
+                    f"redirects on proof URI")
+        www_404 = f"URI-RSA: HTTP error 404 for www.d.example at URL: https://www.d.example{path}"
+        self.assertEqual(_URI_FALLBACK_ERROR_SPLIT_RE.split(redirect), [redirect])
+        self.assertEqual(_URI_FALLBACK_ERROR_SPLIT_RE.split(f"{redirect}; {www_404}"),
+                         [redirect, www_404])
+        self.assertEqual(_simplify_error_message(redirect), ("URI: Connection error", 'uri'))
+        self.assertEqual(_simplify_error_message(f"{redirect}; {www_404}"),
+                         ("URI: Fingerprint file not found (404)", 'uri'))
+
+        # DNS TXT content is the operator's text too, its records joined by '; '.
+        # Content that mimics a URI proof label still reads as a DNS error.
+        for found in ("v=spf1 mx -all; google-site-verification=x",
+                      "v=spf1 -all; URI-RSA: HTTP error 404 for d.example"):
+            for error in (
+                    "DNS-RSA: TXT record has invalid proof content. Expected "
+                    f"'we-run-this-tor-relay', found: {found}",
+                    "DNS-FamilyID: TXT record content does not match relay family_ids. "
+                    f"Expected one of: {'A' * 43}, found: {found}"):
+                self.assertEqual(_simplify_error_message(error), ("DNS: TXT record error", 'dns'),
+                                 error)
+
+    def test_error_top5_labels_joined_and_cached_errors_of_a_domain_alike(self):
+        """A domain's fetched (joined) and cached errors count under one label."""
+        v2_path = "/.well-known/tor-relay/rsa-fingerprint.txt"
+        v3_path = "/.well-known/tor-relay/ed25519-family-id.txt"
+        v2_primary = f"URI-RSA: HTTP error 404 for v2.example at URL: https://v2.example{v2_path}"
+        v2_www = (f"URI-RSA: HTTP SSL certificate expired for www.v2.example at "
+                  f"URL: https://www.v2.example{v2_path}")
+        v3_primary = (f"URI-FamilyID: proof file not found at v3.example at "
+                      f"URL: https://v3.example{v3_path}")
+        v3_www = (f"URI-FamilyID: HTTP error name resolution failed for www.v3.example at "
+                  f"URL: https://www.v3.example{v3_path}")
+        cached = ". Used domain cache after 3 attempts."
+        # aroivalidator: a domain's first relays fetch and report both attempts;
+        # later relays read the domain cache, which keeps the primary's message.
+        errors = [
+            ('v2.example', f"{v2_primary}; {v2_www}"),
+            ('v2.example', f"{v2_primary}; {v2_www}"),
+            ('v2.example', f"{v2_primary}; {v2_www}"),
+            ('v2.example', v2_primary + cached),
+            ('v2.example', v2_primary + cached),
+            ('v3.example', f"{v3_primary}; {v3_www}"),
+            ('v3.example', v3_primary + cached),
+        ]
+        relays = [{'fingerprint': f'FP{i}', 'aroi_domain': domain, 'contact': f'c@{domain}'}
+                  for i, (domain, _) in enumerate(errors)]
+        validation_data = {
+            'metadata': {'timestamp': '2026-10-12T00:00:00Z'},
+            'statistics': {
+                'proof_types': {
+                    'uri_rsa': {'total': 5, 'valid': 0, 'success_rate': 0.0},
+                    'uri_familyid_ed25519': {'total': 2, 'valid': 0, 'success_rate': 0.0},
+                }
+            },
+            'results': [{'fingerprint': f'FP{i}', 'valid': False, 'error': error}
+                        for i, (_, error) in enumerate(errors)],
+        }
+
+        metrics = calculate_aroi_validation_metrics(
+            relays, validation_data, calculate_operator_metrics=True)
+
+        relay_counts = {"URI: Fingerprint file not found (404)": 5, "URI: Connection error": 2}
+        self.assertEqual(dict(metrics['relay_error_top5']), relay_counts)
+        self.assertEqual(dict(metrics['uri_error_top5']), relay_counts)
+        self.assertEqual(dict(metrics['operator_error_top5']),
+                         {"URI: Fingerprint file not found (404)": 1, "URI: Connection error": 1})
 
     def test_error_simplification_tls_causes(self):
         """aroivalidator's cause-specific TLS errors map to the SSL/TLS labels."""
