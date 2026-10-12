@@ -86,11 +86,13 @@ when fontconfig's `fc-match` is installed to check.
 
 ## Content rules
 
-- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`; for
-  an operator its AROI domain, else its `url:` host, else its contact text, cut
-  at a word when longer than 50 characters, and its relay count:
-  `tor@kllx.eu · 64 relays`; relays without a contact, or with `none`, as the
-  contact page treats them, are not an operator and get no chart),
+- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`, with
+  the fingerprint's first 8 hex digits after a nickname that is `Unnamed` (in
+  any case) or missing: `Unnamed · 0123ABCD… · url host`; for an operator its
+  AROI domain, else its `url:` host, else its contact text, cut at a word when
+  longer than 50 characters, and its relay count: `tor@kllx.eu · 64 relays`;
+  relays without a contact, or with `none`, as the contact page treats them, are
+  not an operator and get no chart),
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Subtitles state facts about what the panel draws, so they hold by

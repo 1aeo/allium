@@ -39,6 +39,16 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
+def test_an_unnamed_relays_charts_name_its_fingerprint(tmp_path):
+    fp = "0123ABCD" + "F" * 32
+    unnamed = relay(fp, nickname="Unnamed", contact="url:https://tor-relays.example-operator-collective.org")
+    writer([unnamed], {fp: history([100] * 30)}, {fp: [999] * 180}).relay(unnamed, str(tmp_path))
+    for name in ("bandwidth-1m.svg", "uptime-1m.svg"):
+        line = texts(tmp_path / name)[0]
+        assert line == "Unnamed · 0123ABCD…  ·  tor-relays.example-operator-collective.org"
+        assert text_width(line, 15, bold=True) <= PLOT_WIDTH
+
+
 def test_uptime_chart_of_a_stopped_history_shows_the_pages_average(tmp_path):
     # 150 slots from the window's start, then the relay went offline: Onionoo counts the last 36 slots as down
     charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 150},

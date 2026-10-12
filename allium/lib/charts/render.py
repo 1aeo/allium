@@ -347,7 +347,8 @@ class ChartWriter(object):
         stopped = relay.get("running") is False
         common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT,
                       bands=bands_for_role(role_from_flags(relay.get("flags"))),
-                      identity=chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact"))),
+                      identity=chart_identity(relay.get("nickname"), operator_from_contact(relay.get("contact")),
+                                              relay["fingerprint"]),
                       restart=parse_onionoo_timestamp(relay.get("last_restarted")), overload=_overload_text(relay))
         return (self._charts(directory, "bandwidth", self._relay_bandwidth, relay, common, stopped),
                 self._charts(directory, "uptime", self._relay_uptime, relay, common))
