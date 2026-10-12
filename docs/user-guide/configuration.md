@@ -27,7 +27,7 @@ python3 allium.py [options]
 | `--filter-downtime` | `7` | Filter relays not seen for >N days, even if Onionoo still marks them running (0=disable) |
 | `--workers` | `4` | Parallel workers (0=disable multiprocessing) |
 | `--no-charts` | charts on | Skip the relay and contact history charts (drawn only with `--apis all`) |
-| `--chart-format` | `png` | `png` (needs cairocffi, numpy and libcairo2: without them the default writes SVG with a warning, and an explicit `png` stops) or `svg` |
+| `--chart-format` | `png` | `png` (needs cairocffi, numpy, the cairo library and DejaVu Sans, see the README's PNG charts section: without them the default writes SVG with a notice naming the install commands, and an explicit `png` stops) or `svg` |
 | `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
 | `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
 
@@ -101,6 +101,7 @@ crontab -e
 - Log output for debugging
 - Don't use `--progress` (creates large logs)
 - Run as non-root user
+- After updating allium, check the next run's log for `⚠️` and `💡` lines: they name any package the new version needs and the command that installs it for the Python cron runs (they print without `--progress` too)
 
 ## Virtual Environment
 

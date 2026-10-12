@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+from lib import optional_deps
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
@@ -289,29 +290,6 @@ if __name__ == "__main__":
 
     # Charts only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
     args.charts = args.charts and args.enabled_apis == "all"
-    # PNG charts need cairocffi and numpy (config/requirements.txt) and the cairo library: check before
-    # fetching anything. Asked for, they are required; by default, SVG stands in with a warning.
-    if args.charts and args.chart_format != "svg":
-        try:
-            from lib.charts import raster  # noqa: F401
-        except (ImportError, OSError) as e:
-            needs = ("PNG charts need cairocffi and numpy (pip install -r config/requirements.txt) "
-                     f"and the cairo library: {e}")
-            if args.chart_format == "png":
-                sys.exit("❌ " + needs)
-            print(f"⚠️ {needs}; writing SVG")
-            args.chart_format = "svg"
-        else:
-            args.chart_format = "png"
-            # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
-            try:  # fontconfig's fc-match tells; when it is missing or fails, stay quiet
-                font = subprocess.run(["fc-match", "DejaVu Sans"], capture_output=True, text=True, timeout=10).stdout
-            except (OSError, subprocess.SubprocessError):
-                font = "DejaVu Sans"
-            if "DejaVu Sans" not in font:
-                print("⚠️ PNG charts: DejaVu Sans is not installed (e.g. apt install fonts-dejavu-core), "
-                      "so chart text falls back to another font")
-
     start_time = time.time()
     
     # Progress step accounting - DERIVED from the structures that emit the
@@ -352,6 +330,22 @@ if __name__ == "__main__":
     else:
         check_dependencies(show_progress=False)
     
+    # PNG charts need cairocffi, numpy and the cairo library: check before fetching anything. Asked for, they
+    # are required; by default SVG stands in, and the notice (again at the end) says how to install them.
+    chart_notice = []
+    if args.charts and args.chart_format != "svg":
+        chart_notice = optional_deps.check("png", asked=args.chart_format == "png", show_progress=args.progress)
+        args.chart_format = "svg" if chart_notice else "png"
+        if not chart_notice:
+            # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
+            try:  # fontconfig's fc-match tells; when it is missing or fails, stay quiet
+                font = subprocess.run(["fc-match", "DejaVu Sans"], capture_output=True, text=True, timeout=10).stdout
+            except (OSError, subprocess.SubprocessError):
+                font = "DejaVu Sans"
+            if "DejaVu Sans" not in font:
+                print("⚠️ PNG charts: DejaVu Sans is not installed, so chart text falls back to another font")
+                print("💡 On Debian/Ubuntu: sudo apt install fonts-dejavu-core")
+
     progress_logger.log("Starting allium static site generation...")
 
     # Fail fast - ensure output directory exists before expensive processing
@@ -405,6 +399,8 @@ if __name__ == "__main__":
     generate_site(RELAY_SET, args, progress_logger)
     if getattr(RELAY_SET, "chart_writer", None):
         RELAY_SET.chart_writer.sweep()
+    if chart_notice:  # again last, where cron mail and a `tail` of the log end
+        print("\n".join(chart_notice))
 
     # The relay set holds several GB of small objects, and freeing them one
     # by one at interpreter shutdown took ~40s. Every output file is closed

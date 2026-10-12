@@ -33,6 +33,8 @@ cd allium && python3 allium.py --progress
 
 ### Production Dependencies (`config/requirements.txt`)
 - **Jinja2 ≥2.11.2** - Template engine
+- **cairocffi ≥1.2.0, numpy ≥1.17** - PNG history charts (plus the cairo library and DejaVu Sans from the system, see README Requirements)
+- **zlib-ng ≥0.4.0** - optional, ~4x faster PNG deflate
 
 ### Development Dependencies (`config/requirements-dev.txt`)
 - **pytest ≥6.0.0** - Unit testing framework
@@ -42,6 +44,13 @@ cd allium && python3 allium.py --progress
 - **safety ≥1.10.0** - Dependency vulnerability checker
 - **djlint ≥1.0.0** - HTML/template linter
 - **memory-profiler ≥0.60.0** - Memory usage profiling
+
+### Adding a dependency
+
+1. Add it to `config/requirements.txt`.
+2. File it in `allium/lib/optional_deps.py`: `REQUIRED`, `SPEEDUPS` (used when installed, no notice), or a `FEATURES` entry with the module that imports it, its Debian/Ubuntu `python3-*` package, any system packages pip cannot install, and the options that build without it. `tests/unit/test_optional_deps.py` fails until steps 1 and 2 agree.
+3. For a new feature, call `optional_deps.check()` where `allium.py` resolves that feature's options, before fetching anything, so a missing package is announced with the commands that install it.
+4. Name its install commands in the README's Requirements and in the comments of `config/requirements.txt`.
 
 ## 🧪 Running Tests
 
@@ -72,7 +81,7 @@ safety check
 
 ### For Production Users (Default)
 - Use `curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash`
-- Only installs Jinja2 (minimal dependencies)
+- Installs `config/requirements.txt` (Jinja2 and the PNG chart packages); prints the system packages charts still need
 - Optimized for deployment and running the site generator
 
 ### For Contributors/Developers
