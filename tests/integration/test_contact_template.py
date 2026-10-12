@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+import hashlib
 import os
 import pytest
+import shutil
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
@@ -1081,17 +1083,17 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # by-ipv6.html should NOT exist (no IPv6 in test data)
         self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
-    def _write_validated_contact_pages(self, aroi_domain, base_url="https://metrics.1aeo.com"):
-        """Run one contact-page generation whose only contact is validated for aroi_domain."""
-        contact = f"operator@{aroi_domain}"
+    def _write_validated_contact_pages(self, *aroi_domains, base_url="https://metrics.1aeo.com"):
+        """Run one contact-page generation with a validated 3-relay contact per AROI domain."""
         relay_data = {"relays": [
-            {"fingerprint": letter * 40, "nickname": f"V{number}", "contact": contact,
+            {"fingerprint": hashlib.sha1(f"{domain}/{number}".encode()).hexdigest().upper(),
+             "nickname": f"V{number}", "contact": f"operator@{domain}",
              "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
              "observed_bandwidth": 1000000 * number, "consensus_weight": 100 * number,
              "flags": ["Running", "Valid"], "running": True, "measured": True,
              "first_seen": "2023-01-01 00:00:00", "or_addresses": [f"1.1.1.{number}:9001"],
              "platform": "Tor 0.4.7.8 on Linux", "effective_family": []}
-            for number, letter in enumerate("DEF", start=1)
+            for domain in aroi_domains for number in (1, 2, 3)
         ]}
         relay_set = Relays(
             output_dir=self.temp_dir,
@@ -1104,7 +1106,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         )
         for contact_data in relay_set.json["sorted"]["contact"].values():
             contact_data["is_validated_aroi"] = True
-            contact_data["aroi_domain"] = aroi_domain
+            contact_data["aroi_domain"] = contact_data["contact"].split("@", 1)[1]
         write_pages_by_key(relay_set, "contact")
 
     def _write_output_file(self, relative_path, content="keep"):
@@ -1120,7 +1122,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         Two generations share one output directory, as with a reused ./www:
         the first validates example.org, the second only example.net (the
         operator moved domains, or example.org's relays were all dropped).
-        Root folders and files that are not generated vanity output survive.
+        Hand-made folders and everything else in the root survive.
         """
         unrelated_paths = [
             "index.html",
@@ -1141,25 +1143,41 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             # Named like a domain, but holding a subdirectory
             os.path.join("nested.example.com", "index.html"),
             os.path.join("nested.example.com", "sub", "index.html"),
+            # Named like a domain and holding only an index.html, but hand-made
+            os.path.join("handmade.example.com", "index.html"),
         ]
         for relative_path in unrelated_paths:
             self._write_output_file(relative_path)
+        # A page that is not UTF-8 cannot be allium's
+        binary_page = os.path.join(self.temp_dir, "binary.example.com", "index.html")
+        os.makedirs(os.path.dirname(binary_page))
+        with open(binary_page, "wb") as handle:
+            handle.write(b"\xff\xfe<html><head></head></html>")
         # A symlinked domain-named folder is never followed or removed
         link_target = os.path.join(self.temp_dir, "outside")
         os.makedirs(link_target)
         self._write_output_file(os.path.join("outside", "index.html"))
         os.symlink(link_target, os.path.join(self.temp_dir, "linked.example.com"))
 
-        self._write_validated_contact_pages("example.org")
+        self._write_validated_contact_pages("example.org", "half.example.org")
         stale_vanity_dir = os.path.join(self.temp_dir, "example.org")
-        self.assertTrue(os.path.isfile(os.path.join(stale_vanity_dir, "index.html")))
+        with open(os.path.join(stale_vanity_dir, "index.html"), encoding="utf8") as handle:
+            first_page = handle.read()
+        canonical = '<link rel="canonical" href="https://metrics.1aeo.com/example.org/">'
+        self.assertIn(canonical, first_page)
         self.assertTrue(os.path.isfile(os.path.join(stale_vanity_dir, "by-status.html")))
         # Pages left by an earlier, longer listing are generated output too
-        self._write_output_file(os.path.join("example.org", "page-2.html"))
-        self._write_output_file(os.path.join("example.org", "by-status-page-2.html"))
-        # An interrupted run can leave a vanity folder without index.html
-        half_written = os.path.dirname(
-            self._write_output_file(os.path.join("half.example.org", "by-status.html")))
+        self._write_output_file(os.path.join("example.org", "page-2.html"),
+                                first_page.replace(canonical, canonical.replace('org/"', 'org/page-2"')))
+        # An interrupted rewrite can leave a vanity folder without index.html
+        half_written = os.path.join(self.temp_dir, "half.example.org")
+        for filename in os.listdir(half_written):
+            if filename != "by-status.html":
+                os.remove(os.path.join(half_written, filename))
+        # Allium's page copied under another name is not that folder's output
+        copied_page = os.path.join(self.temp_dir, "copied.example.com", "index.html")
+        os.makedirs(os.path.dirname(copied_page))
+        shutil.copyfile(os.path.join(stale_vanity_dir, "index.html"), copied_page)
 
         self._write_validated_contact_pages("example.net")
 
@@ -1170,6 +1188,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         for relative_path in unrelated_paths:
             with open(os.path.join(self.temp_dir, relative_path), encoding="utf8") as handle:
                 self.assertEqual(handle.read(), "keep", f"{relative_path} was modified")
+        self.assertTrue(os.path.isfile(binary_page))
+        self.assertTrue(os.path.isfile(copied_page))
         self.assertTrue(os.path.islink(os.path.join(self.temp_dir, "linked.example.com")))
         self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
 

@@ -14,6 +14,7 @@ import pickle
 import re
 import time
 from shutil import rmtree
+from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
@@ -45,6 +46,7 @@ from .operator_analysis import (
 )
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .search_discovery import _head_signals
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
 from .file_io_utils import sanitize_path_component as _sanitize_path_component
@@ -1086,6 +1088,20 @@ def _is_vanity_page_file(filename):
     return filename in CONTACT_SORT_FILE_MAP.values() or bool(_VANITY_PAGE_NAME.match(filename))
 
 
+def _is_generated_vanity_page(path, dir_name):
+    """Return True if the page at path is allium's output for vanity folder dir_name.
+
+    Every page allium writes to <out>/<domain>/ has one canonical link, to
+    <base>/<domain>/ or <base>/<domain>/page-N whatever its sort, so a
+    hand-made page in a folder named like a domain does not pass.
+    """
+    signals = _head_signals(path)
+    if signals is None or len(signals[0]) != 1:
+        return False
+    route = urlsplit(signals[0][0]).path
+    return re.fullmatch(rf"(?:/.*)?/{re.escape(dir_name)}/(?:page-[0-9]+)?", route) is not None
+
+
 def _vanity_dir_name(relay_set, contact_data):
     """Return the root-level vanity folder name for a contact, or None.
 
@@ -1131,9 +1147,10 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
     would keep linking relay and contact pages that no longer exist, and
     stay in the sitemap.
 
-    Only folders that look like generated vanity output are removed: named
-    like a sanitized domain (never a core site folder), not a symlink, and
-    holding contact page files and nothing else. A folder (or output root)
+    Only folders allium generated are removed: named like a sanitized domain
+    (never a core site folder), not a symlink, holding contact page files and
+    nothing else, and every page carrying the canonical link allium gives
+    that folder. Hand-made folders are left alone. A folder (or output root)
     that cannot be read or cleaned is skipped rather than failing the build.
     Returns the number of folders removed.
     """
@@ -1160,8 +1177,10 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
                     child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
                     for child in children):
                 continue
+            if not all(_is_generated_vanity_page(child.path, entry.name) for child in children):
+                continue
             _cleanup_vanity_sort_files(entry.path)
-        except OSError:
+        except (OSError, ValueError):  # ValueError: a page that is not UTF-8
             continue
         if not os.path.exists(entry.path):
             removed += 1
