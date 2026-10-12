@@ -1107,6 +1107,38 @@ def get_detail_page_context(relay_set, category, value):
     return get_detail_page_context(category, value, display_value)
 
 
+# Paginated and sorted contact pages: page-N.html, by-<mode>[-page-N].html
+_VANITY_PAGE_NAME = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
+
+# A vanity folder is named after a lowercased, sanitized AROI domain
+_VANITY_DIR_NAME = re.compile(r"^[a-z0-9-][a-z0-9_-]*(?:\.[a-z0-9_-]+)+$")
+
+# Root-level folders the generator owns; never treated as vanity output
+_CORE_OUTPUT_DIRS = frozenset({
+    "as", "contact", "country", "family", "first_seen", "flag", "misc",
+    "platform", "relay", "static",
+})
+
+
+def _is_vanity_page_file(filename):
+    """Return True if filename is a contact page copied into a vanity folder."""
+    return filename in CONTACT_SORT_FILE_MAP.values() or bool(_VANITY_PAGE_NAME.match(filename))
+
+
+def _vanity_dir_name(relay_set, contact_data):
+    """Return the root-level vanity folder name for a contact, or None.
+
+    Validated AROI operators get a copy of their contact pages at
+    <out>/<domain>/ when a base URL is set. The renderer and the stale
+    folder sweep both use this, so they agree on which folders are current.
+    """
+    aroi_domain = contact_data.get('aroi_domain')
+    if (relay_set.base_url and contact_data.get('is_validated_aroi')
+            and aroi_domain and aroi_domain != 'none'):
+        return _sanitize_path_component(aroi_domain.lower())
+    return None
+
+
 def _cleanup_vanity_sort_files(vanity_dir):
     """Remove all contact sort variant files from a vanity directory.
 
@@ -1115,9 +1147,8 @@ def _cleanup_vanity_sort_files(vanity_dir):
     """
     if not os.path.isdir(vanity_dir):
         return
-    generated_name = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
     for filename in os.listdir(vanity_dir):
-        if filename not in CONTACT_SORT_FILE_MAP.values() and not generated_name.match(filename):
+        if not _is_vanity_page_file(filename):
             continue
         filepath = os.path.join(vanity_dir, filename)
         try:
@@ -1130,6 +1161,45 @@ def _cleanup_vanity_sort_files(vanity_dir):
         pass
 
 
+def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
+    """Remove root-level vanity folders for domains not rendered this run.
+
+    relay/ and contact/ are rebuilt on every run, but the output directory
+    is reused. A vanity folder left by an operator who disappeared (all
+    relays dropped by the downtime filter) or moved to another AROI domain
+    would keep linking relay and contact pages that no longer exist, and
+    stay in the sitemap.
+
+    Only folders that look like generated vanity output are removed: named
+    like a sanitized domain, not a core site folder, not a symlink, and
+    holding index.html plus nothing but contact page files. Returns the
+    number of folders removed.
+    """
+    # Without a base URL no vanity folders are written, so none are swept
+    if not relay_set.base_url or not output_root:
+        return 0
+
+    contacts = relay_set.json["sorted"]["contact"]
+    current = {_vanity_dir_name(relay_set, contacts[v]) for v in sorted_values}
+
+    removed = 0
+    for entry in list(os.scandir(output_root)):
+        if (entry.name in current or entry.name in _CORE_OUTPUT_DIRS
+                or not _VANITY_DIR_NAME.match(entry.name)
+                or not entry.is_dir(follow_symlinks=False)):
+            continue
+        children = list(os.scandir(entry.path))
+        if not any(child.name == "index.html" for child in children):
+            continue
+        if not all(child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
+                   for child in children):
+            continue
+        _cleanup_vanity_sort_files(entry.path)
+        if not os.path.exists(entry.path):
+            removed += 1
+    return removed
+
+
 def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
     """Render all static sort variants for one contact page.
 
@@ -1138,7 +1208,8 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     - IPv6: by-ipv6.html is only emitted when IPv6 is visible in the contact.
 
     Vanity cleanup: removes stale vanity files when an operator loses
-    validation or when sort modes change between generations.
+    validation or when sort modes change between generations. Folders for
+    domains no longer rendered at all are swept by _remove_stale_vanity_dirs.
     """
     files_written = 0
 
@@ -1150,7 +1221,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
         safe_domain = _sanitize_path_component(aroi_domain.lower())
         potential_vanity_dir = os.path.join(output_root, safe_domain)
 
-        if relay_set.base_url and base_template_args.get('is_validated_aroi'):
+        if _vanity_dir_name(relay_set, contact_data):
             _cleanup_vanity_sort_files(potential_vanity_dir)
             vanity_dir = potential_vanity_dir
             os.makedirs(vanity_dir, exist_ok=True)
@@ -1349,8 +1420,12 @@ def write_pages_by_key(relay_set, k):
             _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
         else:
             _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        removed = _remove_stale_vanity_dirs(relay_set, sorted_values, os.path.dirname(output_path))
+        if removed:
+            relay_set.progress_logger.log_without_increment(
+                f"Removed {removed} stale vanity folder(s) for domains no longer rendered")
         return
-    
+
     if use_mp:
         write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time)
         return

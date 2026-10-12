@@ -1074,6 +1074,101 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # by-ipv6.html should NOT exist (no IPv6 in test data)
         self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
+    def _write_validated_contact_pages(self, aroi_domain, base_url="https://metrics.1aeo.com"):
+        """Run one contact-page generation whose only contact is validated for aroi_domain."""
+        contact = f"operator@{aroi_domain}"
+        relay_data = {"relays": [
+            {"fingerprint": letter * 40, "nickname": f"V{number}", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 1000000 * number, "consensus_weight": 100 * number,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": [f"1.1.1.{number}:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []}
+            for number, letter in enumerate("DEF", start=1)
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url=base_url,
+        )
+        for contact_data in relay_set.json["sorted"]["contact"].values():
+            contact_data["is_validated_aroi"] = True
+            contact_data["aroi_domain"] = aroi_domain
+        write_pages_by_key(relay_set, "contact")
+
+    def _write_output_file(self, relative_path, content="keep"):
+        path = os.path.join(self.temp_dir, relative_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf8") as handle:
+            handle.write(content)
+        return path
+
+    def test_contact_page_generation_removes_stale_vanity_dir_for_absent_domain(self):
+        """A vanity folder for a domain no longer rendered is removed on the next run.
+
+        Two generations share one output directory, as with a reused ./www:
+        the first validates example.org, the second only example.net (the
+        operator moved domains, or example.org's relays were all dropped).
+        Root folders and files that are not generated vanity output survive.
+        """
+        unrelated_paths = [
+            "index.html",
+            "robots.txt",
+            "sitemap.xml",
+            "search-index.json",
+            os.path.join("relay", "A" * 40, "index.html"),
+            os.path.join("family", "B" * 40, "index.html"),
+            os.path.join("misc", "all.html"),
+            os.path.join("static", "css", "style.css"),
+            # Only generated-looking files, but not named like a domain
+            os.path.join("about", "index.html"),
+            # Named like a domain, but holding a file allium never writes there
+            os.path.join("notes.example.com", "index.html"),
+            os.path.join("notes.example.com", "README.txt"),
+            # Named like a domain, but holding a subdirectory
+            os.path.join("nested.example.com", "index.html"),
+            os.path.join("nested.example.com", "sub", "index.html"),
+        ]
+        for relative_path in unrelated_paths:
+            self._write_output_file(relative_path)
+        # A symlinked domain-named folder is never followed or removed
+        link_target = os.path.join(self.temp_dir, "outside")
+        os.makedirs(link_target)
+        self._write_output_file(os.path.join("outside", "index.html"))
+        os.symlink(link_target, os.path.join(self.temp_dir, "linked.example.com"))
+
+        self._write_validated_contact_pages("example.org")
+        stale_vanity_dir = os.path.join(self.temp_dir, "example.org")
+        self.assertTrue(os.path.isfile(os.path.join(stale_vanity_dir, "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(stale_vanity_dir, "by-status.html")))
+        # Pages left by an earlier, longer listing are generated output too
+        self._write_output_file(os.path.join("example.org", "page-2.html"))
+        self._write_output_file(os.path.join("example.org", "by-status-page-2.html"))
+
+        self._write_validated_contact_pages("example.net")
+
+        self.assertFalse(os.path.exists(stale_vanity_dir))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "by-status.html")))
+        for relative_path in unrelated_paths:
+            with open(os.path.join(self.temp_dir, relative_path), encoding="utf8") as handle:
+                self.assertEqual(handle.read(), "keep", f"{relative_path} was modified")
+        self.assertTrue(os.path.islink(os.path.join(self.temp_dir, "linked.example.com")))
+        self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
+
+    def test_contact_page_generation_without_base_url_keeps_existing_vanity_dirs(self):
+        """Without a base URL no vanity pages are written, and none are swept."""
+        self._write_validated_contact_pages("example.org")
+
+        self._write_validated_contact_pages("example.net", base_url="")
+
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, "example.net")))
+
 
 class TestB3V3RelayInfoRendering(unittest.TestCase):
     """B3.2 (re-opened): integration tests for v3 awareness in
