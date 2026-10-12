@@ -31,6 +31,7 @@ def test_ratio_text_never_prints_a_band_edge_the_value_is_not_on():
     assert ratio_text(1.123, 1.01) == "1.12" and ratio_text(1.01, 1.01) == "1.01"
     assert ratio_text(1.0097, 1.01) == "1.0097" and ratio_text(1.973, 1.97) == "1.973"
     assert ratio_text(1.0099881, 1.01) == "1.00999"  # 4 decimals would still read 1.0100
+    assert ratio_text(1.0099996, 1.01) == "1.0099996"
 
 
 def test_throughput_subtitle_states_the_mean_its_share_and_the_peak():
@@ -78,8 +79,9 @@ def test_ratio_subtitle_says_whether_family_and_peers_left_the_band_on_the_same_
     assert ratio_subtitle(spike, {"role": half_below}, GUARD) == base + " · peers stayed in"
     half = {**inside, spike[5][0]: 3.0}  # out with the relay on one of its two days: half is enough
     assert ratio_subtitle(spike, {"role": half}, GUARD) == base + " · out with other Guards"
-    # A median a hair under the typical band is still inside p2–p98.
+    # A median a hair under the typical band is still inside p2–p98, as is one on its edge.
     assert ratio_subtitle(spike, {"role": {t: 1.009 for t in inside}}, GUARD) == base + " · peers stayed in"
+    assert ratio_subtitle(spike, {"role": {t: GUARD["invest_lo"] for t in inside}}, GUARD) == base + " · peers stayed in"
 
 
 def test_frozen_bands_and_copy():

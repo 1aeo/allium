@@ -137,14 +137,20 @@ def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
     # and the page's figure for them: 120 of 174 slots up.
     assert "Average 69.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
     # A running relay's history only lags behind Onionoo by a day or two: its axis ends just past it, no gap. One
-    # that ended 10 days before relays_published is a stale block: the gap shows, as for a relay no longer running.
-    for days, gap in ((28, False), (20, True)):
+    # that ended over two slots and a day before relays_published (4 days, not 3) is a stale block: the gap shows,
+    # as for a relay no longer running.
+    for days, gap in ((27, False), (26, True)):
         charts = writer([relay("A")], {"A": history([100] * days)})
         charts.relay(relay("A"), str(tmp_path))
         write = [p.get("d") for p in ET.parse(tmp_path / "bandwidth-1m.svg").iter("{http://www.w3.org/2000/svg}path")
                  if p.get("stroke") == GREEN]
         last = max(float(x) for d in write for x in re.findall(r"[ML]([\d.]+) ", d))
-        assert (last < LEFT + PLOT_WIDTH * 0.9) is gap
+        assert (last < LEFT + PLOT_WIDTH * 0.95) is gap
+    # The bandwidth window and a stopped relay's axis follow the bandwidth document, not the uptime one's publish time.
+    offline = relay("A", running=False)
+    charts = writer([offline], {"A": history([100] * 20)}, uptime_published="2026-09-26 12:00:00")
+    charts.relay(offline, str(tmp_path))
+    assert "Sep 29" in texts(tmp_path / "bandwidth-1m.svg")
     # An operator's axis runs on only when every member stopped.
     for running, gap in ((False, True), (None, False)):
         members = [relay("A", running=False), relay("B", running=running)]
@@ -156,7 +162,7 @@ def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
 
 
 def test_uptime_charts_use_the_uptime_documents_own_window(tmp_path):
-    # Uptime from Aug 25: down until Aug 29 06:00, then up. Its document was published Sep 26 (bandwidth: Sep 30),
+    # Uptime from Aug 25: down until Aug 29 12:00, then up. Its document was published Sep 26 (bandwidth: Sep 30),
     # so Onionoo's 1-month window starts Aug 26 12:00: the chart draws its 186 slots, 18 of them down.
     charts = writer([relay("A")], {"A": history([100] * 30)}, {"A": [0] * 24 + [999] * 168},
                     uptime_published="2026-09-26 12:00:00", uptime_first="2026-08-25 14:00:00")
@@ -165,6 +171,16 @@ def test_uptime_charts_use_the_uptime_documents_own_window(tmp_path):
     line = [path.get("d") for path in ET.parse(tmp_path / "uptime-1m.svg").iter("{http://www.w3.org/2000/svg}path")
             if path.get("stroke") == GREEN and path.get("stroke-width") == "2.2"]
     assert len(line) == 1 and len(re.findall(r"[ML]", line[0])) == 186
+
+
+def test_a_short_uptime_history_is_drawn_without_the_pages_figure(tmp_path):
+    # Under 30 slots the page shows no uptime figure, so the chart has no "Average"; one slot is no history.
+    for slots, drawn in ((10, True), (1, False)):
+        a = relay("A")
+        charts = writer([a], {"A": history([100] * 30)}, {"A": [999] * slots}, uptime_first="2026-09-29 14:00:00")
+        assert ("1m" in charts.relay(a, str(tmp_path))[1]) is drawn
+        if drawn:
+            assert not any(text.startswith("Average") for text in texts(tmp_path / "uptime-1m.svg"))
 
 
 def test_days_under_50_kb_s_leave_the_write_read_strip(tmp_path):
@@ -248,7 +264,7 @@ def test_out_of_band_days_on_either_side_of_the_band_each_get_a_dot():
     start = [op[:2] for op in svg.ops].index(("clip", "r"))
     assert len([op for op in svg.ops[start:] if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 2
     # The legend explains them, its swatch a red line with a dot; on a chart only below p2 too.
-    ratios = [1.05] * 10 + [0.98, 0.95] + [1.05] * 18
+    ratios = [1.05] * 10 + [0.98, 0.97] + [1.05] * 18
     svg = bandwidth_chart("1m", (ts, [10 * r for r in ratios], [10.0] * 30, DAY), 100.0, bands_for_role("Guard"), "relay")
     start = [op[:2] for op in svg.ops].index(("clip", "r"))
     assert "Outside p2–p98" in [op[3] for op in svg.ops if op[0] == "text"]
@@ -256,7 +272,7 @@ def test_out_of_band_days_on_either_side_of_the_band_each_get_a_dot():
     # Of those two days below p2 (0.99), only the one under 2 px past it is a sliver that gets a dot.
     (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "r")]
     near, far = (height * (0.99 - r) / 1.20 for r in ratios[10:12])
-    assert 1 < near < 2 < far
+    assert 1 < near < 2 < far < 3
     dots = [op[1] for op in svg.ops[start:] if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]
     ys = [float(y) for y in re.findall(r"[ML][\d.]+ ([\d.]+)", dots[0])] if len(dots) == 1 else []
     assert ys and abs(sum(ys) / len(ys) - (top + height * (1.70 - 0.98) / 1.20)) < 1
@@ -336,6 +352,13 @@ def test_overload_legend_and_spike_callout(tmp_path):
                           bands_for_role("Guard"), "relay")
     (x, _y, width, _height), = [op[1:5] for op in svg.ops if op[0] == "rect" and op[5] == CALLOUT_BG]
     assert width > PLOT_WIDTH / 2 and LEFT <= x and x + width <= LEFT + PLOT_WIDTH
+    # Wherever the peak is, the box stays inside the plot (not just the canvas).
+    ts = [T0 + timedelta(days=i) for i in range(180)]
+    for peak in range(180):
+        svg = bandwidth_chart("6m", (ts, [10.0] * peak + [16.5] + [10.0] * (179 - peak), [10.0] * 180, DAY), 100.0,
+                              bands_for_role("Guard"), "relay")
+        (x, _y, width, _height), = [op[1:5] for op in svg.ops if op[0] == "rect" and op[5] == CALLOUT_BG]
+        assert LEFT <= x and x + width <= LEFT + PLOT_WIDTH
     # A newer rate-limit report where no limit was hit does not count toward the verdict, nor its time.
     quiet = dict(OVERLOADED["overload_ratelimits"], **{"write-count": 0, "timestamp": OVERLOADED[
         "overload_ratelimits"]["timestamp"] + 86400000})
@@ -371,10 +394,12 @@ def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp
         charts.contact(order, str(tmp_path))
         assert "Write / read · last 30 days  ·  vs Exit band" in texts(tmp_path / "bandwidth-1m.svg")
     # Relays without contact info share one hash, but they are not an operator; nor are those whose contact is
-    # "none", which the contact page treats alike.
+    # exactly "none", which the contact page treats alike (" none " is a name there).
     assert charts.contact([3], str(tmp_path)) == {}
     charts = writer([relay("N", contact="none"), relay("O", contact="none")], {"N": history([50] * 30)})
     assert charts.contact([0, 1], str(tmp_path)) == {}
+    charts = writer([relay("N", contact=" none ")], {"N": history([50] * 30)})
+    assert list(charts.contact([0], str(tmp_path))) == ["1m"]
 
 
 def test_a_line_breaks_where_a_slot_is_missing():
