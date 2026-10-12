@@ -1159,7 +1159,11 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         link_target = os.path.join(self.temp_dir, "outside")
         os.makedirs(link_target)
         self._write_output_file(os.path.join("outside", "index.html"))
-        os.symlink(link_target, os.path.join(self.temp_dir, "linked.example.com"))
+        link_path = os.path.join(self.temp_dir, "linked.example.com")
+        try:
+            os.symlink(link_target, link_path)
+        except (OSError, NotImplementedError):  # Windows without symlink privilege
+            link_path = None
 
         self._write_validated_contact_pages("example.org", "half.example.org")
         stale_vanity_dir = os.path.join(self.temp_dir, "example.org")
@@ -1213,7 +1217,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
                 self.assertEqual(handle.read(), "keep", f"{relative_path} was modified")
         self.assertTrue(os.path.isfile(binary_page))
         self.assertTrue(os.path.isfile(copied_page))
-        self.assertTrue(os.path.islink(os.path.join(self.temp_dir, "linked.example.com")))
+        if link_path:
+            self.assertTrue(os.path.islink(link_path))
         self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
 
     @staticmethod
