@@ -145,4 +145,5 @@ when fontconfig's `fc-match` is installed to check.
   shorter one holds it whole, so such a member is summed from that shorter
   history, averaged into the period's slots (whole slots only). Members'
   histories reach the newest day at different times, so the sum stops at the
-  newest slot every member still reporting (within two slots) has reached.
+  newest slot every member still reporting (within two slots) has reached; a
+  member no longer running does not hold it back, as its end is a real drop.

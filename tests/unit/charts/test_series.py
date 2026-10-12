@@ -89,6 +89,10 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     assert [r["fingerprint"] for r, _traffic in summed] == list("ABLO") and interval == 2 * DAY
     # Sep 7 would sum A and B without L: the sum stops at Sep 5 instead of ending on a false drop.
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
+    # If L is no longer running, it will not catch up: the drop on Sep 7 is real.
+    members[2]["running"] = False
+    (ts, write, _read, interval), summed = operator_throughput(members, bandwidth_map, "1_year")
+    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)][-2:] == [(5, 160), (7, 110)]
 
 
 def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():

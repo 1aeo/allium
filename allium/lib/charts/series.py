@@ -110,7 +110,8 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     without this period is summed from its next shorter one, averaged into this
     period's slots; members on other intervals are left out. Members' histories
     reach the newest slot at different times, so the sum stops at the newest slot
-    every member still reporting has reached, not on a partial sum.
+    every member still reporting has reached, not on a partial sum. A member no
+    longer running has stopped for good: its end is a real drop, not a delay.
     """
     histories = []
     for relay in members:
@@ -134,9 +135,10 @@ def operator_throughput(members, bandwidth_map, key, since=None):
             write.update({t: w[t] for t in both})
             read.update({t: r[t] for t in both})
             summed.append((relay, sum(w[t] + r[t] for t in both)))
-            lasts.append(max(w.keys() | r.keys()))
-    reporting = [last for last in lasts if max(lasts) - last <= timedelta(seconds=2 * interval)]
-    end = min(reporting, default=None)
+            lasts.append((max(w.keys() | r.keys()), relay.get("running") is False))
+    newest = max((last for last, _stopped in lasts), default=None)
+    reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
+    end = min(reporting, default=newest)
     return _aligned({t: v for t, v in write.items() if t <= end}, read, interval) if end else None, summed
 
 
