@@ -26,6 +26,7 @@ CATEGORY_HREF = re.compile(r'href="([^"]*\b(?:%s)/[^"]*)"' % "|".join(SORTED_PAG
 
 
 def _relay(fingerprint, nickname, **extra):
+    """An Onionoo details relay in DE on Linux, with fields overridden by extra."""
     relay = {
         "nickname": nickname,
         "fingerprint": fingerprint,
@@ -50,6 +51,7 @@ def _relay(fingerprint, nickname, **extra):
 
 @pytest.fixture(scope="module")
 def site(tmp_path_factory):
+    """A whole site generated from the test relays, and their relay set."""
     out = tmp_path_factory.mktemp("site")
     unlisted = _relay(UNLISTED, "unlisted", **{"as": "AS100"})
     for field in ("country", "country_name", "platform"):
@@ -83,10 +85,12 @@ def site(tmp_path_factory):
 
 
 def _read(site, *path):
+    """The text of a generated page."""
     return site.out.joinpath(*path).read_text()
 
 
 def test_has_page_is_true_only_for_written_category_pages(site):
+    """has_page() holds for exactly the keys that get a category page."""
     relay_set = site.relay_set
     assert relay_set.has_page("country", "DE")
     assert relay_set.has_page("platform", "Linux")
@@ -100,6 +104,7 @@ def test_has_page_is_true_only_for_written_category_pages(site):
 
 
 def test_authority_age_links_its_first_seen_page(site):
+    """The Age column links first_seen/<YYYY-MM-DD>/, the date's page."""
     html = _read(site, "misc", "authorities.html")
 
     assert 'href="../first_seen/2017-10-14/"' in html
@@ -108,6 +113,7 @@ def test_authority_age_links_its_first_seen_page(site):
 
 
 def test_authority_in_unknown_country_shows_it_as_text(site):
+    """An authority in "??" shows Unknown where its country link would be."""
     html = _read(site, "misc", "authorities.html")
 
     assert "country/??" not in html
@@ -116,6 +122,7 @@ def test_authority_in_unknown_country_shows_it_as_text(site):
 
 
 def test_relay_page_shows_unknown_country_and_platform_as_text(site):
+    """A relay page links only a country or platform that has a page."""
     for fingerprint in (NOWHERE, UNLISTED):
         html = _read(site, "relay", fingerprint, "index.html")
         assert "country/" not in html, fingerprint
@@ -131,6 +138,7 @@ def test_relay_page_shows_unknown_country_and_platform_as_text(site):
 
 
 def test_relay_rows_and_listings_show_unknown_as_text(site):
+    """Relay rows, the networks listing and contact pages show "??" and no platform as text."""
     all_relays = _read(site, "misc", "all.html")
     assert "country/??" not in all_relays
     assert "platform//" not in all_relays
@@ -151,6 +159,7 @@ def test_relay_rows_and_listings_show_unknown_as_text(site):
 
 
 def test_no_page_links_a_missing_category_page(site):
+    """Every category link on every page has a page behind it."""
     checked = 0
     for dirpath, _, files in os.walk(site.out):
         for name in files:

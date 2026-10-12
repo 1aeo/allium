@@ -1385,6 +1385,7 @@ class TestContactTemplateIPv6Column:
         return relay
 
     def _base_context(self, relay_subset):
+        """A contact.html context for a contact running relay_subset."""
         return {
             'contact': 'test@example.com',
             'contact_hash': 'abcd1234',

@@ -198,6 +198,7 @@ def test_overload_bullet_no_relay_list_without_path_prefix(jinja_env):
 
 
 def _contact_context(overload_summary):
+    """A contact.html context for one relay with the given overload summary."""
     relay = {
         'aroi_domain': 'example.org', 'country': 'us', 'country_name': 'United States',
         'observed_bandwidth': 1000000, 'nickname': 'TestRelay',
