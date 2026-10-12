@@ -656,8 +656,8 @@ th[title]::after {
 }
 .chart-history .chart-hero {
     display: block;
-    scroll-margin-top: calc(min(14vw, 151px) + 30px);  /* the thumbnail row's height: a deep link lands with
-                                                          the row in view above its chart */
+    scroll-margin-top: calc(min(17.5vw, 186px) + 30px);  /* the thumbnail row's height: a deep link lands with
+                                                            the row in view above its chart */
     color: var(--aeo-text-dim);  /* alt text, e.g. SVG at Tor Browser's Safest level */
     text-decoration: none;
 }
@@ -694,7 +694,7 @@ th[title]::after {
     display: flex;  /* the row stretches every link to the tallest chart: keep each label at the bottom */
     flex-direction: column;
     justify-content: space-between;
-    flex: 0 1 20%;
+    flex: 0 1 25%;
     border-radius: 4px;
     outline: 1px solid transparent;
     outline-offset: 2px;
