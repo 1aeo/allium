@@ -28,6 +28,7 @@ from .svg import (
 
 WIDTH, LEFT = 1080, 138
 PLOT_WIDTH = WIDTH - LEFT - 24
+CREDIT = "Produced by 1aeo at 1aeo.com"  # every chart's source, bottom right
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +46,8 @@ def _header(svg, identity, title, subtitle, y=10):
 
 
 def _footer(svg, panel, period, interval, footnote=""):
-    """Date-axis caption (``6M · 1-day``) under longer periods, then the footnote. Returns the height."""
+    """Date-axis caption (``6M · 1-day``) under longer periods, then a line with the footnote on the left and
+    the CREDIT on the right. Returns the height."""
     y = panel.top + panel.height + 38
     if period != "1m":
         units = ((SECONDS_PER_WEEK, "week"), (SECONDS_PER_DAY, "day"), (SECONDS_PER_HOUR, "hour"))
@@ -53,9 +55,10 @@ def _footer(svg, panel, period, interval, footnote=""):
         caption = period.upper() + (" · {}-{}".format(interval // unit[0], unit[1]) if unit else "")
         y += 20
         svg.text(LEFT + PLOT_WIDTH / 2, y, caption, 13, MUTED, "middle")
+    y += 24
     if footnote:
-        y += 24
         svg.text(12, y, footnote, 11, MUTED)
+    svg.text(WIDTH - 12, y, CREDIT, 11, MUTED, "end")
     return y + 12
 
 
