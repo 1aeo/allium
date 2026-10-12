@@ -101,6 +101,8 @@ def test_frozen_bands_and_copy():
 
 
 def test_identity_and_roles():
+    """Name lines (a relay's nickname and url host, with its fingerprint's start when Unnamed; an operator's name and
+    relay count) and the role a relay's flags give."""
     assert operator_from_contact("Admin url:https://www.1AEO.com/about email:x") == "1aeo.com"
     assert operator_from_contact("url:localhost") == operator_from_contact(None) == ""
     assert chart_identity("jeangrae", "1aeo.com") == "jeangrae  ·  1aeo.com"

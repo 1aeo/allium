@@ -39,8 +39,8 @@ def test_uptime_points_follow_onionoos_window_and_pad_a_stopped_history():
 
 
 def test_an_uptime_block_without_a_factor_is_read_as_the_page_reads_it():
-    # Onionoo always sends a factor. A block without one is read with the relay page's default (1/999), not 1: it is
-    # drawn 0-100%, its mean the page's figure. A factor of 0 stays 0; a bandwidth block without one is unscaled.
+    """Onionoo always sends a factor. A block without one is read with the relay page's default (1/999), not 1: it is
+    drawn 0-100%, its mean the page's figure. A factor of 0 stays 0; a bandwidth block without one is unscaled."""
     windows = uptime_windows({"relays_published": "2026-09-30 12:00:00", "relays": []})
     bare = block([999] * 100 + [0] * 36 + [500] * 50, first="2026-08-30 14:00:00", interval=14400)
     del bare["factor"]

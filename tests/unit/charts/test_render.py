@@ -40,6 +40,8 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
 
 
 def test_an_unnamed_relays_charts_name_its_fingerprint(tmp_path):
+    """An Unnamed relay's bandwidth and uptime charts give its fingerprint's first 8 digits before its url host, and
+    the line fits the plot."""
     fp = "0123ABCD" + "F" * 32
     unnamed = relay(fp, nickname="Unnamed", contact="url:https://tor-relays.example-operator-collective.org")
     writer([unnamed], {fp: history([100] * 30)}, {fp: [999] * 180}).relay(unnamed, str(tmp_path))
@@ -430,6 +432,8 @@ def test_a_line_breaks_where_a_slot_is_missing():
 
 
 def test_a_lone_slot_without_traffic_sits_on_the_bottom_edge():
+    """A lone dash at or just above 0 on an axis from 0 sits on the bottom edge rather than half under the clip; lines
+    along the edge, points below the scale and the write/read strip's floor stay where they are."""
     # Sep 11 has no traffic and no neighbour to join: its write and read dashes would lie on the throughput panel's
     # bottom edge, the lower half of their strokes under its clip. They sit on the edge instead.
     ts = [T0 + timedelta(days=day) for day in [*range(9), 10, *range(12, 20)]]
