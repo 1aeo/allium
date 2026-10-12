@@ -87,11 +87,13 @@ when fontconfig's `fc-match` is installed to check.
 
 ## Content rules
 
-- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`; for
-  an operator its AROI domain, else its `url:` host, else its contact text, cut
-  at a word when longer than 50 characters, and its relay count:
-  `tor@kllx.eu · 64 relays`; relays without a contact, or with `none`, as the
-  contact page treats them, are not an operator and get no chart),
+- Copy: `outcome.py` (subtitles), `identity.py` (`nickname · url host`, with
+  the fingerprint's first 8 hex digits after a nickname that is `Unnamed` (in
+  any case) or missing: `Unnamed · 0123ABCD… · url host`; for an operator its
+  AROI domain, else its `url:` host, else its contact text, cut at a word when
+  longer than 50 characters, and its relay count: `tor@kllx.eu · 64 relays`;
+  relays without a contact, or with `none`, as the contact page treats them, are
+  not an operator and get no chart),
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Subtitles state facts about what the panel draws, so they hold by
@@ -125,7 +127,8 @@ when fontconfig's `fc-match` is installed to check.
   from the uptime document's `relays_published`). An offline relay's history
   stops at its last consensus; the window's slots after it are drawn as Onionoo
   counts them (the first holds its last hours in the consensus, the rest 0%),
-  and the "Average" is the relay page's figure for the period.
+  and the "Average" is the relay page's figure for the period. A block without
+  a `factor` is read with the page's default, 1/999.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day with no joined neighbour out on its side is a red tip, marked
@@ -133,7 +136,9 @@ when fontconfig's `fc-match` is installed to check.
   red is only a sliver.
   A red line-and-dot legend entry, `Outside p2–p98`, explains them on the
   charts that draw them. A
-  point with no neighbour to join (between gaps) is drawn as a short dash.
+  point with no neighbour to join (between gaps) is drawn as a short dash; at
+  or just above 0 on the throughput and uptime panels (a slot with no traffic,
+  or 0% up) it sits on the bottom edge rather than half under it.
 - A relay that relays.py finds overloaded gets a legend entry with its newest
   counted report: `currently overloaded · last report Sep 29, 22:00 UTC`
   (just `overloaded · …` for a relay no longer running, whose verdict comes

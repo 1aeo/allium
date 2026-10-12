@@ -11,6 +11,11 @@ from allium.lib.page_writer import build_template_args, write_pages_by_key
 from allium.lib.relays import Relays
 
 
+def _every_page_exists(category, key):
+    """Relays.has_page for the dict relay sets below: link every category key."""
+    return True
+
+
 class TestContactTemplateIntegration(unittest.TestCase):
     """Integration tests for contact template two-column layout rendering."""
     
@@ -79,7 +84,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
                 'json': {
                     'relay_subset': [self.sample_relay]  # Keep for backward compat in tests
                 },
-                'use_bits': False
+                'use_bits': False,
+                'has_page': _every_page_exists,
             },
             'page_ctx': {
                 'path_prefix': '../'
@@ -604,6 +610,7 @@ def test_contact_template_non_default_variant_uses_clean_absolute_canonical(
         'relays': {
             'json': {'relay_subset': [sample_relay]},
             'use_bits': False,
+            'has_page': _every_page_exists,
         },
         'sortable_scope': 'contact',
     }
@@ -1511,6 +1518,7 @@ class TestContactTemplateIPv6Column:
         return relay
 
     def _base_context(self, relay_subset):
+        """A contact.html context for a contact running relay_subset."""
         return {
             'contact': 'test@example.com',
             'contact_hash': 'abcd1234',
@@ -1526,6 +1534,7 @@ class TestContactTemplateIPv6Column:
                 'json': {'relay_subset': relay_subset},
                 'use_bits': False,
                 'timestamp': '2026-01-01 00:00:00',
+                'has_page': _every_page_exists,
             },
             'page_ctx': {'path_prefix': '../'},
             'contact_rankings': [],

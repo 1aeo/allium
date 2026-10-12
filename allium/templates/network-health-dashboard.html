@@ -1021,6 +1021,59 @@ Network Health Dashboard
                         <span class="metric-label">Other Circuit</span>
                     </div>
                 </div>
+                {# Upstream resolvers: metadata.resolvers, absent in older reports and failed runs #}
+                {% set _nh = relays.json.network_health %}
+                {% if _nh.exit_dns_health_resolvers_available %}
+                <div style="font-size: 11px; color: #666; margin-top: 4px;" title="Estimated from sampled queries reaching the validator's authoritative DNS over recent scans (3.5-day half-life).">
+                    Upstream resolvers: estimated share of exit DNS lookups{% if _nh.exit_dns_health_resolver_weighted %}, weighted by exit probability{% elif _nh.exit_dns_health_resolver_weighted is sameas false %}, unweighted{% endif %}.
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Google Public DNS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_google_percentage_formatted }}</span>
+                        <span class="metric-label">Google</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Cloudflare 1.1.1.1.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_cloudflare_percentage_formatted }}</span>
+                        <span class="metric-label">Cloudflare</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Quad9 (a lower bound: only Quad9's own networks are recognized).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_quad9_percentage_formatted }}</span>
+                        <span class="metric-label">Quad9</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via OpenDNS (Cisco Umbrella).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_opendns_percentage_formatted }}</span>
+                        <span class="metric-label">OpenDNS</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Freifunk München public DNS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_ffmuc_percentage_formatted }}</span>
+                        <span class="metric-label">Freifunk München</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
+                        <span class="metric-label">All Public</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups resolved from the exit's own address or its network (same origin AS): the operator's or hoster's resolver.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
+                        <span class="metric-label">Local</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
+                        <span class="metric-label">Other</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
+                        <span class="metric-label">Unknown</span>
+                    </div>
+                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
+                        <span class="metric-label">Exits Covered</span>
+                    </div>
+                </div>
+                {% else %}
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Upstream resolvers: not available.</div>
+                {% endif %}
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">
                     Source: <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>.
                     Last scan: {{ relays.json.network_health.exit_dns_health_timestamp }}.

@@ -101,10 +101,18 @@ def test_frozen_bands_and_copy():
 
 
 def test_identity_and_roles():
+    """Name lines (a relay's nickname and url host, with its fingerprint's start when Unnamed; an operator's name and
+    relay count) and the role a relay's flags give."""
     assert operator_from_contact("Admin url:https://www.1AEO.com/about email:x") == "1aeo.com"
     assert operator_from_contact("url:localhost") == operator_from_contact(None) == ""
     assert chart_identity("jeangrae", "1aeo.com") == "jeangrae  ·  1aeo.com"
     assert chart_identity("1aeo.com", "1AEO.com") == "1aeo.com"
+    # Relays named "Unnamed" (Tor's default) or not at all are told apart by their fingerprint's first 8 digits.
+    fp = "0123ABCD" + "F" * 32
+    assert chart_identity("Unnamed", "1aeo.com", fp) == "Unnamed · 0123ABCD…  ·  1aeo.com"
+    assert chart_identity("unnamed", "", fp) == "unnamed · 0123ABCD…" and chart_identity(" ", "", fp) == "0123ABCD…"
+    assert chart_identity(None, "1aeo.com", fp) == "0123ABCD…  ·  1aeo.com"
+    assert chart_identity("jeangrae", "1aeo.com", fp) == "jeangrae  ·  1aeo.com"
     # An operator: its AROI domain, else its url: host, else its contact text (cut at a word past 50 characters),
     # and its relay count.
     host, aroi = {"contact": "url:https://www.1AEO.com/about"}, {"contact": "x", "aroi_domain": "example.org"}
