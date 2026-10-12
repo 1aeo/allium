@@ -7,6 +7,7 @@ import pytest
 from allium.lib.charts.series import (
     MBIT, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
 )
+from allium.lib.uptime_utils import uptime_windows
 
 from .fixtures import DAY, T0, block, history, relay
 
@@ -20,16 +21,21 @@ def test_points_scale_by_factor_skip_holes_and_clip_to_window():
 
 def test_uptime_points_follow_onionoos_window_and_pad_a_stopped_history():
     # Published 30 Sep 12:00: Onionoo's 1-month window is 186 four-hour slots from 30 Aug 14:00
-    published = datetime(2026, 9, 30, 12, tzinfo=timezone.utc)
+    windows = uptime_windows({"relays_published": "2026-09-30 12:00:00", "relays": []})
     first = datetime(2026, 8, 30, 14, tzinfo=timezone.utc)
-    stopped = block([999] * 150, first="2026-08-30 14:00:00", interval=14400, factor=1 / 999.0)
-    drawn = uptime_points(stopped, "1_month", published)
+    stopped = block([999] * 150, first="2026-08-30 14:00:00", interval=14400, factor=1 / 999.0)  # ends 24 Sep 12:00
+    drawn = uptime_points(stopped, "1_month", windows)
     assert sorted(drawn) == [first + timedelta(hours=4 * i) for i in range(186)]
     assert [drawn[t] for t in sorted(drawn)][148:152] == [pytest.approx(100.0)] * 2 + [0.0] * 2
+    # Last seen 24 Sep 11:00, so its consensus hour runs to 12:00, the block's end: no hours missing
+    assert uptime_points(stopped, "1_month", windows, {"last_seen": "2026-09-24 11:00:00"}) == drawn
+    # Last seen 24 Sep 13:00: the first missing slot holds its last two hours, half the slot
+    late = uptime_points(stopped, "1_month", windows, {"last_seen": "2026-09-24 13:00:00"})
+    assert [late[t] for t in sorted(late)][149:152] == [pytest.approx(100.0), pytest.approx(50.0), 0.0]
     older = block([999] * 186, first="2026-08-28 14:00:00", interval=14400, factor=1 / 999.0)
-    assert min(uptime_points(older, "1_month", published)) == first  # its first 12 slots predate the window
-    assert sum(uptime_points(older, "1_month", published).values()) == pytest.approx(174 * 100.0)
-    assert uptime_points(stopped, "1_month", None) == points(stopped, 100.0)
+    assert min(uptime_points(older, "1_month", windows)) == first  # its first 12 slots predate the window
+    assert sum(uptime_points(older, "1_month", windows).values()) == pytest.approx(174 * 100.0)
+    assert uptime_points(stopped, "1_month", {}) == points(stopped, 100.0)
 
 
 def test_throughput_keeps_timestamps_with_both_directions():

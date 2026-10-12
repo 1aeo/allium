@@ -47,21 +47,22 @@ def points(block, scale=1.0, since=None):
     return {t: v * scale for t, v in zip(times[start:], values[start:]) if isinstance(v, (int, float))}
 
 
-def uptime_points(block, key, published):
+def uptime_points(block, key, windows, relay=None, section=None):
     """``{timestamp: percent}`` an uptime chart draws for one Onionoo block: its slots inside Onionoo's current
-    window and 0% for each window slot it lacks after its end, the slots the relay page averages
-    (``uptime_utils.block_window``). An offline relay's history stops at its last consensus, but Onionoo counts
-    the time since as down. The whole block when there is no window."""
+    window, then the window slots it lacks after its end, the slots the relay page averages
+    (``uptime_utils.block_window``, given the document's ``uptime_windows``, the relay's details entry and the
+    block's section). An offline relay's history stops at its last consensus, but Onionoo counts the time since
+    as down: the first missing slot holds the relay's last hours, the rest are 0%. The whole block when there is
+    no window."""
     drawn = points(block, 100.0)
-    where = block_window(block or {}, key, published)
+    where = block_window(block or {}, key, windows, relay, section)
     if where is None:
         return drawn
-    lo, hi, pad_from, padded = where
-    interval = int(block["interval"])
-    kept = _slots(parse_onionoo_timestamp(block.get("first")), interval, len(block["values"]))[lo:hi]
+    lo, hi, padding, credit = where
+    kept = _slots(parse_onionoo_timestamp(block.get("first")), int(block["interval"]), len(block["values"]))[lo:hi]
     drawn = {t: drawn[t] for t in kept if t in drawn}
-    pad = datetime.fromtimestamp(pad_from, timezone.utc)
-    drawn.update((pad + k * timedelta(seconds=interval), 0.0) for k in range(padded))
+    for i, midpoint in enumerate(padding):
+        drawn[datetime.fromtimestamp(midpoint, timezone.utc)] = credit * 100.0 if i == 0 else 0.0
     return drawn
 
 
