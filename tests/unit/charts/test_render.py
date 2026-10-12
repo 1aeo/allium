@@ -39,6 +39,14 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
+def test_uptime_chart_of_a_stopped_history_shows_the_pages_average(tmp_path):
+    # 150 slots from the window's start, then the relay went offline: Onionoo counts the last 36 slots as down
+    charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 150},
+                    uptime_first="2026-08-30 14:00:00")
+    charts.relay(relay("A"), str(tmp_path))
+    assert "Average 80.6%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")  # 150 of 186 slots
+
+
 @needs_png
 def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_path):
     first, second, third, root = (tmp_path / name for name in ("first", "second", "third", "cache"))
@@ -119,32 +127,30 @@ def test_each_period_only_shows_its_own_window(tmp_path):
 
 def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
     # An offline relay: 20 days of history, then nothing until relays_published (Sep 30), and a restart in the gap.
-    offline = relay("A", last_restarted="2026-09-25 08:00:00", running=False, last_seen="2026-09-21 10:00:00")
-    charts = writer([offline], {"A": history([100] * 20)}, {"A": [999] * 120})
+    offline = relay("A", last_restarted="2026-09-25 08:00:00", running=False, last_seen="2026-09-21 11:00:00")
+    charts = writer([offline], {"A": history([100] * 20)}, {"A": [999] * 120}, uptime_first="2026-09-01 14:00:00")
     charts.relay(offline, str(tmp_path))
     for name in ("bandwidth-1m.svg", "uptime-1m.svg"):
         lines = texts(tmp_path / name)
         assert "Sep 29" in lines and "Last restarted  Sep 25" in lines
-    # Onionoo has no points while it is out of the consensus: the 54 whole 4-hour slots from when it was last seen
-    # (Sep 21 10:00) to relays_published count as down in the average, 120 x 100% / 174.
-    assert "Average 69.0%  ·  down since Sep 21  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
-    # A running relay whose history ends as early only lags behind Onionoo: no gap, nothing counted down.
+    # Its uptime chart draws the 54 slots of Onionoo's window after its last one at 0%, as Onionoo counts them,
+    # and the page's figure for them: 120 of 174 slots up.
+    assert "Average 69.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+    # A running relay whose bandwidth history ends as early only lags behind Onionoo: no gap.
     charts.relay(relay("A"), str(tmp_path))
     assert "Sep 29" not in texts(tmp_path / "bandwidth-1m.svg")
-    assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
-    # Seen after its uptime document was published: nothing to count down.
-    charts.relay(relay("A", running=False, last_seen="2026-10-02 10:00:00"), str(tmp_path))
-    assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
-def test_uptime_windows_end_at_the_uptime_documents_own_publish_time(tmp_path):
-    # Uptime from Aug 25: down until Aug 29 08:00, then up. Its document was published Sep 26 (bandwidth: Sep 30),
-    # so its 31-day window starts Aug 26 12:00 and holds 18 of the down slots.
-    values = [0] * 24 + [999] * 169
-    charts = writer([relay("A")], {"A": history([100] * 30)}, {"A": values}, uptime_published="2026-09-26 12:00:00",
-                    uptime_first="2026-08-25 12:00:00")
+def test_uptime_charts_use_the_uptime_documents_own_window(tmp_path):
+    # Uptime from Aug 25: down until Aug 29 06:00, then up. Its document was published Sep 26 (bandwidth: Sep 30),
+    # so Onionoo's 1-month window starts Aug 26 12:00: the chart draws its 186 slots, 18 of them down.
+    charts = writer([relay("A")], {"A": history([100] * 30)}, {"A": [0] * 24 + [999] * 168},
+                    uptime_published="2026-09-26 12:00:00", uptime_first="2026-08-25 14:00:00")
     charts.relay(relay("A"), str(tmp_path))
-    assert "Average 90.4%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+    assert "Average 90.3%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+    line = [path.get("d") for path in ET.parse(tmp_path / "uptime-1m.svg").iter("{http://www.w3.org/2000/svg}path")
+            if path.get("stroke") == GREEN and path.get("stroke-width") == "2.2"]
+    assert len(line) == 1 and len(re.findall(r"[ML]", line[0])) == 186
 
 
 def test_days_under_50_kb_s_leave_the_write_read_strip(tmp_path):

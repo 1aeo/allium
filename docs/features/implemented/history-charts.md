@@ -104,14 +104,17 @@ when fontconfig's `fc-match` is installed to check.
 - The strip's 0.5 / 1.0 / 1.5 grid lines keep plain labels; `p10–p90` and
   `>p98` are named inside their own bands (beside the grid label where a band
   is too thin to clear it).
-- Each period only shows its own window, ending at its Onionoo document's
-  `relays_published` (allium caches bandwidth for longer than uptime). Onionoo
-  adds no points once a relay is out of the consensus: for a relay no longer
-  running (an operator with none running), the time axis runs on to that end,
-  so the outage shows as a gap rather than a line reaching the right edge, and
-  the uptime average counts the whole slots from its `last_seen` as down
-  (`Average 89.2% · down since Oct 7`). A running relay's history only lags
-  Onionoo's by a day or so; its axis ends just past its last point.
+- Each bandwidth period only shows its own window, ending at the bandwidth
+  document's `relays_published`. Onionoo adds no points once a relay is out of
+  the consensus: for a relay no longer running (an operator with none
+  running), the time axis runs on to that end, so the outage shows as a gap
+  rather than a line reaching the right edge. A running relay's history only
+  lags Onionoo's by a day or so; its axis ends just past its last point.
+- Uptime charts use Onionoo's own window (`uptime_utils.block_window`: one
+  calendar period ending at the latest consensus, on Onionoo's slot grid, taken
+  from the uptime document's `relays_published`). An offline relay's history
+  stops at its last consensus; the slots after it are drawn at 0%, as Onionoo
+  counts them, and the "Average" is the relay page's figure for the period.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day out of band alone is a red tip, marked with a red dot too, as
