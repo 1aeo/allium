@@ -95,7 +95,8 @@ when fontconfig's `fc-match` is installed to check.
   census) and its band, the days above p98 and below p2 listed per side (as a
   count past three runs, or when the line would not fit), then `out with the
   family` / `out with other Guards` when that median was beyond p2–p98 on the
-  relay's side on at least half of those days, or `family and peers stayed in`.
+  relay's side on at least half of those days, or `family and peers stayed in`
+  when it was inside p2–p98 on at least half of them (out the other way: neither).
 - Write/read is judged only on days with enough traffic to compare: some read,
   and a mean of write and read of 50 KB/s or more, the band census's cut (also
   the family and peer medians'). Other days leave the write/read line, its red,

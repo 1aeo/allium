@@ -74,7 +74,8 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
 
     The overall ratio (of sums, as the band census) and its band, then the days beyond p2–p98 on each side, then
     whether the family and peer medians in ``overlays`` (1M relay charts) left it on the same side on at least
-    half of those days. ``most`` runs of days are listed per side before they collapse (``format_day_span``).
+    half of those days, or stayed inside it on at least half. ``most`` runs of days are listed per side before
+    they collapse (``format_day_span``).
     """
     if not rows:
         return "Under {} KB/s throughout: too little traffic to compare".format(MIN_ACTIVE_KBYTES)
@@ -91,15 +92,18 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
     if not beyond:
         return parts[0] + " · inside p2–p98 throughout"
 
-    def shared(overlay):
-        """True if ``overlay`` was beyond p2–p98 on the relay's side on at least half of those days, None
-        without values on them."""
-        hits = [overlay[t] > ihi if high else overlay[t] < ilo for t, high in beyond.items() if overlay.get(t) is not None]
-        return 2 * sum(hits) >= len(hits) if hits else None
+    def where(overlay):
+        """"out" if ``overlay`` was beyond p2–p98 on the relay's side on at least half of those days, "in" if inside
+        it on at least half, else None (also without values on them: out the other way, it neither left with the
+        relay nor stayed in)."""
+        days = [(overlay[t], high) for t, high in beyond.items() if overlay.get(t) is not None]
+        out = sum(value > ihi if high else value < ilo for value, high in days)
+        inside = sum(ilo <= value <= ihi for value, _high in days)
+        return "out" if days and 2 * out >= len(days) else "in" if days and 2 * inside >= len(days) else None
 
-    left = {key: shared(overlays.get(key) or {}) for key in ("family", "role")}
-    moved = [word for key, word in (("family", "the family"), ("role", "other " + bands["peers"])) if left[key]]
-    stayed = [word for key, word in (("family", "family"), ("role", "peers")) if left[key] is False]
+    went = {key: where(overlays.get(key) or {}) for key in ("family", "role")}
+    moved = [word for key, word in (("family", "the family"), ("role", "other " + bands["peers"])) if went[key] == "out"]
+    stayed = [word for key, word in (("family", "family"), ("role", "peers")) if went[key] == "in"]
     if moved:
         parts.append("out with " + " and ".join(moved))
     if stayed:

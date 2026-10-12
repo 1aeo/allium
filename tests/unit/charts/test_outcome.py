@@ -73,7 +73,9 @@ def test_ratio_subtitle_says_whether_family_and_peers_left_the_band_on_the_same_
     assert ratio_subtitle(spike, {"role": inside, "family": inside}, GUARD) == base + " · family and peers stayed in"
     assert ratio_subtitle(spike, {"role": inside, "family": above}, GUARD) == base + " · out with the family · peers stayed in"
     assert ratio_subtitle(spike, {"role": above}, GUARD) == base + " · out with other Guards"
-    assert ratio_subtitle(spike, {"role": below}, GUARD) == base + " · peers stayed in"  # out, but the other way
+    assert ratio_subtitle(spike, {"role": below}, GUARD) == base  # out, but the other way: neither
+    half_below = {**inside, spike[5][0]: 0.5}  # the other way on one of the two days, inside on the other
+    assert ratio_subtitle(spike, {"role": half_below}, GUARD) == base + " · peers stayed in"
     half = {**inside, spike[5][0]: 3.0}  # out with the relay on one of its two days: half is enough
     assert ratio_subtitle(spike, {"role": half}, GUARD) == base + " · out with other Guards"
     # A median a hair under the typical band is still inside p2–p98.
