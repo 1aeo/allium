@@ -77,10 +77,11 @@ when fontconfig's `fc-match` is installed to check.
   readers meet the chart first, then its thumbnails). `#1m`/`#6m`/`#1y`/`#5y` switch
   every chart on the page (empty `.chart-period` anchors placed before the
   chart sections, `chart_period_anchors`); a chart without that period keeps
-  its default. These fragments are the deep links. On a relay page 1024 px or
-  wider they land on the bandwidth chart card, past the 428 px of bandwidth
-  details above it (a fixed offset: nothing there wraps at those widths);
-  narrower, at the section's top.
+  its default. These fragments are the deep links. On a relay page they land on
+  the bandwidth chart card, past the bandwidth details above it: fixed offsets
+  per width range for the shortest details (428 px from 992 px wide, 559 px
+  below, 595 px under 390 px) put the card near the top, or up to about 200 px
+  lower on a phone, never past it.
 - `--no-charts` skips them.
 
 ## Content rules
