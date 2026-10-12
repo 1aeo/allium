@@ -15,7 +15,7 @@ class _FakeRenderer:
     parent_pid = None
     poisoned = None
 
-    def __init__(self, relay_set, output_path):
+    def __init__(self, relay_set, output_path, relays):
         self.relay_set = relay_set
         self.output_path = output_path
 
