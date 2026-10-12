@@ -1,6 +1,9 @@
 Jinja2>=2.11.2
-# PNG history charts (the default; --chart-format svg needs none of these). cairocffi also needs
-# the cairo library, and the chart text DejaVu Sans: apt install libcairo2 fonts-dejavu-core
+# PNG history charts (the default; --chart-format svg and --no-charts need none of these). pip cannot install
+# the cairo library or the chart font, DejaVu Sans; on Debian/Ubuntu: sudo apt install libcairo2 fonts-dejavu-core
+# Debian/Ubuntu's own python3 (no virtualenv; pip is missing or refused there) takes them all from apt instead:
+#   sudo apt install python3-jinja2 python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
+# allium/lib/optional_deps.py files every package listed here (tests/unit/test_optional_deps.py checks).
 cairocffi>=1.2.0
 numpy>=1.17
 zlib-ng>=0.4.0  # optional: ~4x faster deflate
