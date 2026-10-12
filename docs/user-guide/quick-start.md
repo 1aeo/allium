@@ -24,7 +24,9 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```bash
 git clone https://github.com/1aeo/allium.git
 cd allium
-pip3 install -r config/requirements.txt
+sudo apt install python3-venv libcairo2 fonts-dejavu-core  # Debian/Ubuntu: venv support, then PNG charts
+python3 -m venv venv && source venv/bin/activate
+pip install -r config/requirements.txt
 cd allium
 python3 allium.py --progress
 ```
@@ -85,10 +87,11 @@ python3 allium.py --help
 
 | Error | Solution |
 |-------|----------|
-| "Jinja2 not found" | `pip3 install -r config/requirements.txt` |
+| "Jinja2 not found" | `sudo apt install python3-jinja2` for Debian/Ubuntu's own python3; in a virtualenv, `pip install -r config/requirements.txt` from the repository root |
 | "Permission denied" | `python3 allium.py --out ~/allium-output` |
 | "No module named 'lib'" | Run from `allium/` directory: `cd allium` |
 | Out of memory | `python3 allium.py --apis details` |
+| "PNG charts need cairocffi, numpy and the cairo library" | Run the `💡` commands printed after it, or add `--chart-format svg` |
 
 ## Next Steps
 
