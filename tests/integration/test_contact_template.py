@@ -1166,22 +1166,37 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         self.assertTrue(os.path.islink(os.path.join(self.temp_dir, "linked.example.com")))
         self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
 
+    @staticmethod
+    def _scandir_denying(denied_path):
+        """Return an os.scandir stand-in that raises PermissionError for denied_path."""
+        real_scandir = os.scandir
+
+        def scandir(path="."):
+            if path == denied_path:
+                raise PermissionError(13, "Permission denied", path)
+            return real_scandir(path)
+        return scandir
+
     def test_contact_page_generation_skips_unreadable_vanity_like_dir(self):
         """A domain-named folder the sweep cannot read is left alone, not fatal."""
         unreadable = os.path.dirname(
             self._write_output_file(os.path.join("locked.example.com", "index.html")))
-        real_scandir = os.scandir
 
-        def scandir(path="."):
-            if path == unreadable:
-                raise PermissionError(13, "Permission denied", path)
-            return real_scandir(path)
-
-        with patch("allium.lib.page_writer.os.scandir", side_effect=scandir):
+        with patch("allium.lib.page_writer.os.scandir", side_effect=self._scandir_denying(unreadable)):
             self._write_validated_contact_pages("example.org")
 
         self.assertTrue(os.path.isfile(os.path.join(unreadable, "index.html")))
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+
+    def test_contact_page_generation_completes_when_output_root_is_unlistable(self):
+        """An output root that cannot be listed skips the sweep, not the run."""
+        self._write_validated_contact_pages("example.org")
+
+        with patch("allium.lib.page_writer.os.scandir", side_effect=self._scandir_denying(self.temp_dir)):
+            self._write_validated_contact_pages("example.net")
+
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
 
     def test_contact_page_generation_without_base_url_keeps_existing_vanity_dirs(self):
         """Without a base URL no vanity pages are written, and none are swept."""

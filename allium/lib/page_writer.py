@@ -1169,9 +1169,9 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
 
     Only folders that look like generated vanity output are removed: named
     like a sanitized domain (never a core site folder), not a symlink, and
-    holding contact page files and nothing else. A folder that cannot be
-    read or cleaned is skipped rather than failing the build. Returns the
-    number of folders removed.
+    holding contact page files and nothing else. A folder (or output root)
+    that cannot be read or cleaned is skipped rather than failing the build.
+    Returns the number of folders removed.
     """
     # Without a base URL no vanity folders are written, so none are swept
     if not relay_set.base_url or not output_root:
@@ -1180,8 +1180,13 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
     contacts = relay_set.json["sorted"]["contact"]
     current = {_vanity_dir_name(relay_set, contacts[v]) for v in sorted_values}
 
+    try:
+        entries = list(os.scandir(output_root))
+    except OSError:
+        return 0
+
     removed = 0
-    for entry in list(os.scandir(output_root)):
+    for entry in entries:
         if (entry.name in current or not _VANITY_DIR_NAME.match(entry.name)
                 or not entry.is_dir(follow_symlinks=False)):
             continue
