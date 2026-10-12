@@ -93,7 +93,7 @@ cd www && python3 -m http.server 8000
 - Multiprocessing page generation (configurable via `--workers`)
 - Downtime filtering: excludes relays not seen for >7 days before the Onionoo snapshot, including relays Onionoo still marks as running (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
-- Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages, drawn at build time with no JavaScript: PNG by default so they show at Tor Browser's Safest level (see the `--chart-*` options), reused from `data/cache/charts` while unchanged. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
+- History charts (1M/6M/1Y/5Y), bandwidth and uptime on relay pages and the operator's summed bandwidth on contact pages, drawn at build time with no JavaScript: PNG by default so they show at Tor Browser's Safest level (see the `--chart-*` options), reused from `data/cache/charts` while unchanged. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
 </details>
 
