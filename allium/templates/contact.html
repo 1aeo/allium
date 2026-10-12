@@ -157,17 +157,22 @@
                     {% if primary_country_data %}
                     <li><strong>Countries:</strong> 
                         {% for country_info in primary_country_data.all_countries %}
+                            {% if relays.has_page('country', country_info.country) %}
                             <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" class="al-link-plain">
                                 <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country|lower }}.png" 
                                      title="{{ primary_country_data.tooltip }}" 
                                      alt="{{ country_info.country_name }}" 
                                      style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
                                 {{ country_info.country_name }} ({{ country_info.relay_count }})
-                            </a>{% if not loop.last %}, {% endif %}
+                            </a>
+                            {%- else %}
+                            unknown ({{ country_info.relay_count }})
+                            {%- endif %}{% if not loop.last %}, {% endif %}
                         {% endfor %}
                     </li>
                     {% elif relay_subset[0]['country'] %}
                     <li><strong>Countries:</strong> 
+                        {% if relays.has_page('country', relay_subset[0]['country']) %}
                         <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" class="al-link-plain">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay_subset[0]['country']|lower }}.png" 
                                  title="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}" 
@@ -175,6 +180,9 @@
                                  style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
                             {{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}
                         </a>
+                        {% else %}
+                        unknown
+                        {% endif %}
                     </li>
                     {% endif %}
                 </ul>
