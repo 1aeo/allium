@@ -300,6 +300,17 @@ class TestOnionooWindow(unittest.TestCase):
             {'fingerprint': 'A', 'uptime': {'1_month': late}}, {'fingerprint': 'B', 'uptime': {'1_month': counted}}]}
         self.assertEqual(uptime_windows(uptime_data)['1_month'][3], frozenset())
 
+    def test_slot_no_block_covers_is_null_wherever_it_falls(self):
+        """An outage inside the window that no block spans is skipped like one at the window's start"""
+        slot = timedelta(hours=4)
+        before = onionoo_block(self.WINDOW_FIRST, [999] * 120)  # last seen in slot 119
+        after = onionoo_block(self.WINDOW_FIRST + 123 * slot, [999] * 57)  # first seen in slot 123
+        uptime_data = {'relays_published': '2026-10-11 20:00:00', 'relays': [
+            {'fingerprint': 'A', 'uptime': {'1_month': before}}, {'fingerprint': 'B', 'uptime': {'1_month': after}}]}
+        windows = uptime_windows(uptime_data)
+        self.assertEqual(windows['1_month'][3], frozenset({120, 121, 122}))
+        self.assertEqual(len(block_window(before, '1_month', windows)[2]), 57)  # slots 123-179
+
     def test_without_publish_time_or_slot_times_whole_block(self):
         """No relays_published, or a block without first/interval, averages the whole block as before"""
         block = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)

@@ -119,9 +119,8 @@ def _compute_uptime_percentage_and_datapoints(uptime_values, factor=None, padded
 def _network_null_slots(blocks, start, end, step):
     """
     The window slot indices that are null for every relay (see uptime_windows):
-    those where every block covering the slot is null, and those before the
-    first slot any block covers. Blocks off the window's slot grid are skipped,
-    as block_window does.
+    those no block has a value for, up to the last slot any block covers.
+    Blocks off the window's slot grid are skipped, as block_window does.
     """
     slots = (end - start) // step
     covers, nulls = [0] * (slots + 1), [0] * slots  # blocks starting/ending at each slot; blocks null there
@@ -141,8 +140,8 @@ def _network_null_slots(blocks, start, end, step):
                 if values[k - offset] is None:
                     nulls[k] += 1
     covering = list(accumulate(covers[:slots]))
-    lead = next((k for k, n in enumerate(covering) if n), 0)  # an outage at the window's start
-    return frozenset(range(lead)).union(k for k, n in enumerate(nulls) if n and n == covering[k])
+    last = max((k for k, n in enumerate(covering) if n), default=-1)
+    return frozenset(k for k in range(last + 1) if nulls[k] == covering[k])  # covered by none, or null in all
 
 
 def uptime_windows(uptime_data):
@@ -155,10 +154,11 @@ def uptime_windows(uptime_data):
     slots from both ends of a block (GraphHistoryCompiler's firstNonNullIndex
     and lastNonNullIndex), so no block need span the window. Each window's end
     is moved back to the newest block end in the document. A window slot is
-    null where every block covering it is null there (inside a block, Onionoo
-    only leaves an outage null), and so are the slots before the first one any
-    block covers: an outage at the window's start is trimmed from every block.
-    None of them counts as downtime. Computed once per document and kept on it.
+    null where no block has a value for it: every block covering it is null
+    there (inside a block, Onionoo only leaves an outage null), or no block
+    covers it, as with an outage at the window's start, which Onionoo trims
+    from every block. None of them counts as downtime. Computed once per
+    document and kept on it.
 
     Args:
         uptime_data (dict): Onionoo uptime document
