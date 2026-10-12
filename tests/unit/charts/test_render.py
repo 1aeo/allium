@@ -25,6 +25,8 @@ def height(path):
 
 
 def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
+    """A relay's bandwidth chart carries its identity, titles, legend entries, date labels and census footnote, and
+    its uptime chart the page's average; each written chart's height comes back with its period."""
     charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 180})
     # Each drawn period comes with its chart's height, so the page can reserve the image's box.
     assert charts.relay(relay("A"), str(tmp_path)) == ({"1m": height(tmp_path / "bandwidth-1m.svg")},
