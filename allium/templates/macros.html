@@ -615,3 +615,39 @@
 {# This macro is deprecated - issues are now shown in per-category sections #}
 {# Kept empty for backwards compatibility during transition #}
 {%- endmacro %}
+
+{#- History charts, one per period. The first shows; a thumbnail link shows its period
+    through CSS :target instead (no JavaScript, no page copy). As in the AROI pagination,
+    the default chart is last in the DOM so the ~ combinator can hide it. Deep links:
+    #<name>-<period> switches this chart, #<period> (chart_period_anchors) every chart on
+    the page; chart-on-<period> marks what shows for a period, the default standing in for
+    periods this chart lacks. Each chart links to its full-size image for zooming. periods
+    maps each drawn period to its chart's height, so the page reserves the image's box.
+    chart_spans is a fixed global; pass ext=chart_ext, which allium.py changes after the
+    macros may already be imported and cached. -#}
+{% macro chart_history(name, periods, alt, src='', ext='svg') %}
+{% if periods %}
+{% set order = periods|list %}
+{% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
+<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<div class="chart-history">
+    {% for period in order[1:] + order[:1] %}
+    <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="{{ alt }}, {{ chart_spans[period] }}" loading="lazy"></a>
+    {% endfor %}
+    {% if periods|length > 1 %}
+    <div class="chart-sparks">
+        {% for period in order %}
+        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="{{ period|upper }}: show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{#- Targets for #1m/#6m/#1y/#5y, which switch every chart on the page. Place them before
+    (as earlier siblings of an ancestor of) all the page's chart_history blocks; ``above`` adds a class for
+    the CSS of where they sit (above the relay page's bandwidth or, without it, uptime details). -#}
+{% macro chart_period_anchors(above='') %}
+{% for period in chart_spans %}<span id="{{ period }}" class="chart-period{{ ' chart-period-' ~ above if above }}"></span>{% endfor %}
+{% endmacro %}
