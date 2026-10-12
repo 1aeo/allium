@@ -24,8 +24,12 @@ python3 allium.py [options]
 | `--aroi-url` | `https://aroivalidator.1aeo.com/latest.json` | AROI validator endpoint |
 | `--bandwidth-cache-hours` | `12` | Hours to cache bandwidth data |
 | `--apis` | `all` | `details` (~400MB) or `all` (~2.4GB) |
-| `--filter-downtime` | `7` | Filter relays offline >N days (0=disable) |
+| `--filter-downtime` | `7` | Filter relays not seen for >N days, even if Onionoo still marks them running (0=disable) |
 | `--workers` | `4` | Parallel workers (0=disable multiprocessing) |
+| `--no-charts` | charts on | Skip the relay and contact history charts (drawn only with `--apis all`) |
+| `--chart-format` | `png` | `png` (needs cairocffi, numpy and libcairo2: without them the default writes SVG with a warning, and an explicit `png` stops) or `svg` |
+| `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
+| `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
 
 ## Common Profiles
 

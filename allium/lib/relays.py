@@ -8,7 +8,6 @@ timestamp
 import bisect
 import functools
 import hashlib
-import multiprocessing as mp
 import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
@@ -18,6 +17,7 @@ from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import BandwidthFormatter
 from .stability_utils import compute_relay_stability
+from .worker_pool import fork_map
 from .intelligence_engine import IntelligenceEngine
 from .time_utils import (
     parse_onionoo_timestamp,
@@ -47,6 +47,7 @@ from .page_writer import (
     _init_precompute_worker,
     _precompute_contact_worker,
     _precompute_family_worker,
+    _load_precomputed,
 )
 
 class Relays:
@@ -238,25 +239,32 @@ class Relays:
                     relay["observed_bandwidth"] = 0
             return
         
-        # Combined filtering + bandwidth fix - single pass
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=self.filter_downtime_days)
+        # Combined filtering + bandwidth fix - single pass. Measure from the
+        # document's publish time when it has one: a relay in the latest
+        # consensus has last_seen == relays_published, and the cutoff then does
+        # not drift with how long after the snapshot allium runs.
+        published = parse_onionoo_timestamp(self.json.get('relays_published'))
+        cutoff_time = (published or datetime.now(timezone.utc)) - timedelta(days=self.filter_downtime_days)
+        stale_running = 0
         
         def should_keep_relay(relay):
+            nonlocal stale_running
             # Fix bandwidth while we're processing
             if not relay.get("observed_bandwidth"):
                 relay["observed_bandwidth"] = 0
             
-            # Keep if running
+            last_seen_dt = parse_onionoo_timestamp(relay.get('last_seen'))
             if relay.get('running', False):
+                # Onionoo can keep marking a relay as running long after its
+                # last consensus (its documents stop updating): drop it like
+                # any other relay not seen for that long
+                if published and last_seen_dt and last_seen_dt < cutoff_time:
+                    stale_running += 1
+                    return False
                 return True
             
-            # For offline relays, check last_seen
-            last_seen = relay.get('last_seen')
-            if not last_seen:
-                return False  # No last_seen data
-            
-            last_seen_dt = parse_onionoo_timestamp(last_seen)
-            return last_seen_dt and last_seen_dt >= cutoff_time
+            # Offline relays: keep only if seen within the cutoff
+            return last_seen_dt is not None and last_seen_dt >= cutoff_time
         
         # Filter in-place
         self.json["relays"] = [r for r in self.json["relays"] if should_keep_relay(r)]
@@ -264,7 +272,9 @@ class Relays:
         # Log if relays were filtered
         excluded_count = original_count - len(self.json["relays"])
         if excluded_count > 0 and self.progress:
-            self.progress_logger.log_without_increment(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
+            stale_note = f" ({stale_running} still marked running by Onionoo)" if stale_running else ""
+            self.progress_logger.log_without_increment(
+                f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days{stale_note}")
 
     def _simple_aroi_parsing(self, contact):
         """
@@ -581,7 +591,9 @@ class Relays:
         if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
             self.progress_logger.log_without_increment("Calculating network uptime percentiles (6-month period)...")
-            self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months')
+            # Only relays the site shows: the uptime document also lists relays the downtime filter dropped
+            kept = {r['fingerprint']: r for r in self.json["relays"] if r.get('fingerprint')}
+            self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months', kept)
             if self.network_uptime_percentiles:
                 total_relays = self.network_uptime_percentiles.get('total_relays', 0)
                 self.progress_logger.log_without_increment(f"Network percentiles calculated: {total_relays:,} relays analyzed")
@@ -933,6 +945,15 @@ class Relays:
         from .categorization import categorize
         categorize(self)
 
+    def has_page(self, category, key):
+        """True if <category>/<key>/ is written: one page per sorted key.
+
+        Templates link a country, platform, etc. only when this holds. Onionoo
+        reports an unknown country as "??" and can omit platform, and
+        sort_relay() files neither, so those have no page to link.
+        """
+        return key in self.json.get("sorted", {}).get(category, ())
+
     def _propagate_as_rarity(self):
         """Propagate AS rarity data from sorted AS data to each relay."""
         from .categorization import propagate_as_rarity
@@ -1069,8 +1090,7 @@ class Relays:
         validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
         
         # Use multiprocessing if available and beneficial
-        use_mp = (self.mp_workers > 0 and len(contact_hashes) >= 100 and 
-                  hasattr(mp, 'get_context'))
+        use_mp = self.mp_workers > 0 and len(contact_hashes) >= 100
         
         if use_mp:
             try:
@@ -1099,15 +1119,13 @@ class Relays:
                 contact_data[key] = value
     
     def _precompute_contacts_parallel(self, contact_hashes, aroi_validation_timestamp, validated_aroi_domains):
-        """Parallel precomputation using fork() with imap_unordered for better memory and progress.
-        
-        Uses chunked imap_unordered (GPT-style streaming) instead of map() to:
-        - Keep peak memory lower by processing results as they complete
+        """Parallel precomputation using fork() with streaming results for better memory and progress.
+
+        Iterates the chunked executor.map() as results arrive instead of collecting them first to:
+        - Keep peak memory lower by applying each result as it is yielded
         - Enable granular progress reporting during precomputation
+        A worker that dies raises BrokenProcessPool, so the caller falls back to sequential.
         """
-        # Use fork context for efficient memory sharing
-        ctx = mp.get_context('fork')
-        
         # Prepare arguments for worker function
         worker_args = [(contact_hash, aroi_validation_timestamp, validated_aroi_domains) 
                        for contact_hash in contact_hashes]
@@ -1117,22 +1135,21 @@ class Relays:
         chunk_size = max(50, total_contacts // (self.mp_workers * 4))  # Balance granularity vs overhead
         
         # Initialize workers with self reference (fork shares memory)
-        with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-            # Use imap_unordered for streaming results (lower peak memory)
-            for contact_hash, precomputed_data in pool.imap_unordered(
-                _precompute_contact_worker, worker_args, chunksize=chunk_size
-            ):
-                # Apply result directly to contact data (flat storage pattern)
-                if precomputed_data and contact_hash in self.json["sorted"]["contact"]:
-                    contact_data = self.json["sorted"]["contact"][contact_hash]
-                    # Store each field directly on contact_data (Sonnet-style simple access)
-                    for key, value in precomputed_data.items():
-                        contact_data[key] = value
-                
-                # Progress reporting
-                processed += 1
-                if processed % 500 == 0:
-                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
+        # Stream results chunk by chunk (lower peak memory)
+        for contact_hash, precomputed_data in fork_map(
+            self.mp_workers, _precompute_contact_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+        ):
+            # Apply result directly to contact data (flat storage pattern)
+            if precomputed_data and contact_hash in self.json["sorted"]["contact"]:
+                contact_data = self.json["sorted"]["contact"][contact_hash]
+                # Store each field directly on contact_data (Sonnet-style simple access)
+                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                    contact_data[key] = value
+
+            # Progress reporting
+            processed += 1
+            if processed % 500 == 0:
+                self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_contacts} contacts...")
 
     def _precompute_all_family_page_data(self):
         """
@@ -1154,8 +1171,7 @@ class Relays:
             return
         
         # Use multiprocessing if available and beneficial
-        use_mp = (self.mp_workers > 0 and len(family_hashes) >= 100 and 
-                  hasattr(mp, 'get_context'))
+        use_mp = self.mp_workers > 0 and len(family_hashes) >= 100
         
         if use_mp:
             try:
@@ -1182,13 +1198,10 @@ class Relays:
                 family_data[key] = value
     
     def _precompute_families_parallel(self, family_hashes):
-        """Parallel family precomputation using fork() with imap_unordered.
-        
+        """Parallel family precomputation using fork() with streaming executor.map().
+
         Mirrors _precompute_contacts_parallel for consistency.
         """
-        # Use fork context for efficient memory sharing
-        ctx = mp.get_context('fork')
-        
         # Prepare arguments for worker function (single-element tuple)
         worker_args = [(family_hash,) for family_hash in family_hashes]
         
@@ -1197,21 +1210,20 @@ class Relays:
         chunk_size = max(50, total_families // (self.mp_workers * 4))
         
         # Initialize workers with self reference (fork shares memory)
-        with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-            # Use imap_unordered for streaming results
-            for family_hash, precomputed_data in pool.imap_unordered(
-                _precompute_family_worker, worker_args, chunksize=chunk_size
-            ):
-                # Apply result directly to family data
-                if precomputed_data and family_hash in self.json["sorted"]["family"]:
-                    family_data = self.json["sorted"]["family"][family_hash]
-                    for key, value in precomputed_data.items():
-                        family_data[key] = value
-                
-                # Progress reporting
-                processed += 1
-                if processed % 1000 == 0:
-                    self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
+        # Stream results chunk by chunk
+        for family_hash, precomputed_data in fork_map(
+            self.mp_workers, _precompute_family_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+        ):
+            # Apply result directly to family data
+            if precomputed_data and family_hash in self.json["sorted"]["family"]:
+                family_data = self.json["sorted"]["family"][family_hash]
+                for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                    family_data[key] = value
+
+            # Progress reporting
+            processed += 1
+            if processed % 1000 == 0:
+                self.progress_logger.log_without_increment(f"Pre-computed {processed}/{total_families} families...")
 
     def _generate_aroi_leaderboards(self):
         """

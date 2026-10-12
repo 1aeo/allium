@@ -346,10 +346,13 @@ def generate_site(relay_set, args, progress_logger):
         oversized_html_files,
         rewrite_internal_html_links,
     )
-    link_stats = rewrite_internal_html_links(args.output_dir)
+    # Pages written since this run started were rewritten as they were written
+    link_stats = rewrite_internal_html_links(
+        args.output_dir, modified_before=progress_logger.start_time
+    )
     progress_logger.log_without_increment(
         f"Rewrote {link_stats['changed_links']} internal .html link(s) "
-        f"across {link_stats['changed_files']} file(s) to clean routes"
+        f"across {link_stats['changed_files']} pre-existing file(s) to clean routes"
     )
     discovery_stats = generate_search_discovery(
         args.output_dir, args.base_url

@@ -10,8 +10,9 @@
 cd allium
 (
   set -eu
-  staging_dir="$(mktemp -d)"
+  staging_dir="$(mkdir -p data && mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
   trap 'rm -rf -- "$staging_dir"' EXIT
+  chmod 755 "$staging_dir"  # mktemp makes it 0700, and rsync -a gives the web root its mode
   python3 allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
   rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/

@@ -10,11 +10,16 @@ This module provides:
 - Directory management utilities
 """
 
+import hashlib
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from .error_handlers import handle_file_io_errors, handle_json_errors
+
+
+_WRITE_SLICE_CHARS = 1 << 24
 
 
 class FileIOManager:
@@ -90,7 +95,7 @@ class FileIOManager:
     
     @handle_file_io_errors("write JSON file", context="")
     def write_json_file(self, filename: str, data: Any, encoding: str = "utf-8",
-                       indent: int = 2, sort_keys: bool = False) -> bool:
+                       indent: Optional[int] = 2, sort_keys: bool = False) -> bool:
         """
         Write data to JSON file with error handling.
         
@@ -98,17 +103,25 @@ class FileIOManager:
             filename: Name of JSON file to write
             data: Data to serialize as JSON
             encoding: Text encoding (default: utf-8)
-            indent: JSON indentation (default: 2)
+            indent: JSON indentation (default: 2; None writes compact JSON)
             sort_keys: Whether to sort object keys for deterministic output
             
         Returns:
             bool: True if successful, False if error
         """
         file_path = self.get_file_path(filename)
+        # json.dumps (one-shot) without indent runs CPython's C encoder;
+        # json.dump always falls back to the pure-Python encoder, which
+        # took ~35s for the ~1GB uptime cache. Serializing before opening
+        # the temp file also leaves no partial file on failure.
+        serialized = json.dumps(data, indent=indent, sort_keys=sort_keys,
+                                separators=(",", ":") if indent is None else None)
         # Atomic write: a crash mid-dump must not corrupt the existing file
         tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
         with open(tmp_path, "w", encoding=encoding) as f:
-            json.dump(data, f, indent=indent, sort_keys=sort_keys)
+            # Slices keep the encoded copy small (the uptime cache is ~240MB)
+            for start in range(0, len(serialized), _WRITE_SLICE_CHARS):
+                f.write(serialized[start:start + _WRITE_SLICE_CHARS])
         tmp_path.replace(file_path)
         return True
     
@@ -132,7 +145,9 @@ class CacheManager(FileIOManager):
             bool: True if successful, False if error
         """
         cache_filename = f"{cache_key}.json"
-        return self.write_json_file(cache_filename, data, sort_keys=True)
+        # Compact output: caches are machine-read only, and the indented
+        # form was ~4.5x larger (1.1GB vs 240MB for uptime) to write and load.
+        return self.write_json_file(cache_filename, data, indent=None, sort_keys=True)
     
     def load_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """
@@ -206,6 +221,44 @@ def create_cache_manager(cache_directory: str) -> CacheManager:
 def create_timestamp_manager(timestamp_directory: str) -> TimestampManager:
     """Create a new timestamp manager instance."""
     return TimestampManager(timestamp_directory)
+
+
+def sanitize_path_component(value: str) -> str:
+    """Sanitize a string for safe use as a filesystem path component.
+
+    Guards against directory traversal, path injection, and OS-specific edge cases:
+    - Strips Windows drive prefixes (e.g. "C:") and backslashes
+    - Removes control characters and null bytes
+    - Replaces characters outside a safe whitelist with underscores
+    - Trims leading/trailing dots and underscores to avoid "." / ".." results
+    - Returns "_" if the result is empty or still equals "." / ".."
+    - Appends a short hash suffix when normalization changes the value, preventing
+      distinct raw inputs (e.g. "A B", "A/B", "A_B") from colliding on disk
+    - Truncates to 255 characters (common filesystem limit)
+    """
+    raw_value = str(value)
+    # Strip Windows drive letter prefix (e.g. "C:", "D:")
+    if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
+        value = value[2:]
+    # Remove backslashes, forward slashes, null bytes, and control characters
+    value = value.replace('\\', '_').replace('/', '_').replace('\x00', '')
+    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
+    # Remove traversal sequences
+    value = value.replace('..', '')
+    # Replace any character not in safe whitelist (letters, digits, hyphen, underscore, dot)
+    value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
+    # Trim leading/trailing dots and underscores
+    value = value.strip('._')
+    # Keep room for deterministic suffix when normalization changes value
+    value = value[:240]
+    # Final safety: reject empty or traversal-like results
+    if not value or value in ('.', '..'):
+        value = '_'
+    # Prevent collisions when different raw inputs normalize to the same component
+    if value != raw_value:
+        suffix = hashlib.sha1(raw_value.encode("utf-8")).hexdigest()[:10]
+        value = f"{value}-{suffix}"
+    return value[:255]
 
 
 # Factory function for unified file I/O operations
