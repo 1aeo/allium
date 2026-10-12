@@ -272,6 +272,34 @@ class TestOnionooWindow(unittest.TestCase):
         self.assertEqual(len(block_window(stopped, '1_month', windows)[2]), 36)
         self.assertAlmostEqual(_block_uptime_percentage_and_datapoints(stopped, '1_month', windows)[0], 141 / 177 * 100)
 
+    def test_outage_in_the_window_first_slot_is_not_padded(self):
+        """Onionoo trims null slots at a block's start too: no block spans a window that opens with an outage"""
+        slot = timedelta(hours=4)
+        # Outages at window slots 0-1 and 120-122: every block starts at slot 2 at the earliest
+        running = onionoo_block(self.WINDOW_FIRST + 2 * slot, [999] * 118 + [None] * 3 + [999] * 57)
+        stopped = onionoo_block(self.WINDOW_FIRST + 2 * slot, [999] * 98)  # last seen in slot 99
+        gone = onionoo_block(utc(2026, 3, 6, 22), [999] * 186)  # last seen before the window
+        uptime_data = {'relays_published': '2026-10-11 20:00:00', 'relays': [
+            {'fingerprint': fp, 'uptime': {'1_month': block}}
+            for fp, block in (('A', running), ('B', stopped), ('C', gone))]}
+        windows = uptime_windows(uptime_data)
+        outage = frozenset({0, 1, 120, 121, 122})
+        self.assertEqual(windows['1_month'][3], outage)
+        padding = block_window(stopped, '1_month', windows)[2]
+        self.assertEqual(len(padding), 77)  # slots 100-179 but the later outage
+        self.assertAlmostEqual(_block_uptime_percentage_and_datapoints(stopped, '1_month', windows)[0], 98 / 175 * 100)
+        slot_midpoints = [int((self.WINDOW_FIRST + k * slot).timestamp()) for k in range(180)]
+        self.assertEqual(block_window(gone, '1_month', windows)[2],
+                         [t for k, t in enumerate(slot_midpoints) if k not in outage])
+
+    def test_slot_is_null_only_where_every_covering_block_is(self):
+        """A slot one block has a value for is not an outage, however many other blocks are null there"""
+        late = onionoo_block(self.WINDOW_FIRST, [999] * 170 + [None] + [999] * 9)
+        counted = onionoo_block(self.WINDOW_FIRST, [999] * 180)
+        uptime_data = {'relays_published': '2026-10-11 20:00:00', 'relays': [
+            {'fingerprint': 'A', 'uptime': {'1_month': late}}, {'fingerprint': 'B', 'uptime': {'1_month': counted}}]}
+        self.assertEqual(uptime_windows(uptime_data)['1_month'][3], frozenset())
+
     def test_without_publish_time_or_slot_times_whole_block(self):
         """No relays_published, or a block without first/interval, averages the whole block as before"""
         block = onionoo_block(utc(2026, 9, 5, 10), [999] * 180)

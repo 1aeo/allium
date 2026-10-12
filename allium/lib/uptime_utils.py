@@ -8,6 +8,7 @@ to avoid duplication between aroileaders.py and relays.py.
 import calendar
 import statistics
 from datetime import datetime, timezone
+from itertools import accumulate
 from .error_handlers import handle_calculation_errors
 from .statistical_utils import StatisticalUtils
 from .time_utils import ONIONOO_HISTORY_PERIODS, parse_onionoo_timestamp
@@ -115,17 +116,49 @@ def _compute_uptime_percentage_and_datapoints(uptime_values, factor=None, padded
     return percentage, count
 
 
+def _network_null_slots(blocks, start, end, step):
+    """
+    The window slot indices that are null for every relay (see uptime_windows):
+    those where every block covering the slot is null, and those before the
+    first slot any block covers. Blocks off the window's slot grid are skipped,
+    as block_window does.
+    """
+    slots = (end - start) // step
+    covers, nulls = [0] * (slots + 1), [0] * slots  # blocks starting/ending at each slot; blocks null there
+    for block in blocks:
+        first = parse_onionoo_timestamp(block.get('first'))
+        if first is None:
+            continue
+        values = block['values']
+        offset, off_grid = divmod(int(first.timestamp()) - start - step // 2, step)  # window slot of values[0]
+        lo, hi = max(offset, 0), min(offset + len(values), slots)
+        if off_grid or lo >= hi:
+            continue
+        covers[lo] += 1
+        covers[hi] -= 1
+        if None in values:
+            for k in range(lo, hi):
+                if values[k - offset] is None:
+                    nulls[k] += 1
+    covering = list(accumulate(covers[:slots]))
+    lead = next((k for k, n in enumerate(covering) if n), 0)  # an outage at the window's start
+    return frozenset(range(lead)).union(k for k, n in enumerate(nulls) if n and n == covering[k])
+
+
 def uptime_windows(uptime_data):
     """
     Onionoo's current window for each uptime history of an uptime document.
 
     The windows come from onionoo_uptime_window() and the document's
     relays_published. Onionoo leaves a slot null when it has under 20% of an
-    interval's consensuses (an outage), for every relay alike, and drops null
-    slots at a block's end. So each window's end is moved back to the newest
-    block end in the document, and the window's null slots are read from a
-    block that spans the window: none of them counts as downtime. Computed once
-    per document and kept on it.
+    interval's consensuses (an outage), for every relay alike, and trims null
+    slots from both ends of a block (GraphHistoryCompiler's firstNonNullIndex
+    and lastNonNullIndex), so no block need span the window. Each window's end
+    is moved back to the newest block end in the document. A window slot is
+    null where every block covering it is null there (inside a block, Onionoo
+    only leaves an outage null), and so are the slots before the first one any
+    block covers: an outage at the window's start is trimmed from every block.
+    None of them counts as downtime. Computed once per document and kept on it.
 
     Args:
         uptime_data (dict): Onionoo uptime document
@@ -155,14 +188,7 @@ def uptime_windows(uptime_data):
                       if last is not None), default=None)
         if newest is not None and start < newest < end and not (newest - start) % step:
             end = newest
-        null_slots = frozenset()
-        for block in blocks:  # the first block spanning the window shows the network's null slots
-            first = parse_onionoo_timestamp(block.get('first'))
-            if (first is not None and int(first.timestamp()) == start + step // 2
-                    and len(block['values']) == (end - start) // step):
-                null_slots = frozenset(i for i, v in enumerate(block['values']) if v is None)
-                break
-        windows[period] = (start, end, step, null_slots)
+        windows[period] = (start, end, step, _network_null_slots(blocks, start, end, step))
     uptime_data['_onionoo_uptime_windows'] = windows
     return windows
 
@@ -213,8 +239,8 @@ def block_window(block, period, windows, relay=None, section=None, flag=None):
     Slots from before the window drop out, and the window slots after the
     block's last one are the ones Onionoo would add if it rewrote the document
     now: 0%, except for the relay's last hours before it left the consensus.
-    The block of a relay in the latest consensus spans the window exactly:
-    nothing drops out and nothing is missing.
+    The block of a relay in the latest consensus spans the window, less any
+    outage slots at its ends: nothing drops out and nothing is missing.
 
     Args:
         block (dict): Onionoo history block (first, interval, values)
