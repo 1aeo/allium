@@ -16,6 +16,7 @@ import time
 from typing import Callable, Dict, List, Protocol, Set
 
 from .aroi_validation import _check_aroi_fields
+from .exit_dns_health import RESOLVER_CATEGORIES, RESOLVER_PROVIDERS, _as_number, parse_resolver_summary
 
 # Schema version — bump on breaking changes (metric renames, label key changes)
 SCHEMA_VERSION = "2"
@@ -364,8 +365,68 @@ def _build_exit_dns_rows(relays: List[dict],
             "consecutive_failures": relay.get("exit_dns_health_consecutive_failures", 0),
             "nick": relay.get("nickname", ""),
             "verifiedaroi": _get_verified_aroi(relay, aroi_map, validated_domains),
+            "resolver_queries": relay.get("exit_dns_health_resolver_queries"),
         })
     return rows
+
+
+def _write_resolver_aggregates(lines: _LineAppender, metadata) -> None:
+    """Emit network-wide upstream resolver metrics from metadata.resolvers.
+
+    Emits nothing when the block is absent or unusable (older reports, failed runs), and no
+    shares when no exit was covered, so missing data never reads as a real zero.
+    """
+    summary = parse_resolver_summary(metadata)
+    if summary is None:
+        return
+
+    public_share = summary["public_share_pct"]
+    if any(pct is not None for pct in public_share.values()):
+        _emit_help_type(lines, "aeo1_exit_dns_public_resolver_share_ratio",
+                        "Estimated share of exit DNS lookups sent via a public resolver service, weighted by exit "
+                        "probability when available (0..1). provider ∈ {google,cloudflare,quad9,opendns,ffmuc,all}")
+        for provider in RESOLVER_PROVIDERS + ("all",):
+            pct = public_share[provider]
+            _emit(lines, "aeo1_exit_dns_public_resolver_share_ratio", {"provider": provider},
+                  round(pct / 100, 4) if pct is not None else 0)
+        lines.append("")
+
+    for name, key, help_text in (
+        ("aeo1_exit_resolver_covered_relays_count", "exits_covered",
+         "Exits with DNS success and enough sampled queries to count toward resolver shares"),
+        ("aeo1_exit_public_resolver_relays_count", "exits_using_public",
+         "Exits with DNS success whose primary upstream resolver is a public resolver service"),
+    ):
+        if summary[key] is not None:
+            _emit_help_type(lines, name, help_text)
+            _emit(lines, name, {}, summary[key])
+            lines.append("")
+
+
+def _write_resolver_queries(lines: _LineAppender, dns_rows: List[dict]) -> None:
+    """Emit per-exit estimated query counts by resolver category; nothing when no exit has any."""
+    samples = []
+    for row in dns_rows:
+        queries = row["resolver_queries"]
+        if not isinstance(queries, dict):
+            continue
+        for provider in RESOLVER_CATEGORIES:
+            count = _as_number(queries.get(provider))
+            if count is not None:
+                samples.append((row, provider, count))
+    if not samples:
+        return
+
+    lines.append("")
+    _emit_help_type(lines, "aeo1_exit_dns_resolver_queries_count",
+                    "Estimated DNS queries from the exit relay by upstream resolver, sampled and decayed "
+                    "with a 3.5-day half-life. provider ∈ {google,cloudflare,quad9,opendns,ffmuc,local,other,unknown}")
+    for row, provider, count in samples:
+        _emit(lines, "aeo1_exit_dns_resolver_queries_count", {
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+            "provider": provider,
+        }, count)
 
 
 def _write_dns_health_section(lines: _LineAppender, relay_set,
@@ -447,6 +508,9 @@ def _write_dns_health_section(lines: _LineAppender, relay_set,
     _emit(lines, "aeo1_exit_scan_timestamp_seconds", {}, int(scan_ts))
     lines.append("")
 
+    # Upstream resolver shares (only when the report carries metadata.resolvers)
+    _write_resolver_aggregates(lines, metadata)
+
     # --- Per-relay metrics ---
     relays = relay_set.json.get("relays", [])
     dns_rows = _build_exit_dns_rows(relays, fp_to_family, aroi_map, validated_domains)
@@ -494,6 +558,9 @@ def _write_dns_health_section(lines: _LineAppender, relay_set,
             "nick": row["nick"],
             "verifiedaroi": row["verifiedaroi"],
         }, 1)
+
+    # aeo1_exit_dns_resolver_queries_count (only exits with resolver data)
+    _write_resolver_queries(lines, dns_rows)
 
     return len(dns_rows)
 
