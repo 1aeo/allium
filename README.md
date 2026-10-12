@@ -67,7 +67,7 @@ cd www && python3 -m http.server 8000
 
 - **Memory**: Plan for **~3GB RAM** available (the uptime dataset alone peaks around ~2GB)
 - **Time**: Full generation takes ~2-5 minutes producing ~21,700 HTML pages
-- **Disk**: Output is ~500MB of HTML plus ~3.4GB of PNG charts (hard-linked from `data/cache/charts` on the build host; ~0.6GB as `--chart-format svg`)
+- **Disk**: Output is ~500MB of HTML plus ~3.6GB of PNG charts (hard-linked from `data/cache/charts` on the build host; ~0.7GB as `--chart-format svg`)
 
 📖 **[Full Quick Start Guide](docs/user-guide/quick-start.md)** — detailed setup instructions, troubleshooting, and deployment options.
 

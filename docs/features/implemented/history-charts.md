@@ -33,13 +33,13 @@ change since the last build is linked, not drawn: most 6M/1Y/5Y charts, and 1M
 charts between Onionoo's 4-hourly points (about 85% of all charts an hour
 apart). A hit keeps the file's modification time, so `rsync -a` and HTTP caches
 see it unchanged. `ChartWriter.sweep()` then deletes what the build did not
-use, so the cache holds one copy of the current charts (about 3.6 GB; 9.4 GB in
-full color); an SVG build (`--chart-format svg`) deletes all of them. The cache
+use, so the cache holds one copy of the current charts (about 3.6 GB; about 11 GB
+in full color); an SVG build (`--chart-format svg`) deletes all of them. The cache
 folder is named after `raster.VERSION` (replay code, background, palette, cairo
 version, fonts found), so a change there starts a fresh cache. On 4 cores a full build
-took 4m30s with an empty cache, then 1m31s-1m33s an hour later, or 1m56s when
-Onionoo had added a 4-hourly point (SVG: about 1m45s; full-color 1x PNG drawn
-by CairoSVG took 9m41s).
+takes about 5m30s with an empty cache, then about 1m30s-2m on later builds, as
+Onionoo adds a few points to each history (SVG: about 2m; full-color 1x PNG
+drawn by CairoSVG took 9m41s).
 
 The cost is page weight: a relay page with all eight charts loads about 415 KB
 of PNG (1.2 MB in full color) against 80 KB of SVG, and with JavaScript off (Tor

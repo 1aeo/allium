@@ -314,7 +314,7 @@ class ChartWriter(object):
         except OSError as error:  # e.g. the output is on another filesystem
             if error.errno == errno.EXDEV and not ChartWriter._copy_warned:
                 ChartWriter._copy_warned = True
-                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~3.4 GB at the "
+                logger.warning("--out is not on the filesystem of %s: copying every PNG chart (~3.6 GB at the "
                                "defaults) instead of linking it; build next to it to save that", self.cache_root)
             shutil.copy2(cached, path)
 
