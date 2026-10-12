@@ -30,13 +30,13 @@ DASHED, DOTTED, DASHDOT = "7 4", "1.5 3", "9 3.5 2 3.5"
 # operator-controlled contact strings could carry them.
 _CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
-# DejaVu Sans advance widths in 1/100 em for " " .. "~" (Verdana, the usual
-# fallback, is about as wide), so layouts hold in either font.
+# DejaVu Sans advance widths in 1/100 em for " " .. "~" and the other characters the charts' own text uses
+# (Verdana, the usual fallback, is about as wide), so layouts hold in either font.
 _WIDTHS = dict(zip(map(chr, range(32, 127)), map(int, (
     "32 40 46 84 64 95 78 27 39 39 50 84 32 36 32 34 64 64 64 64 64 64 64 64 64 64 34 34 84 84 84 53 "
     "100 68 69 70 77 63 58 77 75 29 29 66 56 86 75 79 60 79 69 63 61 73 68 99 69 61 69 39 34 39 84 50 "
     "50 61 63 55 63 62 35 63 63 28 28 58 28 97 63 61 63 63 41 52 39 63 59 82 59 59 52 64 34 64 84"
-).split())))
+).split())), **{"·": 32, "–": 50, "—": 100, "…": 100, "’": 32, "×": 84})
 
 
 def text_width(text, size, bold=False):
@@ -195,7 +195,7 @@ class Panel(object):
         for run in self.runs(values):
             points = [(self.xs[i], self.y(values[i])) for i in run]
             d.append("M%.1f %.1f" % points[0] + "".join("L%.1f %.1f" % point for point in points[1:]) if run[1:] else
-                     "M%.1f %.1fh%g" % (points[0][0] - width, points[0][1], 2 * width))
+                     "M%.1f %.1fh%g" % (max(points[0][0] - width, self.left), points[0][1], 2 * width))
         self.svg.path("".join(d), color, width, dash, clip=clip or self.clip)
 
     def hband(self, lo, hi, color, opacity):

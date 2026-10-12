@@ -63,8 +63,8 @@ def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval):
     """Label the highest of the ``high`` write/read rows (above the role's p98), with its neighbouring slots
     (``interval`` apart), on the throughput lines; ``yhi`` is the top of the write/read strip's scale.
 
-    The label sits right of the peak (left when it would not fit) in the band the y range keeps
-    free under the legend, whose bottom is ``clear_of``.
+    The label sits right of the peak (left when it would not fit, else over it, inside the plot) in the band the
+    y range keeps free under the legend, whose bottom is ``clear_of``.
     """
     peak, step = max(high, key=lambda row: row[3]), timedelta(seconds=interval or SECONDS_PER_DAY)
     by_time = {row[0]: row for row in high}
@@ -76,7 +76,9 @@ def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval):
     )
     x, y = panel.x(peak[0]), panel.y(peak[1])
     width = text_width(label, 11.5, bold=True) + 14
-    box_x = x + 19 if x + 19 + width <= svg.width - 12 else max(12, x - 19 - width)
+    right = panel.left + panel.width
+    box_x = x + 19 if x + 19 + width <= right else x - 19 - width if x - 19 - width >= panel.left else \
+        min(max(panel.left, x - width / 2), right - width)
     svg.line(x, y, min(max(x, box_x), box_x + width), clear_of + 30, MUTED, 1)
     svg.rect(box_x, clear_of + 6, width, 24, CALLOUT_BG, stroke=RED, rx=5)
     svg.text(box_x + 7, clear_of + 22.5, label, 11.5, RED, bold=True)

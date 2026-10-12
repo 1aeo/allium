@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from allium.lib.charts.bands import bands_for_role
-from allium.lib.charts.render import PLOT_WIDTH, bandwidth_chart
-from allium.lib.charts.svg import GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
+from allium.lib.charts.render import LEFT, PLOT_WIDTH, bandwidth_chart
+from allium.lib.charts.svg import CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -296,6 +296,12 @@ def test_overload_legend_and_spike_callout(tmp_path):
     svg = bandwidth_chart("1y", (ts, [10.0] * 4 + [17.0, 18.0] + [10.0] * 4, [10.0] * 10, 2 * DAY), 100.0,
                           bands_for_role("Guard"), "relay")
     assert "Sep 9 '26–Sep 11 '26 · write/read 1.70 / 1.80 · off the 1.70 scale" in [op[3] for op in svg.ops if op[0] == "text"]
+    # A label too long for either side of a peak mid-axis sits over it, inside the plot (clear of the y labels).
+    ts = [T0 + timedelta(days=2 * i) for i in range(61)]
+    svg = bandwidth_chart("1y", (ts, [10.0] * 29 + [18.1, 19.1, 18.1] + [10.0] * 29, [10.0] * 61, 2 * DAY), 100.0,
+                          bands_for_role("Guard"), "relay")
+    (x, _y, width, _height), = [op[1:5] for op in svg.ops if op[0] == "rect" and op[5] == CALLOUT_BG]
+    assert width > PLOT_WIDTH / 2 and LEFT <= x and x + width <= LEFT + PLOT_WIDTH
     # A newer rate-limit report where no limit was hit does not count toward the verdict, nor its time.
     quiet = dict(OVERLOADED["overload_ratelimits"], **{"write-count": 0, "timestamp": OVERLOADED[
         "overload_ratelimits"]["timestamp"] + 86400000})
@@ -343,6 +349,13 @@ def test_a_line_breaks_where_a_slot_is_missing():
     ts = [T0 + timedelta(days=day) for day in (0, 2, 4)]
     Panel(svg, "q", 0, 0, 100, 100, ts, 0, 10, interval=86400).series([1, 2, 3], GREEN, 2)
     assert svg.ops[-1][1].count("M") == 3
+    # A point with no neighbour is a short dash; at the axis' start, it starts there instead of half outside the plot.
+    assert svg.ops[-1][1].startswith("M0.0 90.0h4")  # not M-2.0
+
+
+def test_text_width_knows_the_charts_punctuation():
+    # DejaVu Sans: a subtitle full of "·" and "–" must not look wider than it is, or it collapses needlessly.
+    assert text_width("·–…", 100) == pytest.approx(32 + 50 + 100) and text_width("ab", 100) == 61 + 63
 
 
 def test_svg_text_is_escaped_and_valid_xml():
