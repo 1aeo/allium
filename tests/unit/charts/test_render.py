@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from allium.lib.charts.bands import bands_for_role
-from allium.lib.charts.render import LEFT, PLOT_WIDTH, bandwidth_chart, uptime_chart
+from allium.lib.charts.bands import CATALOG, bands_for_role, census_footnote
+from allium.lib.charts.render import CREDIT, LEFT, PLOT_WIDTH, WIDTH, bandwidth_chart, uptime_chart
 from allium.lib.charts.svg import BLUE, CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
@@ -37,6 +37,31 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
         assert line in lines
     assert "Outside p2–p98" not in lines  # nothing red to explain
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
+
+
+def test_every_chart_credits_1aeo_bottom_right(tmp_path):
+    """Relay bandwidth and uptime charts and an operator's chart, with and without the date-axis caption, end on
+    the credit: right-aligned to the canvas margin, on the footnote's line clear of it, inside the chart."""
+    month, six_months = history([100] * 30), history([100] * 60, key="6_months", first="2026-08-01 12:00:00")
+    charts = writer([relay("A"), relay("B")], {"A": {k: dict(month[k], **six_months[k]) for k in month},
+                                               "B": history([100] * 30)}, {"A": [999] * 180})
+    (tmp_path / "relay").mkdir()
+    charts.relay(relay("A"), str(tmp_path / "relay"))
+    charts.contact([0, 1], str(tmp_path))
+    paths = [tmp_path / "relay" / name for name in ("bandwidth-1m.svg", "bandwidth-6m.svg", "uptime-1m.svg")]
+    assert "6M · 1-day" in texts(paths[1])
+    for path in paths + [tmp_path / "bandwidth-1m.svg"]:
+        lines = list(ET.parse(path).iter("{http://www.w3.org/2000/svg}text"))
+        credit = lines[-1]
+        assert credit.text == CREDIT and credit.get("text-anchor") == "end"
+        assert float(credit.get("x")) == WIDTH - 12 and float(credit.get("y")) < height(path)
+        footnote = [line for line in lines if line.text.endswith("baseline 15 Aug 2026")]
+        assert bool(footnote) == path.name.startswith("bandwidth")
+        if footnote:  # the census footnote, on the left of the same line
+            assert footnote[0].get("y") == credit.get("y")
+    # The longest census footnote still clears the credit.
+    widest = max(text_width(census_footnote(bands_for_role(role)), 11) for role in CATALOG["roles"])
+    assert 12 + widest + 24 < WIDTH - 12 - text_width(CREDIT, 11)
 
 
 def test_an_unnamed_relays_charts_name_its_fingerprint(tmp_path):
