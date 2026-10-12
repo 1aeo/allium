@@ -336,8 +336,11 @@ def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp
     for order in ([0, 2], [2, 0]):
         charts.contact(order, str(tmp_path))
         assert "Write / read · last 30 days  ·  vs Exit band" in texts(tmp_path / "bandwidth-1m.svg")
-    # Relays without contact info share one hash, but they are not an operator.
+    # Relays without contact info share one hash, but they are not an operator; nor are those whose contact is
+    # "none", which the contact page treats alike.
     assert charts.contact([3], str(tmp_path)) == {}
+    charts = writer([relay("N", contact="none"), relay("O", contact="none")], {"N": history([50] * 30)})
+    assert charts.contact([0, 1], str(tmp_path)) == {}
 
 
 def test_a_line_breaks_where_a_slot_is_missing():

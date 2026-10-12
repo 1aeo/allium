@@ -14,7 +14,8 @@ def operator_from_contact(contact):
 
 def operator_identity(members):
     """``tor@kllx.eu  ·  64 relays`` for an operator's member relays: their AROI domain, else the first ``url:``
-    host, else the first contact text, cut at a word past 50 characters like the contact page's title."""
+    host, else the first contact text with its whitespace collapsed, cut at a word when longer than 50
+    characters."""
     contacts = [relay.get("contact") for relay in members]
     name = next((relay["aroi_domain"] for relay in members if relay.get("aroi_domain") not in (None, "", "none")),
                 "") or next(filter(None, map(operator_from_contact, contacts)), "")

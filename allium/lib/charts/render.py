@@ -381,8 +381,9 @@ class ChartWriter(object):
     def contact(self, member_indexes, directory):
         """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""
         members = [self.relays[i] for i in member_indexes]
-        # Relays without contact info share one hash, but they are not an operator.
-        if not any((relay.get("contact") or "").strip() for relay in members):
+        # Relays without contact info share one hash, but they are not an operator; nor are relays whose contact is
+        # "none", which the contact page treats alike.
+        if not any((relay.get("contact") or "").strip() not in ("", "none") for relay in members):
             return {}
         return self._charts(directory, "bandwidth", self._contact_bandwidth, members, operator_identity(members))
 
