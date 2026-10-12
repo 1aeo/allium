@@ -485,6 +485,74 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(msg, "URI: Connection timeout")
         self.assertEqual(proof, 'uri')
 
+    def test_error_simplification_names_primary_failure(self):
+        """A primary URI failure is labelled even when the www-fallback fails differently."""
+        path = "/.well-known/tor-relay/rsa-fingerprint.txt"
+
+        def joined(primary, www):
+            # aroivalidator joins the primary and www-fallback errors with '; '
+            return (f"URI-RSA: {primary} for d.example at URL: https://d.example{path}; "
+                    f"URI-RSA: {www} for www.d.example at URL: https://www.d.example{path}")
+
+        cases = [
+            # Primary 404, www-fallback TLS failure: the operator's host serves a 404
+            (joined("HTTP error 404", "HTTP SSL certificate expired"),
+             "URI: Fingerprint file not found (404)"),
+            (joined("HTTP error 404", "HTTP SSL hostname mismatch, certificate is not valid"),
+             "URI: Fingerprint file not found (404)"),
+            (joined("HTTP error 404", "HTTP error connection max retries exceeded"),
+             "URI: Fingerprint file not found (404)"),
+            # Primary TLS failure, www-fallback does not resolve
+            (joined("HTTP SSL certificate expired", "HTTP error name resolution failed"),
+             "URI: SSL certificate error"),
+            (joined("HTTP SSL handshake failure (server sent handshake_failure alert)",
+                    "HTTP SSL handshake failure (server sent handshake_failure alert)"),
+             "URI: SSL/TLS v3 handshake failed"),
+            (joined("HTTP error connection max retries exceeded", "HTTP error name resolution failed"),
+             "URI: Server unreachable"),
+            # A primary redirect has no specific label: the www-fallback's 404 names it
+            (f"URI-RSA: HTTP redirect (301) to https://www.d.example{path} for d.example at "
+             f"URL: https://d.example{path} — CIISS spec disallows redirects on proof URI; "
+             f"URI-RSA: HTTP error 404 for www.d.example at URL: https://www.d.example{path}",
+             "URI: Fingerprint file not found (404)"),
+        ]
+        for error, expected in cases:
+            self.assertEqual(_simplify_error_message(error), (expected, 'uri'), error)
+
+        # '; ' inside a single DNS error is not an attempt separator
+        msg, proof = _simplify_error_message(
+            "DNS-RSA: TXT record has invalid proof content. Expected "
+            "'we-run-this-tor-relay', found: v=spf1 mx -all; google-site-verification=x")
+        self.assertEqual((msg, proof), ("DNS: TXT record error", 'dns'))
+
+    def test_error_simplification_tls_causes(self):
+        """aroivalidator's cause-specific TLS errors map to the SSL/TLS labels."""
+        url = "https://d.example/.well-known/tor-relay/rsa-fingerprint.txt"
+        cases = {
+            "certificate expired": "URI: SSL certificate error",
+            "certificate is self-signed": "URI: SSL certificate error",
+            "certificate chain ends in an untrusted root CA": "URI: SSL certificate error",
+            "certificate chain incomplete or issued by an untrusted CA": "URI: SSL certificate error",
+            "hostname mismatch, certificate is not valid": "URI: SSL certificate error",
+            "certificate verification failed (unable to get local issuer certificate)":
+                "URI: SSL certificate error",
+            "handshake failure (server does not support TLS 1.2 or newer)":
+                "URI: SSL/TLS handshake failed",
+            "handshake failure (server sent handshake_failure alert)":
+                "URI: SSL/TLS v3 handshake failed",
+            "error unexpected EOF": "URI: SSL/TLS handshake failed",
+        }
+        for cause, expected in cases.items():
+            for error in (f"URI-RSA: HTTP SSL {cause} for d.example at URL: {url}",
+                          f"URI-RSA: HTTP SSL {cause} for d.example at URL: {url}. "
+                          f"Used domain cache after 3 attempts."):
+                self.assertEqual(_simplify_error_message(error), (expected, 'uri'), error)
+
+        # aroivalidator's earlier wording for a TLS failure keeps its label
+        msg, _ = _simplify_error_message(
+            f"URI-RSA: HTTP error connection max retries exceeded for URL: {url}")
+        self.assertEqual(msg, "URI: Server unreachable")
+
     def test_error_categorization(self):
         """Test that errors are categorized into DNS and URI correctly."""
         errors = {
