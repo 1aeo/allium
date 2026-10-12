@@ -132,7 +132,9 @@ when fontconfig's `fc-match` is installed to check.
   red is only a sliver.
   A red line-and-dot legend entry, `Outside p2–p98`, explains them on the
   charts that draw them. A
-  point with no neighbour to join (between gaps) is drawn as a short dash.
+  point with no neighbour to join (between gaps) is drawn as a short dash; at
+  or just above 0 on the throughput and uptime panels (a slot with no traffic,
+  or 0% up) it sits on the bottom edge rather than half under it.
 - A relay that relays.py finds overloaded gets a legend entry with its newest
   counted report: `currently overloaded · last report Sep 29, 22:00 UTC`
   (just `overloaded · …` for a relay no longer running, whose verdict comes

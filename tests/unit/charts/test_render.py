@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from allium.lib.charts.bands import bands_for_role
-from allium.lib.charts.render import LEFT, PLOT_WIDTH, bandwidth_chart
-from allium.lib.charts.svg import CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
+from allium.lib.charts.render import LEFT, PLOT_WIDTH, bandwidth_chart, uptime_chart
+from allium.lib.charts.svg import BLUE, CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -417,6 +417,32 @@ def test_a_line_breaks_where_a_slot_is_missing():
     assert svg.ops[-1][1].count("M") == 3
     # A point with no neighbour is a short dash; at the axis' start, it starts there instead of half outside the plot.
     assert svg.ops[-1][1].startswith("M0.0 90.0h4")  # not M-2.0
+
+
+def test_a_lone_slot_without_traffic_sits_on_the_bottom_edge():
+    # Sep 11 has no traffic and no neighbour to join: its write and read dashes would lie on the throughput panel's
+    # bottom edge, the lower half of their strokes under its clip. They sit on the edge instead.
+    ts = [T0 + timedelta(days=day) for day in [*range(9), 10, *range(12, 20)]]
+    traffic = [10.0] * 9 + [0.0] + [10.0] * 8
+    svg = bandwidth_chart("1m", (ts, traffic, traffic, DAY), 100.0, bands_for_role("Guard"), "relay")
+    (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "t")]
+    for color, width in ((GREEN, 2.4), (BLUE, 1.7)):
+        line, = [op[1] for op in svg.ops if op[0] == "path" and op[2:4] == (color, width)]
+        dash, = re.findall(r"M[\d.]+ ([\d.]+)h", line)
+        assert float(dash) == pytest.approx(top + height - width / 2, abs=0.06)
+    # As does a lone 0% slot on an uptime chart.
+    svg = uptime_chart("1m", ts, [100.0] * 9 + [0.0] + [100.0] * 8, DAY, "relay", None, 0.0)
+    (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "u")]
+    line, = [op[1] for op in svg.ops if op[0] == "path" and op[2:4] == (GREEN, 2.2)]
+    assert [float(y) for y in re.findall(r"M[\d.]+ ([\d.]+)h", line)] == [pytest.approx(top + height - 1.1, abs=0.06)]
+    # One just above 0 sits on the edge too; a line along it and a point below the scale stay where they are.
+    svg = Svg(100)
+    ts = [T0 + timedelta(days=day) for day in (0, 1, 3, 5)]
+    Panel(svg, "p", 0, 0, 100, 100, ts, 0, 10).series([0, 0, 0.05, -1], GREEN, 2)
+    assert re.findall(r"[ML][\d.]+ ([\d.]+)", svg.ops[-1][1]) == ["100.0", "100.0", "99.0", "110.0"]
+    # The write/read strip's bottom edge is a cut of its scale, not 0: a day below it is drawn there, under its marker.
+    Panel(svg, "s", 0, 0, 100, 100, ts, 0.5, 1.5).series([1.0, None, 0.5, None], TEXT, 2.2)
+    assert re.findall(r"[ML][\d.]+ ([\d.]+)", svg.ops[-1][1]) == ["50.0", "100.0"]
 
 
 def test_text_width_knows_the_charts_punctuation():
