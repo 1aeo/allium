@@ -91,7 +91,7 @@ cd www && python3 -m http.server 8000
 
 - Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
 - Multiprocessing page generation (configurable via `--workers`)
-- Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
+- Downtime filtering: excludes relays not seen for >7 days before the Onionoo snapshot, including relays Onionoo still marks as running (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
 - Bandwidth and uptime history charts (1M/6M/1Y/5Y) on relay and contact pages, drawn at build time with no JavaScript: PNG by default so they show at Tor Browser's Safest level (see the `--chart-*` options), reused from `data/cache/charts` while unchanged. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
@@ -182,7 +182,7 @@ Pre-computed analysis attached to contact pages:
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
 | `--progress` | `false` | Show detailed progress with memory usage |
 | `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
-| `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
+| `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
 | `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) and the cairo library (`apt install libcairo2 fonts-dejavu-core`; DejaVu Sans keeps the chart font), without them the default writes SVG with a warning and an explicit `--chart-format png` stops; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~9 KB per chart, no extra packages, blank at Safest |

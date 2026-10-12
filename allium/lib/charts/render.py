@@ -16,8 +16,9 @@ from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, pa
 from .bands import RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags
 from .identity import chart_identity, operator_from_contact
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, subtitles
+from ..uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 from .series import (
-    MBIT, PERIOD_SPAN, PERIODS, WINDOW, family_key, operator_throughput, peer_medians, points, throughput,
+    MBIT, PERIOD_SPAN, PERIODS, WINDOW, family_key, operator_throughput, peer_medians, throughput, uptime_points,
 )
 from .svg import (
     BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
@@ -168,13 +169,11 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     return svg.finish(_footer(svg, strip, period, interval, census_footnote(bands)))
 
 
-def uptime_chart(period, ts, percent, interval, identity, restart):
-    """Running-flag uptime percent over one period, its legend above the plot."""
+def uptime_chart(period, ts, percent, interval, identity, restart, average):
+    """Running-flag uptime percent over one period, its legend above the plot. ``average`` is the relay page's
+    figure for the period, the mean of what is drawn (0.0 when the page shows none: under 30 slots, or 1% or less)."""
     svg = Svg(WIDTH)
-    # Average what is drawn (factor applied, window clipped); like the site's uptime figures,
-    # only from 30 points and above 1%.
-    average = sum(percent) / len(percent)
-    subtitle = "Average {:.1f}%  ·  Onionoo Running flag".format(average) if len(percent) >= 30 and average > 1.0 else ""
+    subtitle = "Average {:.1f}%  ·  Onionoo Running flag".format(average) if average else ""
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
     restarted = _restart_entry(restart, ts)
     y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
@@ -243,6 +242,8 @@ class ChartWriter(object):
         published = parse_onionoo_timestamp(
             (relay_set.bandwidth_data or relay_set.uptime_data or {}).get("relays_published"))
         self.since = {period: published - window if published else None for period, window in WINDOW.items()}
+        # Uptime charts use Onionoo's own windows, from the uptime document's publish time (it is cached apart)
+        self.uptime_windows = uptime_windows(relay_set.uptime_data)
         self.role_medians, self.family_medians = peer_medians(self.relays, self.bandwidth, self.since["1m"])
 
     def _save(self, directory, name, draw, *args):
@@ -341,13 +342,15 @@ class ChartWriter(object):
         return bandwidth_chart(period, series, overlays=overlays, family_n=family_n, **common)
 
     def _relay_uptime(self, relay, common, key, period):
-        block = ((self.uptime.get(relay["fingerprint"]) or {}).get("uptime") or {}).get(key) or {}
-        percent = points(block, 100.0, self.since[period])
-        if len(percent) < 2:
+        section = (self.uptime.get(relay["fingerprint"]) or {}).get("uptime") or {}
+        block = section.get(key) or {}
+        average, slots = _block_uptime_percentage_and_datapoints(block, key, self.uptime_windows, relay, section)
+        if slots < 2:  # padded slots alone are not a history
             return None
+        percent = uptime_points(block, key, self.uptime_windows, relay, section)
         ts = sorted(percent)
         return uptime_chart(period, ts, [percent[t] for t in ts], int(block.get("interval") or 0), common["identity"],
-                            common["restart"])
+                            common["restart"], average)
 
     def contact(self, member_indexes, directory):
         """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""

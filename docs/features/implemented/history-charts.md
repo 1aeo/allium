@@ -82,6 +82,11 @@ when fontconfig's `fc-match` is installed to check.
   frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Each period only shows its own window, ending at Onionoo's `relays_published`.
+  Uptime charts use Onionoo's own window (`uptime_utils.block_window`: one
+  calendar period ending at the latest consensus, on Onionoo's slot grid, taken
+  from the uptime document's `relays_published`). An offline relay's history
+  stops at its last consensus; the slots after it are drawn at 0%, as Onionoo
+  counts them, and the "Average" is the relay page's figure for the period.
 - Family and peer medians are 1M only. A family's median is over the members
   of the relay's effective family (Onionoo's families are mutual declarations,
   so members can list different sets), and is drawn only when 3 or more members
