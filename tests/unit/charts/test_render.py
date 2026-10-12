@@ -33,6 +33,14 @@ def test_relay_charts_carry_identity_title_legend_and_footnote(tmp_path):
     assert "Average 100.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
 
 
+def test_uptime_chart_of_a_stopped_history_shows_the_pages_average(tmp_path):
+    # 150 slots from the window's start, then the relay went offline: Onionoo counts the last 36 slots as down
+    charts = writer([relay("A")], {"A": history([100 + i for i in range(30)])}, {"A": [999] * 150},
+                    uptime_first="2026-08-30 14:00:00")
+    charts.relay(relay("A"), str(tmp_path))
+    assert "Average 80.6%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")  # 150 of 186 slots
+
+
 @needs_png
 def test_png_charts_are_drawn_at_twice_their_size_and_reused_from_the_cache(tmp_path):
     first, second, third, root = (tmp_path / name for name in ("first", "second", "third", "cache"))

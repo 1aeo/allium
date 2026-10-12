@@ -3,10 +3,11 @@
 import functools
 from bisect import bisect_left
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from statistics import median
 
 from ..time_utils import ONIONOO_HISTORY_PERIODS, PERIOD_SHORT_NAMES, parse_onionoo_timestamp
+from ..uptime_utils import block_window
 from .bands import role_from_flags
 
 # Onionoo graph-history key -> chart period id ("1_month" -> "1m"), in page order: a chart section shows its first.
@@ -44,6 +45,24 @@ def points(block, scale=1.0, since=None):
     scale *= float(block.get("factor") or 1)
     start = bisect_left(times, since) if since else 0
     return {t: v * scale for t, v in zip(times[start:], values[start:]) if isinstance(v, (int, float))}
+
+
+def uptime_points(block, key, published):
+    """``{timestamp: percent}`` an uptime chart draws for one Onionoo block: its slots inside Onionoo's current
+    window and 0% for each window slot it lacks after its end, the slots the relay page averages
+    (``uptime_utils.block_window``). An offline relay's history stops at its last consensus, but Onionoo counts
+    the time since as down. The whole block when there is no window."""
+    drawn = points(block, 100.0)
+    where = block_window(block or {}, key, published)
+    if where is None:
+        return drawn
+    lo, hi, pad_from, padded = where
+    interval = int(block["interval"])
+    kept = _slots(parse_onionoo_timestamp(block.get("first")), interval, len(block["values"]))[lo:hi]
+    drawn = {t: drawn[t] for t in kept if t in drawn}
+    pad = datetime.fromtimestamp(pad_from, timezone.utc)
+    drawn.update((pad + k * timedelta(seconds=interval), 0.0) for k in range(padded))
+    return drawn
 
 
 def _aligned(write, read, interval):

@@ -1,11 +1,11 @@
 """Onionoo history parsing, operator sums and peer medians for the charts."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from allium.lib.charts.series import (
-    MBIT, family_key, operator_throughput, peer_medians, points, throughput,
+    MBIT, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
 )
 
 from .fixtures import DAY, T0, block, history, relay
@@ -16,6 +16,20 @@ def test_points_scale_by_factor_skip_holes_and_clip_to_window():
     assert points(block([1, 2, 3]), since=T0 + timedelta(days=1)) == {
         T0 + timedelta(days=1): 2000.0, T0 + timedelta(days=2): 3000.0}
     assert points(None) == {} and points(block([1], first="bad")) == {}
+
+
+def test_uptime_points_follow_onionoos_window_and_pad_a_stopped_history():
+    # Published 30 Sep 12:00: Onionoo's 1-month window is 186 four-hour slots from 30 Aug 14:00
+    published = datetime(2026, 9, 30, 12, tzinfo=timezone.utc)
+    first = datetime(2026, 8, 30, 14, tzinfo=timezone.utc)
+    stopped = block([999] * 150, first="2026-08-30 14:00:00", interval=14400, factor=1 / 999.0)
+    drawn = uptime_points(stopped, "1_month", published)
+    assert sorted(drawn) == [first + timedelta(hours=4 * i) for i in range(186)]
+    assert [drawn[t] for t in sorted(drawn)][148:152] == [pytest.approx(100.0)] * 2 + [0.0] * 2
+    older = block([999] * 186, first="2026-08-28 14:00:00", interval=14400, factor=1 / 999.0)
+    assert min(uptime_points(older, "1_month", published)) == first  # its first 12 slots predate the window
+    assert sum(uptime_points(older, "1_month", published).values()) == pytest.approx(174 * 100.0)
+    assert uptime_points(stopped, "1_month", None) == points(stopped, 100.0)
 
 
 def test_throughput_keeps_timestamps_with_both_directions():

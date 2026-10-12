@@ -41,12 +41,13 @@ def relay(fp, contact="url:example.com", flags=("Guard", "Running"), **extra):
                  "effective_family": [fp], "uptime_percentages": {"1_month": 99.5}}, **extra)
 
 
-def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None, **options):
+def writer(relays, bandwidth, uptime=None, image_format="svg", cache_dir=None, uptime_first="2026-09-01 12:00:00",
+           **options):
     return ChartWriter(SimpleNamespace(
         json={"relays": relays},
         bandwidth_data={"relays_published": PUBLISHED, "relays": [dict(row, fingerprint=fp) for fp, row in bandwidth.items()]},
         uptime_data={"relays_published": PUBLISHED, "relays": [
-            {"fingerprint": fp, "uptime": {"1_month": block(values, interval=14400, factor=1 / 999.0)}}
+            {"fingerprint": fp, "uptime": {"1_month": block(values, first=uptime_first, interval=14400, factor=1 / 999.0)}}
             for fp, values in (uptime or {}).items()]},
     ), image_format, cache_dir, **options)
 
