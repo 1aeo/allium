@@ -13,15 +13,19 @@
 {%- macro pctile(value, label) -%}
 {% if value is not none %}<span class="{% if value >= 90 %}al-status-success{% elif value >= 50 %}{% else %}al-status-warning{% endif %}" title="This relay's {{ label }} is higher than {{ value }}% of all relays on the network.">({{ value|round(0)|int }}th pctl)</span>{% endif %}
 {%- endmacro -%}
-{# DRY macro: render a family member fingerprint list (replaces 3 near-identical inline <pre> blocks) #}
+{# DRY macro: render a family member fingerprint list (replaces 3 near-identical inline <pre> blocks).
+   Only members with a relay page (relay_page_fps) are links: Onionoo also lists
+   fingerprints it doesn't know as relays, and relays the downtime filter dropped. #}
 {%- macro family_member_list(members, relay_fp, show_self=false) -%}
 {% if members -%}
 <pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; margin-top: 5px;">
 {%- for fp in members -%}
 {%- if show_self and fp == relay_fp -%}
 {{ fp|escape }} (this relay){{ '\n' if not loop.last }}
-{%- else -%}
+{%- elif fp in relay_page_fps -%}
 <a href="../{{ fp|escape }}/">{{ fp|escape }}</a>{{ '\n' if not loop.last }}
+{%- else -%}
+{{ fp|escape }} <span class="al-status-muted" title="No relay page: unknown to Onionoo, or offline too long">(not in the network)</span>{{ '\n' if not loop.last }}
 {%- endif -%}
 {%- endfor -%}
 </pre>
@@ -1330,7 +1334,11 @@ Country: unknown
             <dd>
                 {% if relay.exit_dns_health_first_hop_nickname %}{{ relay.exit_dns_health_first_hop_nickname|escape }}{% endif %}
                 {% if relay.exit_dns_health_first_hop_country %} ({{ relay.exit_dns_health_first_hop_country|upper|escape }}){% endif %}
-                <a href="../{{ relay.exit_dns_health_first_hop|escape }}/" title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</a>
+                {% if relay.exit_dns_health_first_hop|upper in relay_page_fps %}
+                <a href="../{{ relay.exit_dns_health_first_hop|upper|escape }}/" title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</a>
+                {% else %}
+                <span title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</span> <span class="al-status-muted" style="font-size: 11px;">(not in the network)</span>
+                {% endif %}
             </dd>
             {% endif %}
 
@@ -1452,8 +1460,10 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 {% for vote in diag.authority_table %}
 <tr class="{% if not vote.voted %}row-not-voted{% endif %}">
     <td>
-        {% if vote.fingerprint %}
-        <a href="{{ page_ctx.path_prefix }}relay/{{ vote.fingerprint }}/" style="text-decoration: underline;">
+        {# vote.fingerprint is the authority's V3 signing key, not its relay fingerprint #}
+        {% set authority_fp = authority_page_fps.get(vote.authority|lower) if authority_page_fps else none %}
+        {% if authority_fp %}
+        <a href="{{ page_ctx.path_prefix }}relay/{{ authority_fp }}/" style="text-decoration: underline;">
             <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
         </a>
         {% else %}
