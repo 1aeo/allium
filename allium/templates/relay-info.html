@@ -1,5 +1,5 @@
 {% extends "skeleton.html" -%}
-{% from "macros.html" import navigation, aroi_validation_badge -%}
+{% from "macros.html" import navigation, aroi_validation_badge, chart_history, chart_period_anchors -%}
 {# DRY macro: format bandwidth value with auto-detected unit #}
 {%- macro bw(value) -%}
 {% set unit = value|determine_unit(relays.use_bits) -%}
@@ -651,6 +651,7 @@ Country: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
+{% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
 <span id="bandwidth-capacity" class="compat-anchor"></span><span id="network-participation" class="compat-anchor"></span>
@@ -789,9 +790,11 @@ Country: unknown
     </div>
     {% endif %}
 </div>
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
+{% if uptime_periods and not bandwidth_periods %}{{ chart_period_anchors('uptime') }}{% endif %}
 <section id="uptime" class="section-box relay-section">
 <span id="first-last-seen" class="compat-anchor"></span>
 <h4 style="margin-top: 0; margin-bottom: 12px;">
@@ -1030,6 +1033,7 @@ Country: unknown
 </div>
 {% endif %}
 
+{{ chart_history('uptime', uptime_periods, 'Uptime', ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}

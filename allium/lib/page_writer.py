@@ -35,6 +35,7 @@ from .bandwidth_formatter import (
     format_data_volume_with_unit,
 )
 from .aroi_validation import get_contact_validation_status
+from .charts.series import PERIOD_SPAN
 from .intelligence_engine import IntelligenceEngine
 from .ip_utils import safe_parse_ip_address
 from .operator_analysis import (
@@ -252,6 +253,8 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
+ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
@@ -1141,6 +1144,8 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     validation or when sort modes change between generations.
     """
     files_written = 0
+    chart_writer = getattr(relay_set, 'chart_writer', None)
+    chart_periods = chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else {}
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1187,6 +1192,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
             template_args = dict(variant_args)
             template_args['relay_subset'] = visible_relays
             template_args['contact_has_ipv6'] = has_ipv6
+            template_args['contact_chart_periods'] = chart_periods
             template_args['page_number'] = page_number
             template_args['pagination'] = pagination_context(
                 base_filename, page_number, total_pages
@@ -1656,6 +1662,7 @@ class _RelayPageRenderer:
         self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
         self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
         self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+        self.chart_writer = getattr(relay_set, 'chart_writer', None)
 
     def write(self, relay):
         """Render one relay page to relay/FINGERPRINT/index.html."""
@@ -1674,6 +1681,12 @@ class _RelayPageRenderer:
         _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
                                 self.family_key_to_fps)
 
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
+        # with the relay's history charts beside it
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
+        os.makedirs(relay_dir, exist_ok=True)
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ({}, {})
+
         rendered = self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
             contact_display_data=contact_display_data,
@@ -1687,11 +1700,9 @@ class _RelayPageRenderer:
                 self.base_url, f"relay/{relay['fingerprint']}/index.html"
             ),
             page_number=1,
+            bandwidth_periods=bandwidth_periods,
+            uptime_periods=uptime_periods,
         )
-
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
         _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 
