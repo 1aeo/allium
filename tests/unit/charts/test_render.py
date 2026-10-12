@@ -299,9 +299,11 @@ def test_band_names_sit_in_their_own_ranges_beside_plain_grid_labels():
     # Guard's typical band (1.01–1.17) lies above 1.0: its name goes inside it, clear of the "1.0" grid label.
     guard = labels("Guard")
     assert guard["p10–p90"][0] == guard["1.0"][0] and guard["1.0"][1] - guard["p10–p90"][1] >= 13
-    # Exit's (0.96–1.02) is too thin to clear it, and holds 1.0: its name goes beside the label.
-    exits = labels("Exit")
-    assert abs(exits["p10–p90"][1] - exits["1.0"][1]) < 1 and exits["p10–p90"][0] < exits["1.0"][0] - 20
+    # Exit's (0.96–1.02) and Exit+Guard's (0.97–1.15) are too thin to hold the name clear of it, and hold 1.0: their
+    # name goes beside the label.
+    for role in ("Exit", "Exit+Guard"):
+        exits = labels(role)
+        assert abs(exits["p10–p90"][1] - exits["1.0"][1]) < 1 and exits["p10–p90"][0] < exits["1.0"][0] - 20
     # ">p98" goes inside its own range, Guard's 1.58 up to the 1.70 scale top, clear of "1.5".
     svg = bandwidth_chart("1m", (ts, [10.0] * 5, [10.0] * 5, DAY), 100.0, bands_for_role("Guard"), "relay")
     (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "r")]

@@ -218,12 +218,12 @@ class Panel(object):
 
     def band_label(self, text, lo, hi, color, ticks, fmt="{:.1f}", size=12, room=13):
         """Name the y range ``lo``–``hi`` beside the axis, inside the range: at its middle, or the spot nearest the
-        middle ``room`` px clear of the ``yaxis`` labels of ``ticks``; in a range too narrow for that, beside the
-        label of its tick nearest the middle."""
+        middle ``room`` px clear of the ``yaxis`` labels of ``ticks``, the text's digits inside the range; in a range
+        too narrow for that, beside the label of its tick nearest the middle."""
         top, bottom = self.y(min(hi, self.ylo + self.yspan)), self.y(max(lo, self.ylo))
-        mid, marks = (top + bottom) / 2, {tick: self.y(tick) for tick in ticks}
+        mid, marks, inset = (top + bottom) / 2, {tick: self.y(tick) for tick in ticks}, size * 0.365  # half a digit
         spots = [y for y in [mid] + [mark + step for mark in marks.values() for step in (-room, room)]
-                 if top <= y <= bottom and all(abs(y - mark) >= room for mark in marks.values())]
+                 if top + inset <= y <= bottom - inset and all(abs(y - mark) >= room for mark in marks.values())]
         inside = [tick for tick in ticks if lo <= tick <= hi]
         x = self.left - 8
         if spots or not inside:
