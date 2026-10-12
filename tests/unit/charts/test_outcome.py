@@ -51,6 +51,12 @@ def test_ratio_subtitle_gives_the_overall_band_and_the_days_beyond_p2_p98_on_eac
     assert ratio_subtitle([], {}, GUARD) == "Under 50 KB/s throughout: too little traffic to compare"
     assert ratio_subtitle(rows([1.05] * 5 + [3.0, 3.1, 0.5]), {}, GUARD) == \
         "Write/read 1.48 overall (uncommon) · above p98 Sep 6–7 · below p2 Sep 8"
+    # Typical overall, but two big days pull the sums in while most days sit below p2: the counts say so.
+    mostly_out = rows([0.98] * 26 + [2.3, 2.3, 1.05, 1.05])
+    assert ratio_subtitle(mostly_out, {}, GUARD) == "Write/read 1.07 overall (typical) · above p98 Sep 27–28 " \
+        "(2 of 30 days) · below p2 Sep 1–26 (26 of 30 days)"
+    assert ratio_subtitle(rows([0.98] * 20 + [1.05] * 10), {}, GUARD) == \
+        "Write/read 1.00 overall (uncommon) · below p2 Sep 1–20"  # not typical: the days themselves
     # Overall is the ratio of sums, as in the band census: 400 / 150, not the mean of the daily ratios (3.50).
     assert ratio_subtitle([(T0, 100.0, 100.0, 1.0), (T0 + timedelta(days=1), 300.0, 50.0, 6.0)], {}, GUARD).startswith(
         "Write/read 2.67 overall")

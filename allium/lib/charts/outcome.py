@@ -75,7 +75,7 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
     The overall ratio (of sums, as the band census) and its band, then the days beyond p2–p98 on each side, then
     whether the family and peer medians in ``overlays`` (1M relay charts) left it on the same side on at least
     half of those days, or stayed inside it on at least half. ``most`` runs of days are listed per side before
-    they collapse (``format_day_span``).
+    they collapse (``format_day_span``); a typical overall ratio with most days out of band gives their counts.
     """
     if not rows:
         return "Under {} KB/s throughout: too little traffic to compare".format(MIN_ACTIVE_KBYTES)
@@ -84,6 +84,8 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
     band = "typical" if tlo <= overall <= thi else "uncommon" if ilo <= overall <= ihi else "investigate"
     parts = ["Write/read {} overall ({})".format(ratio_text(overall, tlo, thi, ilo, ihi), band)]
     beyond = {row[0]: row[3] > ihi for row in rows if not ilo <= row[3] <= ihi}  # day -> above p98 (or below p2)
+    if band == "typical" and 2 * len(beyond) > len(rows):  # a few big days pull the sums in: say how many are out
+        most = min(most, 0)
     step, year = timedelta(seconds=interval or SECONDS_PER_DAY), period in YEAR_PERIODS
     for label, side in (("above p98", True), ("below p2", False)):
         days = [t for t, high in beyond.items() if high is side]

@@ -94,7 +94,8 @@ when fontconfig's `fc-match` is installed to check.
   Mbit/s Sep 16` (the share only up to 100%: a period's mean is compared with
   today's advertised bandwidth). Write/read: the overall ratio (of sums, as the
   census) and its band, the days above p98 and below p2 listed per side (as a
-  count past three runs, or when the line would not fit), then `out with the
+  count past three runs, when the line would not fit, or when a typical
+  overall ratio has most days out of band), then `out with the
   family` / `out with other Guards` when that median was beyond p2–p98 on the
   relay's side on at least half of those days, or `family and peers stayed in`
   when it was inside p2–p98 on at least half of them (out the other way: neither).
