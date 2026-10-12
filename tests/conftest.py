@@ -108,6 +108,31 @@ def temp_dir():
         yield tmpdir
 
 
+@pytest.fixture(autouse=True)
+def isolated_worker_data(tmp_path_factory, monkeypatch):
+    """Point every test's API cache, timestamps and worker state at a temp dir.
+
+    allium.lib.workers derives DATA_DIR, CACHE_DIR and STATE_FILE from its own
+    location and builds _cache_manager and _timestamp_manager on CACHE_DIR at
+    import, so a test that reaches a worker would otherwise write fixture data
+    into the real allium/data/ that site builds load from. _worker_status is
+    reset too, since _load_state() seeds it from the real state.json and
+    _save_state() writes the whole registry back out.
+    """
+    from allium.lib import workers
+    from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+
+    data_dir = tmp_path_factory.mktemp('allium-data')
+    cache_dir = os.path.join(str(data_dir), 'cache')
+    monkeypatch.setattr(workers, 'DATA_DIR', str(data_dir))
+    monkeypatch.setattr(workers, 'CACHE_DIR', cache_dir)
+    monkeypatch.setattr(workers, 'STATE_FILE', os.path.join(str(data_dir), 'state.json'))
+    monkeypatch.setattr(workers, '_cache_manager', create_cache_manager(cache_dir))
+    monkeypatch.setattr(workers, '_timestamp_manager', create_timestamp_manager(cache_dir))
+    monkeypatch.setattr(workers, '_worker_status', {})
+    return data_dir
+
+
 @pytest.fixture
 def isolated_worker_registry(monkeypatch):
     """Give a test a fresh worker-status registry."""
