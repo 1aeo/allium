@@ -945,6 +945,15 @@ class Relays:
         from .categorization import categorize
         categorize(self)
 
+    def has_page(self, category, key):
+        """True if <category>/<key>/ is written: one page per sorted key.
+
+        Templates link a country, platform, etc. only when this holds. Onionoo
+        reports an unknown country as "??" and can omit platform, and
+        sort_relay() files neither, so those have no page to link.
+        """
+        return key in self.json.get("sorted", {}).get(category, ())
+
     def _propagate_as_rarity(self):
         """Propagate AS rarity data from sorted AS data to each relay."""
         from .categorization import propagate_as_rarity

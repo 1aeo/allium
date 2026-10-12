@@ -35,6 +35,7 @@ from .bandwidth_formatter import (
     format_data_volume_with_unit,
 )
 from .aroi_validation import get_contact_validation_status
+from .charts.series import PERIOD_SPAN
 from .intelligence_engine import IntelligenceEngine
 from .ip_utils import safe_parse_ip_address
 from .operator_analysis import (
@@ -46,6 +47,7 @@ from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
+from .file_io_utils import sanitize_path_component as _sanitize_path_component
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -125,47 +127,6 @@ def _paginated_validation_status(status, visible_relays):
     return page_status
 
 
-def _sanitize_path_component(value: str) -> str:
-    """Sanitize a string for safe use as a filesystem path component.
-    
-    Guards against directory traversal, path injection, and OS-specific edge cases:
-    - Strips Windows drive prefixes (e.g. "C:") and backslashes
-    - Removes control characters and null bytes
-    - Replaces characters outside a safe whitelist with underscores
-    - Trims leading/trailing dots and underscores to avoid "." / ".." results
-    - Returns "_" if the result is empty or still equals "." / ".."
-    - Appends a short hash suffix when normalization changes the value, preventing
-      distinct raw inputs (e.g. "A B", "A/B", "A_B") from colliding on disk
-    - Truncates to 255 characters (common filesystem limit)
-    """
-    import hashlib
-    import re
-    raw_value = str(value)
-    # Strip Windows drive letter prefix (e.g. "C:", "D:")
-    if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
-        value = value[2:]
-    # Remove backslashes, forward slashes, null bytes, and control characters
-    value = value.replace('\\', '_').replace('/', '_').replace('\x00', '')
-    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
-    # Remove traversal sequences
-    value = value.replace('..', '')
-    # Replace any character not in safe whitelist (letters, digits, hyphen, underscore, dot)
-    value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
-    # Trim leading/trailing dots and underscores
-    value = value.strip('._')
-    # Keep room for deterministic suffix when normalization changes value
-    value = value[:240]
-    # Final safety: reject empty or traversal-like results
-    if not value or value in ('.', '..'):
-        value = '_'
-    # Prevent collisions when different raw inputs normalize to the same component
-    if value != raw_value:
-        suffix = hashlib.sha1(raw_value.encode("utf-8")).hexdigest()[:10]
-        value = f"{value}-{suffix}"
-    return value[:255]
-
-
-
 # Template bytecode cache directory for improved rendering performance
 TEMPLATE_CACHE_DIR = os.path.join(os.path.dirname(ABS_PATH), ".jinja2_cache")
 os.makedirs(TEMPLATE_CACHE_DIR, exist_ok=True)
@@ -229,6 +190,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
     the macro reads: the relay dict (shared and not modified while pages
     render), the call arguments, the page values, and for rows that show
     aroi_validation_icon the relay's membership in the page's fingerprint sets.
+    It also asks relays.has_page(), whose answers are fixed for the build.
     """
     icon_state = None
     if show_validation_icon and validation_icon_type not in {
@@ -252,6 +214,8 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
+ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
@@ -1141,6 +1105,8 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     validation or when sort modes change between generations.
     """
     files_written = 0
+    chart_writer = getattr(relay_set, 'chart_writer', None)
+    chart_periods = chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else {}
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1187,6 +1153,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
             template_args = dict(variant_args)
             template_args['relay_subset'] = visible_relays
             template_args['contact_has_ipv6'] = has_ipv6
+            template_args['contact_chart_periods'] = chart_periods
             template_args['page_number'] = page_number
             template_args['pagination'] = pagination_context(
                 base_filename, page_number, total_pages
@@ -1656,6 +1623,7 @@ class _RelayPageRenderer:
         self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
         self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
         self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+        self.chart_writer = getattr(relay_set, 'chart_writer', None)
 
     def write(self, relay):
         """Render one relay page to relay/FINGERPRINT/index.html."""
@@ -1674,6 +1642,12 @@ class _RelayPageRenderer:
         _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
                                 self.family_key_to_fps)
 
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
+        # with the relay's history charts beside it
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
+        os.makedirs(relay_dir, exist_ok=True)
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ({}, {})
+
         rendered = self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
             contact_display_data=contact_display_data,
@@ -1687,11 +1661,9 @@ class _RelayPageRenderer:
                 self.base_url, f"relay/{relay['fingerprint']}/index.html"
             ),
             page_number=1,
+            bandwidth_periods=bandwidth_periods,
+            uptime_periods=uptime_periods,
         )
-
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
         _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 

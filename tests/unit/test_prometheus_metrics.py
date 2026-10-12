@@ -451,3 +451,188 @@ def test_dns_error_and_unknown_emitted(tmp_path, make_relay, make_relay_set):
     content = (tmp_path / "metrics").read_text(encoding="utf-8")
     assert 'aeo1_exit_dns_errors_count{error_type="error"} 7' in content
     assert 'aeo1_exit_dns_errors_count{error_type="unknown"} 3' in content
+
+
+# ---------------------------------------------------------------------------
+# Upstream resolver metrics (metadata.resolvers, per-exit resolver queries)
+# ---------------------------------------------------------------------------
+
+_RESOLVER_FAMILIES = (
+    "aeo1_exit_dns_public_resolver_share_ratio",
+    "aeo1_exit_resolver_covered_relays_count",
+    "aeo1_exit_public_resolver_relays_count",
+    "aeo1_exit_dns_resolver_queries_count",
+)
+
+
+def _dns_with_resolvers(sample_dns_metadata, resolvers=_USE_DEFAULT):
+    """Sample DNS data with metadata.resolvers set (a full block by default)."""
+    data = sample_dns_metadata()
+    if resolvers is _USE_DEFAULT:
+        resolvers = {
+            "version": 1, "weighted": True, "exits_total": 2674, "exits_covered": 2670,
+            "exits_labelled": 2608, "exits_using_public": 512,
+            "public_share_pct": {"google": 10.5, "cloudflare": 7.99, "quad9": 2.0, "opendns": 0.0,
+                                 "ffmuc": 1.12, "all": 21.61},
+            "share_pct": {"google": 10.5, "cloudflare": 7.99, "quad9": 2.0, "opendns": 0.0, "ffmuc": 1.12,
+                          "local": 66.69, "other": 11.7, "unknown": 0.0},
+        }
+    data["metadata"]["resolvers"] = resolvers
+    return data
+
+
+def _resolver_relay(make_relay, fingerprint, queries, **kwargs):
+    """Exit relay fixture with exit_dns_health_resolver_queries set."""
+    relay = make_relay(fingerprint, **kwargs)
+    relay["exit_dns_health_resolver_queries"] = queries
+    return relay
+
+
+def _metric_lines(content, name):
+    """Sample lines of one metric family."""
+    return [line for line in content.split("\n") if line.startswith(name + "{") or line.startswith(name + " ")]
+
+
+def test_resolver_metrics_absent_emit_no_series(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                sample_aroi_metadata):
+    """Older reports and failed resolver runs add nothing to the metrics file."""
+    relays = [make_relay("AAAA"), _resolver_relay(make_relay, "BBBB", None), _resolver_relay(make_relay, "CCCC", {})]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
+    assert "resolver" not in content
+
+
+@pytest.mark.parametrize("resolvers", [None, "x", [], {}, {"version": 1}, {"public_share_pct": "x"}])
+def test_resolver_metrics_malformed_block_emits_nothing(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                        sample_aroi_metadata, resolvers):
+    """A malformed block adds no series and leaves the DNS section intact."""
+    dns = _dns_with_resolvers(sample_dns_metadata, resolvers)
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=dns)
+    assert "resolver" not in content
+    # The rest of the DNS section is still there
+    assert 'aeo1_exit_dns_failed{fingerprint="AAAA",familyid="",status="success"} 0' in content
+
+
+def test_resolver_aggregates(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
+    """A full block emits all six share ratios and both counts."""
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=_dns_with_resolvers(sample_dns_metadata))
+    assert _metric_lines(content, "aeo1_exit_dns_public_resolver_share_ratio") == [
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="google"} 0.105',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="cloudflare"} 0.0799',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="quad9"} 0.02',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="opendns"} 0.0',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="ffmuc"} 0.0112',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="all"} 0.2161',
+    ]
+    assert _metric_lines(content, "aeo1_exit_resolver_covered_relays_count") == [
+        "aeo1_exit_resolver_covered_relays_count 2670"]
+    assert _metric_lines(content, "aeo1_exit_public_resolver_relays_count") == [
+        "aeo1_exit_public_resolver_relays_count 512"]
+    # No exit has resolver queries here, so no per-relay family
+    assert "aeo1_exit_dns_resolver_queries_count" not in content
+
+
+def test_resolver_aggregates_partial(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                     sample_aroi_metadata):
+    """Missing providers are emitted as defined 0 defaults; missing counts are omitted."""
+    dns = _dns_with_resolvers(sample_dns_metadata, {
+        "public_share_pct": {"google": 12.5, "cloudflare": "8", "quad9": float("nan"), "all": 250},
+        "exits_covered": 10, "exits_using_public": "512",
+    })
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=dns)
+    assert _metric_lines(content, "aeo1_exit_dns_public_resolver_share_ratio") == [
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="google"} 0.125',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="cloudflare"} 0',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="quad9"} 0',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="opendns"} 0',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="ffmuc"} 0',
+        'aeo1_exit_dns_public_resolver_share_ratio{provider="all"} 1.0',
+    ]
+    assert _metric_lines(content, "aeo1_exit_resolver_covered_relays_count") == [
+        "aeo1_exit_resolver_covered_relays_count 10"]
+    assert "aeo1_exit_public_resolver_relays_count" not in content
+
+
+def test_resolver_cold_start_emits_counts_but_no_shares(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                       sample_aroi_metadata):
+    """Upstream's 0.0 placeholder shares before any exit is covered are not exported as real zeros."""
+    dns = _dns_with_resolvers(sample_dns_metadata, {
+        "exits_total": 2674, "exits_covered": 0, "exits_labelled": 0, "exits_using_public": 0,
+        "public_share_pct": dict.fromkeys(("google", "cloudflare", "quad9", "opendns", "ffmuc", "all"), 0.0),
+        "share_pct": dict.fromkeys(("google", "cloudflare", "quad9", "opendns", "ffmuc", "local", "other", "unknown"), 0.0),
+    })
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=dns)
+    assert "aeo1_exit_dns_public_resolver_share_ratio" not in content
+    assert "aeo1_exit_resolver_covered_relays_count 0" in content
+    assert "aeo1_exit_public_resolver_relays_count 0" in content
+
+
+def test_resolver_counts_without_shares(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                        sample_aroi_metadata):
+    """Counts are emitted even when the share block is missing."""
+    dns = _dns_with_resolvers(sample_dns_metadata, {"exits_covered": 7, "exits_using_public": 3})
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=dns)
+    assert "aeo1_exit_dns_public_resolver_share_ratio" not in content
+    assert "aeo1_exit_resolver_covered_relays_count 7" in content
+    assert "aeo1_exit_public_resolver_relays_count 3" in content
+
+
+def test_resolver_queries_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                    sample_aroi_metadata):
+    """Per-relay counts are emitted for known categories with valid numbers, sorted by fingerprint."""
+    relays = [
+        _resolver_relay(make_relay, "BBBB", {"local": 40.0}),
+        _resolver_relay(make_relay, "AAAA", {"google": 61.3, "local": 4.2}),
+        _resolver_relay(make_relay, "CCCC", {}),  # report has resolver data, none for this exit yet
+        _resolver_relay(make_relay, "DDDD", None),  # untested
+        _resolver_relay(make_relay, "EEEE", {"evil\"}": 1, "google": "x", "quad9": True, "other": 2,
+                                             "unknown": float("nan"), "local": 10 ** 400, "ffmuc": -1}),
+        _resolver_relay(make_relay, "FFFF", ["google"]),
+        _resolver_relay(make_relay, "GGGG", {"google": 30}, flags=["Guard", "Running"]),  # not an exit
+    ]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays,
+                           dns_data=_dns_with_resolvers(sample_dns_metadata), fp_to_family={"AAAA": "FAM"})
+    assert _metric_lines(content, "aeo1_exit_dns_resolver_queries_count") == [
+        'aeo1_exit_dns_resolver_queries_count{fingerprint="AAAA",familyid="FAM",provider="google"} 61.3',
+        'aeo1_exit_dns_resolver_queries_count{fingerprint="AAAA",familyid="FAM",provider="local"} 4.2',
+        'aeo1_exit_dns_resolver_queries_count{fingerprint="BBBB",familyid="",provider="local"} 40.0',
+        'aeo1_exit_dns_resolver_queries_count{fingerprint="EEEE",familyid="",provider="other"} 2.0',
+    ]
+
+
+def test_resolver_label_values_bounded_and_lowercase(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                     sample_aroi_metadata):
+    """Provider labels come only from the fixed lowercase sets."""
+    relays = [_resolver_relay(make_relay, "AAAA", {c: 1 for c in
+                                                   ("google", "cloudflare", "quad9", "opendns", "ffmuc",
+                                                    "local", "other", "unknown", "NextDNS", "Google")})]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays,
+                           dns_data=_dns_with_resolvers(sample_dns_metadata))
+    share = set(re.findall(r'aeo1_exit_dns_public_resolver_share_ratio\{provider="([^"]+)"\}', content))
+    queries = set(re.findall(r'aeo1_exit_dns_resolver_queries_count\{[^}]*provider="([^"]+)"\}', content))
+    assert share == {"google", "cloudflare", "quad9", "opendns", "ffmuc", "all"}
+    assert queries == {"google", "cloudflare", "quad9", "opendns", "ffmuc", "local", "other", "unknown"}
+
+
+def test_resolver_families_have_one_help_type_and_unique_prefixes(tmp_path, make_relay, make_relay_set,
+                                                                  sample_dns_metadata, sample_aroi_data):
+    """Each new family has one HELP/TYPE and no name prefixes another metric's."""
+    relays = [_resolver_relay(make_relay, "AAAA", {"google": 61.3}), _resolver_relay(make_relay, "BBBB", {"local": 9})]
+    rs = make_relay_set(relays, exit_dns_health_data=_dns_with_resolvers(sample_dns_metadata),
+                        aroi_validation_data=sample_aroi_data())
+    generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+
+    for family in _RESOLVER_FAMILIES:
+        assert content.count(f"# HELP {family} ") == 1, family
+        assert content.count(f"# TYPE {family} gauge") == 1, family
+        assert content.index(f"# TYPE {family} gauge") < content.index(f"\n{family}"), family
+
+    # Substring-based checks elsewhere must not match a new family by accident
+    names = {line.split()[2] for line in content.split("\n") if line.startswith("# TYPE ")}
+    for family in _RESOLVER_FAMILIES:
+        assert not [n for n in names if n != family and (family.startswith(n) or n.startswith(family))], family

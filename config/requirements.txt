@@ -1,1 +1,6 @@
 Jinja2>=2.11.2
+# PNG history charts (the default; --chart-format svg needs none of these). cairocffi also needs
+# the cairo library, and the chart text DejaVu Sans: apt install libcairo2 fonts-dejavu-core
+cairocffi>=1.2.0
+numpy>=1.17
+zlib-ng>=0.4.0  # optional: ~4x faster deflate

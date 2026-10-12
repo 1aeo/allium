@@ -328,14 +328,22 @@ class TestPatchingHelpers:
     @staticmethod
     @contextmanager
     def patch_worker_environment(temp_dir):
-        """Context manager to patch worker environment variables."""
+        """Context manager to point the worker cache, timestamps and state at temp_dir.
+
+        Cache and timestamp I/O goes through _cache_manager and
+        _timestamp_manager, built on CACHE_DIR at import, so those are
+        replaced as well as the path constants.
+        """
+        from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+
         cache_dir = os.path.join(temp_dir, 'cache')
         state_file = os.path.join(temp_dir, 'state.json')
-        
-        with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
-             patch('allium.lib.workers.STATE_FILE', state_file):
-            # Create directories
-            os.makedirs(cache_dir, exist_ok=True)
+
+        with patch('allium.lib.workers.DATA_DIR', temp_dir), \
+             patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+             patch('allium.lib.workers.STATE_FILE', state_file), \
+             patch('allium.lib.workers._cache_manager', create_cache_manager(cache_dir)), \
+             patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(cache_dir)):
             yield cache_dir, state_file
 
 
