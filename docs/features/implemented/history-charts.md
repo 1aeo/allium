@@ -49,11 +49,15 @@ view with JavaScript on, but add bytes at Safest, where hidden `<img>`s load
 anyway.
 
 PNG needs cairocffi and numpy (`config/requirements.txt`, where zlib-ng makes
-deflate ~4x faster) plus the cairo library (`apt install libcairo2`).
-`allium.py` checks before fetching anything: without them it writes SVG and
-says so, or stops when `--chart-format png` was asked for. Without DejaVu Sans
-(`fonts-dejavu-core`) cairo draws the text in another font; `allium.py` warns
-when fontconfig's `fc-match` is installed to check.
+deflate ~4x faster) plus the cairo library and the DejaVu Sans font, which pip
+cannot install (`sudo apt install libcairo2 fonts-dejavu-core`; Debian/Ubuntu's
+own python3 takes all of them from apt, see the README's PNG charts section).
+`allium.py` checks before fetching anything (`lib/optional_deps.py`): without
+them it writes SVG, or stops when `--chart-format png` was asked for, and prints
+the commands that install them for the Python it runs on, at the start of the
+run and again at the end. With `--progress` it reports the cairocffi and numpy
+versions it found. Without DejaVu Sans cairo draws the text in another font;
+`allium.py` warns when fontconfig's `fc-match` is installed to check.
 
 ## Where they are written
 

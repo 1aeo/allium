@@ -133,6 +133,13 @@ done
 echo ""
 echo "🎉 Setup complete! Your Tor metrics site is ready."
 echo ""
+# PNG charts (the default) also need the cairo library and the DejaVu Sans font: system packages pip cannot install
+if ! python3 -c "import cairocffi, numpy" 2>/dev/null; then
+    echo "⚠️  PNG charts need the cairo library, which pip cannot install; until it is installed, allium writes SVG charts."
+    echo "💡 On Debian/Ubuntu: sudo apt install libcairo2 fonts-dejavu-core"
+    echo "💡 Or keep SVG charts without the notice: python3 $ALLIUM_PY_PATH --chart-format svg"
+    echo ""
+fi
 echo "📊 Generated files are in: ./www/"
 echo "🌐 To serve locally, run:"
 echo "   cd www && python3 -m http.server 8000"
