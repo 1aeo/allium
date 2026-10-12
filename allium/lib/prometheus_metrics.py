@@ -373,8 +373,8 @@ def _build_exit_dns_rows(relays: List[dict],
 def _write_resolver_aggregates(lines: _LineAppender, metadata) -> None:
     """Emit network-wide upstream resolver metrics from metadata.resolvers.
 
-    Emits nothing when the block is absent or unusable (older reports, failed runs),
-    so missing data never reads as a real zero.
+    Emits nothing when the block is absent or unusable (older reports, failed runs), and no
+    shares when no exit was covered, so missing data never reads as a real zero.
     """
     summary = parse_resolver_summary(metadata)
     if summary is None:
@@ -383,8 +383,8 @@ def _write_resolver_aggregates(lines: _LineAppender, metadata) -> None:
     public_share = summary["public_share_pct"]
     if any(pct is not None for pct in public_share.values()):
         _emit_help_type(lines, "aeo1_exit_dns_public_resolver_share_ratio",
-                        "Estimated share of exit DNS lookups sent via a public resolver service, "
-                        "weighted by exit probability (0..1). provider ∈ {google,cloudflare,quad9,opendns,ffmuc,all}")
+                        "Estimated share of exit DNS lookups sent via a public resolver service, weighted by exit "
+                        "probability when available (0..1). provider ∈ {google,cloudflare,quad9,opendns,ffmuc,all}")
         for provider in RESOLVER_PROVIDERS + ("all",):
             pct = public_share[provider]
             _emit(lines, "aeo1_exit_dns_public_resolver_share_ratio", {"provider": provider},
@@ -395,7 +395,7 @@ def _write_resolver_aggregates(lines: _LineAppender, metadata) -> None:
         ("aeo1_exit_resolver_covered_relays_count", "exits_covered",
          "Exits with DNS success and enough sampled queries to count toward resolver shares"),
         ("aeo1_exit_public_resolver_relays_count", "exits_using_public",
-         "Exits whose primary upstream resolver is a public resolver service"),
+         "Exits with DNS success whose primary upstream resolver is a public resolver service"),
     ):
         if summary[key] is not None:
             _emit_help_type(lines, name, help_text)

@@ -219,6 +219,24 @@ def test_summary_partial_and_malformed_values():
     assert summary["weighted"] is None
 
 
+def test_summary_cold_start_shares_are_not_zeros():
+    """Before any exit is covered, upstream publishes 0.0 placeholders for every share."""
+    cold = dict(RESOLVERS, exits_covered=0, exits_labelled=0, exits_using_public=0,
+                public_share_pct=dict.fromkeys(RESOLVERS["public_share_pct"], 0.0),
+                share_pct=dict.fromkeys(RESOLVERS["share_pct"], 0.0))
+    summary = parse_resolver_summary({"resolvers": cold})
+    assert set(summary["public_share_pct"].values()) == {None}
+    assert set(summary["share_pct"].values()) == {None}
+    assert (summary["exits_total"], summary["exits_covered"], summary["exits_using_public"]) == (2674, 0, 0)
+
+    m = calculate_exit_dns_health_metrics(_report([], resolvers=cold))
+    preformat_network_health_template_strings(m)
+    assert m["exit_dns_health_resolvers_available"] is True
+    assert m["exit_dns_health_resolver_public_percentage_formatted"] == "n/a"
+    assert m["exit_dns_health_resolver_local_percentage_formatted"] == "n/a"
+    assert m["exit_dns_health_resolver_exits_covered_formatted"] == "0"
+
+
 def test_metrics_resolvers_present():
     m = calculate_exit_dns_health_metrics(_report([]))
     assert m["exit_dns_health_resolvers_available"] is True

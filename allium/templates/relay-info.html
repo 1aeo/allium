@@ -1330,7 +1330,7 @@ Country: unknown
                 {% endif %}
                 {% if resolver_total > 0 %}
                 <br><span class="al-text-small-muted" title="Share of this exit's estimated queries by resolver.">
-                    {% for category, count in relay.exit_dns_health_resolver_queries.items() %}{% set share = 100 * count / resolver_total %}{{ resolver_names.get(category, category) }} {{ "%.0f"|format(share) if share >= 1 else "<1" }}%{% if not loop.last %}, {% endif %}{% endfor %}
+                    {% for category, count in relay.exit_dns_health_resolver_queries.items() %}{% set share = 100 * count / resolver_total %}{{ resolver_names.get(category, category) }} {{ "<1" if share < 1 else (">99" if 99 < share < 100 else "%.0f"|format(share)) }}%{% if not loop.last %}, {% endif %}{% endfor %}
                     (~{{ "%.0f"|format(resolver_total) }} estimated queries)
                 </span>
                 {% endif %}

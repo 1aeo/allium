@@ -550,6 +550,21 @@ def test_resolver_aggregates_partial(tmp_path, make_relay, make_relay_set, sampl
     assert "aeo1_exit_public_resolver_relays_count" not in content
 
 
+def test_resolver_cold_start_emits_counts_but_no_shares(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                       sample_aroi_metadata):
+    """Upstream's 0.0 placeholder shares before any exit is covered are not exported as real zeros."""
+    dns = _dns_with_resolvers(sample_dns_metadata, {
+        "exits_total": 2674, "exits_covered": 0, "exits_labelled": 0, "exits_using_public": 0,
+        "public_share_pct": dict.fromkeys(("google", "cloudflare", "quad9", "opendns", "ffmuc", "all"), 0.0),
+        "share_pct": dict.fromkeys(("google", "cloudflare", "quad9", "opendns", "ffmuc", "local", "other", "unknown"), 0.0),
+    })
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
+                           [make_relay("AAAA")], dns_data=dns)
+    assert "aeo1_exit_dns_public_resolver_share_ratio" not in content
+    assert "aeo1_exit_resolver_covered_relays_count 0" in content
+    assert "aeo1_exit_public_resolver_relays_count 0" in content
+
+
 def test_resolver_counts_without_shares(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
                                         sample_aroi_metadata):
     dns = _dns_with_resolvers(sample_dns_metadata, {"exits_covered": 7, "exits_using_public": 3})

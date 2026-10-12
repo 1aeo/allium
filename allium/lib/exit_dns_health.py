@@ -138,8 +138,8 @@ def _parse_resolver(resolver) -> Optional[Dict]:
 def parse_resolver_summary(metadata) -> Optional[Dict]:
     """
     Validate metadata.resolvers, the network-wide resolver shares; None when absent or unusable.
-    Shares are percentages (0-100) weighted by exit probability. Missing or malformed
-    values are None, never 0, so a partial block does not read as real zeros.
+    Shares are percentages (0-100), weighted by exit probability unless 'weighted' is False.
+    Missing or malformed values are None, never 0, so a partial block does not read as real zeros.
     """
     resolvers = metadata.get('resolvers') if isinstance(metadata, dict) else None
     if not isinstance(resolvers, dict):
@@ -154,6 +154,10 @@ def parse_resolver_summary(metadata) -> Optional[Dict]:
         'weighted': resolvers.get('weighted') if isinstance(resolvers.get('weighted'), bool) else None,
     }
     summary.update({k: _as_count(resolvers.get(k)) for k in _RESOLVER_COUNT_FIELDS})
+    if summary['exits_covered'] == 0:
+        # No exit counted toward the shares (upstream cold start): its 0.0 shares are placeholders
+        summary['public_share_pct'] = dict.fromkeys(summary['public_share_pct'])
+        summary['share_pct'] = dict.fromkeys(summary['share_pct'])
     values = (list(summary['public_share_pct'].values()) + list(summary['share_pct'].values())
               + [summary[k] for k in _RESOLVER_COUNT_FIELDS])
     return summary if any(v is not None for v in values) else None

@@ -82,9 +82,9 @@ and failed resolver runs emit none of these series, never zeros. Additive: schem
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `aeo1_exit_dns_public_resolver_share_ratio` | `provider` | Share of exit DNS lookups sent via a public resolver service, weighted by exit probability (0..1) |
+| `aeo1_exit_dns_public_resolver_share_ratio` | `provider` | Share of exit DNS lookups sent via a public resolver service, weighted by exit probability when available (0..1); omitted while no exit is covered |
 | `aeo1_exit_resolver_covered_relays_count` | — | Exits with DNS success and enough sampled queries (5+ estimated) to count toward the shares |
-| `aeo1_exit_public_resolver_relays_count` | — | Exits whose primary resolver (named at 25+ estimated queries) is a public service |
+| `aeo1_exit_public_resolver_relays_count` | — | Exits with DNS success whose primary resolver (named at 25+ estimated queries) is a public service |
 | `aeo1_exit_dns_resolver_queries_count` | `fingerprint`, `familyid`, `provider` | Estimated queries from the exit by resolver, decayed (per relay; only resolvers with data) |
 
 `provider` values for `aeo1_exit_dns_public_resolver_share_ratio`: `google`, `cloudflare`, `quad9`, `opendns`, `ffmuc` (Freifunk München), `all`; all six are emitted whenever the share block is present  
