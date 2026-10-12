@@ -674,10 +674,12 @@ th[title]::after {
 .chart-period {
     scroll-margin-top: 80px;
 }
-/* On a relay page they sit above the bandwidth section's details: land on its chart card instead, as a chart's
-   own #bandwidth-<period> link does, rather than a screen above it. The details are 428-448 px tall from 992 px
-   wide, 559-739 px below that and 595-795 px under 390 px (measured on 300 relay pages); offsets for the
-   shortest put the card near the top, up to about 200 px lower where the details are taller, never past it. */
+/* On a relay page they sit above the bandwidth section's details (or, without bandwidth charts, the uptime
+   section's): land on its chart card instead, as a chart's own #bandwidth-<period> link does, rather than a
+   screen above it. The bandwidth details are 428-448 px tall from 992 px wide, 559-739 px below that and
+   595-795 px under 390 px (measured on 300 relay pages); the uptime ones 366, 580 from 576 px and 600 px below
+   that (178 of the 179 uptime-only pages). Offsets for the shortest put the card near the top, up to about
+   200 px lower where the details are taller, never past it. */
 .chart-period-bandwidth {
     scroll-margin-top: -544px;
 }
@@ -689,6 +691,19 @@ th[title]::after {
 @media (min-width: 992px) {
     .chart-period-bandwidth {
         scroll-margin-top: -418px;
+    }
+}
+.chart-period-uptime {
+    scroll-margin-top: -590px;
+}
+@media (min-width: 576px) {
+    .chart-period-uptime {
+        scroll-margin-top: -570px;
+    }
+}
+@media (min-width: 992px) {
+    .chart-period-uptime {
+        scroll-margin-top: -356px;
     }
 }
 .chart-period:target ~ * .chart-hero {

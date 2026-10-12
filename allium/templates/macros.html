@@ -647,7 +647,7 @@
 
 {#- Targets for #1m/#6m/#1y/#5y, which switch every chart on the page. Place them before
     (as earlier siblings of an ancestor of) all the page's chart_history blocks; ``above`` adds a class for
-    the CSS of where they sit (the relay page's bandwidth details). -#}
+    the CSS of where they sit (above the relay page's bandwidth or, without it, uptime details). -#}
 {% macro chart_period_anchors(above='') %}
 {% for period in chart_spans %}<span id="{{ period }}" class="chart-period{{ ' chart-period-' ~ above if above }}"></span>{% endfor %}
 {% endmacro %}

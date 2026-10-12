@@ -81,7 +81,8 @@ when fontconfig's `fc-match` is installed to check.
   the bandwidth chart card, past the bandwidth details above it: fixed offsets
   per width range for the shortest details (428 px from 992 px wide, 559 px
   below, 595 px under 390 px) put the card near the top, or up to about 200 px
-  lower on a phone, never past it.
+  lower on a phone, never past it. A relay page with only uptime charts does
+  the same for the uptime card (366 / 580 / 600 px from 992 / 576 / 0 px).
 - `--no-charts` skips them.
 
 ## Content rules

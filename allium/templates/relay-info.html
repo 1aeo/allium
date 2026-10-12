@@ -790,7 +790,7 @@ Country: unknown
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
-{% if uptime_periods and not bandwidth_periods %}{{ chart_period_anchors() }}{% endif %}
+{% if uptime_periods and not bandwidth_periods %}{{ chart_period_anchors('uptime') }}{% endif %}
 <section id="uptime" class="section-box relay-section">
 <span id="first-last-seen" class="compat-anchor"></span>
 <h4 style="margin-top: 0; margin-bottom: 12px;">
