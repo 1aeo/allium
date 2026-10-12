@@ -29,6 +29,9 @@ def test_page_wide_period_links_fall_back_to_the_default_chart():
     assert 'class="chart-spark chart-on-6m chart-spark-default chart-on-1m chart-on-5y"' in html
     anchors = ENV.from_string('{% from "macros.html" import chart_period_anchors %}{{ chart_period_anchors() }}')
     assert anchors.render() == "".join('<span id="%s" class="chart-period"></span>' % period for _key, period in PERIODS)
+    anchors = ENV.from_string('{% from "macros.html" import chart_period_anchors %}{{ chart_period_anchors("bandwidth") }}')
+    assert anchors.render() == "".join('<span id="%s" class="chart-period chart-period-bandwidth"></span>' % period
+                                       for _key, period in PERIODS)
 
 
 def test_charts_use_the_chart_format():

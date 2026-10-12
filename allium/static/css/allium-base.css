@@ -674,6 +674,14 @@ th[title]::after {
 .chart-period {
     scroll-margin-top: 80px;
 }
+/* On a relay page they sit above the bandwidth section's details, 428 px above its chart card wherever
+   nothing wraps (desktop widths; at 1024-1199 px a wrapped line can add 20): land on the card, as a chart's
+   own #bandwidth-<period> link does, rather than a screen above it. Narrower, the details' height varies. */
+@media (min-width: 1024px) {
+    .chart-period-bandwidth {
+        scroll-margin-top: -418px;  /* the card 10 px from the top */
+    }
+}
 .chart-period:target ~ * .chart-hero {
     display: none;
 }

@@ -647,7 +647,7 @@ Country: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
-{% if bandwidth_periods %}{{ chart_period_anchors() }}{% endif %}
+{% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
 <span id="bandwidth-capacity" class="compat-anchor"></span><span id="network-participation" class="compat-anchor"></span>
