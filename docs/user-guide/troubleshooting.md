@@ -54,6 +54,7 @@ The build goes on with SVG charts (an explicit `--chart-format png` stops instea
 commands for the Python that ran `allium.py`.
 
 **Solution**:
+
 ```bash
 # Debian/Ubuntu's own python3 (no virtualenv): every package from apt
 sudo apt install python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
