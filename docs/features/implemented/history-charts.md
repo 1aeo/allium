@@ -133,6 +133,10 @@ when fontconfig's `fc-match` is installed to check.
   A red line-and-dot legend entry, `Outside p2–p98`, explains them on the
   charts that draw them. A
   point with no neighbour to join (between gaps) is drawn as a short dash.
+- A relay that relays.py finds overloaded gets a legend entry with its newest
+  counted report: `currently overloaded · last report Sep 29, 22:00 UTC`
+  (just `overloaded · …` for a relay no longer running, whose verdict comes
+  from its last descriptor).
 - Family and peer medians are 1M only. A family's median is over the members
   of the relay's effective family (Onionoo's families are mutual declarations,
   so members can list different sets), and is drawn only when 3 or more members

@@ -207,17 +207,19 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average):
 
 def _overload_text(relay):
     """Legend text while the relay is overloaded (relays.py's verdict), with the newest report time among the
-    reports that verdict counts (a rate-limit report counts only when a limit was hit)."""
+    reports that verdict counts (a rate-limit report counts only when a limit was hit). "Currently" only while
+    it runs: an offline relay's verdict comes from its last descriptor."""
     if not relay.get("stability_is_overloaded"):
         return None
     facts = evaluate_overload(relay)
     stamps = [stamp for stamp in (facts["general_ts"] if facts["general_active"] else None,
                                   facts["ratelimits"].get("timestamp") if facts["ratelimit_hit"] else None,
                                   facts["fd_timestamp"]) if stamp]
+    state = "overloaded" if relay.get("running") is False else "currently overloaded"
     if not stamps:
-        return "currently overloaded"
+        return state
     last = datetime.fromtimestamp(max(stamps) / 1000.0, timezone.utc)
-    return "currently overloaded · last report {}, {:%H:%M} UTC".format(format_day(last), last)
+    return "{} · last report {}, {:%H:%M} UTC".format(state, format_day(last), last)
 
 
 class ChartWriter(object):

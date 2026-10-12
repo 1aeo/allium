@@ -333,6 +333,10 @@ def test_overload_legend_and_spike_callout(tmp_path):
     charts.relay(busy, str(tmp_path))
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert "currently overloaded · last report Sep 29, 22:00 UTC" in lines
+    # An offline relay's verdict comes from its last descriptor: not "currently".
+    gone = relay("A", running=False, **OVERLOADED)
+    writer([gone], {"A": history(SPIKE, [100] * 21)}).relay(gone, str(tmp_path))
+    assert "overloaded · last report Sep 29, 22:00 UTC" in texts(tmp_path / "bandwidth-1m.svg")
     assert "Sep 11 · write/read 4.00 · off the 1.70 scale" in lines
     assert "Last restarted  Sep 21" in lines  # inside the axis' right margin, so still marked
     # Off the scale, the lone day is marked by the edge triangle, not a dot.
