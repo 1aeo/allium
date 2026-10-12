@@ -22,6 +22,7 @@ NOWHERE = "B" * 40     # country "??", empty platform, alone in its AS
 UNLISTED = "C" * 40    # no country or platform in Onionoo's details
 MORIA1 = "D" * 40
 DIZUM = "E" * 40       # an authority in "??"
+RENAMED = "F" * 40     # platform "_Linux", which the page writer would rename
 CATEGORY_HREF = re.compile(r'href="([^"]*\b(?:%s)/[^"]*)"' % "|".join(SORTED_PAGE_KEYS))
 
 
@@ -68,6 +69,7 @@ def site(tmp_path_factory):
                    first_seen="2017-10-14 00:00:00", country="us", country_name="United States"),
             _relay(DIZUM, "dizum", flags=["Authority", "Running", "Valid"],
                    country="??", country_name=None, **{"as": "AS300"}),
+            _relay(RENAMED, "renamed", platform="Tor 0.4.8.10 on _Linux"),
         ],
     }
     relay_set = Relays(
@@ -95,8 +97,8 @@ def test_has_page_is_true_only_for_written_category_pages(site):
     assert relay_set.has_page("country", "DE")
     assert relay_set.has_page("platform", "Linux")
     assert relay_set.has_page("first_seen", "2017-10-14")
-    for category, key in (("country", "??"), ("country", None), ("platform", ""),
-                          ("platform", None), ("first_seen", "20171014"), ("nonexistent", "DE")):
+    for category, key in (("country", "??"), ("country", None), ("platform", ""), ("platform", None),
+                          ("platform", "_Linux"), ("first_seen", "20171014"), ("nonexistent", "DE")):
         assert not relay_set.has_page(category, key), (category, key)
     for category in ("country", "platform", "first_seen"):
         for key in relay_set.json["sorted"][category]:
@@ -135,6 +137,16 @@ def test_relay_page_shows_unknown_country_and_platform_as_text(site):
     assert '<a href="../../platform/Linux/">Linux</a>' in known
     assert "Country: unknown" not in known
     assert "Platform: unknown" not in known
+
+
+def test_a_key_the_writer_would_rename_has_no_page_or_link(site):
+    """A platform written to a renamed folder ("_Linux" -> "Linux-<hash>") is shown as text."""
+    assert os.listdir(site.out / "platform") == ["Linux"]
+
+    html = _read(site, "relay", RENAMED, "index.html")
+    assert "platform/_Linux" not in html
+    assert "Platform: unknown" in html
+    assert "Tor 0.4.8.10 on _Linux" in html  # the reported platform is still shown
 
 
 def test_relay_rows_and_listings_show_unknown_as_text(site):
