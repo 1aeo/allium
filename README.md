@@ -90,7 +90,7 @@ cd www && python3 -m http.server 8000
 
 - Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
 - Multiprocessing page generation (configurable via `--workers`)
-- Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
+- Downtime filtering: excludes relays not seen for >7 days before the Onionoo snapshot, including relays Onionoo still marks as running (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
 
 </details>
@@ -180,7 +180,7 @@ Pre-computed analysis attached to contact pages:
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
 | `--progress` | `false` | Show detailed progress with memory usage |
 | `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
-| `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
+| `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 
 **Examples**:
