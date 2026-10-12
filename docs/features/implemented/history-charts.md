@@ -22,9 +22,9 @@ most 4 levels (of 255); a few antialiased edge pixels move further, so it looks
 the same. `--chart-colors full` keeps every shade instead
 (RGBA, every row "Up"-filtered with numpy).
 
-Per chart at 2x with 4 workers busy: about 10.5 ms and 50 KB (full color: 10 ms
+Per chart at 2x with 4 workers busy: about 10.5 ms and 53 KB (full color: 10 ms
 and 150 KB), against about 70 ms to rasterize the SVG text with CairoSVG at the
-same size, and about 1 ms and 9 KB for SVG (`--chart-format svg`).
+same size, and about 1 ms and 10 KB for SVG (`--chart-format svg`).
 
 PNGs are cached in `data/cache/charts` under a hash of their drawing calls
 (`Svg.ops`, exactly what cairo replays; the SVG text rounds them to 0.1 px), the
@@ -33,7 +33,7 @@ change since the last build is linked, not drawn: most 6M/1Y/5Y charts, and 1M
 charts between Onionoo's 4-hourly points (about 85% of all charts an hour
 apart). A hit keeps the file's modification time, so `rsync -a` and HTTP caches
 see it unchanged. `ChartWriter.sweep()` then deletes what the build did not
-use, so the cache holds one copy of the current charts (about 3.4 GB; 9.4 GB in
+use, so the cache holds one copy of the current charts (about 3.6 GB; 9.4 GB in
 full color); an SVG build (`--chart-format svg`) deletes all of them. The cache
 folder is named after `raster.VERSION` (replay code, background, palette, cairo
 version, fonts found), so a change there starts a fresh cache. On 4 cores a full build
@@ -41,8 +41,8 @@ took 4m30s with an empty cache, then 1m31s-1m33s an hour later, or 1m56s when
 Onionoo had added a 4-hourly point (SVG: about 1m45s; full-color 1x PNG drawn
 by CairoSVG took 9m41s).
 
-The cost is page weight: a relay page with all eight charts loads about 405 KB
-of PNG (1.2 MB in full color) against 72 KB of SVG, and with JavaScript off (Tor
+The cost is page weight: a relay page with all eight charts loads about 415 KB
+of PNG (1.2 MB in full color) against 80 KB of SVG, and with JavaScript off (Tor
 Browser's Safest) `loading="lazy"` is ignored, so all of it loads with the page.
 Thumbnails use the same files: separate small thumbnails would cut the first
 view with JavaScript on, but add bytes at Safest, where hidden `<img>`s load

@@ -185,9 +185,9 @@ Pre-computed analysis attached to contact pages:
 | `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
-| `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) and the cairo library (`apt install libcairo2 fonts-dejavu-core`; DejaVu Sans keeps the chart font), without them the default writes SVG with a warning and an explicit `--chart-format png` stops; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~9 KB per chart, no extra packages, blank at Safest |
+| `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) and the cairo library (`apt install libcairo2 fonts-dejavu-core`; DejaVu Sans keeps the chart font), without them the default writes SVG with a warning and an explicit `--chart-format png` stops; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~10 KB per chart, no extra packages, blank at Safest |
 | `--chart-scale` | `2` | PNG resolution: `2` (2160 px wide, sharp on HiDPI screens), `1.5` or `1`; the page lays charts out at 1080 px either way |
-| `--chart-colors` | `64` | PNG colors: `64` (a fixed palette, ~50 KB a chart at 2x, looks the same) or `full` (~150 KB) |
+| `--chart-colors` | `64` | PNG colors: `64` (a fixed palette, ~53 KB a chart at 2x, looks the same) or `full` (~150 KB) |
 
 **Examples**:
 
