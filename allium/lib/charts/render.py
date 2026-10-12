@@ -339,8 +339,8 @@ class ChartWriter(object):
     def relay(self, relay, directory):
         """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts; return their ``{period: height}`` maps
         (drawn periods only), bandwidth first."""
-        # A relay no longer running gets no more bandwidth history: its axes run on to relays_published, showing
-        # the gap (its uptime charts draw the time since at 0%, as Onionoo counts it).
+        # A relay no longer running gets no more bandwidth history (see _end; its uptime charts draw the time since
+        # at 0%, as Onionoo counts it).
         stopped = relay.get("running") is False
         common = dict(advertised=(relay.get("advertised_bandwidth") or 0) * MBIT,
                       bands=bands_for_role(role_from_flags(relay.get("flags"))),
@@ -355,11 +355,20 @@ class ChartWriter(object):
                    for key, period in PERIODS)
         return {period: height for period, height in heights if height}
 
+    def _end(self, series, stopped):
+        """relays_published, where a bandwidth chart's time axis runs on to so that a missing end shows as a gap: for
+        a relay no longer running, or a history that ended over two slots and a day before it (a stale Onionoo
+        block); None for a running relay's history, which only lags Onionoo's by a day or so."""
+        ts, interval = series[0], series[3]
+        if self.published and (stopped or self.published - ts[-1] > timedelta(days=1, seconds=2 * interval)):
+            return self.published
+        return None
+
     def _relay_bandwidth(self, relay, common, stopped, key, period):
         series = throughput(self.bandwidth.get(relay["fingerprint"]), key, self._since(period))
         if not series:
             return None
-        end = self.published if stopped else None
+        end = self._end(series, stopped)
         if period != "1m":  # peer and family medians are 1M only
             return bandwidth_chart(period, series, end=end, **common)
         family_n, family = self.family_medians.get(family_key(relay), (0, {}))
@@ -397,6 +406,5 @@ class ChartWriter(object):
             traffic[role_from_flags(relay.get("flags"))] += carried
         bands = bands_for_role(max(sorted(traffic), key=traffic.get))
         advertised = sum(relay.get("advertised_bandwidth") or 0 for relay, _carried in summed) * MBIT
-        # Every member stopped: show the gap up to relays_published, as for a relay.
-        end = None if any(relay.get("running") is not False for relay in members) else self.published
+        end = self._end(series, all(relay.get("running") is False for relay in members))  # as for a relay
         return bandwidth_chart(period, series, advertised, bands, identity, operator=True, end=end)

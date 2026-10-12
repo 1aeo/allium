@@ -111,7 +111,9 @@ when fontconfig's `fc-match` is installed to check.
   the consensus: for a relay no longer running (an operator with none
   running), the time axis runs on to that end, so the outage shows as a gap
   rather than a line reaching the right edge. A running relay's history only
-  lags Onionoo's by a day or so; its axis ends just past its last point.
+  lags Onionoo's by a day or so; its axis ends just past its last point,
+  unless the history ended over two slots and a day earlier (a stale Onionoo
+  block), which shows as a gap too.
 - Uptime charts use Onionoo's own window (`uptime_utils.block_window`: one
   calendar period ending at the latest consensus, on Onionoo's slot grid, taken
   from the uptime document's `relays_published`). An offline relay's history

@@ -136,9 +136,23 @@ def test_a_history_that_stopped_leaves_a_gap_up_to_the_window_end(tmp_path):
     # Its uptime chart draws the 54 slots of Onionoo's window after its last one at 0%, as Onionoo counts them,
     # and the page's figure for them: 120 of 174 slots up.
     assert "Average 69.0%  ·  Onionoo Running flag" in texts(tmp_path / "uptime-1m.svg")
-    # A running relay whose bandwidth history ends as early only lags behind Onionoo: no gap.
-    charts.relay(relay("A"), str(tmp_path))
-    assert "Sep 29" not in texts(tmp_path / "bandwidth-1m.svg")
+    # A running relay's history only lags behind Onionoo by a day or two: its axis ends just past it, no gap. One
+    # that ended 10 days before relays_published is a stale block: the gap shows, as for a relay no longer running.
+    for days, gap in ((28, False), (20, True)):
+        charts = writer([relay("A")], {"A": history([100] * days)})
+        charts.relay(relay("A"), str(tmp_path))
+        write = [p.get("d") for p in ET.parse(tmp_path / "bandwidth-1m.svg").iter("{http://www.w3.org/2000/svg}path")
+                 if p.get("stroke") == GREEN]
+        last = max(float(x) for d in write for x in re.findall(r"[ML]([\d.]+) ", d))
+        assert (last < LEFT + PLOT_WIDTH * 0.9) is gap
+    # An operator's axis runs on only when every member stopped.
+    for running, gap in ((False, True), (None, False)):
+        members = [relay("A", running=False), relay("B", running=running)]
+        charts = writer(members, {"A": history([100] * 28), "B": history([100] * 28)})
+        charts.contact([0, 1], str(tmp_path))
+        write = [p.get("d") for p in ET.parse(tmp_path / "bandwidth-1m.svg").iter("{http://www.w3.org/2000/svg}path")
+                 if p.get("stroke") == GREEN]
+        assert (max(float(x) for d in write for x in re.findall(r"[ML]([\d.]+) ", d)) < LEFT + PLOT_WIDTH * 0.95) is gap
 
 
 def test_uptime_charts_use_the_uptime_documents_own_window(tmp_path):
