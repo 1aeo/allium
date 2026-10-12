@@ -1316,8 +1316,7 @@ Country: unknown
                 {% endif %}
             </dd>
             {% endif %}
-
-            {# None: the report has no resolver data; {}: no queries seen from this exit yet #}
+            {# Upstream resolver. None: the report has no resolver data; {}: no queries seen from this exit yet #}
             {% if relay.get('exit_dns_health_resolver_queries') is not none %}
             {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'other': 'Other', 'unknown': 'Unknown'} %}
             {% set resolver_total = relay.exit_dns_health_resolver_queries.values()|sum %}
