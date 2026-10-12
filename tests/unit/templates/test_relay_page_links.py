@@ -20,6 +20,7 @@ DROPPED = "C" * 40     # in Onionoo's details, not seen for 30 days
 UNKNOWN = "D" * 40     # not in Onionoo's details at all
 INDIRECT_UNKNOWN = "E" * 40
 MORIA1 = "1A25C6358DB91342AA51720A5038B72742732498"  # relay fingerprint, not V3 key
+OLD_MORIA1 = "9695DFC35FFEB861329B9F1AB04C46397020CE31"  # its identity before a key change
 NOT_IN_NETWORK = "(not in the network)"
 
 
@@ -52,12 +53,15 @@ def _render_relay_pages(tmp_path):
         "relays_published": PUBLISHED,
         "relays": [
             _relay(OWNER, "owner",
-                   effective_family=[OWNER, KEPT],
+                   effective_family=[OWNER, KEPT, DROPPED],
                    alleged_family=[KEPT, DROPPED, UNKNOWN, "nicknameonly"],
                    indirect_family=[INDIRECT_UNKNOWN]),
             _relay(KEPT, "kept", effective_family=[OWNER, KEPT], indirect_family=[OWNER]),
             _relay(DROPPED, "dropped", last_seen="2026-09-11 12:00:00", running=False),
             _relay(MORIA1, "moria1", flags=["Authority", "Running", "Valid"]),
+            # Onionoo keeps the old identity, with its last flags, for a week
+            _relay(OLD_MORIA1, "moria1", last_seen="2026-10-09 12:00:00", running=False,
+                   flags=["Authority", "Running", "Valid"], observed_bandwidth=500_000),
         ],
     }
     relay_set = Relays(
@@ -68,7 +72,7 @@ def _render_relay_pages(tmp_path):
         mp_workers=0,
     )
     relay_set.enrich_with_api_data()
-    assert {r["fingerprint"] for r in relay_set.json["relays"]} == {OWNER, KEPT, MORIA1}
+    assert {r["fingerprint"] for r in relay_set.json["relays"]} == {OWNER, KEPT, MORIA1, OLD_MORIA1}
 
     relays = {r["fingerprint"]: r for r in relay_set.json["relays"]}
     # Authority votes as CollecTor reports them: keyed by V3 signing key
@@ -84,8 +88,10 @@ def _render_relay_pages(tmp_path):
     })
 
     # Exit DNS health first hops come from an external API
-    relays[OWNER].update(exit_dns_health_status="success", exit_dns_health_first_hop=DROPPED)
-    relays[KEPT].update(exit_dns_health_status="success", exit_dns_health_first_hop=OWNER.lower())
+    relays[OWNER].update(exit_dns_health_status="success", exit_dns_health_first_hop=DROPPED,
+                         exit_dns_health_first_hop_nickname="dropped")
+    relays[KEPT].update(exit_dns_health_status="success", exit_dns_health_first_hop=OWNER.lower(),
+                        exit_dns_health_first_hop_nickname="owner", exit_dns_health_first_hop_country="de")
 
     page_writer.write_relay_info(relay_set)
     return tmp_path / "relay"
@@ -118,6 +124,8 @@ def test_effective_and_indirect_members_use_the_same_rule(tmp_path):
     effective = _section(owner, "mf-effective", "mf-alleged")
     assert f"{OWNER} (this relay)" in effective
     assert f'<a href="../{KEPT}/">{KEPT}</a>' in effective
+    assert f"../{DROPPED}/" not in effective
+    assert f'{DROPPED} <span class="al-status-muted"' in effective
 
     indirect = owner[owner.index('id="mf-indirect"'):]
     indirect = indirect[:indirect.index("</dl>")]
@@ -131,10 +139,11 @@ def test_authority_votes_link_the_authority_relay_page(tmp_path):
     relay_dir = _render_relay_pages(tmp_path)
     owner = _page(relay_dir, OWNER)
 
-    assert f'href="../../relay/{MORIA1}/"' in owner
+    assert re.search(rf'<a href="\.\./\.\./relay/{MORIA1}/"[^>]*>\s*<strong>moria1\b', owner)
+    assert f"relay/{OLD_MORIA1}/" not in owner
     for v3_key in AUTHORITIES_BY_NAME.values():
         assert v3_key not in owner
-    assert "<strong>bastet (US)</strong>" in owner  # shown, no page to link
+    assert re.search(r'<td>\s*<strong>bastet\b', owner)  # shown, no page to link
 
 
 def test_no_relay_page_links_a_missing_relay_page(tmp_path):
@@ -151,7 +160,14 @@ def test_no_relay_page_links_a_missing_relay_page(tmp_path):
 def test_exit_dns_first_hop_links_only_relays_with_a_page(tmp_path):
     relay_dir = _render_relay_pages(tmp_path)
 
-    owner = _page(relay_dir, OWNER)
-    assert f"../{DROPPED}/" not in owner
-    assert re.search(rf'>{DROPPED}</span> <span class="al-status-muted"[^>]*>{re.escape(NOT_IN_NETWORK)}', owner)
-    assert f'<a href="../{OWNER}/" title="Guard relay used to build test circuit"' in _page(relay_dir, KEPT)
+    def first_hop(fingerprint):
+        html = _page(relay_dir, fingerprint)
+        start = html.index("<dt>First Hop</dt>")
+        return html[start:html.index("</dd>", start)]
+
+    dropped = first_hop(OWNER)
+    assert f"../{DROPPED}/" not in dropped
+    assert re.search(rf'dropped\s+<span [^>]*>{DROPPED}</span> <span class="al-status-muted"[^>]*>'
+                     rf'{re.escape(NOT_IN_NETWORK)}', dropped)
+    assert re.search(rf'owner \(DE\)\s+<a href="\.\./{OWNER}/" title="Guard relay used to build test circuit"',
+                     first_hop(KEPT))

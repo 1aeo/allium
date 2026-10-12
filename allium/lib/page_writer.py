@@ -1637,10 +1637,14 @@ class _RelayPageRenderer:
         # relays it doesn't list or the downtime filter dropped, and vote
         # files name authorities by V3 key, so links are checked against these.
         self.relay_page_fps = frozenset(relay["fingerprint"] for relay in relays)
-        # Vote file authority name (lowercase nickname) -> relay fingerprint
+        # Vote file authority name (lowercase nickname) -> relay fingerprint.
+        # After an identity key change Onionoo lists the old identity too:
+        # the running, most recently seen relay is set last and wins.
+        authorities = sorted(
+            (relay for relay in relays if "Authority" in (relay.get("flags") or [])),
+            key=lambda relay: (bool(relay.get("running")), relay.get("last_seen") or ""))
         self.authority_page_fps = {
-            relay.get("nickname", "").lower(): relay["fingerprint"]
-            for relay in relays if "Authority" in (relay.get("flags") or [])
+            relay.get("nickname", "").lower(): relay["fingerprint"] for relay in authorities
         }
         self.template = ENV.get_template("relay-info.html")
         self.standard_contexts = StandardTemplateContexts(relay_set)

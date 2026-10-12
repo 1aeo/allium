@@ -1334,11 +1334,11 @@ Country: unknown
             <dd>
                 {% if relay.exit_dns_health_first_hop_nickname %}{{ relay.exit_dns_health_first_hop_nickname|escape }}{% endif %}
                 {% if relay.exit_dns_health_first_hop_country %} ({{ relay.exit_dns_health_first_hop_country|upper|escape }}){% endif %}
-                {% if relay.exit_dns_health_first_hop|upper in relay_page_fps -%}
+                {% if relay.exit_dns_health_first_hop|upper in relay_page_fps %}
                 <a href="../{{ relay.exit_dns_health_first_hop|upper|escape }}/" title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</a>
-                {%- else -%}
+                {% else %}
                 <span title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</span> <span class="al-status-muted" style="font-size: 11px;">(not in the network)</span>
-                {%- endif %}
+                {% endif %}
             </dd>
             {% endif %}
 
