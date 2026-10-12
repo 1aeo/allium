@@ -2,6 +2,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -14,7 +15,7 @@ from tests.unit.charts.fixtures import needs_png
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PNG = deps.FEATURES["png"]
 APT_ALL = "sudo apt install " + " ".join(PNG["apt"] + PNG["system"])  # Debian/Ubuntu's own python3
-APT_SYSTEM = "sudo apt install " + " ".join(PNG["system"])  # what pip cannot install
+SYSTEM_HINT = "💡 Then the system packages pip cannot install, on Debian/Ubuntu: sudo apt install " + " ".join(PNG["system"])
 WITHOUT = "💡 To build without them and without this notice: --chart-format svg (SVG charts) or --no-charts"
 
 
@@ -24,15 +25,25 @@ def read(*path):
 
 
 @pytest.fixture
-def debian(monkeypatch):
-    """Debian/Ubuntu's own python3, as cron runs it: apt's python3-* packages, no pip."""
+def managed(monkeypatch, tmp_path):
+    """A distribution's own python3 outside a virtualenv, marked EXTERNALLY-MANAGED: pip refuses it (PEP 668)."""
+    (tmp_path / "EXTERNALLY-MANAGED").write_text("[externally-managed]\n")
+    monkeypatch.setattr(deps, "sysconfig", SimpleNamespace(get_path=lambda name: str(tmp_path)))
+    monkeypatch.setattr(sys, "prefix", sys.base_prefix)
     monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != deps.DEBIAN_PACKAGES])
+
+
+@pytest.fixture
+def debian(managed, monkeypatch):
+    """Debian/Ubuntu's own python3, as cron runs it: apt's python3-* packages, no pip."""
     monkeypatch.setattr(sys, "path", sys.path + [deps.DEBIAN_PACKAGES])
 
 
 @pytest.fixture
 def venv(monkeypatch):
     monkeypatch.setattr(sys, "executable", "/srv/allium/venv/bin/python3")
+    monkeypatch.setattr(sys, "prefix", "/srv/allium/venv")
     monkeypatch.setattr(sys, "path", [p for p in sys.path if p != deps.DEBIAN_PACKAGES])
 
 
@@ -43,10 +54,23 @@ def test_debian_python_gets_one_apt_command(debian):
 
 def test_venv_gets_its_own_pip_then_apt_for_what_pip_cannot_install(venv):
     assert os.path.isabs(deps.REQUIREMENTS) and os.path.isfile(deps.REQUIREMENTS)
+    assert not deps.externally_managed()
     assert deps.install_hints("png") == [
         "💡 Install them for /srv/allium/venv/bin/python3: /srv/allium/venv/bin/python3 -m pip install -r "
-        + deps.REQUIREMENTS,
-        "💡 Then the system packages pip cannot install, on Debian/Ubuntu: sudo apt install libcairo2 fonts-dejavu-core",
+        + shlex.quote(deps.REQUIREMENTS),
+        SYSTEM_HINT,
+        WITHOUT]
+
+
+def test_other_externally_managed_python_gets_a_virtualenv_not_a_refused_pip(managed):
+    """Alpine's, Arch's or Homebrew's python3: pip refuses it too, and apt has none of its packages."""
+    assert deps.externally_managed()
+    venv_python = shlex.quote(os.path.join(deps.VENV, "bin", "python3"))
+    assert deps.install_hints("png") == [
+        "💡 pip refuses to install into /usr/bin/python3 (PEP 668): use the system package manager, or a virtualenv "
+        "whose python3 then runs allium.py: /usr/bin/python3 -m venv %s && %s -m pip install -r %s"
+        % (shlex.quote(deps.VENV), venv_python, shlex.quote(deps.REQUIREMENTS)),
+        SYSTEM_HINT,
         WITHOUT]
 
 
@@ -77,11 +101,34 @@ def test_installed_is_quiet_except_under_progress(monkeypatch, capsys):
     assert capsys.readouterr().out == "✅ PNG charts: cairocffi 1.7.1, numpy 2.2.4 found\n"
 
 
-def test_missing_keeps_the_first_line_of_the_error(monkeypatch):
-    def no_cairo(name, package):
-        raise OSError('no library called "cairo-2" was found\nno library called "cairo" was found')
-    monkeypatch.setattr(deps, "importlib", SimpleNamespace(import_module=no_cairo))
-    assert deps.missing("png") == 'no library called "cairo-2" was found'
+# cairocffi 1.7.1's errors on Debian 13, cut after the first file it tried to load
+NO_CAIRO = ('no library called "cairo-2" was found\nno library called "cairo" was found\n'
+            'no library called "libcairo-2" was found\n'
+            "cannot load library 'libcairo.so.2': libcairo.so.2: cannot open shared object file: No such file or "
+            "directory.  Additionally, ctypes.util.find_library() did not manage to locate a library called "
+            "'libcairo.so.2'\ncannot load library 'libcairo.2.dylib': libcairo.2.dylib: cannot open shared object file")
+NO_PIXMAN = ('no library called "cairo-2" was found\nno library called "libcairo-2" was found\n'
+             "cannot load library 'libcairo.so.2': libpixman-1.so.0: cannot open shared object file: No such file or "
+             "directory.  Additionally, ctypes.util.find_library() did not manage to locate a library called "
+             "'libcairo.so.2'\ncannot load library 'libcairo.2.dylib': libcairo.2.dylib: cannot open shared object file")
+
+
+@pytest.mark.parametrize("error, why", [
+    (OSError(NO_CAIRO), "cannot load library 'libcairo.so.2': libcairo.so.2: cannot open shared object file: "
+                        "No such file or directory"),
+    (OSError(NO_PIXMAN), "cannot load library 'libcairo.so.2': libpixman-1.so.0: cannot open shared object file: "
+                         "No such file or directory"),  # libcairo2 is installed, but one of its own libraries is not
+    (OSError('no library called "cairo-2" was found'), 'no library called "cairo-2" was found'),
+    (ImportError("Error importing numpy: you should not try to import numpy from\n        its source directory; "
+                 "please exit the numpy source tree, and relaunch\n        your python interpreter from there."),
+     "Error importing numpy: you should not try to import numpy from its source directory; please exit the numpy "
+     "source tree, and relaunch your python interpreter from there."),
+])
+def test_missing_says_why_on_one_line(monkeypatch, error, why):
+    def fail(name, package):
+        raise error
+    monkeypatch.setattr(deps, "importlib", SimpleNamespace(import_module=fail))
+    assert deps.missing("png") == why
 
 
 def test_missing_names_the_absent_module(monkeypatch):
@@ -105,14 +152,17 @@ def test_requirements_txt_files_every_package():
     assert listed == {name(p) for p in filed}, "file each package in allium/lib/optional_deps.py"
 
 
-@pytest.mark.parametrize("path", [("README.md",), ("config", "requirements.txt"),
-                                  ("docs", "user-guide", "troubleshooting.md"), ("setup.sh",)])
-def test_install_docs_give_the_same_commands(path):
+@pytest.mark.parametrize("path, system_python", [
+    (("README.md",), True), (("config", "requirements.txt"), True), (("docs", "user-guide", "troubleshooting.md"), True),
+    (("setup.sh",), False),  # this and the user guide's install steps always make a virtualenv
+    (("docs", "user-guide", "quick-start.md"), False), (("docs", "user-guide", "configuration.md"), False),
+])
+def test_install_docs_give_the_same_commands(path, system_python):
     """Where people install allium, the docs name what pip cannot install, and apt's packages for the system python3."""
-    text = read(*path)
-    assert APT_SYSTEM in text
-    if path != ("setup.sh",):  # setup.sh always makes a virtualenv
-        assert all(package in text for package in PNG["apt"])
+    apt = [line for line in read(*path).splitlines() if "sudo apt install" in line]
+    assert any(all(package in line for package in PNG["system"]) for line in apt)
+    if system_python:
+        assert any(all(package in line for package in PNG["apt"] + PNG["system"]) for line in apt)
 
 
 def test_the_way_out_uses_options_allium_accepts():
@@ -122,28 +172,33 @@ def test_the_way_out_uses_options_allium_accepts():
     assert 'choices=("png", "svg")' in source
 
 
-@pytest.mark.parametrize("options, code, shown", [
-    (["--chart-format", "png"], 1, "❌ PNG charts need cairocffi, numpy and the cairo library ("),
-    ([], 0, "⚠️ PNG charts need cairocffi, numpy and the cairo library ("),
-    (["--chart-format", "svg"], 0, None),
-    (["--no-charts"], 0, None),
+@pytest.mark.parametrize("options, code, shown, built", [
+    (["--chart-format", "png"], 1, "❌ PNG charts need cairocffi, numpy and the cairo library (", None),
+    ([], 0, "⚠️ PNG charts need cairocffi, numpy and the cairo library (", "charts=True chart_format=svg"),
+    (["--chart-format", "svg"], 0, None, "charts=True chart_format=svg"),
+    (["--no-charts"], 0, None, "charts=False"),
 ])
-def test_allium_checks_before_fetching(tmp_path, options, code, shown):
-    """allium.py with cairocffi unimportable, stopped where it would start fetching."""
+def test_allium_checks_before_fetching(tmp_path, options, code, shown, built):
+    """allium.py with cairocffi unimportable, run to the end with nothing fetched and the site generator stubbed."""
     script = ("import runpy, sys\n"
+              "from types import SimpleNamespace\n"
               "sys.path.insert(0, '.')\n"
               "sys.modules['cairocffi'] = None\n"
-              "import lib.coordinator\n"
-              "lib.coordinator.create_relay_set_with_coordinator = lambda *a, **k: sys.exit(0)\n"
+              "import lib.coordinator, lib.site_generator\n"
+              "lib.coordinator.create_relay_set_with_coordinator = lambda *a, **k: SimpleNamespace(json={'relays': []})\n"
+              "lib.site_generator.generate_site = lambda relay_set, args, log: print("
+              "'charts=%s chart_format=%s' % (args.charts, args.chart_format))\n"
               "sys.argv = ['allium.py'] + sys.argv[1:]\n"
               "runpy.run_path('allium.py', run_name='__main__')\n")
     out = tmp_path / "www"
     run = subprocess.run([sys.executable, "-c", script] + options + ["--out", str(out)],
                          cwd=os.path.join(ROOT, "allium"), capture_output=True, text=True, timeout=25)
     assert run.returncode == code, run.stderr
-    if shown is None:
-        assert "PNG charts" not in run.stdout + run.stderr
+    if code:  # an explicit png stops before making the output directory
+        assert shown in run.stderr and "--no-charts" in run.stderr
+        assert not out.exists() and "chart_format=" not in run.stdout
+    elif shown:  # before fetching, and again after the build, where cron mail and a log's tail end
+        before, after = run.stdout.split(built)
+        assert shown in before and shown in after and "--no-charts" in after
     else:
-        assert shown in (run.stderr if code else run.stdout)
-        assert "--no-charts" in (run.stderr if code else run.stdout)
-    assert out.exists() == (code == 0)  # an explicit png stops before making the output directory
+        assert built in run.stdout and "PNG charts" not in run.stdout + run.stderr

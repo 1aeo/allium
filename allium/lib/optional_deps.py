@@ -12,11 +12,13 @@ import importlib
 import os
 import shlex
 import sys
+import sysconfig
 
-# Absolute, so the pip command works from any directory (cron runs allium.py from allium/).
-REQUIREMENTS = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                                             "config", "requirements.txt"))
-REQUIRED = ("Jinja2",)  # check_dependencies() in allium.py
+ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# Absolute, so the commands work from any directory (cron runs allium.py from allium/).
+REQUIREMENTS = os.path.join(ROOT, "config", "requirements.txt")
+VENV = os.path.join(ROOT, "venv")  # where setup.sh makes one
+REQUIRED = ("Jinja2",)  # allium does not start without these
 SPEEDUPS = ("zlib-ng",)  # used when installed, skipped without a word
 # Debian and Ubuntu's own python3 imports apt's python3-* packages from here; a virtualenv does not.
 DEBIAN_PACKAGES = "/usr/lib/python3/dist-packages"
@@ -36,12 +38,22 @@ FEATURES = {
 
 
 def missing(feature):
-    """Why ``feature`` cannot run on this Python (the import error's first line), or None when it can."""
+    """Why ``feature`` cannot run on this Python, on one line, or None when it can."""
     try:
         importlib.import_module(FEATURES[feature]["probe"], __package__)
-    except (ImportError, OSError) as e:  # cairocffi's OSError lists every library name it tried, a line each
-        return (str(e).splitlines() or [type(e).__name__])[0]
+    except ImportError as e:
+        return " ".join(str(e).split()) or type(e).__name__
+    except OSError as e:  # cairocffi's: a line per library name it looked up, then why each file did not load
+        lines = str(e).splitlines() or [type(e).__name__]
+        why = [line for line in lines if not line.startswith("no library called")] or lines
+        return why[0].split(".  Additionally")[0]
     return None
+
+
+def externally_managed():
+    """True for a distribution's Python, outside a virtualenv, that refuses pip installs (PEP 668)."""
+    return sys.prefix == sys.base_prefix and os.path.isfile(
+        os.path.join(sysconfig.get_path("stdlib"), "EXTERNALLY-MANAGED"))
 
 
 def install_hints(feature):
@@ -50,8 +62,15 @@ def install_hints(feature):
     python = shlex.quote(sys.executable or "python3")
     if DEBIAN_PACKAGES in sys.path:  # pip is missing or refused here (PEP 668): apt has every package
         hints = ["Install them for %s: sudo apt install %s" % (python, " ".join(spec["apt"] + spec["system"]))]
-    else:  # a virtualenv, or a Python of its own
-        hints = ["Install them for %s: %s -m pip install -r %s" % (python, python, shlex.quote(REQUIREMENTS))]
+    else:
+        pip = "-m pip install -r " + shlex.quote(REQUIREMENTS)
+        if externally_managed():  # another distribution's python3 (Alpine, Arch) or Homebrew's
+            venv = shlex.quote(os.path.join(VENV, "bin", "python3"))
+            hints = ["pip refuses to install into %s (PEP 668): use the system package manager, or a virtualenv "
+                     "whose python3 then runs allium.py: %s -m venv %s && %s %s"
+                     % (python, python, shlex.quote(VENV), venv, pip)]
+        else:  # a virtualenv, or a Python of its own
+            hints = ["Install them for %s: %s %s" % (python, python, pip)]
         if spec["system"]:
             hints.append("Then the system packages pip cannot install, on Debian/Ubuntu: sudo apt install "
                          + " ".join(spec["system"]))
