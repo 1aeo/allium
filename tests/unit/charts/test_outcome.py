@@ -105,6 +105,8 @@ def test_identity_and_roles():
     assert operator_identity([{}, {"contact": "  tor@kllx.eu\n"}]) == "tor@kllx.eu  ·  2 relays"
     assert operator_identity([{"contact": "email:tor-node+shdrt06[]hobi.one abuse:tor-node+shdrt06[]hobi.one up"}]) == \
         "email:tor-node+shdrt06[]hobi.one…  ·  1 relay"
+    assert operator_identity([{"contact": "Jane   Doe\t<jane AT example DOT org>   runs  several relays here"}]) == \
+        "Jane Doe <jane AT example DOT org> runs several…  ·  1 relay"
     assert [role_from_flags(f) for f in (["Exit", "Guard"], ["Exit"], ["Guard"], [])] == \
         ["Exit+Guard", "Exit", "Guard", "Middle"]
     assert bands_for_role("Middle")["peers"] == "middle relays"

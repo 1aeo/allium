@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from allium.lib.charts.series import (
-    MBIT, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
+    MBIT, active_ratio, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
 )
 from allium.lib.uptime_utils import uptime_windows
 
@@ -36,6 +36,13 @@ def test_uptime_points_follow_onionoos_window_and_pad_a_stopped_history():
     assert min(uptime_points(older, "1_month", windows)) == first  # its first 12 slots predate the window
     assert sum(uptime_points(older, "1_month", windows).values()) == pytest.approx(174 * 100.0)
     assert uptime_points(stopped, "1_month", {}) == points(stopped, 100.0)
+
+
+def test_write_read_counts_on_days_averaging_50_kb_s_both_ways():
+    # The mean of write and read decides, not each direction: 90 and 20 KB/s average 55.
+    kbytes = 1000 * MBIT
+    assert active_ratio(90 * kbytes, 20 * kbytes) == pytest.approx(4.5)
+    assert active_ratio(70 * kbytes, 20 * kbytes) is None and active_ratio(100 * kbytes, 0) is None
 
 
 def test_throughput_keeps_timestamps_with_both_directions():

@@ -245,8 +245,21 @@ def test_out_of_band_days_on_either_side_of_the_band_each_get_a_dot():
     ts = [T0 + timedelta(days=i) for i in range(30)]
     ratios = [1.05] * 15 + [1.65, 0.95] + [1.05] * 13
     svg = bandwidth_chart("1m", (ts, [10 * r for r in ratios], [10.0] * 30, DAY), 100.0, bands_for_role("Guard"), "relay")
-    strip = svg.ops[[op[:2] for op in svg.ops].index(("clip", "r")):]
-    assert len([op for op in strip if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 2
+    start = [op[:2] for op in svg.ops].index(("clip", "r"))
+    assert len([op for op in svg.ops[start:] if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 2
+    # The legend explains them, its swatch a red line with a dot; on a chart only below p2 too.
+    ratios = [1.05] * 10 + [0.98, 0.95] + [1.05] * 18
+    svg = bandwidth_chart("1m", (ts, [10 * r for r in ratios], [10.0] * 30, DAY), 100.0, bands_for_role("Guard"), "relay")
+    start = [op[:2] for op in svg.ops].index(("clip", "r"))
+    assert "Outside p2–p98" in [op[3] for op in svg.ops if op[0] == "text"]
+    assert len([op for op in svg.ops[:start] if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 1
+    # Of those two days below p2 (0.99), only the one under 2 px past it is a sliver that gets a dot.
+    (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "r")]
+    near, far = (height * (0.99 - r) / 1.20 for r in ratios[10:12])
+    assert 1 < near < 2 < far
+    dots = [op[1] for op in svg.ops[start:] if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]
+    ys = [float(y) for y in re.findall(r"[ML][\d.]+ ([\d.]+)", dots[0])] if len(dots) == 1 else []
+    assert ys and abs(sum(ys) / len(ys) - (top + height * (1.70 - 0.98) / 1.20)) < 1
 
 
 def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():
@@ -289,6 +302,11 @@ def test_band_names_sit_in_their_own_ranges_beside_plain_grid_labels():
     # Exit's (0.96–1.02) is too thin to clear it, and holds 1.0: its name goes beside the label.
     exits = labels("Exit")
     assert abs(exits["p10–p90"][1] - exits["1.0"][1]) < 1 and exits["p10–p90"][0] < exits["1.0"][0] - 20
+    # ">p98" goes inside its own range, Guard's 1.58 up to the 1.70 scale top, clear of "1.5".
+    svg = bandwidth_chart("1m", (ts, [10.0] * 5, [10.0] * 5, DAY), 100.0, bands_for_role("Guard"), "relay")
+    (_x, top, _w, height), = [op[2:] for op in svg.ops if op[:2] == ("clip", "r")]
+    spot = next(op[2] for op in svg.ops if op[0] == "text" and op[3] == ">p98") - 12 * 0.35
+    assert top <= spot <= top + height * (1.70 - 1.58) / 1.20
 
 
 def test_overload_legend_and_spike_callout(tmp_path):
