@@ -21,6 +21,7 @@ KNOWN = "A" * 40
 NOWHERE = "B" * 40     # country "??", empty platform, alone in its AS
 UNLISTED = "C" * 40    # no country or platform in Onionoo's details
 MORIA1 = "D" * 40
+DIZUM = "E" * 40       # an authority in "??"
 CATEGORY_HREF = re.compile(r'href="([^"]*\b(?:%s)/[^"]*)"' % "|".join(SORTED_PAGE_KEYS))
 
 
@@ -63,6 +64,8 @@ def site(tmp_path_factory):
             unlisted,
             _relay(MORIA1, "moria1", flags=["Authority", "Running", "Valid"],
                    first_seen="2017-10-14 00:00:00", country="us", country_name="United States"),
+            _relay(DIZUM, "dizum", flags=["Authority", "Running", "Valid"],
+                   country="??", country_name=None, **{"as": "AS300"}),
         ],
     }
     relay_set = Relays(
@@ -102,6 +105,14 @@ def test_authority_age_links_its_first_seen_page(site):
     assert 'href="../first_seen/2017-10-14/"' in html
     assert "first_seen/20171014" not in html
     assert site.out.joinpath("first_seen", "2017-10-14", "index.html").is_file()
+
+
+def test_authority_in_unknown_country_shows_it_as_text(site):
+    html = _read(site, "misc", "authorities.html")
+
+    assert "country/??" not in html
+    assert 'href="../country/US/"' in html
+    assert re.search(r'bgp\.tools/AS300"[^>]*>[^<]*</a>\s*</td>\s*<td>\s*Unknown\s*</td>', html)
 
 
 def test_relay_page_shows_unknown_country_and_platform_as_text(site):
@@ -150,10 +161,13 @@ def test_no_page_links_a_missing_category_page(site):
             for href in hrefs:
                 if href.startswith(("http:", "https:")):
                     continue
+                page = os.path.relpath(os.path.join(dirpath, name), site.out)
                 path = href.split("#", 1)[0]
+                # normpath would fold an empty key (platform//) into the category directory
+                assert "//" not in path, (page, href)
                 base = str(site.out) if path.startswith("/") else dirpath
                 target = os.path.normpath(os.path.join(base, path.lstrip("/")))
-                assert os.path.isdir(target) or os.path.isfile(target), (
-                    os.path.relpath(os.path.join(dirpath, name), site.out), href)
+                assert os.path.isfile(target) or os.path.isfile(os.path.join(target, "index.html")), (
+                    page, href)
                 checked += 1
     assert checked > 100
