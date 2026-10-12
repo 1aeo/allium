@@ -13,8 +13,9 @@ import os
 import pickle
 import re
 import time
+from html.parser import HTMLParser
 from shutil import rmtree
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
@@ -46,7 +47,7 @@ from .operator_analysis import (
 )
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
-from .search_discovery import _head_signals
+from .search_discovery import MAX_HEAD_CHARS
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
 from .file_io_utils import sanitize_path_component as _sanitize_path_component
@@ -1076,6 +1077,10 @@ def get_detail_page_context(relay_set, category, value):
 # Paginated and sorted contact pages: page-N.html, by-<mode>[-page-N].html
 _VANITY_PAGE_NAME = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
 
+# skeleton.html has put this comment in the <head> of every page allium
+# renders since 2020, vanity copies included
+_ALLIUM_SOURCE_COMMENT = "source: metrics.torproject.org"
+
 # A vanity folder is named after a lowercased, sanitized AROI domain, so it
 # has a dot and a final label starting with a letter. Core site folders
 # (relay, contact, family, as, country, misc, static, ...) have no dot and
@@ -1088,18 +1093,51 @@ def _is_vanity_page_file(filename):
     return filename in CONTACT_SORT_FILE_MAP.values() or bool(_VANITY_PAGE_NAME.match(filename))
 
 
+class _VanityHeadParser(HTMLParser):
+    """Collect a page head's canonical links and whether allium's source comment is there."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.canonicals = []
+        self.from_allium = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "link" and "canonical" in (attrs.get("rel") or "").lower().split() and attrs.get("href"):
+            self.canonicals.append(attrs["href"])
+
+    def handle_comment(self, data):
+        self.from_allium = self.from_allium or data.strip() == _ALLIUM_SOURCE_COMMENT
+
+
 def _is_generated_vanity_page(path, dir_name):
     """Return True if the page at path is allium's output for vanity folder dir_name.
 
-    Every page allium writes to <out>/<domain>/ has one canonical link, to
-    <base>/<domain>/ or <base>/<domain>/page-N whatever its sort, so a
-    hand-made page in a folder named like a domain does not pass.
+    Two things prove it. The head has the source comment skeleton.html puts
+    in every page allium renders, which a hand-made page lacks even when it
+    carries a self-canonical (an https build requires one on every page).
+    And it has one canonical link to the folder: <base>/<domain>/ or
+    <base>/<domain>/page-N whatever the sort, so allium's page copied under
+    another name does not pass. Builds before 2026-08 wrote the raw domain
+    there, which matches the folder once sanitized.
     """
-    signals = _head_signals(path)
-    if signals is None or len(signals[0]) != 1:
+    with open(path, encoding="utf-8") as handle:
+        head = handle.read(MAX_HEAD_CHARS)
+    head_end = head.find("</head>")
+    if head_end < 0:
         return False
-    route = urlsplit(signals[0][0]).path
-    return re.fullmatch(rf"(?:/.*)?/{re.escape(dir_name)}/(?:page-[0-9]+)?", route) is not None
+    parser = _VanityHeadParser()
+    try:
+        parser.feed(head[:head_end])
+    except Exception:  # HTMLParser errors on odd markup differ by Python version
+        return False
+    if not parser.from_allium or len(parser.canonicals) != 1:
+        return False
+    match = re.fullmatch(r"(?:/.*)?/([^/]+)/(?:page-[0-9]+)?", urlsplit(parser.canonicals[0]).path)
+    if match is None:
+        return False
+    folder = unquote(match.group(1))
+    return folder == dir_name or _sanitize_path_component(folder.lower()) == dir_name
 
 
 def _vanity_dir_name(relay_set, contact_data):
@@ -1149,10 +1187,10 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
 
     Only folders allium generated are removed: named like a sanitized domain
     (never a core site folder), not a symlink, holding contact page files and
-    nothing else, and every page carrying the canonical link allium gives
-    that folder. Hand-made folders are left alone. A folder (or output root)
-    that cannot be read or cleaned is skipped rather than failing the build.
-    Returns the number of folders removed.
+    nothing else, and every page proven to be allium's output for that
+    folder (_is_generated_vanity_page). Hand-made folders are left alone. A
+    folder (or output root) that cannot be read or cleaned is skipped rather
+    than failing the build. Returns the number of folders removed.
     """
     # Without a base URL no vanity folders are written, so none are swept
     if not relay_set.base_url or not output_root:
@@ -1168,10 +1206,11 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
 
     removed = 0
     for entry in entries:
-        if (entry.name in current or not _VANITY_DIR_NAME.match(entry.name)
-                or not entry.is_dir(follow_symlinks=False)):
+        if entry.name in current or not _VANITY_DIR_NAME.match(entry.name):
             continue
         try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
             children = list(os.scandir(entry.path))
             if not children or not all(
                     child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)

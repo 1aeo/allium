@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from allium.lib.file_io_utils import sanitize_path_component
 from allium.lib.page_writer import build_template_args, write_pages_by_key
 from allium.lib.relays import Relays
 
@@ -1174,15 +1175,36 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         for filename in os.listdir(half_written):
             if filename != "by-status.html":
                 os.remove(os.path.join(half_written, filename))
+        # Builds before 2026-08 wrote the raw domain into the canonical, while
+        # the folder carries the sanitized name
+        legacy_dir = os.path.dirname(self._write_output_file(
+            os.path.join(sanitize_path_component("example.com:8443"), "index.html"),
+            first_page.replace(canonical, '<link rel="canonical" href="https://metrics.1aeo.com/example.com:8443/" />')))
         # Allium's page copied under another name is not that folder's output
         copied_page = os.path.join(self.temp_dir, "copied.example.com", "index.html")
         os.makedirs(os.path.dirname(copied_page))
         shutil.copyfile(os.path.join(stale_vanity_dir, "index.html"), copied_page)
+        # Hand-made pages: a self-canonical (an https build needs one on every
+        # page) is no proof, and markup HTMLParser rejects must not stop the run
+        hand_made_pages = {
+            os.path.join("selfcanonical.example.com", "index.html"): (
+                '<html><head><link rel="canonical" href="https://metrics.1aeo.com/selfcanonical.example.com/">'
+                '</head><body>Mirror notes</body></html>'),
+            os.path.join("oddmarkup.example.com", "index.html"): (
+                '<html><head><![foo[ x ]]><link rel="canonical" href="https://metrics.1aeo.com/oddmarkup.example.com/">'
+                '</head><body>Notes</body></html>'),
+        }
+        for relative_path, content in hand_made_pages.items():
+            self._write_output_file(relative_path, content)
 
         self._write_validated_contact_pages("example.net")
 
         self.assertFalse(os.path.exists(stale_vanity_dir))
         self.assertFalse(os.path.exists(half_written))
+        self.assertFalse(os.path.exists(legacy_dir))
+        for relative_path, content in hand_made_pages.items():
+            with open(os.path.join(self.temp_dir, relative_path), encoding="utf8") as handle:
+                self.assertEqual(handle.read(), content, f"{relative_path} was modified")
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "by-status.html")))
         for relative_path in unrelated_paths:
@@ -1205,9 +1227,9 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         return scandir
 
     def test_contact_page_generation_skips_unreadable_vanity_like_dir(self):
-        """A domain-named folder the sweep cannot read is left alone, not fatal."""
-        unreadable = os.path.dirname(
-            self._write_output_file(os.path.join("locked.example.com", "index.html")))
+        """A stale vanity folder the sweep cannot read is left alone, not fatal."""
+        self._write_validated_contact_pages("locked.example.com")
+        unreadable = os.path.join(self.temp_dir, "locked.example.com")
 
         with patch("allium.lib.page_writer.os.scandir", side_effect=self._scandir_denying(unreadable)):
             self._write_validated_contact_pages("example.org")
