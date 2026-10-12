@@ -30,8 +30,8 @@ DASHED, DOTTED, DASHDOT = "7 4", "1.5 3", "9 3.5 2 3.5"
 # operator-controlled contact strings could carry them.
 _CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
-# DejaVu Sans advance widths in 1/100 em for " " .. "~" and the other characters the charts' own text uses
-# (Verdana, the usual fallback, is about as wide), so layouts hold in either font.
+# DejaVu Sans advance widths in 1/100 em for " " .. "~" and common non-ASCII punctuation (the charts' own "·",
+# "–" and "…"; Verdana, the usual fallback, is about as wide), so layouts hold in either font.
 _WIDTHS = dict(zip(map(chr, range(32, 127)), map(int, (
     "32 40 46 84 64 95 78 27 39 39 50 84 32 36 32 34 64 64 64 64 64 64 64 64 64 64 34 34 84 84 84 53 "
     "100 68 69 70 77 63 58 77 75 29 29 66 56 86 75 79 60 79 69 63 61 73 68 99 69 61 69 39 34 39 84 50 "

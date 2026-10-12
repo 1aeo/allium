@@ -258,8 +258,9 @@ class ChartWriter(object):
             self._drop_versions(keep=self.cache)
         self.relays = relay_set.json["relays"]
         self.uptime, self.bandwidth = history_maps(relay_set)
-        # Bandwidth windows end at the bandwidth document's relays_published, and so does a stopped relay's time
-        # axis. Uptime charts use Onionoo's own windows, from the uptime document's publish time (it is cached apart)
+        # Bandwidth windows end at the bandwidth document's relays_published, and so does the time axis of a stopped
+        # relay or a stale history (_end). Uptime charts use Onionoo's own windows, from the uptime document's
+        # publish time (it is cached apart)
         self.published = parse_onionoo_timestamp((relay_set.bandwidth_data or {}).get("relays_published"))
         self.uptime_windows = uptime_windows(relay_set.uptime_data)
         self.role_medians, self.family_medians = peer_medians(self.relays, self.bandwidth, self._since("1m"))
@@ -391,8 +392,8 @@ class ChartWriter(object):
         """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""
         members = [self.relays[i] for i in member_indexes]
         # Relays without contact info share one hash, but they are not an operator; nor are relays whose contact is
-        # "none", which the contact page treats alike.
-        if not any((relay.get("contact") or "").strip() not in ("", "none") for relay in members):
+        # exactly "none", which the contact page treats alike.
+        if not any((relay.get("contact") or "").strip() and relay["contact"] != "none" for relay in members):
             return {}
         return self._charts(directory, "bandwidth", self._contact_bandwidth, members, operator_identity(members))
 

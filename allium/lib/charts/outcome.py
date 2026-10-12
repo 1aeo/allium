@@ -93,9 +93,9 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
         return parts[0] + " · inside p2–p98 throughout"
 
     def where(overlay):
-        """"out" if ``overlay`` was beyond p2–p98 on the relay's side on at least half of those days, "in" if inside
-        it on at least half, else None (also without values on them: out the other way, it neither left with the
-        relay nor stayed in)."""
+        """"out" if ``overlay`` was beyond p2–p98 on the relay's side on at least half of those days, else "in" if
+        inside it on at least half of them. Otherwise None: mostly out the other way, it neither left with the
+        relay nor stayed in; without values on those days, there is nothing to say."""
         days = [(overlay[t], high) for t, high in beyond.items() if overlay.get(t) is not None]
         out = sum(value > ihi if high else value < ilo for value, high in days)
         inside = sum(ilo <= value <= ihi for value, _high in days)

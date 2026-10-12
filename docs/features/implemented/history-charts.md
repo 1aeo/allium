@@ -117,12 +117,14 @@ when fontconfig's `fc-match` is installed to check.
 - Uptime charts use Onionoo's own window (`uptime_utils.block_window`: one
   calendar period ending at the latest consensus, on Onionoo's slot grid, taken
   from the uptime document's `relays_published`). An offline relay's history
-  stops at its last consensus; the slots after it are drawn at 0%, as Onionoo
-  counts them, and the "Average" is the relay page's figure for the period.
+  stops at its last consensus; the window's slots after it are drawn as Onionoo
+  counts them (the first holds its last hours in the consensus, the rest 0%),
+  and the "Average" is the relay page's figure for the period.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
-  band, so a day out of band alone is a red tip, marked with a red dot too, as
-  is a day less than 2 px past the band edge, where the red is only a sliver.
+  band, so a day with no joined neighbour out on its side is a red tip, marked
+  with a red dot too, as is a day less than 2 px past the band edge, where the
+  red is only a sliver.
   A red line-and-dot legend entry, `Outside p2–p98`, explains them on the
   charts that draw them. A
   point with no neighbour to join (between gaps) is drawn as a short dash.
