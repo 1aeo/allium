@@ -205,7 +205,8 @@ def test_coordinator_exposes_first_seen_repair_stats_on_relay_set():
     relay_data = {
         'version': fixture.get('version', '8.0'),
         'relays_published': '2026-05-13 12:00:00',
-        'relays': list(fixture['relays'])[:3],
+        # In the 2026-05-13 consensus, as in the first test (the downtime filter drops stale relays)
+        'relays': [dict(r, last_seen='2026-05-13 12:00:00') for r in fixture['relays'][:3]],
     }
     uptime_data = {'relays': []}
 
