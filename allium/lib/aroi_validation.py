@@ -745,14 +745,35 @@ def _deduplicate_fingerprint_not_found_error(error: str) -> str:
     return error
 
 
+# When a URI proof fetch and its www-fallback both fail, aroivalidator
+# reports both errors, primary first, joined by '; ', each starting with
+# its proof label:
+#   "URI-RSA: HTTP error 404 for d at URL: ...; URI-RSA: HTTP SSL ... www.d"
+# Split only where a URI proof label follows, so a '; ' inside one error
+# (a DNS TXT "found: a; b") stays put.
+_URI_FALLBACK_ERROR_SPLIT_RE = re.compile(r'; (?=URI-[A-Za-z0-9-]+: )')
+_URI_CONNECTION_ERROR_LABEL = ("URI: Connection error", 'uri')
+
+
 def _simplify_error_message(error: str) -> tuple:
     """
     Simplify a verbose error message into a short protocol-prefixed label.
+
+    When the primary URI fetch and its www-fallback failed differently,
+    the label names the primary failure: a 404 on the operator's own host
+    stays a 404 when www.<domain> then fails TLS. A primary failure with
+    no specific label (a redirect) is labelled from the whole message.
 
     Returns:
         Tuple of (simplified_message, proof_type), where proof_type is
         'dns', 'uri', or 'other'.
     """
+    attempts = _URI_FALLBACK_ERROR_SPLIT_RE.split(error, maxsplit=1)
+    if len(attempts) > 1:
+        primary = _simplify_error_message(attempts[0])
+        if primary != _URI_CONNECTION_ERROR_LABEL:
+            return primary
+
     e = error.lower()
 
     # DNS-specific errors (check first as they're more specific)
@@ -777,6 +798,10 @@ def _simplify_error_message(error: str) -> tuple:
         return ("URI: SSL/TLS handshake failed", 'uri')
     if 'certificate' in e:
         return ("URI: SSL certificate error", 'uri')
+    # aroivalidator's other TLS failures ("HTTP SSL error unexpected EOF")
+    # happen while the TLS connection is set up.
+    if 'http ssl error' in e:
+        return ("URI: SSL/TLS handshake failed", 'uri')
 
     # HTTP errors (check after DNS patterns)
     if '404' in error or (
@@ -811,7 +836,7 @@ def _simplify_error_message(error: str) -> tuple:
     # Generic HTTP errors
     if 'failed to fetch' in e or (
             'http' in e and 'dns' not in e) or 'https' in e:
-        return ("URI: Connection error", 'uri')
+        return _URI_CONNECTION_ERROR_LABEL
 
     # Unknown - truncate if too long
     return (error[:47] + "...",
