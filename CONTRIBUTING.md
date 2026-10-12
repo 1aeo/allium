@@ -48,8 +48,8 @@ cd allium && python3 allium.py --progress
 ### Adding a dependency
 
 1. Add it to `config/requirements.txt`.
-2. File it in `allium/lib/optional_deps.py`: `REQUIRED`, `SPEEDUPS` (used when installed, no notice), or a `FEATURES` entry with the module that imports it, its Debian/Ubuntu `python3-*` package, any system packages pip cannot install, and the options that build without it. `tests/unit/test_optional_deps.py` fails until steps 1 and 2 agree.
-3. For a new feature, call `optional_deps.check()` where `allium.py` resolves that feature's options, before fetching anything, so a missing package is announced with the commands that install it.
+2. File it in `allium/lib/optional_deps.py`: `REQUIRED` (allium does not start without it), `SPEEDUPS` (used when installed, no notice), or a `FEATURES` entry with every key the `png` entry has: the module that imports it, its Debian/Ubuntu `python3-*` package, any system packages pip cannot install, and the options that build without it. `tests/unit/test_optional_deps.py` fails until steps 1 and 2 agree.
+3. For a `FEATURES` entry, call `optional_deps.check()` where `allium.py` resolves that feature's options, before fetching anything, so a missing package is announced with the commands that install it. A missing `REQUIRED` package stops `allium.py` at import with Python's `No module named` error, so step 4 is where people find its install commands.
 4. Name its install commands in the README's Requirements and in the comments of `config/requirements.txt`.
 
 ## 🧪 Running Tests

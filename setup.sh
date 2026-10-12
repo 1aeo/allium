@@ -137,7 +137,7 @@ echo ""
 if ! python3 -c "import cairocffi, numpy" 2>/dev/null; then
     echo "⚠️  PNG charts need the cairo library, which pip cannot install; until it is installed, allium writes SVG charts."
     echo "💡 On Debian/Ubuntu: sudo apt install libcairo2 fonts-dejavu-core"
-    echo "💡 Or keep SVG charts without the notice: python3 $ALLIUM_PY_PATH --chart-format svg"
+    echo "💡 Or keep SVG charts without the notice: source venv/bin/activate && python3 $ALLIUM_PY_PATH --chart-format svg"
     echo ""
 fi
 echo "📊 Generated files are in: ./www/"

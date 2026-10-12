@@ -14,7 +14,7 @@ Allium is a static site generator with minimal attack surface:
 | Path Traversal | Output directory validation |
 | SQL Injection | N/A (no database) |
 | CSRF | N/A (no forms/sessions) |
-| Supply Chain | Few dependencies: Jinja2, plus cairocffi and numpy for PNG charts |
+| Supply Chain | Few dependencies: Jinja2, plus cairocffi, numpy and (optional) zlib-ng for PNG charts |
 
 ## Security Features
 

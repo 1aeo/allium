@@ -13,9 +13,10 @@ ModuleNotFoundError: No module named 'jinja2'
 
 **Solution**:
 ```bash
-pip3 install jinja2
-# or
-pip3 install -r config/requirements.txt
+# Debian/Ubuntu's own python3 (no virtualenv): pip is missing or refused there (PEP 668)
+sudo apt install python3-jinja2
+# A virtualenv, from the repository root
+venv/bin/python3 -m pip install -r config/requirements.txt
 ```
 
 ### "Python version too old"
