@@ -51,7 +51,7 @@ def format_day_span(dates, step=timedelta(days=1), year=False, of=None, most=3):
 def ratio_text(value, *edges):
     """``1.12``, with more decimals where two would print one of ``edges`` that the value is not on: ``1.0097``
     under a band starting at 1.01."""
-    for digits in (2, 3, 4):
+    for digits in range(2, 8):
         text = "{:.{}f}".format(value, digits)
         if not any(text == "{:.{}f}".format(edge, digits) and value != edge for edge in edges):
             break

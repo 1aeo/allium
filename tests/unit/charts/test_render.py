@@ -225,6 +225,16 @@ def test_out_of_band_days_are_red_and_one_alone_gets_a_dot():
     assert len([op for op in strip_paths(drawn[0].ops) if op[5] == RED and op[1].count("L") == 11]) == 3
 
 
+def test_out_of_band_days_on_either_side_of_the_band_each_get_a_dot():
+    # Guard's p2–p98 is 0.99–1.58: day 15 is above it and day 16 below (0.95, 3 px under p2). The line joins them,
+    # but each one's red is only a tip on its own side.
+    ts = [T0 + timedelta(days=i) for i in range(30)]
+    ratios = [1.05] * 15 + [1.65, 0.95] + [1.05] * 13
+    svg = bandwidth_chart("1m", (ts, [10 * r for r in ratios], [10.0] * 30, DAY), 100.0, bands_for_role("Guard"), "relay")
+    strip = svg.ops[[op[:2] for op in svg.ops].index(("clip", "r")):]
+    assert len([op for op in strip if op[0] == "path" and op[5] == RED and op[1].count("L") == 11]) == 2
+
+
 def test_a_long_write_read_subtitle_falls_back_to_counts_to_fit():
     # Above and below the Exit+Guard band every third day each, with family and peers out alongside.
     ts = [T0 + timedelta(days=i) for i in range(30)]

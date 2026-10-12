@@ -30,6 +30,7 @@ def test_format_day_span_joins_runs_and_collapses_long_lists():
 def test_ratio_text_never_prints_a_band_edge_the_value_is_not_on():
     assert ratio_text(1.123, 1.01) == "1.12" and ratio_text(1.01, 1.01) == "1.01"
     assert ratio_text(1.0097, 1.01) == "1.0097" and ratio_text(1.973, 1.97) == "1.973"
+    assert ratio_text(1.0099881, 1.01) == "1.00999"  # 4 decimals would still read 1.0100
 
 
 def test_throughput_subtitle_states_the_mean_its_share_and_the_peak():
