@@ -1111,6 +1111,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         write_pages_by_key(relay_set, "contact")
 
     def _write_output_file(self, relative_path, content="keep"):
+        """Write content to relative_path under the output root and return the full path."""
         path = os.path.join(self.temp_dir, relative_path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf8") as handle:
@@ -1221,6 +1222,7 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         real_scandir = os.scandir
 
         def scandir(path="."):
+            """Deny denied_path, list everything else."""
             if path == denied_path:
                 raise PermissionError(13, "Permission denied", path)
             return real_scandir(path)
@@ -1236,6 +1238,24 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
 
         self.assertTrue(os.path.isfile(os.path.join(unreadable, "index.html")))
         self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+
+    def test_contact_page_generation_skips_vanity_dir_resolving_outside_root(self):
+        """A stale-looking folder that resolves outside the output root (a Windows junction) is kept."""
+        self._write_validated_contact_pages("example.org")
+        junction = os.path.join(self.temp_dir, "example.org")
+        real_realpath = os.path.realpath
+
+        def realpath(path, *args, **kwargs):
+            """Resolve the junction to a folder outside the output root."""
+            if path == junction:
+                return os.path.join(real_realpath(self.temp_dir) + "-elsewhere", "example.org")
+            return real_realpath(path, *args, **kwargs)
+
+        with patch("allium.lib.page_writer.os.path.realpath", side_effect=realpath):
+            self._write_validated_contact_pages("example.net")
+
+        self.assertTrue(os.path.isfile(os.path.join(junction, "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
 
     def test_contact_page_generation_completes_when_output_root_is_unlistable(self):
         """An output root that cannot be listed skips the sweep, not the run."""

@@ -1102,11 +1102,13 @@ class _VanityHeadParser(HTMLParser):
         self.from_allium = False
 
     def handle_starttag(self, tag, attrs):
+        """Record the href of each <link rel="canonical">."""
         attrs = dict(attrs)
         if tag == "link" and "canonical" in (attrs.get("rel") or "").lower().split() and attrs.get("href"):
             self.canonicals.append(attrs["href"])
 
     def handle_comment(self, data):
+        """Note allium's source comment."""
         self.from_allium = self.from_allium or data.strip() == _ALLIUM_SOURCE_COMMENT
 
 
@@ -1201,6 +1203,7 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
 
     try:
         entries = list(os.scandir(output_root))
+        real_root = os.path.realpath(output_root)
     except OSError:
         return 0
 
@@ -1210,6 +1213,10 @@ def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
             continue
         try:
             if not entry.is_dir(follow_symlinks=False):
+                continue
+            # A Windows junction passes is_dir(follow_symlinks=False); never
+            # follow anything that resolves outside the output root
+            if os.path.realpath(entry.path) != os.path.join(real_root, entry.name):
                 continue
             children = list(os.scandir(entry.path))
             if not children or not all(
