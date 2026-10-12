@@ -20,6 +20,7 @@ WITHOUT = "💡 To build without them and without this notice: --chart-format sv
 
 
 def read(*path):
+    """Text of a file in the repository."""
     with open(os.path.join(ROOT, *path), encoding="utf-8") as f:
         return f.read()
 
@@ -42,17 +43,20 @@ def debian(managed, monkeypatch):
 
 @pytest.fixture
 def venv(monkeypatch):
+    """allium.py run by a virtualenv's python3, where pip installs and apt's python3-* packages are not seen."""
     monkeypatch.setattr(sys, "executable", "/srv/allium/venv/bin/python3")
     monkeypatch.setattr(sys, "prefix", "/srv/allium/venv")
     monkeypatch.setattr(sys, "path", [p for p in sys.path if p != deps.DEBIAN_PACKAGES])
 
 
 def test_debian_python_gets_one_apt_command(debian):
+    """Debian/Ubuntu's own python3 gets every package, Python ones and system ones, from one apt command."""
     assert APT_ALL == "sudo apt install python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core"
     assert deps.install_hints("png") == ["💡 Install them for /usr/bin/python3: " + APT_ALL, WITHOUT]
 
 
 def test_venv_gets_its_own_pip_then_apt_for_what_pip_cannot_install(venv):
+    """A virtualenv gets its own pip with the absolute requirements path, then apt for the cairo library and font."""
     assert os.path.isabs(deps.REQUIREMENTS) and os.path.isfile(deps.REQUIREMENTS)
     assert not deps.externally_managed()
     assert deps.install_hints("png") == [
@@ -75,6 +79,7 @@ def test_other_externally_managed_python_gets_a_virtualenv_not_a_refused_pip(man
 
 
 def test_default_writes_svg_and_says_how_to_get_png(debian, monkeypatch, capsys):
+    """By default a missing package means SVG charts and a notice, printed and returned for the end of the run."""
     monkeypatch.setattr(deps, "missing", lambda feature: "No module named 'cairocffi'")
     notice = deps.check("png", asked=False)
     assert notice == ["⚠️ PNG charts need cairocffi, numpy and the cairo library (No module named 'cairocffi'); "
@@ -83,6 +88,7 @@ def test_default_writes_svg_and_says_how_to_get_png(debian, monkeypatch, capsys)
 
 
 def test_asked_for_png_stops_with_the_same_hints(debian, monkeypatch, capsys):
+    """An explicit --chart-format png stops with the same hints on stderr, and prints nothing on stdout."""
     monkeypatch.setattr(deps, "missing", lambda feature: "No module named 'numpy'")
     with pytest.raises(SystemExit) as stop:
         deps.check("png", asked=True)
@@ -92,6 +98,7 @@ def test_asked_for_png_stops_with_the_same_hints(debian, monkeypatch, capsys):
 
 
 def test_installed_is_quiet_except_under_progress(monkeypatch, capsys):
+    """With every package installed, nothing prints but a ✅ line with their versions under --progress."""
     monkeypatch.setattr(deps, "missing", lambda feature: None)
     monkeypatch.setitem(sys.modules, "cairocffi", SimpleNamespace(__version__="1.7.1"))
     monkeypatch.setitem(sys.modules, "numpy", SimpleNamespace(__version__="2.2.4"))
@@ -125,25 +132,30 @@ NO_PIXMAN = ('no library called "cairo-2" was found\nno library called "libcairo
      "source tree, and relaunch your python interpreter from there."),
 ])
 def test_missing_says_why_on_one_line(monkeypatch, error, why):
+    """The reason is one line: the file that did not load from cairocffi's OSError, or the whole ImportError."""
     def fail(name, package):
+        """Fail the probe's import with the parametrized error."""
         raise error
     monkeypatch.setattr(deps, "importlib", SimpleNamespace(import_module=fail))
     assert deps.missing("png") == why
 
 
 def test_missing_names_the_absent_module(monkeypatch):
+    """A probe that cannot be imported is reported by its module name."""
     monkeypatch.setitem(PNG, "probe", ".no_such_module")
     assert deps.missing("png") == "No module named 'allium.lib.no_such_module'"
 
 
 @needs_png
 def test_missing_is_none_when_png_charts_work():
+    """Where cairocffi, numpy and the cairo library load, nothing is missing."""
     assert deps.missing("png") is None
 
 
 def test_requirements_txt_files_every_package():
     """A package added to config/requirements.txt gets filed in optional_deps, so a missing one is announced."""
     def name(package):
+        """A package name in PEP 503 normal form, so Jinja2 and jinja2 compare equal."""
         return re.sub(r"[-_.]+", "-", package).lower()
     listed = {name(re.match(r"[A-Za-z0-9._-]+", line.strip()).group())
               for line in read("config", "requirements.txt").splitlines()
@@ -166,6 +178,7 @@ def test_install_docs_give_the_same_commands(path, system_python):
 
 
 def test_the_way_out_uses_options_allium_accepts():
+    """The options the notice names to build without the packages are ones allium.py accepts."""
     source = read("allium", "allium.py")
     for option in re.findall(r"--[a-z-]+", PNG["without"]):
         assert f'"{option}"' in source
