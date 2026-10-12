@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 
 from ..time_utils import ONIONOO_HISTORY_PERIODS, PERIOD_SHORT_NAMES, parse_onionoo_timestamp
-from ..uptime_utils import block_window
+from ..uptime_utils import DEFAULT_UPTIME_FACTOR, block_window
 from .bands import role_from_flags
 
 # Onionoo graph-history key -> chart period id ("1_month" -> "1m"), in page order: a chart section shows its first.
@@ -34,16 +34,17 @@ def _slots(first, interval, count):
     return tuple(first + i * step for i in range(count)) if first else ()
 
 
-def points(block, scale=1.0, since=None):
+def points(block, scale=1.0, since=None, factor=1.0):
     """``{timestamp: value}`` for the numeric slots of an Onionoo history block from ``since`` on.
 
-    Values are multiplied by the block's ``factor`` and ``scale``: bandwidth
-    blocks then give bytes/s * scale, uptime blocks (factor 1/999) fractions.
+    Values are multiplied by the block's ``factor`` (the ``factor`` argument
+    when it has none) and ``scale``: bandwidth blocks then give bytes/s *
+    scale, uptime blocks (factor 1/999) fractions.
     """
     block = block or {}
     values = block.get("values") or ()
     times = _slots(parse_onionoo_timestamp(block.get("first")), int(block.get("interval") or 0), len(values))
-    scale *= float(block.get("factor") or 1)
+    scale *= float(factor if block.get("factor") is None else block["factor"])
     start = bisect_left(times, since) if since else 0
     return {t: v * scale for t, v in zip(times[start:], values[start:]) if isinstance(v, (int, float))}
 
@@ -54,8 +55,8 @@ def uptime_points(block, key, windows, relay=None, section=None):
     (``uptime_utils.block_window``, given the document's ``uptime_windows``, the relay's details entry and the
     block's section). An offline relay's history stops at its last consensus, but Onionoo counts the time since
     as down: the first missing slot holds the relay's last hours, the rest are 0%. The whole block when there is
-    no window."""
-    drawn = points(block, 100.0)
+    no window. A block without a ``factor`` is read as the page reads it (``DEFAULT_UPTIME_FACTOR``)."""
+    drawn = points(block, 100.0, factor=DEFAULT_UPTIME_FACTOR)
     where = block_window(block or {}, key, windows, relay, section)
     if where is None:
         return drawn

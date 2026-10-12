@@ -190,12 +190,18 @@ class Panel(object):
 
     def series(self, values, color, width, dash=None, clip=None):
         """Polyline of ``values`` over the panel's times, one per run; a point with no neighbour to join is a short
-        dash, so it still shows."""
-        d = []
+        dash, so it still shows. The dash stays inside the plot rather than half outside its clip: at the time axis'
+        start it starts there, and at or just above 0 on an axis from 0 (a slot with no traffic, or 0% up) it sits on
+        the bottom edge. (The write/read strip's bottom edge is a cut of its scale instead: the days below it, drawn
+        there, are marked.)"""
+        d, bottom = [], self.top + self.height
         for run in self.runs(values):
             points = [(self.xs[i], self.y(values[i])) for i in run]
+            x, y = points[0]
+            if self.ylo == 0 and bottom - width / 2 < y <= bottom:  # at 0, or less than half the stroke above it
+                y = bottom - width / 2
             d.append("M%.1f %.1f" % points[0] + "".join("L%.1f %.1f" % point for point in points[1:]) if run[1:] else
-                     "M%.1f %.1fh%g" % (max(points[0][0] - width, self.left), points[0][1], 2 * width))
+                     "M%.1f %.1fh%g" % (max(x - width, self.left), y, 2 * width))
         self.svg.path("".join(d), color, width, dash, clip=clip or self.clip)
 
     def hband(self, lo, hi, color, opacity):
