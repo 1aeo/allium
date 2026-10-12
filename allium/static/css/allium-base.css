@@ -183,8 +183,20 @@
 }
 
 /* verified-hostname, unverified-hostname, status classes,
-   section-box, subsection-card, subsection-header, and
-   status-note moved to relay-info.html (only consumer) */
+   section-box, subsection-card and status-note moved to
+   relay-info.css (only consumer) */
+
+/* Subsection headers - Level 2 in information hierarchy (relay pages, and the
+   history charts' heading on contact pages too) */
+.subsection-header {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid var(--color-border-light);
+}
 
 /* ========== 6. CONTACT & TEXT TRUNCATION ========== */
 .contact-text {
@@ -619,4 +631,119 @@ th[title]::after {
     flex-wrap: wrap;
     gap: 12px;
     margin: 12px 0;
+}
+
+/* History charts (relay and contact pages): dark 1aeo.com/blog cards. Only
+   the default chart (last in the DOM) shows until a thumbnail link targets
+   another period; same pure-CSS :target pattern as the AROI pagination. The
+   thumbnails follow the charts in the DOM (for "a targeted chart ~ ...") but
+   show above them, so they stay in view after a click scrolls to the chart;
+   keyboard and screen readers meet the chart first, then its thumbnails. */
+.chart-history {
+    display: flex;
+    flex-direction: column;
+    max-width: 1094px;  /* the chart's own 1080 px (+ padding and border): a PNG is not upscaled */
+    margin: 12px 0;  /* clear of what follows: on contact pages, the "Last updated" line */
+    padding: 6px;
+    background: var(--aeo-dark-surface);
+    border: 1px solid var(--aeo-dark-border);
+    border-radius: 8px;
+}
+.chart-history img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.chart-history .chart-hero {
+    display: block;
+    scroll-margin-top: calc(min(17.5vw, 186px) + 30px);  /* the thumbnail row's height: a deep link lands with
+                                                            the row in view above its chart */
+    color: var(--aeo-text-dim);  /* alt text, e.g. SVG at Tor Browser's Safest level */
+    text-decoration: none;
+}
+.chart-history .chart-hero:focus {
+    outline: 1px solid var(--aeo-green);  /* a deep link focuses its chart: ring it like its thumbnail */
+    outline-offset: -1px;
+}
+.chart-history .chart-hero:not(:last-of-type):not(:target),
+.chart-history .chart-hero:target ~ .chart-hero {
+    display: none;
+}
+/* #1m/#6m/#1y/#5y (chart_period_anchors) switch every chart on the page, like a
+   period page would: hide all, then show each chart's chart-on-<period>. */
+.chart-period {
+    scroll-margin-top: 80px;
+}
+/* On a relay page they sit above the bandwidth section's details (or, without bandwidth charts, the uptime
+   section's): land on its chart card instead, as a chart's own #bandwidth-<period> link does, rather than a
+   screen above it. The details' height varies with the relay (a 1-month history has no Total Data breakdown,
+   an unmeasured relay no per-authority rows) and with the width. Measured on every relay page of a full build,
+   the shortest are bandwidth 408 px from 992 px wide and 519 px below that (typically 428 / 559-795), uptime
+   366 px and 580 px (typically 580-640); offsets 10 px short of those put the card near the top, or up to
+   about 280 px lower on a narrow phone, never past it. One offset below 992 px: where lines wrap depends on
+   the fonts. */
+.chart-period-bandwidth {
+    scroll-margin-top: -509px;
+}
+.chart-period-uptime {
+    scroll-margin-top: -570px;
+}
+@media (min-width: 992px) {
+    .chart-period-bandwidth {
+        scroll-margin-top: -398px;
+    }
+    .chart-period-uptime {
+        scroll-margin-top: -356px;
+    }
+}
+.chart-period:target ~ * .chart-hero {
+    display: none;
+}
+.chart-period[id="1m"]:target ~ * .chart-hero.chart-on-1m,
+.chart-period[id="6m"]:target ~ * .chart-hero.chart-on-6m,
+.chart-period[id="1y"]:target ~ * .chart-hero.chart-on-1y,
+.chart-period[id="5y"]:target ~ * .chart-hero.chart-on-5y {
+    display: block;
+}
+.chart-sparks {
+    display: flex;
+    order: -1;
+    gap: 6px;
+    margin: 0 0 6px;
+}
+/* .chart-sparks prefixes outrank Bootstrap's a:hover/a:focus color, underline and outline. */
+.chart-sparks .chart-spark {
+    display: flex;  /* the row stretches every link to the tallest chart: keep each label at the bottom */
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 0 1 25%;
+    border-radius: 4px;
+    outline: 1px solid transparent;
+    outline-offset: 2px;
+    color: var(--aeo-text-dim);
+    font-size: 12px;
+    text-align: center;
+    text-decoration: none;
+}
+.chart-sparks .chart-spark:hover,
+.chart-sparks .chart-spark:focus {
+    outline-color: var(--aeo-green);
+}
+/* The thumbnail of the chart showing: the default until a link targets another. */
+.chart-sparks .chart-spark-default,
+.chart-hero.chart-on-1m:target ~ .chart-sparks .chart-on-1m,
+.chart-hero.chart-on-6m:target ~ .chart-sparks .chart-on-6m,
+.chart-hero.chart-on-1y:target ~ .chart-sparks .chart-on-1y,
+.chart-hero.chart-on-5y:target ~ .chart-sparks .chart-on-5y,
+.chart-period[id="1m"]:target ~ * .chart-spark.chart-on-1m,
+.chart-period[id="6m"]:target ~ * .chart-spark.chart-on-6m,
+.chart-period[id="1y"]:target ~ * .chart-spark.chart-on-1y,
+.chart-period[id="5y"]:target ~ * .chart-spark.chart-on-5y {
+    box-shadow: 0 0 0 1px var(--aeo-green);
+    color: var(--aeo-green);
+}
+.chart-hero:target ~ .chart-sparks .chart-spark-default,
+.chart-period:target ~ * .chart-spark-default {
+    box-shadow: none;
+    color: var(--aeo-text-dim);
 }

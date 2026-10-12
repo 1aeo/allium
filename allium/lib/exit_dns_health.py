@@ -9,8 +9,16 @@ Only exit relays (those with the Exit flag) are relevant.
 Non-exit relays should show nothing for DNS health.
 """
 
+import math
 from bisect import bisect_left
 from typing import Dict, Optional, List
+
+# Upstream resolver categories in results[i].resolver.queries and metadata.resolvers (version 1,
+# exitmap-dns-health-deploy scripts/resolver_stats.py): five public resolver services, then the
+# exit's own address or origin AS ("local"), any other resolver, and failed origin AS lookups.
+RESOLVER_PROVIDERS = ('google', 'cloudflare', 'quad9', 'opendns', 'ffmuc')
+RESOLVER_CATEGORIES = RESOLVER_PROVIDERS + ('local', 'other', 'unknown')
+_RESOLVER_COUNT_FIELDS = ('exits_total', 'exits_covered', 'exits_labelled', 'exits_using_public')
 
 # Field names set on each exit relay dict during enrichment.
 # Defined once here as the single source of truth — used by both the
@@ -26,6 +34,8 @@ _RELAY_FIELDS = (
     'exit_dns_health_cv_success', 'exit_dns_health_cv_total',
     'exit_dns_health_cv_improved', 'exit_dns_health_cv_per_instance',
     'exit_dns_health_timestamp',
+    'exit_dns_health_resolver_primary', 'exit_dns_health_resolver_public',
+    'exit_dns_health_resolver_queries',
 )
 
 _UNTESTED_DEFAULTS = {k: None for k in _RELAY_FIELDS}
@@ -74,6 +84,85 @@ _CIRCUIT_FIELDS = {
 }
 
 
+def _as_number(value) -> Optional[float]:
+    """Return value as a finite, non-negative float; None for anything else (bools and strings too)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        value = float(value)
+    except OverflowError:
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
+def _as_count(value) -> Optional[int]:
+    """Return value as a non-negative integer count, or None."""
+    number = _as_number(value)
+    return int(number) if number is not None and number.is_integer() else None
+
+
+def _as_percent(value) -> Optional[float]:
+    """Return value as a percentage capped at 100, or None."""
+    number = _as_number(value)
+    return min(number, 100.0) if number is not None else None
+
+
+def _parse_resolver(resolver) -> Optional[Dict]:
+    """
+    Validate one result's resolver block; None when absent or not a dict.
+    Query counts keep known categories only (a category this version does not know
+    counts as "other"), largest first, so labels and display stay bounded.
+    """
+    if not isinstance(resolver, dict):
+        return None
+    queries = {}
+    raw_queries = resolver.get('queries')
+    for category, count in (raw_queries.items() if isinstance(raw_queries, dict) else ()):
+        count = _as_number(count)
+        if count is not None:
+            category = category if category in RESOLVER_CATEGORIES else 'other'
+            queries[category] = round(queries.get(category, 0.0) + count, 2)
+    primary = resolver.get('primary')
+    if primary not in RESOLVER_CATEGORIES:
+        primary = 'other' if isinstance(primary, str) else None
+    public = resolver.get('public')
+    if not isinstance(public, bool) or primary in (None, 'unknown'):
+        public = None
+    return {
+        'primary': primary,
+        'public': public,
+        'queries': dict(sorted(queries.items(), key=lambda kv: (-kv[1], RESOLVER_CATEGORIES.index(kv[0])))),
+    }
+
+
+def parse_resolver_summary(metadata) -> Optional[Dict]:
+    """
+    Validate metadata.resolvers, the network-wide resolver shares; None when absent or unusable.
+    Shares are percentages (0-100), weighted by exit probability unless 'weighted' is False.
+    Missing or malformed values are None, never 0, so a partial block does not read as real zeros.
+    """
+    resolvers = metadata.get('resolvers') if isinstance(metadata, dict) else None
+    if not isinstance(resolvers, dict):
+        return None
+    public_share = resolvers.get('public_share_pct')
+    public_share = public_share if isinstance(public_share, dict) else {}
+    share = resolvers.get('share_pct')
+    share = share if isinstance(share, dict) else {}
+    summary = {
+        'public_share_pct': {p: _as_percent(public_share.get(p)) for p in RESOLVER_PROVIDERS + ('all',)},
+        'share_pct': {c: _as_percent(share.get(c)) for c in RESOLVER_CATEGORIES},
+        'weighted': resolvers.get('weighted') if isinstance(resolvers.get('weighted'), bool) else None,
+    }
+    summary.update({k: _as_count(resolvers.get(k)) for k in _RESOLVER_COUNT_FIELDS})
+    if summary['exits_covered'] == 0:
+        # No exit counted toward the shares (upstream cold start): its 0.0 shares are placeholders
+        summary['public_share_pct'] = dict.fromkeys(summary['public_share_pct'])
+        summary['share_pct'] = dict.fromkeys(summary['share_pct'])
+    values = (list(summary['public_share_pct'].values()) + list(summary['share_pct'].values())
+              + [summary[k] for k in _RESOLVER_COUNT_FIELDS])
+    return summary if any(v is not None for v in values) else None
+
+
 def build_exit_dns_health_map(exit_dns_health_data: Optional[Dict]) -> Dict[str, Dict]:
     """
     Build fingerprint -> DNS health result map for O(1) per-relay lookup.
@@ -107,6 +196,7 @@ def build_exit_dns_health_map(exit_dns_health_data: Optional[Dict]) -> Dict[str,
             'cv_improved': cv.get('improved', False),
             'cv_per_instance': cv.get('per_instance', {}),
             'timestamp': result.get('timestamp'),
+            'resolver': _parse_resolver(result.get('resolver')),
         }
     return health_map
 
@@ -132,6 +222,8 @@ def attach_exit_dns_health_to_relays(relays: List[Dict], health_map: Dict[str, D
     Exit relays get full troubleshooting data; non-exit relays get status=None.
     """
     sorted_timings = _compute_timing_percentiles(health_map)
+    # Once any exit in the report has resolver data, exits without it have too few queries yet
+    resolver_live = any(e.get('resolver') for e in health_map.values())
 
     # Build fp->(nickname, country) map for first_hop display (O(n) once)
     relay_info_map = {}
@@ -154,6 +246,7 @@ def attach_exit_dns_health_to_relays(relays: List[Dict], health_map: Dict[str, D
         status = entry['status']
         is_success = status == 'success'
         fh_info = relay_info_map.get((entry['first_hop'] or '').upper(), ('', ''))
+        resolver = entry.get('resolver') or {}
 
         relay.update({
             'exit_dns_health_status': 'success' if is_success else 'fail',
@@ -176,6 +269,11 @@ def attach_exit_dns_health_to_relays(relays: List[Dict], health_map: Dict[str, D
             'exit_dns_health_cv_improved': entry['cv_improved'],
             'exit_dns_health_cv_per_instance': entry['cv_per_instance'],
             'exit_dns_health_timestamp': entry['timestamp'],
+            'exit_dns_health_resolver_primary': resolver.get('primary'),
+            'exit_dns_health_resolver_public': resolver.get('public'),
+            # None: the report has no resolver data; {}: none for this exit yet
+            'exit_dns_health_resolver_queries': (
+                resolver['queries'] if resolver else ({} if resolver_live else None)),
         })
 
 
@@ -198,6 +296,7 @@ def calculate_exit_dns_health_metrics(exit_dns_health_data: Optional[Dict] = Non
         'exit_dns_health_timing_p95_ms': 0,
         'exit_dns_health_timing_p99_ms': 0,
     })
+    metrics.update(_resolver_metrics(None))
 
     if not exit_dns_health_data or not isinstance(exit_dns_health_data, dict):
         return metrics
@@ -230,6 +329,24 @@ def calculate_exit_dns_health_metrics(exit_dns_health_data: Optional[Dict] = Non
     for suffix in ('avg', 'p50', 'p95', 'p99'):
         metrics[f'exit_dns_health_timing_{suffix}_ms'] = timing.get(f'{suffix}_ms', 0)
 
+    metrics.update(_resolver_metrics(parse_resolver_summary(metadata)))
+    return metrics
+
+
+def _resolver_metrics(summary: Optional[Dict]) -> Dict:
+    """Flatten parse_resolver_summary() into dashboard keys. Without a summary every value
+    is None and exit_dns_health_resolvers_available is False, so it renders as not available."""
+    summary = summary or {}
+    public_share = summary.get('public_share_pct', {})
+    share = summary.get('share_pct', {})
+    metrics = {
+        'exit_dns_health_resolvers_available': bool(summary),
+        'exit_dns_health_resolver_public_percentage': public_share.get('all'),
+        'exit_dns_health_resolver_weighted': summary.get('weighted'),
+    }
+    metrics.update({f'exit_dns_health_resolver_{p}_percentage': public_share.get(p) for p in RESOLVER_PROVIDERS})
+    metrics.update({f'exit_dns_health_resolver_{c}_percentage': share.get(c) for c in ('local', 'other', 'unknown')})
+    metrics.update({f'exit_dns_health_resolver_{k}': summary.get(k) for k in _RESOLVER_COUNT_FIELDS})
     return metrics
 
 
