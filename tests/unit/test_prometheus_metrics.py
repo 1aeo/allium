@@ -466,6 +466,7 @@ _RESOLVER_FAMILIES = (
 
 
 def _dns_with_resolvers(sample_dns_metadata, resolvers=_USE_DEFAULT):
+    """Sample DNS data with metadata.resolvers set (a full block by default)."""
     data = sample_dns_metadata()
     if resolvers is _USE_DEFAULT:
         resolvers = {
@@ -481,12 +482,14 @@ def _dns_with_resolvers(sample_dns_metadata, resolvers=_USE_DEFAULT):
 
 
 def _resolver_relay(make_relay, fingerprint, queries, **kwargs):
+    """Exit relay fixture with exit_dns_health_resolver_queries set."""
     relay = make_relay(fingerprint, **kwargs)
     relay["exit_dns_health_resolver_queries"] = queries
     return relay
 
 
 def _metric_lines(content, name):
+    """Sample lines of one metric family."""
     return [line for line in content.split("\n") if line.startswith(name + "{") or line.startswith(name + " ")]
 
 
@@ -501,6 +504,7 @@ def test_resolver_metrics_absent_emit_no_series(tmp_path, make_relay, make_relay
 @pytest.mark.parametrize("resolvers", [None, "x", [], {}, {"version": 1}, {"public_share_pct": "x"}])
 def test_resolver_metrics_malformed_block_emits_nothing(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
                                                         sample_aroi_metadata, resolvers):
+    """A malformed block adds no series and leaves the DNS section intact."""
     dns = _dns_with_resolvers(sample_dns_metadata, resolvers)
     content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
                            [make_relay("AAAA")], dns_data=dns)
@@ -510,6 +514,7 @@ def test_resolver_metrics_malformed_block_emits_nothing(tmp_path, make_relay, ma
 
 
 def test_resolver_aggregates(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
+    """A full block emits all six share ratios and both counts."""
     content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
                            [make_relay("AAAA")], dns_data=_dns_with_resolvers(sample_dns_metadata))
     assert _metric_lines(content, "aeo1_exit_dns_public_resolver_share_ratio") == [
@@ -567,6 +572,7 @@ def test_resolver_cold_start_emits_counts_but_no_shares(tmp_path, make_relay, ma
 
 def test_resolver_counts_without_shares(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
                                         sample_aroi_metadata):
+    """Counts are emitted even when the share block is missing."""
     dns = _dns_with_resolvers(sample_dns_metadata, {"exits_covered": 7, "exits_using_public": 3})
     content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata,
                            [make_relay("AAAA")], dns_data=dns)
@@ -577,6 +583,7 @@ def test_resolver_counts_without_shares(tmp_path, make_relay, make_relay_set, sa
 
 def test_resolver_queries_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
                                     sample_aroi_metadata):
+    """Per-relay counts are emitted for known categories with valid numbers, sorted by fingerprint."""
     relays = [
         _resolver_relay(make_relay, "BBBB", {"local": 40.0}),
         _resolver_relay(make_relay, "AAAA", {"google": 61.3, "local": 4.2}),
@@ -599,6 +606,7 @@ def test_resolver_queries_per_relay(tmp_path, make_relay, make_relay_set, sample
 
 def test_resolver_label_values_bounded_and_lowercase(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
                                                      sample_aroi_metadata):
+    """Provider labels come only from the fixed lowercase sets."""
     relays = [_resolver_relay(make_relay, "AAAA", {c: 1 for c in
                                                    ("google", "cloudflare", "quad9", "opendns", "ffmuc",
                                                     "local", "other", "unknown", "NextDNS", "Google")})]
@@ -612,6 +620,7 @@ def test_resolver_label_values_bounded_and_lowercase(tmp_path, make_relay, make_
 
 def test_resolver_families_have_one_help_type_and_unique_prefixes(tmp_path, make_relay, make_relay_set,
                                                                   sample_dns_metadata, sample_aroi_data):
+    """Each new family has one HELP/TYPE and no name prefixes another metric's."""
     relays = [_resolver_relay(make_relay, "AAAA", {"google": 61.3}), _resolver_relay(make_relay, "BBBB", {"local": 9})]
     rs = make_relay_set(relays, exit_dns_health_data=_dns_with_resolvers(sample_dns_metadata),
                         aroi_validation_data=sample_aroi_data())

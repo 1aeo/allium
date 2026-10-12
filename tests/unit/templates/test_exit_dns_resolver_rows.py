@@ -40,6 +40,7 @@ COLD_START = dict(RESOLVERS, weighted=False, exits_covered=0, exits_labelled=0, 
 
 
 def _relay(fingerprint, nickname, flags):
+    """Minimal Onionoo details entry for one relay."""
     return {
         "nickname": nickname, "fingerprint": fingerprint, "running": True, "flags": flags,
         "observed_bandwidth": 1_000_000, "consensus_weight": 100, "exit_probability": 0.1,
@@ -73,6 +74,7 @@ def _report(resolvers):
 
 
 def _relay_set(tmp_path, resolvers):
+    """Relays enriched with a report carrying the given metadata.resolvers."""
     details = {
         "version": "8.0",
         "relays_published": PUBLISHED,
@@ -86,11 +88,13 @@ def _relay_set(tmp_path, resolvers):
 
 
 def _relay_pages(relay_set):
+    """Render relay pages and return the exit and guard pages by fingerprint."""
     page_writer.write_relay_info(relay_set)
     return {fp: open(f"{relay_set.output_dir}/relay/{fp}/index.html").read() for fp in EXITS + (GUARD,)}
 
 
 def _render(tmp_path, resolvers):
+    """Relay pages and the network health dashboard for a report with the given resolvers."""
     relay_set = _relay_set(tmp_path, resolvers)
     pages = _relay_pages(relay_set)
     page_def = next(p for p in STANDALONE_PAGES if p["template"] == "network-health-dashboard.html")
@@ -110,33 +114,39 @@ def _resolver_row(html):
 
 @pytest.fixture(scope="module")
 def rendered(tmp_path_factory):
+    """Pages from a report with resolver data."""
     return _render(tmp_path_factory.mktemp("with_resolvers"), RESOLVERS)
 
 
 @pytest.fixture(scope="module")
 def rendered_without(tmp_path_factory):
+    """Pages from a report without resolver data."""
     return _render(tmp_path_factory.mktemp("without_resolvers"), None)
 
 
 def test_public_resolver_row(rendered):
+    """A labelled public exit shows its provider and query mix."""
     pages, _ = rendered
     assert _resolver_row(pages[PUBLIC]) == \
         "Google (public resolver) Google 94%, Local 6% (~66 estimated queries)"
 
 
 def test_local_resolver_row(rendered):
+    """A local exit shows its own network; shares near 0 and 100 never round to 0% or 100%."""
     pages, _ = rendered
     assert _resolver_row(pages[LOCAL]) == \
         "Local (exit's own network) Local &gt;99%, Other &lt;1% (~200 estimated queries)"
 
 
 def test_not_yet_labelled_row(rendered):
+    """Exits below the label threshold, or without queries, show Not enough data."""
     pages, _ = rendered
     assert _resolver_row(pages[COLD]) == "Not enough data Other 100% (~4 estimated queries)"
     assert _resolver_row(pages[UNSEEN]) == "Not enough data"
 
 
 def test_hostile_values_are_bounded_and_escaped(rendered):
+    """Unexpected upstream strings never reach the page."""
     pages, _ = rendered
     html = pages[HOSTILE]
     assert _resolver_row(html) == "Other Other 100% (~30 estimated queries)"
@@ -145,11 +155,13 @@ def test_hostile_values_are_bounded_and_escaped(rendered):
 
 
 def test_non_exit_has_no_resolver_row(rendered):
+    """Only exit relays get the row."""
     pages, _ = rendered
     assert _resolver_row(pages[GUARD]) is None
 
 
 def test_no_resolver_row_without_resolver_data(rendered_without):
+    """Without resolver data in the report no page shows the row."""
     pages, _ = rendered_without
     for fp in EXITS + (GUARD,):
         assert "Upstream Resolver" not in pages[fp], fp
@@ -182,6 +194,7 @@ def _dashboard_tiles(html):
 
 
 def test_dashboard_resolver_row(rendered):
+    """The Exit DNS Health card shows shares per provider and coverage."""
     _, html = rendered
     tiles = _dashboard_tiles(html)
     assert {k: tiles[k] for k in ("Google", "Cloudflare", "Quad9", "OpenDNS", "Freifunk München",
@@ -195,6 +208,7 @@ def test_dashboard_resolver_row(rendered):
 
 
 def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
+    """Upstream's placeholder zeros render as n/a, with the coverage counts."""
     _, html = _render(tmp_path, COLD_START)
     tiles = _dashboard_tiles(html)
     for label in ("Google", "Cloudflare", "Quad9", "OpenDNS", "Freifunk München", "All Public", "Local", "Other",
@@ -205,6 +219,7 @@ def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
 
 
 def test_dashboard_without_resolver_data(rendered_without):
+    """Without resolver data the card says not available and is otherwise unchanged."""
     _, html = rendered_without
     tiles = _dashboard_tiles(html)
     assert "Upstream resolvers: not available." in html

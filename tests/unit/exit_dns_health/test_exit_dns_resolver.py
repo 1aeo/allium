@@ -34,6 +34,7 @@ RESOLVERS = {
 
 
 def _report(results, resolvers=RESOLVERS):
+    """Report with the given results; resolvers=None leaves out metadata.resolvers."""
     metadata = {"timestamp": "2026-10-12T07:27:12Z", "dns_success_rate_percent": 99.0}
     if resolvers is not None:
         metadata["resolvers"] = copy.deepcopy(resolvers)
@@ -41,6 +42,7 @@ def _report(results, resolvers=RESOLVERS):
 
 
 def _result(fp, resolver=None, status="success"):
+    """One results[] entry, with a resolver block when given."""
     result = {"exit_fingerprint": fp, "status": status, "timing": {"total_ms": 1000}}
     if resolver is not None:
         result["resolver"] = resolver
@@ -53,6 +55,7 @@ def _resolver_of(resolver):
 
 
 def _attach(report, relays):
+    """Attach the report's DNS health to relays and index them by fingerprint."""
     attach_exit_dns_health_to_relays(relays, build_exit_dns_health_map(report))
     return {r["fingerprint"]: r for r in relays}
 
@@ -62,32 +65,38 @@ def _attach(report, relays):
 # ---------------------------------------------------------------------------
 
 def test_resolver_present():
+    """A labelled block keeps primary, public and its queries, largest first."""
     resolver = _resolver_of({"primary": "google", "public": True, "queries": {"local": 4.2, "google": 61.3}})
     assert resolver == {"primary": "google", "public": True, "queries": {"google": 61.3, "local": 4.2}}
     assert list(resolver["queries"]) == ["google", "local"]  # largest first
 
 
 def test_resolver_cold_start():
+    """Before 25 estimated queries upstream has no primary; the counts still come through."""
     resolver = _resolver_of({"primary": None, "public": None, "queries": {"other": 3.5}})
     assert resolver == {"primary": None, "public": None, "queries": {"other": 3.5}}
 
 
 def test_resolver_local_is_not_public():
+    """A local primary is labelled but not public."""
     resolver = _resolver_of({"primary": "local", "public": False, "queries": {"local": 40}})
     assert resolver["primary"] == "local"
     assert resolver["public"] is False
 
 
 def test_resolver_absent():
+    """Exits without a resolver block parse to None."""
     assert _resolver_of(None) is None
 
 
 @pytest.mark.parametrize("resolver", ["google", ["google"], 42, True])
 def test_resolver_not_a_dict(resolver):
+    """A resolver value that is not a dict is ignored."""
     assert _resolver_of(resolver) is None
 
 
 def test_resolver_bad_query_values_dropped():
+    """Strings, bools, negatives, NaN, inf, None and huge ints are not counts."""
     resolver = _resolver_of({"primary": "google", "public": True, "queries": {
         "google": 30, "cloudflare": "12", "quad9": True, "opendns": -1, "ffmuc": float("nan"),
         "local": float("inf"), "other": None, "unknown": 10 ** 400,
@@ -97,11 +106,13 @@ def test_resolver_bad_query_values_dropped():
 
 @pytest.mark.parametrize("queries", [None, "google=3", ["google", 3], 7])
 def test_resolver_queries_not_a_dict(queries):
+    """A queries value that is not a dict leaves no counts."""
     resolver = _resolver_of({"primary": "google", "public": True, "queries": queries})
     assert resolver == {"primary": "google", "public": True, "queries": {}}
 
 
 def test_resolver_unknown_category_counts_as_other():
+    """Categories this version does not know fold into 'other'."""
     resolver = _resolver_of({"primary": "nextdns", "public": True,
                              "queries": {"nextdns": 20.5, "other": 1.25, "<b>x</b>": 3}})
     assert resolver["primary"] == "other"
@@ -118,11 +129,13 @@ def test_resolver_unknown_category_counts_as_other():
     ("quad9", 1, ("quad9", None)),
 ])
 def test_resolver_primary_and_public_validated(primary, public, expected):
+    """primary must be a string category; public must be a bool and needs a known primary."""
     resolver = _resolver_of({"primary": primary, "public": public, "queries": {"google": 30}})
     assert (resolver["primary"], resolver["public"]) == expected
 
 
 def test_resolver_missing_keys():
+    """An empty block parses to no primary and no counts."""
     assert _resolver_of({}) == {"primary": None, "public": None, "queries": {}}
 
 
@@ -131,6 +144,7 @@ def test_resolver_missing_keys():
 # ---------------------------------------------------------------------------
 
 def test_attach_resolver_fields():
+    """Each kind of exit gets the documented primary/public/queries values."""
     report = _report([
         _result("PUB", {"primary": "google", "public": True, "queries": {"google": 61.3, "local": 4.2}}),
         _result("LOC", {"primary": "local", "public": False, "queries": {"local": 40.0}}),
@@ -143,6 +157,7 @@ def test_attach_resolver_fields():
                      + [{"fingerprint": "GUARD", "flags": ["Guard"]}])
 
     def fields(fp):
+        """(primary, public, queries) of the relay with fingerprint fp."""
         r = relays[fp]
         return (r["exit_dns_health_resolver_primary"], r["exit_dns_health_resolver_public"],
                 r["exit_dns_health_resolver_queries"])
@@ -176,6 +191,7 @@ def test_attach_health_entry_without_resolver_key():
 
 
 def test_attach_queries_not_shared_between_relays():
+    """Exits without data each get their own empty dict."""
     relays = _attach(_report([_result("A1", {"primary": "google", "public": True, "queries": {"google": 30}}),
                               _result("A2"), _result("A3")]),
                      [{"fingerprint": fp, "flags": ["Exit"]} for fp in ("A1", "A2", "A3")])
@@ -188,6 +204,7 @@ def test_attach_queries_not_shared_between_relays():
 # ---------------------------------------------------------------------------
 
 def test_summary_present():
+    """A complete block parses to its shares, counts and weighting."""
     summary = parse_resolver_summary({"resolvers": RESOLVERS})
     assert summary["public_share_pct"] == {"google": 10.5, "cloudflare": 7.99, "quad9": 2.0, "opendns": 0.0,
                                            "ffmuc": 1.12, "all": 21.61}
@@ -202,10 +219,12 @@ def test_summary_present():
     {"resolvers": {"version": 1, "public_share_pct": "x", "share_pct": [1, 2], "exits_total": "2674"}},
 ])
 def test_summary_absent_or_unusable(metadata):
+    """No block, or one without any usable value, parses to None."""
     assert parse_resolver_summary(metadata) is None
 
 
 def test_summary_partial_and_malformed_values():
+    """Bad values become None, shares are capped at 100, good ones are kept."""
     summary = parse_resolver_summary({"resolvers": {
         "public_share_pct": {"google": 12.5, "cloudflare": "8", "quad9": None, "all": 100.4},
         "exits_covered": 10, "exits_total": True, "exits_labelled": 2.0, "exits_using_public": 2.5,
@@ -238,6 +257,7 @@ def test_summary_cold_start_shares_are_not_zeros():
 
 
 def test_metrics_resolvers_present():
+    """Dashboard keys carry the block's shares and counts."""
     m = calculate_exit_dns_health_metrics(_report([]))
     assert m["exit_dns_health_resolvers_available"] is True
     assert m["exit_dns_health_resolver_google_percentage"] == 10.5
@@ -253,6 +273,7 @@ def test_metrics_resolvers_present():
 
 @pytest.mark.parametrize("data", [None, _report([], resolvers=None), _report([], resolvers={"version": 1})])
 def test_metrics_resolvers_not_available(data):
+    """Without a usable block every resolver key is None and availability is False."""
     m = calculate_exit_dns_health_metrics(data)
     assert m["exit_dns_health_resolvers_available"] is False
     resolver_values = {k: v for k, v in m.items()
@@ -262,6 +283,7 @@ def test_metrics_resolvers_not_available(data):
 
 
 def test_metrics_existing_keys_unchanged_by_resolvers():
+    """Resolver data changes none of the existing dashboard keys."""
     with_resolvers = calculate_exit_dns_health_metrics(_report([]))
     without = calculate_exit_dns_health_metrics(_report([], resolvers=None))
     new_keys = {k for k in with_resolvers if k.startswith("exit_dns_health_resolver")}
@@ -270,6 +292,7 @@ def test_metrics_existing_keys_unchanged_by_resolvers():
 
 
 def test_formatted_strings():
+    """Shares format as percentages and counts with thousands separators."""
     m = calculate_exit_dns_health_metrics(_report([]))
     preformat_network_health_template_strings(m)
     assert m["exit_dns_health_resolver_google_percentage_formatted"] == "10.5%"
@@ -282,6 +305,7 @@ def test_formatted_strings():
 
 
 def test_formatted_strings_not_available():
+    """Missing values format as n/a."""
     m = calculate_exit_dns_health_metrics(_report([], resolvers=None))
     preformat_network_health_template_strings(m)
     assert m["exit_dns_health_resolver_google_percentage_formatted"] == "n/a"
