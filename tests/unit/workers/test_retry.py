@@ -19,7 +19,6 @@ from allium.lib.workers import (
     _fetch_with_cache_fallback,
     TotalTimeoutError,
     APIConfig,
-    _cache_manager,
 )
 
 
