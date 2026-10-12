@@ -1629,10 +1629,19 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
 class _RelayPageRenderer:
     """Renders relay-info pages; built once, then shared with forked workers."""
 
-    def __init__(self, relay_set, output_path):
+    def __init__(self, relay_set, output_path, relays):
         from .page_context import StandardTemplateContexts
         self.relay_set = relay_set
         self.output_path = output_path
+        # Only these relays get a page. Onionoo's family lists also name
+        # relays it doesn't list or the downtime filter dropped, and vote
+        # files name authorities by V3 key, so links are checked against these.
+        self.relay_page_fps = frozenset(relay["fingerprint"] for relay in relays)
+        # Vote file authority name (lowercase nickname) -> relay fingerprint
+        self.authority_page_fps = {
+            relay.get("nickname", "").lower(): relay["fingerprint"]
+            for relay in relays if "Authority" in (relay.get("flags") or [])
+        }
         self.template = ENV.get_template("relay-info.html")
         self.standard_contexts = StandardTemplateContexts(relay_set)
         self.contact_map = relay_set.json.get("sorted", {}).get("contact", {})
@@ -1668,6 +1677,8 @@ class _RelayPageRenderer:
             aroi_validation_timestamp=self.aroi_validation_timestamp,
             validated_aroi_domains=self.validated_aroi_domains,
             base_url=self.base_url,
+            relay_page_fps=self.relay_page_fps,
+            authority_page_fps=self.authority_page_fps,
             canonical_url=canonical_url_for_output(
                 self.base_url, f"relay/{relay['fingerprint']}/index.html"
             ),
@@ -1690,8 +1701,8 @@ def write_relay_info(relay_set):
         rmtree(output_path)
     os.makedirs(output_path)
 
-    renderer = _RelayPageRenderer(relay_set, output_path)
     relays = [relay for relay in relay_set.json["relays"] if relay["fingerprint"].isalnum()]
+    renderer = _RelayPageRenderer(relay_set, output_path, relays)
 
     # Relay pages are the largest page set (~10k); render them in parallel
     # like the other page types.
