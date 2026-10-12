@@ -79,10 +79,10 @@ when fontconfig's `fc-match` is installed to check.
   chart sections, `chart_period_anchors`); a chart without that period keeps
   its default. These fragments are the deep links. On a relay page they land on
   the bandwidth chart card, past the bandwidth details above it: fixed offsets
-  per width range for the shortest details (428 px from 992 px wide, 559 px
-  below, 595 px under 390 px) put the card near the top, or up to about 200 px
-  lower on a phone, never past it. A relay page with only uptime charts does
-  the same for the uptime card (366 / 580 / 600 px from 992 / 576 / 0 px).
+  for the shortest details measured on every relay page (408 px from 992 px
+  wide, 519 px below) put the card near the top, or up to about 280 px lower on
+  a narrow phone, never past it. A relay page with only uptime charts does the
+  same for the uptime card (366 / 580 px).
 - `--no-charts` skips them.
 
 ## Content rules
