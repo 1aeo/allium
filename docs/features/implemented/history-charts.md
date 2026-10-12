@@ -124,7 +124,8 @@ when fontconfig's `fc-match` is installed to check.
   from the uptime document's `relays_published`). An offline relay's history
   stops at its last consensus; the window's slots after it are drawn as Onionoo
   counts them (the first holds its last hours in the consensus, the rest 0%),
-  and the "Average" is the relay page's figure for the period.
+  and the "Average" is the relay page's figure for the period. A block without
+  a `factor` is read with the page's default, 1/999.
 - Write/read is red where it leaves the role's p2–p98 band: the line's segments
   at an out-of-band day are drawn again in red, clipped to the strip beyond the
   band, so a day with no joined neighbour out on its side is a red tip, marked

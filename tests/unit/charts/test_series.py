@@ -7,7 +7,7 @@ import pytest
 from allium.lib.charts.series import (
     MBIT, active_ratio, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
 )
-from allium.lib.uptime_utils import uptime_windows
+from allium.lib.uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 
 from .fixtures import DAY, T0, block, history, relay
 
@@ -36,6 +36,23 @@ def test_uptime_points_follow_onionoos_window_and_pad_a_stopped_history():
     assert min(uptime_points(older, "1_month", windows)) == first  # its first 12 slots predate the window
     assert sum(uptime_points(older, "1_month", windows).values()) == pytest.approx(174 * 100.0)
     assert uptime_points(stopped, "1_month", {}) == points(stopped, 100.0)
+
+
+def test_an_uptime_block_without_a_factor_is_read_as_the_page_reads_it():
+    # Onionoo always sends a factor. A block without one is read with the relay page's default (1/999), not 1: it is
+    # drawn 0-100%, its mean the page's figure. A factor of 0 stays 0; a bandwidth block without one is unscaled.
+    windows = uptime_windows({"relays_published": "2026-09-30 12:00:00", "relays": []})
+    bare = block([999] * 100 + [0] * 36 + [500] * 50, first="2026-08-30 14:00:00", interval=14400)
+    del bare["factor"]
+    drawn = uptime_points(bare, "1_month", windows)
+    assert len(drawn) == 186 and min(drawn.values()) == 0.0 and max(drawn.values()) == pytest.approx(100.0)
+    average, _slots = _block_uptime_percentage_and_datapoints(bare, "1_month", windows)
+    assert sum(drawn.values()) / len(drawn) == pytest.approx(average)
+    assert uptime_points(dict(bare, factor=None), "1_month", windows) == drawn
+    assert set(uptime_points(dict(bare, factor=0), "1_month", windows).values()) == {0.0}
+    bare = block([1, 2])
+    del bare["factor"]
+    assert points(bare, 2.0) == {T0: 2.0, T0 + timedelta(days=1): 4.0}
 
 
 def test_write_read_counts_on_days_averaging_50_kb_s_both_ways():
