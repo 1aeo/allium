@@ -229,6 +229,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
     the macro reads: the relay dict (shared and not modified while pages
     render), the call arguments, the page values, and for rows that show
     aroi_validation_icon the relay's membership in the page's fingerprint sets.
+    It also asks relays.has_page(), whose answers are fixed for the build.
     """
     icon_state = None
     if show_validation_icon and validation_icon_type not in {

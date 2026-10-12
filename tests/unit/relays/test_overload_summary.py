@@ -216,7 +216,8 @@ def _contact_context(overload_summary):
         'consensus_weight_fraction': 0.025,
         'network_position': {'label': 'mixed', 'formatted_string': 'Mixed (5 total relays)'},
         'relay_subset': [relay],
-        'relays': {'json': {'relay_subset': [relay]}, 'use_bits': False},
+        'relays': {'json': {'relay_subset': [relay]}, 'use_bits': False,
+                   'has_page': lambda category, key: True},  # every category page exists
         'page_ctx': {'path_prefix': '../'},
         'contact_display_data': {'bandwidth_breakdown': '50.0 MB/s guard',
                                  'consensus_weight_breakdown': '1.0% guard',
