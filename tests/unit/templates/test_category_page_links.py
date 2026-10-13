@@ -15,6 +15,7 @@ import pytest
 from allium.lib.progress_logger import ProgressLogger
 from allium.lib.relays import Relays
 from allium.lib.site_generator import SORTED_PAGE_KEYS, generate_site
+from helpers.html_links import dead_fragment_links
 
 PUBLISHED = "2026-10-11 12:00:00"
 KNOWN = "A" * 40
@@ -192,3 +193,8 @@ def test_no_page_links_a_missing_category_page(site):
                     page, href)
                 checked += 1
     assert checked > 100
+
+
+def test_no_page_links_a_missing_fragment(site):
+    """Every #fragment link names an element of the generated page it opens."""
+    assert dead_fragment_links(site.out) == []

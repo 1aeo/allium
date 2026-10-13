@@ -53,6 +53,17 @@ CONTACT_SECTION_KEYS = (
     'not_configured_relays',
 )
 
+# contact-relay-list.html's AROI sections: each aroi_section_header's id is
+# "<section>-relays", and it lists the relays of these validation status lists
+AROI_SECTION_LISTS = {
+    'security_incident': ('security_incident_relays',),
+    'pending_onionoo': ('pending_onionoo_relays',),
+    'validated': ('validated_relays',),
+    'misconfigured': ('misconfigured_relays',),
+    'unauthorized': ('unauthorized_relays',),
+    'not_configured': ('incomplete_relays', 'not_configured_relays'),
+}
+
 # TOTAL_DATA_PERIOD_ORDER (longest-first period lookup order) is imported
 # above from bandwidth_formatter — single source of truth.
 DNS_SORT_RANK = {'success': 0, 'fail': 1, 'untested': 2}
