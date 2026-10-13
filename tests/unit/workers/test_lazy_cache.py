@@ -92,10 +92,11 @@ def test_not_modified_loads_cache_once():
     load.assert_called_once_with('test_api')
 
 
-def test_not_modified_with_unreadable_cache_does_not_refetch():
-    result, timeouts, _ = _fetch([_http_error(304)])
-    assert result is None
-    assert timeouts == [5]
+def test_not_modified_with_unreadable_cache_refetches():
+    result, timeouts, load = _fetch([_http_error(304), NEW])
+    assert result == {"relays": [{"id": "new"}]}
+    assert timeouts == [5, 10]
+    load.assert_called_once_with('test_api')
 
 
 def test_failed_attempts_leave_no_reference_cycles():
