@@ -1504,7 +1504,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
         <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
         {% endif %}
     </td>
-    <td>{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
+    <td headers="col-running">{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-muted">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
@@ -1513,7 +1513,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     {% if has_ipv6 %}
     <td>{% if vote.ipv6_reachable == true %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_reachable == false %}<span class="al-status-danger">No</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     {% endif %}
-    <td style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
+    <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
             {% for flag_info in vote.flags_with_consensus %}
                 {%- if flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
@@ -1524,7 +1524,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
         {% elif vote.flags %}{{ vote.flags_display }}
         {% else %}<span class="al-status-muted">—</span>{% endif %}
     </td>
-    <td>{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-fast">{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Guard needs this authority's top-25% cutoff ({{ vote.guard_bw_top25_display }}) OR AuthDirGuardBWGuarantee ({{ vote.guard_bw_guarantee_display }}).">{{ vote.guard_bw_value_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
@@ -1532,8 +1532,8 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span class="{% if vote.stable_uptime_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span class="al-status-muted">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu >= 0.98 %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span class="{% if vote.hsdir_tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-cons-wt">{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
