@@ -7,8 +7,8 @@ in templates. If the template requirements change, update these tests.
 Key thresholds tested:
 - Guard WFU: >= 98% (0.98)
 - Guard TK: >= 8 days (691200 seconds)
-- HSDir WFU: >= 98% (0.98)  
-- HSDir TK: >= 10 days (864000 seconds)
+- HSDir uptime: >= 96 hours observed (MinUptimeHidServDirectoryV2)
+- Published hsdir-wfu / hsdir-tk: only authorities that set them (moria1)
 """
 
 import pytest
@@ -705,40 +705,46 @@ class TestIdentifyIssuesComprehensive:
         fast_issues = [i for i in issues if 'Fast' in i.get('title', '')]
         assert len(fast_issues) >= 1
     
-    def test_hsdir_low_wfu_issue(self):
-        """Test detection of HSDir WFU below threshold."""
+    def test_hsdir_low_wfu_is_not_an_hsdir_issue(self):
+        """WFU is a Guard requirement. Authorities do not assign HSDir from it."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'hsdir': {'eligible_count': 0}},
+            'flag_eligibility': {'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []}},
             'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
         }
-        
-        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
-        
-        hsdir_issues = [i for i in issues if i['category'] == 'hsdir']
-        # Should identify WFU as issue for HSDir
-        wfu_hsdir = [i for i in hsdir_issues if 'WFU' in i.get('title', '')]
-        assert len(wfu_hsdir) >= 1
-    
-    def test_hsdir_low_tk_issue(self):
-        """Test detection of HSDir Time Known below threshold (25 hours default)."""
+
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable', 'V2Dir'],
+                                  observed_bandwidth=3_000_000)
+        assert [i for i in issues if i['category'] == 'hsdir' and 'WFU' in i.get('title', '')] == []
+
+    def test_hsdir_observed_uptime_issue(self):
+        """Withheld HSDir after Fast, Stable and V2Dir is an observed-uptime miss."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.99, 'tk': 20 * 3600}],  # 20 hours, below 25 hour default
+            'flag_eligibility': {'hsdir': {
+                'assigned_count': 4,
+                'details': [
+                    {'authority': 'bastet', 'uptime_met': True, 'assigned': True},
+                    {'authority': 'dannenberg', 'uptime_met': False, 'assigned': False},
+                ],
+            }},
+            'authority_votes': [{'wfu': 0.99, 'tk': 29 * SECONDS_PER_DAY}],
         }
-        
-        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
-        
-        hsdir_tk_issues = [i for i in issues if i['category'] == 'hsdir' and 'Time Known' in i.get('title', '')]
-        assert len(hsdir_tk_issues) >= 1
-        assert '25' in hsdir_tk_issues[0]['description']  # Mentions 25 hours
+
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable', 'V2Dir'],
+                                  observed_bandwidth=3_000_000)
+        uptime = [i for i in issues if i['category'] == 'hsdir' and 'uptime' in i.get('title', '').lower()]
+        assert len(uptime) == 1
+        assert uptime[0]['severity'] == 'warning'
+        assert '96' in uptime[0]['description']
+        assert 'dannenberg' in uptime[0]['description']
+        assert uptime[0]['section'] == 'flag-hsdir-uptime'
     
     def test_bandwidth_deviation_warning(self):
         """Test detection of high bandwidth measurement deviation."""
@@ -1200,8 +1206,8 @@ class TestMiddleOnlyFlag:
     def test_normal_relay_row_count(self):
         """Test that normal relay has correct row count (no MiddleOnly).
         
-        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 = 19
+        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 = 18
         """
         result = format_relay_consensus_evaluation(
             self.NORMAL_EVALUATION,
@@ -1216,7 +1222,7 @@ class TestMiddleOnlyFlag:
         assert 'Valid' in flags_present
         assert 'V2Dir' in flags_present
         assert 'MiddleOnly' not in flags_present
-        assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
+        assert len(frt) == 18  # Fast, Stable:2, HSDir:4, Guard:6, Running:2, Valid, V2Dir, Exit
     
     def test_middleonly_relay_row_count(self):
         """Test that MiddleOnly relay has correct row count
@@ -1228,9 +1234,9 @@ class TestMiddleOnlyFlag:
         )
 
         frt = result['flag_requirements_table']
-        # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
+        # 18 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
         # even though this fixture's flag_eligibility has no 'badexit' entry)
-        assert len(frt) == 21
+        assert len(frt) == 20
         badexit = next(r for r in frt if r['flag'] == 'BadExit')
         assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
 
@@ -1683,3 +1689,110 @@ class TestForest44VoteBandwidthDisplay:
         assert 'lists this relay as Sybil' in rows['maatuska']['flag_bw_title']
         fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
         assert 'bastet, faravahar: not published' in fast['value']
+
+
+class TestHSDirUptimeMatchesAssignments:
+    """HSDir 4/9 in the summary must not sit above an all-green requirements table.
+
+    tonyyayo (B9F405AA27AC3BC0794958A5E4AC7E160333BEE1) on 2026-10-12: every
+    authority voted Fast, Stable and V2Dir, WFU was about 99%, and Time Known
+    was about 29 days except moria1. Only 4 authorities voted HSDir. The
+    requirements those 8 authorities actually use is observed uptime >= 96h,
+    which the votes do not publish. The uptime row has to show 4/9, and the
+    old WFU / Time Known rows must not read Meets (9/9).
+    """
+
+    ASSIGNED = ('bastet', 'dizum', 'maatuska', 'tor26')
+    UPTIME_FAILED = ('dannenberg', 'faravahar', 'gabelmoo', 'longclaw')
+
+    def _evaluation(self):
+        def vote(name, assigned):
+            flags = ['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid']
+            if assigned:
+                flags.append('HSDir')
+            return {
+                'authority': name, 'voted': True, 'flags': flags,
+                'wfu': 0.994, 'tk': 2_500_000, 'mtbf': 870_000,
+                'bandwidth': 10000, 'measured': 20000,
+            }
+
+        names = self.ASSIGNED + self.UPTIME_FAILED + ('moria1',)
+        votes = [vote(name, name in self.ASSIGNED) for name in names]
+        votes[-1]['tk'] = 818995  # moria1, under its published hsdir-tk
+        guard_details = [{
+            'authority': name, 'has_fast': True, 'has_stable': True, 'has_v2dir': True,
+        } for name in names]
+        hsdir_details = []
+        for name in names:
+            assigned = name in self.ASSIGNED
+            if name == 'moria1':
+                detail = {
+                    'authority': name, 'assigned': False, 'uptime_met': None,
+                    'wfu_published': True, 'wfu_value': 0.982, 'wfu_threshold': 0.98, 'wfu_met': True,
+                    'tk_published': True, 'tk_value': 818995, 'tk_threshold': 843698, 'tk_met': False,
+                }
+            elif assigned:
+                detail = {
+                    'authority': name, 'assigned': True, 'uptime_met': True,
+                    'wfu_published': False, 'tk_published': False,
+                }
+            else:
+                detail = {
+                    'authority': name, 'assigned': False, 'uptime_met': False,
+                    'wfu_published': False, 'tk_published': False,
+                }
+            hsdir_details.append(detail)
+        return {
+            'fingerprint': 'B9F405AA27AC3BC0794958A5E4AC7E160333BEE1',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': votes,
+            'flag_eligibility': {
+                'guard': {'eligible_count': 9, 'assigned_count': 9, 'details': guard_details},
+                'stable': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+                'fast': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+                'hsdir': {'eligible_count': 4, 'assigned_count': 4, 'details': hsdir_details},
+                'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            },
+            'reachability': {'ipv4_reachable_count': 9, 'ipv6_reachable_count': 0,
+                             'ipv6_not_tested_authorities': [], 'total_authorities': 9},
+            'bandwidth': {'median': 20000, 'measurement_count': 5, 'unmeasured': False},
+        }
+
+    def test_summary_and_uptime_row_both_say_four_of_nine(self):
+        result = format_relay_consensus_evaluation(
+            self._evaluation(),
+            current_flags=['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid'],
+            relay_uptime=12.4 * SECONDS_PER_DAY,
+        )
+        hsdir = next(flag for flag in result['eligible_flags_display']['flags'] if flag['name'] == 'HSDir')
+        assert (hsdir['count'], hsdir['total']) == (4, 9)
+
+        rows = [row for row in result['flag_requirements_table'] if row['flag'] == 'HSDir']
+        by_metric = {row['metric']: row for row in rows}
+        assert by_metric['Prereq: Fast']['status'] == 'meets'
+        assert '9/9 DA' in by_metric['Prereq: Fast']['status_text']
+        assert by_metric['Uptime']['status'] == 'below'
+        assert by_metric['Uptime']['status_text'] == 'Below (4/9 DA)'
+        assert by_metric['Uptime']['anchor'] == 'flag-hsdir-uptime'
+        for name in self.UPTIME_FAILED:
+            assert name in by_metric['Uptime']['value']
+        assert '9/9' not in by_metric['Uptime']['status_text']
+
+        # moria1's published rule is its own row, not a 9/9 Time Known pass
+        assert by_metric['Time Known']['status'] == 'below'
+        assert by_metric['Time Known']['status_text'] == 'Below (0/1 DA)'
+        assert 'moria1' in by_metric['Time Known']['value']
+        assert by_metric['WFU']['status_text'] == 'Meets (1/1 DA)'
+        assert all('9/9' not in row['status_text'] or row['metric'].startswith('Prereq')
+                   for row in rows)
+
+        by_auth = {row['authority']: row for row in result['authority_table']}
+        assert by_auth['moria1']['hsdir_tk_published'] is True
+        assert by_auth['moria1']['hsdir_tk_meets'] is False
+        assert by_auth['moria1']['hsdir_uptime_meets'] is None
+        assert by_auth['dannenberg']['hsdir_uptime_meets'] is False
+        assert by_auth['dannenberg']['hsdir_tk_published'] is False
+        assert by_auth['bastet']['hsdir_uptime_meets'] is True

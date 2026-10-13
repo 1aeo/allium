@@ -21,7 +21,7 @@ from .flag_thresholds import (
     GUARD_TK_DEFAULT,
     GUARD_WFU_DEFAULT,
     GUARD_BW_GUARANTEE,
-    HSDIR_TK_DEFAULT,
+    HSDIR_UPTIME_DEFAULT,
     FAST_BW_GUARANTEE,
     MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
@@ -120,6 +120,46 @@ def _format_days_adaptive(value_seconds, threshold_seconds, decimals=1):
             break
         d += 1
     return f"{val_days:.{d}f}d", f"{thresh_days:.{d}f}d"
+
+
+def _hsdir_uptime_result(detail: dict, relay_uptime) -> Optional[bool]:
+    """One authority's HSDir uptime result, capped by self-reported uptime.
+
+    The shorter of observed continuous uptime and descriptor uptime has to
+    reach 96 hours. A descriptor under 96 hours fails every authority that
+    did not vote HSDir, whatever else also failed.
+    """
+    if relay_uptime is not None and relay_uptime < HSDIR_UPTIME_DEFAULT and not detail.get('assigned'):
+        return False
+    return detail.get('uptime_met')
+
+
+def _summarize_hsdir(flag_eligibility: dict, relay_uptime) -> dict:
+    """HSDir uptime passes and the authorities that publish extra thresholds."""
+    info = flag_eligibility.get('hsdir') or {}
+    details = info.get('details') or []
+    assigned = info.get('assigned_count', 0)
+    if not details:
+        # Older evaluations stored only the assignment count. That count is
+        # the number of authorities whose uptime check passed.
+        meets = 0 if (relay_uptime is not None and relay_uptime < HSDIR_UPTIME_DEFAULT) else assigned
+        return {'meets': meets, 'fail_names': [], 'wfu': [], 'tk': []}
+    meets = 0
+    fail_names = []
+    wfu_rows = []
+    tk_rows = []
+    for detail in details:
+        met = _hsdir_uptime_result(detail, relay_uptime)
+        if met is True:
+            meets += 1
+        elif met is False:
+            fail_names.append(detail.get('authority') or '?')
+        if detail.get('wfu_published'):
+            wfu_rows.append(detail)
+        if detail.get('tk_published'):
+            tk_rows.append(detail)
+    fail_names.sort()
+    return {'meets': meets, 'fail_names': fail_names, 'wfu': wfu_rows, 'tk': tk_rows}
 
 
 def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
@@ -486,8 +526,6 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     # Track both actual values set AND defaults for authorities that don't set values
     guard_wfu_threshold = DEFAULT_WFU_THRESHOLD
     guard_tk_threshold = GUARD_TK_DEFAULT
-    hsdir_wfu_threshold = DEFAULT_WFU_THRESHOLD
-    hsdir_tk_threshold = HSDIR_TK_DEFAULT
     
     guard_bw_values = []
     stable_uptime_values = []
@@ -495,9 +533,6 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     fast_speed_values = []
     
     # Track per-threshold statistics for showing min/max and authority counts
-    # This helps distinguish dir-spec defaults from actual authority values
-    hsdir_tk_values = []  # (auth_name, value) tuples for authorities that SET this
-    hsdir_tk_default_count = 0  # Count of authorities using dir-spec default
     fast_speed_by_auth = {}  # auth_name -> value
     stable_mtbf_by_auth = {}  # auth_name -> value for MTBF outlier detection
     stable_uptime_by_auth = {}  # auth_name -> value for uptime threshold tracking
@@ -525,16 +560,6 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
             if 'fast-speed' in thresholds:
                 fast_speed_values.append(thresholds['fast-speed'])
                 fast_speed_by_auth[auth_name] = thresholds['fast-speed']
-            # HSDir thresholds - track which authorities set vs use default
-            if 'hsdir-wfu' in thresholds:
-                val = _parse_wfu_threshold(thresholds['hsdir-wfu'])
-                if val:
-                    hsdir_wfu_threshold = max(hsdir_wfu_threshold, val)
-            if 'hsdir-tk' in thresholds and thresholds['hsdir-tk']:
-                hsdir_tk_values.append((auth_name, thresholds['hsdir-tk']))
-                hsdir_tk_threshold = max(hsdir_tk_threshold, thresholds['hsdir-tk'])
-            else:
-                hsdir_tk_default_count += 1
     
     # Calculate Stable MTBF typical threshold early (needed for stats computation)
     # MTBF thresholds vary per authority; use median as representative threshold
@@ -551,26 +576,6 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     
     # Set relay values from stats
     relay_tk = tk_stats['primary_value']
-    
-    # Calculate HSDir TK statistics for display
-    # dir-spec default: 25 hours (HSDIR_TK_DEFAULT)
-    # Consensus needs majority (5/9), so if 8 authorities use 25h and 1 uses 10d,
-    # relay only needs 25h to get HSDir from majority
-    hsdir_tk_max = hsdir_tk_threshold  # strictest (currently moria1's ~10 days)
-    hsdir_tk_consensus = HSDIR_TK_DEFAULT  # what majority requires (dir-spec default)
-    hsdir_tk_strict_auths = [name for name, val in hsdir_tk_values if val > HSDIR_TK_DEFAULT * 2]  # significantly stricter
-    
-    # Count per-authority HSDir metric evaluations for Summary table
-    # (avoids conflating overall HSDir flag assignment count with per-metric counts)
-    hsdir_tk_meets_count = 0
-    for vote in authority_votes:
-        if vote.get('voted'):
-            auth_name = vote.get('authority', '')
-            auth_thresh = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
-            auth_hsdir_tk = auth_thresh.get('hsdir-tk', HSDIR_TK_DEFAULT)
-            tk_val = vote.get('tk')
-            if tk_val is not None and tk_val >= auth_hsdir_tk:
-                hsdir_tk_meets_count += 1
     
     # Calculate Fast speed statistics
     # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
@@ -623,6 +628,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     hsdir_prereq_stable_count = sum(1 for d in guard_details if d.get('has_stable', False))
     hsdir_prereq_fast_count = sum(1 for d in guard_details if d.get('has_fast', False))
     hsdir_prereq_v2dir_count = sum(1 for d in guard_details if d.get('has_v2dir', False))
+    hsdir_summary = _summarize_hsdir(flag_eligibility, relay_uptime)
     
     # Fast and Guard bandwidth: each authority's own vs its own thresholds
     # (collector_fetcher._analyze_flag_eligibility)
@@ -690,19 +696,14 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'fast_speed_max_display': _format_bandwidth_value(fast_speed_max, use_bits),
         'fast_speed_strict_auths': fast_speed_strict_auths,
         
-        # HSDir eligibility
-        # hsdir_tk_meets uses majority logic: relay needs to meet TK threshold
-        # for ≥5/9 authorities (not the strictest one, which is moria1's ~10 days)
-        'hsdir_wfu_threshold': hsdir_wfu_threshold,
-        'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
-        'hsdir_tk_meets': hsdir_tk_meets_count >= majority_required,
-        'hsdir_tk_meets_count': hsdir_tk_meets_count,
+        # HSDir: observed uptime >= 96h, plus any thresholds an authority publishes
         'hsdir_prereq_stable_count': hsdir_prereq_stable_count,
         'hsdir_prereq_fast_count': hsdir_prereq_fast_count,
         'hsdir_prereq_v2dir_count': hsdir_prereq_v2dir_count,
-        'hsdir_tk_max_display': _format_days(hsdir_tk_max),
-        'hsdir_tk_consensus_display': _format_days(hsdir_tk_consensus),
-        'hsdir_tk_strict_auths': hsdir_tk_strict_auths,
+        'hsdir_uptime_meets_count': hsdir_summary['meets'],
+        'hsdir_uptime_fail_names': hsdir_summary['fail_names'],
+        'hsdir_published_wfu': hsdir_summary['wfu'],
+        'hsdir_published_tk': hsdir_summary['tk'],
         
         # Running flag (reachability)
         'running_ipv4_count': ipv4_reachable_count,
@@ -740,7 +741,9 @@ FLAG_TOOLTIPS = {
     'guard': "Entry Guard: First hop in Tor circuits. Requires high uptime (WFU>=98%), sufficient age (TK>=8d), and bandwidth (>=2MB/s or top 25%).",
     'stable': "Suitable for long-lived connections. Requires sufficient MTBF and uptime to handle persistent streams.",
     'fast': "High bandwidth relay. Requires >=100 KB/s or in top 7/8 of network bandwidth.",
-    'hsdir': "Hidden Service Directory: Stores and serves hidden service descriptors. Requires V2Dir (tunnelled-dir-server), Stable, Fast flags, high uptime (WFU>=98%), and sufficient age.",
+    'hsdir': ("Hidden Service Directory: stores and serves onion service descriptors. "
+              "Requires V2Dir, Stable, Fast, and 96 hours of uptime observed by the authority "
+              "(MinUptimeHidServDirectoryV2)."),
     'running': "Relay is reachable: Directory Authority successfully connected to relay's OR port.",
     'valid': "Relay is verified: Not blacklisted, has valid descriptor, and properly configured. Does not require a recommended Tor version.",
     'v2dir': "Supports directory protocol v2+: Can serve directory information to clients.",
@@ -757,8 +760,14 @@ METRIC_TOOLTIPS = {
     'mtbf_stable': "Mean Time Between Failures: Average uptime between restarts/crashes. Higher = more reliable for long-lived connections. Source: Dir. Auth. vote files.",
     'uptime_stable': "Current session uptime since last restart. Compared against each authority's stable-uptime threshold. Source: Relay descriptor.",
     'speed_fast': "Bandwidth each authority uses for Fast: its bandwidth scanner's measurement if it has one, otherwise the relay-reported bandwidth (or 0 if the authority ignores unmeasured relays). Required: at least that authority's fast-speed, which is AuthDirFastGuarantee (100 KB in tor's units = 102,400 bytes, voted as 102 KB/s) or the top-7/8 cutoff if lower. Source: CollecTor vote files.",
-    'wfu_hsdir': "Weighted Fractional Uptime: Required >=98% for HSDir flag to ensure reliable hidden service directory. Source: Dir. Auth. vote files.",
-    'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
+    'uptime_hsdir': ("Continuous time this authority has reached the relay since it last saw the relay down, "
+                     "capped by the relay's self-reported uptime. HSDir requires >=96 hours "
+                     "(MinUptimeHidServDirectoryV2). This is not Time Known and not WFU. Votes omit the "
+                     "observed value; withholding HSDir after every other requirement passed means it is under 96 hours."),
+    'wfu_hsdir': ("Weighted Fractional Uptime, only for authorities that publish hsdir-wfu (moria1). "
+                  "The other authorities do not use WFU when assigning HSDir."),
+    'tk_hsdir': ("Time Known, only for authorities that publish hsdir-tk (moria1, about 10 days). "
+                 "The other authorities do not use Time Known when assigning HSDir."),
     'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
     'middleonly': "Security restriction assigned by Directory Authorities. MiddleOnly relays cannot serve as Guard, Exit, or HSDir. Removes Exit, Guard, HSDir, V2Dir flags and adds BadExit. Source: CollecTor vote files.",
     'badexit': "Misbehaving exit node flagged by Directory Authorities. Traffic manipulation, SSL stripping, content injection, or DNS manipulation detected. Also assigned automatically with MiddleOnly. Source: CollecTor vote files.",
@@ -1103,6 +1112,36 @@ def _make_prereq_row(parent_flag: str, parent_tooltip: str, parent_color: str,
     )
 
 
+def _published_hsdir_row(tooltip: str, color: str, metric: str, metric_tooltip: str,
+                         publishers: list, met_key: str, value_key: str, threshold_key: str,
+                         format_value, anchor: str) -> dict:
+    """One HSDir row for authorities that publish hsdir-wfu or hsdir-tk.
+
+    The denominator is how many authorities publish the threshold, not every
+    voting authority. A 25-hour default applied to the rest made this row
+    read Meets (8/9) or (9/9) for relays those authorities were not judging
+    that way.
+    """
+    total = len(publishers)
+    met_count = sum(1 for detail in publishers if detail.get(met_key))
+    majority = (total // 2) + 1 if total else 1
+    status = _count_status(met_count, majority, total) if total else 'below'
+    lines = []
+    thresholds = []
+    for detail in publishers:
+        name = detail.get('authority') or '?'
+        lines.append(f'{name}: <strong>{format_value(detail.get(value_key))}</strong>')
+        thresholds.append(f'{name} ≥{format_value(detail.get(threshold_key))}')
+    return _make_row(
+        'HSDir', tooltip, color, metric, metric_tooltip,
+        '<br>'.join(lines) or 'N/A', 'da',
+        _vote_threshold('; '.join(thresholds), majority, total),
+        status,
+        _get_status_text(status, da_count=met_count, da_total=total),
+        anchor=anchor,
+    )
+
+
 def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     """
     Pre-compute flag requirements table data for template efficiency.
@@ -1273,47 +1312,54 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                           _get_status_text(uptime_status, da_count=uptime_meets_count, da_total=total_authorities),
                           anchor='flag-stable-uptime'))
     
-    # HSDir flag (5 rows: 3 prereqs + 2 metrics)
-    # Per Tor source (voteflags.c): HSDir requires Stable, Fast, AND V2Dir
-    # (supports_tunnelled_dir_requests = tunnelled-dir-server in descriptor)
+    # HSDir: Fast, Stable, V2Dir, then observed uptime >= 96h.
+    # WFU and Time Known are rows only for authorities that publish them.
     hsdir_color = get_flag_color('hsdir')
     hsdir_tooltip = FLAG_TOOLTIPS['hsdir']
     hsdir_prereq_stable = rv.get('hsdir_prereq_stable_count', 0)
     hsdir_prereq_fast = rv.get('hsdir_prereq_fast_count', 0)
     hsdir_prereq_v2dir = rv.get('hsdir_prereq_v2dir_count', 0)
-    
-    # Row 1-3: Prerequisites (order matches Guard: Fast → Stable → V2Dir)
+    published_wfu = rv.get('hsdir_published_wfu') or []
+    published_tk = rv.get('hsdir_published_tk') or []
+    hsdir_rowspan = 4 + (1 if published_wfu else 0) + (1 if published_tk else 0)
+
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
-                                  hsdir_prereq_fast, total_authorities, majority_required, rowspan=5,
+                                  hsdir_prereq_fast, total_authorities, majority_required, rowspan=hsdir_rowspan,
                                   threshold_override=fast_threshold, value_detail=fast_detail))
-    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
+    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable',
                                   hsdir_prereq_stable, total_authorities, majority_required,
                                   threshold_override=mtbf_threshold))
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'V2Dir',
                                   hsdir_prereq_v2dir, total_authorities, majority_required,
                                   threshold_override=v2dir_threshold))
-    
-    # Row 3: WFU (using DRY helper)
-    hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
-    hsdir_wfu_da_count = wfu_stats.get('meets_threshold_count', 0) or 0
-    rows.append(_make_row('HSDir', hsdir_tooltip, hsdir_color, 'WFU', METRIC_TOOLTIPS['wfu_hsdir'],
-                          _format_da_value_html(wfu_stats), 'da',
-                          _vote_threshold(f"≥{rv.get('hsdir_wfu_threshold', 0.98) * 100:.1f}%", majority_required, total_authorities),
-                          hsdir_wfu_status,
-                          _get_status_text(hsdir_wfu_status, da_count=hsdir_wfu_da_count, da_total=total_authorities),
-                          anchor='flag-hsdir-wfu'))
-    
-    # Row 4: Time Known (using DRY helper)
-    # Use HSDir-specific TK meets count (per-authority hsdir-tk thresholds),
-    # not Guard TK stats (which use 8-day threshold)
-    hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
-    hsdir_tk_da_count = rv.get('hsdir_tk_meets_count', tk_stats.get('meets_threshold_count', 0) or 0)
-    hsdir_tk_threshold = (_vote_threshold(f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)", majority_required, total_authorities)
-        + _format_stricter_threshold(rv.get('hsdir_tk_strict_auths', []), rv.get('hsdir_tk_max_display', '10d')))
-    rows.append(_make_row('HSDir', hsdir_tooltip, hsdir_color, 'Time Known', METRIC_TOOLTIPS['tk_hsdir'],
-                          _format_da_value_html(tk_stats), 'da', hsdir_tk_threshold, hsdir_tk_status,
-                          _get_status_text(hsdir_tk_status, da_count=hsdir_tk_da_count, da_total=total_authorities),
-                          anchor='flag-hsdir-time-known'))
+
+    uptime_meets = rv.get('hsdir_uptime_meets_count', 0)
+    uptime_status = _count_status(uptime_meets, majority_required, total_authorities)
+    uptime_parts = []
+    reported_uptime = rv.get('stable_uptime_display')
+    if reported_uptime and reported_uptime != 'N/A':
+        uptime_parts.append(_format_relay_value_html(reported_uptime))
+    uptime_parts.append(
+        f'<span class="al-text-small-muted">{uptime_meets}/{total_authorities} DA observed ≥96h continuously</span>')
+    fail_names = rv.get('hsdir_uptime_fail_names') or []
+    if fail_names:
+        uptime_parts.append(f'<span class="al-text-small-muted">{", ".join(fail_names)}: under 96h</span>')
+    rows.append(_make_row(
+        'HSDir', hsdir_tooltip, hsdir_color, 'Uptime', METRIC_TOOLTIPS['uptime_hsdir'],
+        '<br>'.join(uptime_parts), 'da',
+        _vote_threshold('≥96h observed (MinUptimeHidServDirectoryV2)', majority_required, total_authorities),
+        uptime_status,
+        _get_status_text(uptime_status, da_count=uptime_meets, da_total=total_authorities),
+        anchor='flag-hsdir-uptime'))
+
+    if published_wfu:
+        rows.append(_published_hsdir_row(
+            hsdir_tooltip, hsdir_color, 'WFU', METRIC_TOOLTIPS['wfu_hsdir'], published_wfu,
+            'wfu_met', 'wfu_value', 'wfu_threshold', _format_wfu_display, 'flag-hsdir-wfu'))
+    if published_tk:
+        rows.append(_published_hsdir_row(
+            hsdir_tooltip, hsdir_color, 'Time Known', METRIC_TOOLTIPS['tk_hsdir'], published_tk,
+            'tk_met', 'tk_value', 'tk_threshold', _format_days, 'flag-hsdir-time-known'))
     
     # Guard flag (6 rows: 3 prereqs + 3 metrics)
     # Per Tor dir-spec: Guard requires Fast, Stable, and V2Dir flags (3 deps)
@@ -1492,8 +1538,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
     weight_from_measured = not (consensus_data.get('bandwidth') or {}).get('unmeasured', False)
     # Each authority's Fast and Guard bandwidth verdicts (collector_fetcher._analyze_flag_eligibility)
     eligibility = consensus_data.get('flag_eligibility', {})
-    fast_by_auth, guard_by_auth = ({d.get('authority'): d for d in eligibility.get(flag, {}).get('details', [])}
-                                   for flag in ('fast', 'guard'))
+    fast_by_auth, guard_by_auth, hsdir_by_auth = (
+        {d.get('authority'): d for d in eligibility.get(flag, {}).get('details', [])}
+        for flag in ('fast', 'guard', 'hsdir'))
     
     rows = []
     for vote in authority_votes:
@@ -1507,7 +1554,14 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         stable_threshold = thresholds.get('stable-uptime', 0)
         stable_mtbf_threshold = thresholds.get('stable-mtbf', 0)
         fast_threshold = thresholds.get('fast-speed', 0)
-        hsdir_tk_threshold = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
+        hsdir_detail = hsdir_by_auth.get(auth_name, {})
+        # Prefer the vote's flag-thresholds line; details carry the same fact
+        # when the requirements table was built from the eligibility pass.
+        hsdir_tk_published = bool(hsdir_detail.get('tk_published')) or (
+            'hsdir-tk' in thresholds and bool(thresholds.get('hsdir-tk')))
+        hsdir_tk_threshold = hsdir_detail.get('tk_threshold') if hsdir_detail.get('tk_published') else None
+        if hsdir_tk_threshold is None and hsdir_tk_published:
+            hsdir_tk_threshold = thresholds.get('hsdir-tk')
         
         # Relay's measured values from this authority
         relay_wfu = vote.get('wfu')
@@ -1531,8 +1585,20 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         if fast.get('sybil'):
             flag_bw_title += f" {auth_name} lists this relay as Sybil, which clears all its flags."
         
-        # Adaptive HSDir TK displays (increased precision when close)
-        _hsdir_tk_val_disp, _hsdir_tk_thresh_disp = _format_days_adaptive(relay_tk, hsdir_tk_threshold)
+        # HSDir TK display only when this authority publishes hsdir-tk
+        if hsdir_tk_published:
+            _hsdir_tk_val_disp, _hsdir_tk_thresh_disp = _format_days_adaptive(relay_tk, hsdir_tk_threshold)
+        else:
+            _hsdir_tk_val_disp, _hsdir_tk_thresh_disp = 'N/A', 'N/A'
+        if hsdir_detail:
+            hsdir_uptime_meets = _hsdir_uptime_result(hsdir_detail, relay_uptime)
+        elif vote.get('voted'):
+            # No per-authority breakdown: the HSDir vote is the uptime result
+            hsdir_uptime_meets = 'HSDir' in (vote.get('flags') or [])
+            if relay_uptime is not None and relay_uptime < HSDIR_UPTIME_DEFAULT and not hsdir_uptime_meets:
+                hsdir_uptime_meets = False
+        else:
+            hsdir_uptime_meets = None
         
         # Format flags with consensus highlighting info, in canonical order
         authority_flags = _sort_flags(vote.get('flags', []))
@@ -1596,10 +1662,13 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             'fast_threshold_display': _format_bandwidth_value(fast_threshold, use_bits),
             'fast_meets': fast.get('eligible', False),
             
+            'hsdir_uptime_meets': hsdir_uptime_meets,
+            'hsdir_uptime_display': _stable_uptime_display,
+            'hsdir_tk_published': hsdir_tk_published,
             'hsdir_tk_value_display': _hsdir_tk_val_disp,
             'hsdir_tk_threshold_display': _hsdir_tk_thresh_disp,
             'hsdir_tk_threshold': hsdir_tk_threshold,
-            'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
+            'hsdir_tk_meets': bool(relay_tk and hsdir_tk_threshold and relay_tk >= hsdir_tk_threshold),
             
             'ipv4_reachable': vote.get('ipv4_reachable', False),
             'ipv6_reachable': vote.get('ipv6_reachable'),
