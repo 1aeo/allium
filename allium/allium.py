@@ -12,9 +12,11 @@ Default output directory: ./www
 import argparse
 import gc
 import os
+import subprocess
 import sys
 import time
 import urllib.parse
+from lib import optional_deps
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
@@ -242,7 +244,10 @@ if __name__ == "__main__":
         dest="filter_downtime_days",
         type=int,
         default=7,
-        help="filter out relays offline for more than N days (default: 7, use 0 to disable)",
+        help=(
+            "filter out relays not seen for more than N days, even if Onionoo still marks "
+            "them running (default: 7, use 0 to disable)"
+        ),
         required=False,
     )
     parser.add_argument(
@@ -253,11 +258,38 @@ if __name__ == "__main__":
         help="parallel workers for page generation (default: auto-detected CPU count, min 4)",
         required=False,
     )
+    parser.add_argument(
+        "--no-charts",
+        dest="charts",
+        action="store_false",
+        help="skip the bandwidth and uptime history charts on relay and contact pages",
+    )
+    parser.add_argument(
+        "--chart-format",
+        choices=("png", "svg"),
+        help="history chart images: png (default; shows at Tor Browser's Safest level, which turns SVG "
+             "off) or svg (smaller and faster, needs no extra package)",
+    )
+    parser.add_argument(
+        "--chart-scale",
+        type=float,
+        choices=(1.0, 1.5, 2.0),
+        default=2.0,
+        help="PNG chart resolution: 2 (default, 2160 px wide, sharp on HiDPI screens), 1.5 or 1 (smaller files)",
+    )
+    parser.add_argument(
+        "--chart-colors",
+        choices=("64", "full"),
+        default="64",
+        help="PNG chart colors: 64 (default, a fixed palette: about a third of the size, looks the same) or full",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
 
+    # Charts only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
+    args.charts = args.charts and args.enabled_apis == "all"
     start_time = time.time()
     
     # Progress step accounting - DERIVED from the structures that emit the
@@ -298,6 +330,22 @@ if __name__ == "__main__":
     else:
         check_dependencies(show_progress=False)
     
+    # PNG charts need cairocffi, numpy and the cairo library: check before fetching anything. Asked for, they
+    # are required; by default SVG stands in, and the notice (again at the end) says how to install them.
+    chart_notice = []
+    if args.charts and args.chart_format != "svg":
+        chart_notice = optional_deps.check("png", asked=args.chart_format == "png", show_progress=args.progress)
+        args.chart_format = "svg" if chart_notice else "png"
+        if not chart_notice:
+            # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
+            try:  # fontconfig's fc-match tells; when it is missing or fails, stay quiet
+                font = subprocess.run(["fc-match", "DejaVu Sans"], capture_output=True, text=True, timeout=10).stdout
+            except (OSError, subprocess.SubprocessError):
+                font = "DejaVu Sans"
+            if "DejaVu Sans" not in font:
+                print("⚠️ PNG charts: DejaVu Sans is not installed, so chart text falls back to another font")
+                print("💡 On Debian/Ubuntu: sudo apt install fonts-dejavu-core")
+
     progress_logger.log("Starting allium static site generation...")
 
     # Fail fast - ensure output directory exists before expensive processing
@@ -331,6 +379,15 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
+    # History charts are written next to the relay and contact pages. Their
+    # peer medians need every relay, so build the writer before forking.
+    if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
+        from lib.charts.render import ChartWriter
+        from lib.page_writer import ENV
+        RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format, scale=args.chart_scale,
+                                             colors=args.chart_colors)
+        ENV.globals["chart_ext"] = args.chart_format
+
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid
     # copy-on-write copies of the heap that a full collection would cause).
@@ -340,6 +397,10 @@ if __name__ == "__main__":
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
+    if getattr(RELAY_SET, "chart_writer", None):
+        RELAY_SET.chart_writer.sweep()
+    if chart_notice:  # again last, where cron mail and a `tail` of the log end
+        print("\n".join(chart_notice))
 
     # The relay set holds several GB of small objects, and freeing them one
     # by one at interpreter shutdown took ~40s. Every output file is closed

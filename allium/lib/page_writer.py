@@ -13,11 +13,14 @@ import os
 import pickle
 import re
 import time
+from html.parser import HTMLParser
 from shutil import rmtree
+from urllib.parse import unquote, urlsplit
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
 from .contact_sorting import (
+    AROI_SECTION_LISTS,
     CONTACT_SORT_FILE_MAP,
     CONTACT_SORT_MODES,
     CONTACT_DEFAULT_SORT_MODE,
@@ -27,6 +30,7 @@ from .contact_sorting import (
     build_contact_variant_args as _build_contact_variant_args,
     contact_has_ipv6 as _contact_has_ipv6,
     contact_relay_count as _contact_relay_count,
+    sort_contact_relays as _sort_contact_relays,
 )
 from .bandwidth_formatter import (
     format_bandwidth_with_unit,
@@ -35,6 +39,7 @@ from .bandwidth_formatter import (
     format_data_volume_with_unit,
 )
 from .aroi_validation import get_contact_validation_status
+from .charts.series import PERIOD_SPAN
 from .intelligence_engine import IntelligenceEngine
 from .ip_utils import safe_parse_ip_address
 from .operator_analysis import (
@@ -44,8 +49,10 @@ from .operator_analysis import (
 )
 from .stability_utils import compute_group_overload_summary
 from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .search_discovery import MAX_HEAD_CHARS
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
+from .file_io_utils import sanitize_path_component as _sanitize_path_component
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -125,45 +132,38 @@ def _paginated_validation_status(status, visible_relays):
     return page_status
 
 
-def _sanitize_path_component(value: str) -> str:
-    """Sanitize a string for safe use as a filesystem path component.
-    
-    Guards against directory traversal, path injection, and OS-specific edge cases:
-    - Strips Windows drive prefixes (e.g. "C:") and backslashes
-    - Removes control characters and null bytes
-    - Replaces characters outside a safe whitelist with underscores
-    - Trims leading/trailing dots and underscores to avoid "." / ".." results
-    - Returns "_" if the result is empty or still equals "." / ".."
-    - Appends a short hash suffix when normalization changes the value, preventing
-      distinct raw inputs (e.g. "A B", "A/B", "A_B") from colliding on disk
-    - Truncates to 255 characters (common filesystem limit)
-    """
-    import hashlib
-    import re
-    raw_value = str(value)
-    # Strip Windows drive letter prefix (e.g. "C:", "D:")
-    if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
-        value = value[2:]
-    # Remove backslashes, forward slashes, null bytes, and control characters
-    value = value.replace('\\', '_').replace('/', '_').replace('\x00', '')
-    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
-    # Remove traversal sequences
-    value = value.replace('..', '')
-    # Replace any character not in safe whitelist (letters, digits, hyphen, underscore, dot)
-    value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
-    # Trim leading/trailing dots and underscores
-    value = value.strip('._')
-    # Keep room for deterministic suffix when normalization changes value
-    value = value[:240]
-    # Final safety: reject empty or traversal-like results
-    if not value or value in ('.', '..'):
-        value = '_'
-    # Prevent collisions when different raw inputs normalize to the same component
-    if value != raw_value:
-        suffix = hashlib.sha1(raw_value.encode("utf-8")).hexdigest()[:10]
-        value = f"{value}-{suffix}"
-    return value[:255]
+def _aroi_section_hrefs(status, ordered_relays, base_filename, page_number=None, page_dir=""):
+    """Where each AROI section of a contact or family relay listing renders.
 
+    contact-relay-list.html shows the sections only in its sectioned layout,
+    and on each page only for that page's relays (_paginated_validation_status),
+    so a section can be on another page of the listing. Returns {section: href}:
+    "#<section>-relays" on page_number, else the first page of ordered_relays
+    that shows it (page_dir plus its clean route). Sections no page shows are
+    left out.
+    """
+    if not (isinstance(status, dict) and status.get('has_aroi')
+            and status.get('validation_status') != 'not_configured'):
+        return {}
+    positions = {relay.get('fingerprint'): index for index, relay in enumerate(ordered_relays)}
+    hrefs = {}
+    for section, keys in AROI_SECTION_LISTS.items():
+        indexes = [
+            positions[entry['relay'].get('fingerprint')]
+            for key in keys for entry in status.get(key) or ()
+            if isinstance(entry, dict)
+            and entry.get('relay', {}).get('fingerprint') in positions
+        ]
+        if not indexes:
+            continue
+        page = min(indexes) // RELAY_PAGE_SIZE + 1
+        if page == page_number:
+            target = ""
+        else:
+            route = clean_href(paginated_filename(base_filename, page))
+            target = page_dir if page_dir and route == "./" else page_dir + route
+        hrefs[section] = f"{target}#{section}-relays"
+    return hrefs
 
 
 # Template bytecode cache directory for improved rendering performance
@@ -229,6 +229,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
     the macro reads: the relay dict (shared and not modified while pages
     render), the call arguments, the page values, and for rows that show
     aroi_validation_icon the relay's membership in the page's fingerprint sets.
+    It also asks relays.has_page(), whose answers are fixed for the build.
     """
     icon_state = None
     if show_validation_icon and validation_icon_type not in {
@@ -252,6 +253,8 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
+ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
 
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
@@ -1107,6 +1110,88 @@ def get_detail_page_context(relay_set, category, value):
     return get_detail_page_context(category, value, display_value)
 
 
+# Paginated and sorted contact pages: page-N.html, by-<mode>[-page-N].html
+_VANITY_PAGE_NAME = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
+
+# skeleton.html has put this comment in the <head> of every page allium
+# renders since 2020, vanity copies included
+_ALLIUM_SOURCE_COMMENT = "source: metrics.torproject.org"
+
+# A vanity folder is named after a lowercased, sanitized AROI domain, so it
+# has a dot and a final label starting with a letter. Core site folders
+# (relay, contact, family, as, country, misc, static, ...) have no dot and
+# version-like names such as v1.2 end in a digit, so neither can match.
+_VANITY_DIR_NAME = re.compile(r"^[a-z0-9-][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.[a-z][a-z0-9_-]*$")
+
+
+def _is_vanity_page_file(filename):
+    """Return True if filename is a contact page copied into a vanity folder."""
+    return filename in CONTACT_SORT_FILE_MAP.values() or bool(_VANITY_PAGE_NAME.match(filename))
+
+
+class _VanityHeadParser(HTMLParser):
+    """Collect a page head's canonical links and whether allium's source comment is there."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.canonicals = []
+        self.from_allium = False
+
+    def handle_starttag(self, tag, attrs):
+        """Record the href of each <link rel="canonical">."""
+        attrs = dict(attrs)
+        if tag == "link" and "canonical" in (attrs.get("rel") or "").lower().split() and attrs.get("href"):
+            self.canonicals.append(attrs["href"])
+
+    def handle_comment(self, data):
+        """Note allium's source comment."""
+        self.from_allium = self.from_allium or data.strip() == _ALLIUM_SOURCE_COMMENT
+
+
+def _is_generated_vanity_page(path, dir_name):
+    """Return True if the page at path is allium's output for vanity folder dir_name.
+
+    Two things prove it. The head has the source comment skeleton.html puts
+    in every page allium renders, which a hand-made page lacks even when it
+    carries a self-canonical (an https build requires one on every page).
+    And it has one canonical link to the folder: <base>/<domain>/ or
+    <base>/<domain>/page-N whatever the sort, so allium's page copied under
+    another name does not pass. Builds before 2026-08 wrote the raw domain
+    there, which matches the folder once sanitized.
+    """
+    with open(path, encoding="utf-8") as handle:
+        head = handle.read(MAX_HEAD_CHARS)
+    head_end = head.find("</head>")
+    if head_end < 0:
+        return False
+    parser = _VanityHeadParser()
+    try:
+        parser.feed(head[:head_end])
+    except Exception:  # HTMLParser errors on odd markup differ by Python version
+        return False
+    if not parser.from_allium or len(parser.canonicals) != 1:
+        return False
+    match = re.fullmatch(r"(?:/.*)?/([^/]+)/(?:page-[0-9]+)?", urlsplit(parser.canonicals[0]).path)
+    if match is None:
+        return False
+    folder = unquote(match.group(1))
+    return folder == dir_name or _sanitize_path_component(folder.lower()) == dir_name
+
+
+def _vanity_dir_name(relay_set, contact_data):
+    """Return the root-level vanity folder name for a contact, or None.
+
+    Validated AROI operators get a copy of their contact pages at
+    <out>/<domain>/ when a base URL is set. The renderer and the stale
+    folder sweep both use this, so they agree on which folders are current.
+    """
+    aroi_domain = contact_data.get('aroi_domain')
+    if (relay_set.base_url and contact_data.get('is_validated_aroi')
+            and aroi_domain and aroi_domain != 'none'):
+        return _sanitize_path_component(aroi_domain.lower())
+    return None
+
+
 def _cleanup_vanity_sort_files(vanity_dir):
     """Remove all contact sort variant files from a vanity directory.
 
@@ -1115,9 +1200,8 @@ def _cleanup_vanity_sort_files(vanity_dir):
     """
     if not os.path.isdir(vanity_dir):
         return
-    generated_name = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
     for filename in os.listdir(vanity_dir):
-        if filename not in CONTACT_SORT_FILE_MAP.values() and not generated_name.match(filename):
+        if not _is_vanity_page_file(filename):
             continue
         filepath = os.path.join(vanity_dir, filename)
         try:
@@ -1130,6 +1214,61 @@ def _cleanup_vanity_sort_files(vanity_dir):
         pass
 
 
+def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
+    """Remove root-level vanity folders for domains not rendered this run.
+
+    relay/ and contact/ are rebuilt on every run, but the output directory
+    is reused. A vanity folder left by an operator who disappeared (all
+    relays dropped by the downtime filter) or moved to another AROI domain
+    would keep linking relay and contact pages that no longer exist, and
+    stay in the sitemap.
+
+    Only folders allium generated are removed: named like a sanitized domain
+    (never a core site folder), not a symlink, holding contact page files and
+    nothing else, and every page proven to be allium's output for that
+    folder (_is_generated_vanity_page). Hand-made folders are left alone. A
+    folder (or output root) that cannot be read or cleaned is skipped rather
+    than failing the build. Returns the number of folders removed.
+    """
+    # Without a base URL no vanity folders are written, so none are swept
+    if not relay_set.base_url or not output_root:
+        return 0
+
+    contacts = relay_set.json["sorted"]["contact"]
+    current = {_vanity_dir_name(relay_set, contacts[v]) for v in sorted_values}
+
+    try:
+        entries = list(os.scandir(output_root))
+        real_root = os.path.realpath(output_root)
+    except OSError:
+        return 0
+
+    removed = 0
+    for entry in entries:
+        if entry.name in current or not _VANITY_DIR_NAME.match(entry.name):
+            continue
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            # A Windows junction passes is_dir(follow_symlinks=False); never
+            # follow anything that resolves outside the output root
+            if os.path.realpath(entry.path) != os.path.join(real_root, entry.name):
+                continue
+            children = list(os.scandir(entry.path))
+            if not children or not all(
+                    child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
+                    for child in children):
+                continue
+            if not all(_is_generated_vanity_page(child.path, entry.name) for child in children):
+                continue
+            _cleanup_vanity_sort_files(entry.path)
+        except (OSError, ValueError):  # ValueError: a page that is not UTF-8
+            continue
+        if not os.path.exists(entry.path):
+            removed += 1
+    return removed
+
+
 def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
     """Render all static sort variants for one contact page.
 
@@ -1138,9 +1277,12 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     - IPv6: by-ipv6.html is only emitted when IPv6 is visible in the contact.
 
     Vanity cleanup: removes stale vanity files when an operator loses
-    validation or when sort modes change between generations.
+    validation or when sort modes change between generations. Folders for
+    domains no longer rendered at all are swept by _remove_stale_vanity_dirs.
     """
     files_written = 0
+    chart_writer = getattr(relay_set, 'chart_writer', None)
+    chart_periods = chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else {}
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1150,7 +1292,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
         safe_domain = _sanitize_path_component(aroi_domain.lower())
         potential_vanity_dir = os.path.join(output_root, safe_domain)
 
-        if relay_set.base_url and base_template_args.get('is_validated_aroi'):
+        if _vanity_dir_name(relay_set, contact_data):
             _cleanup_vanity_sort_files(potential_vanity_dir)
             vanity_dir = potential_vanity_dir
             os.makedirs(vanity_dir, exist_ok=True)
@@ -1187,6 +1329,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
             template_args = dict(variant_args)
             template_args['relay_subset'] = visible_relays
             template_args['contact_has_ipv6'] = has_ipv6
+            template_args['contact_chart_periods'] = chart_periods
             template_args['page_number'] = page_number
             template_args['pagination'] = pagination_context(
                 base_filename, page_number, total_pages
@@ -1209,6 +1352,11 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
                 template_args['contact_validation_status_full'] = status
                 template_args['contact_validation_status'] = (
                     _paginated_validation_status(status, visible_relays)
+                )
+            # A section's relays can all be on another page of this listing
+            if total_pages > 1:
+                template_args['aroi_section_hrefs'] = _aroi_section_hrefs(
+                    status, sorted_relays, base_filename, page_number
                 )
 
             rendered = template.render(relays=relay_set, **template_args)
@@ -1349,8 +1497,12 @@ def write_pages_by_key(relay_set, k):
             _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
         else:
             _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        removed = _remove_stale_vanity_dirs(relay_set, sorted_values, os.path.dirname(output_path))
+        if removed:
+            relay_set.progress_logger.log_without_increment(
+                f"Removed {removed} stale vanity folder(s) for domains no longer rendered")
         return
-    
+
     if use_mp:
         write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time)
         return
@@ -1477,12 +1629,16 @@ def build_template_args(
 
     full_contact_validation_status = None
     rendered_contact_validation_status = contact_validation_status
+    aroi_section_hrefs = None
     if k == "family" and total_pages > 1 and isinstance(
         contact_validation_status, dict
     ):
         full_contact_validation_status = contact_validation_status
         rendered_contact_validation_status = _paginated_validation_status(
             contact_validation_status, visible_members
+        )
+        aroi_section_hrefs = _aroi_section_hrefs(
+            contact_validation_status, members, "index.html", page_number
         )
 
     safe_value = _sanitize_path_component(v)
@@ -1524,6 +1680,8 @@ def build_template_args(
         'primary_country_data': primary_country_data,
         'contact_validation_status': rendered_contact_validation_status,
         'contact_validation_status_full': full_contact_validation_status,
+        # Contact pages set theirs per sort variant (_render_contact_variants)
+        'aroi_section_hrefs': aroi_section_hrefs,
         'aroi_validation_timestamp': aroi_validation_timestamp,
         # Family-specific data (extracted once, not per-field)
         **({'family_aroi_domain': i.get("aroi_domain", ""),
@@ -1629,10 +1787,23 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
 class _RelayPageRenderer:
     """Renders relay-info pages; built once, then shared with forked workers."""
 
-    def __init__(self, relay_set, output_path):
+    def __init__(self, relay_set, output_path, relays):
         from .page_context import StandardTemplateContexts
         self.relay_set = relay_set
         self.output_path = output_path
+        # Only these relays get a page. Onionoo's family lists also name
+        # relays it doesn't list or the downtime filter dropped, and vote
+        # files name authorities by V3 key, so links are checked against these.
+        self.relay_page_fps = frozenset(relay["fingerprint"] for relay in relays)
+        # Vote file authority name (lowercase nickname) -> relay fingerprint.
+        # After an identity key change Onionoo lists the old identity too:
+        # the running, most recently seen relay is set last and wins.
+        authorities = sorted(
+            (relay for relay in relays if "Authority" in (relay.get("flags") or [])),
+            key=lambda relay: (bool(relay.get("running")), relay.get("last_seen") or ""))
+        self.authority_page_fps = {
+            relay.get("nickname", "").lower(): relay["fingerprint"] for relay in authorities
+        }
         self.template = ENV.get_template("relay-info.html")
         self.standard_contexts = StandardTemplateContexts(relay_set)
         self.contact_map = relay_set.json.get("sorted", {}).get("contact", {})
@@ -1643,12 +1814,28 @@ class _RelayPageRenderer:
         self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
         self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
         self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+        self.chart_writer = getattr(relay_set, 'chart_writer', None)
+        self.operator_section_hrefs = {}  # contact hash -> _aroi_section_hrefs
+
+    def _operator_section_hrefs(self, contact_hash, contact_data, status, path_prefix):
+        """Where the operator badge's AROI sections are on the contact page."""
+        if not (isinstance(status, dict) and status.get('has_aroi')
+                and status.get('validation_status') != 'not_configured'):
+            return {}
+        hrefs = self.operator_section_hrefs.get(contact_hash)
+        if hrefs is None:
+            members = [self.relay_set.json["relays"][index] for index in contact_data.get("relays", ())]
+            hrefs = self.operator_section_hrefs[contact_hash] = _aroi_section_hrefs(
+                status, _sort_contact_relays(members, CONTACT_DEFAULT_SORT_MODE), "index.html",
+                page_dir=f"{path_prefix}contact/{contact_hash}/")
+        return hrefs
 
     def write(self, relay):
         """Render one relay page to relay/FINGERPRINT/index.html."""
         contact_hash = relay.get('contact_md5')
         contact_display_data = {}
         contact_validation_status = None
+        aroi_section_hrefs = {}
 
         if contact_hash and contact_hash in self.contact_map:
             contact_data = self.contact_map[contact_hash]
@@ -1656,27 +1843,37 @@ class _RelayPageRenderer:
             contact_validation_status = contact_data.get('contact_validation_status')
 
         page_ctx = self.standard_contexts.get_relay_page_context(relay, contact_display_data)
+        if contact_validation_status:
+            aroi_section_hrefs = self._operator_section_hrefs(
+                contact_hash, contact_data, contact_validation_status, page_ctx['path_prefix'])
 
         # Partition family lists by family-cert status for template display
         _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
                                 self.family_key_to_fps)
 
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
+        # with the relay's history charts beside it
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
+        os.makedirs(relay_dir, exist_ok=True)
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ({}, {})
+
         rendered = self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
             contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
+            aroi_section_hrefs=aroi_section_hrefs,
             aroi_validation_timestamp=self.aroi_validation_timestamp,
             validated_aroi_domains=self.validated_aroi_domains,
             base_url=self.base_url,
+            relay_page_fps=self.relay_page_fps,
+            authority_page_fps=self.authority_page_fps,
             canonical_url=canonical_url_for_output(
                 self.base_url, f"relay/{relay['fingerprint']}/index.html"
             ),
             page_number=1,
+            bandwidth_periods=bandwidth_periods,
+            uptime_periods=uptime_periods,
         )
-
-        # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
-        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
-        os.makedirs(relay_dir, exist_ok=True)
         _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 
@@ -1690,8 +1887,8 @@ def write_relay_info(relay_set):
         rmtree(output_path)
     os.makedirs(output_path)
 
-    renderer = _RelayPageRenderer(relay_set, output_path)
     relays = [relay for relay in relay_set.json["relays"] if relay["fingerprint"].isalnum()]
+    renderer = _RelayPageRenderer(relay_set, output_path, relays)
 
     # Relay pages are the largest page set (~10k); render them in parallel
     # like the other page types.

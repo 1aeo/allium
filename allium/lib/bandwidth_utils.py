@@ -8,7 +8,7 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 import statistics
 
 from .statistical_utils import StatisticalUtils
-from .time_utils import ONIONOO_HISTORY_PERIODS
+from .time_utils import ONIONOO_HISTORY_PERIODS, parse_onionoo_timestamp
 from .uptime_utils import index_relays_by_fingerprint
 
 def calculate_total_data_from_history(history_data):
@@ -219,7 +219,6 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
             period_data = relay_bandwidth['read_history'].get(period, {})
             if period_data.get('last'):
                 try:
-                    from .relays import parse_onionoo_timestamp
                     data_end = parse_onionoo_timestamp(period_data['last'])
                     break
                 except:
