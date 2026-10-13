@@ -13,6 +13,7 @@ from allium.lib.workers import fetch_onionoo_details, fetch_onionoo_uptime
 # Test constants
 TEST_BANDWIDTH_URL = "http://invalid.nonexistent.url/bandwidth"
 TEST_AROI_URL = "http://invalid.nonexistent.url/aroi"
+TEST_EXIT_DNS_HEALTH_URL = "http://invalid.nonexistent.url/exit-dns"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
 # Mark all tests in this module as slow (real network calls)
@@ -22,8 +23,14 @@ pytestmark = [pytest.mark.slow, pytest.mark.system]
 class TestErrorHandlingWithRealAPIs:
     """Test error handling with real API endpoints"""
     
-    def test_invalid_url_handling(self):
+    def test_invalid_url_handling(self, monkeypatch):
         """Test handling of invalid URLs in coordinator"""
+        # CollecTor workers have no URL argument. Keep consensus evaluation
+        # off so this test does not download consensus or descriptor data.
+        monkeypatch.setattr(
+            "allium.lib.consensus.is_consensus_evaluation_enabled",
+            lambda: False,
+        )
         # Test that invalid URLs are handled gracefully
         invalid_details_url = "http://invalid.nonexistent.url/details"
         invalid_uptime_url = "http://invalid.nonexistent.url/uptime"
@@ -35,6 +42,7 @@ class TestErrorHandlingWithRealAPIs:
                 onionoo_uptime_url=invalid_uptime_url,
                 onionoo_bandwidth_url=TEST_BANDWIDTH_URL,
                 aroi_url=TEST_AROI_URL,
+                exit_dns_health_url=TEST_EXIT_DNS_HEALTH_URL,
                 bandwidth_cache_hours=TEST_BANDWIDTH_CACHE_HOURS,
                 progress=False
             )
