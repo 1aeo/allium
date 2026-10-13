@@ -137,7 +137,7 @@ class TestIssueSectionLinks:
             'total_authorities': 9,
             'authority_votes': [
                 {'voted': True, 'flags': ['StaleDesc', 'Running'],
-                 'wfu': 0.90, 'tk': 20 * 3600},  # under HSDir's 25h too
+                 'wfu': 0.90, 'tk': 20 * 3600},
             ],
             'reachability': {
                 'ipv4_reachable_count': 3,

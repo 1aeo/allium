@@ -503,7 +503,7 @@
                 <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>📁 HSDir Flag Requirements</strong></td>
             </tr>
             <tr>
-                <td title="Weighted Fractional Uptime required for HSDir flag">HSDir WFU</td>
+                <td title="Published hsdir-wfu. Only an authority that includes this on its flag-thresholds line uses it (moria1). The others assign HSDir from 96 hours of observed uptime, not from WFU, and show — here.">HSDir WFU</td>
                 {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
                 {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
                 <td style="text-align: center;">
@@ -520,7 +520,7 @@
                 {% endfor %}
             </tr>
             <tr>
-                <td title="Time Known required for HSDir flag">HSDir Time Known</td>
+                <td title="Published hsdir-tk. Only an authority that includes this on its flag-thresholds line uses it (moria1, about 10 days). The others assign HSDir from 96 hours of observed uptime, not from time-known, and show — here.">HSDir Time Known</td>
                 {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
                 {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
                 <td style="text-align: center;">
@@ -656,6 +656,23 @@
             </p>
         </div>
         
+        <div style="background: #e8f4fd; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #0d6efd;">
+            <strong>📁 HSDir Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per Tor's <code>dirserv_thinks_router_is_hs_dir</code> (<code>voteflags.c</code>), a relay qualifies for HSDir when all of the following are true:</p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>The descriptor advertises <code>hidden-service-dir</code></li>
+                <li>The authority voted <strong>Fast</strong>, <strong>Stable</strong>, and <strong>V2Dir</strong></li>
+                <li>The relay is active: <strong>Running</strong>, <strong>Valid</strong>, not hibernating, and its descriptor is younger than 24 hours</li>
+                <li>Uptime is at least <code>MinUptimeHidServDirectoryV2</code> (default <strong>96 hours</strong>). That uptime is the shorter of the authority's observed continuous uptime and the relay's self-reported uptime. Votes do not publish the observed value.</li>
+            </ul>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                <strong>HSDir WFU</strong> and <strong>HSDir Time Known</strong> above are not this rule.
+                Only an authority that publishes <code>hsdir-wfu</code> or <code>hsdir-tk</code> uses them (moria1).
+                Every other authority leaves those cells blank. Assigning HSDir from a 98% WFU or a 25-hour time-known default made relays look eligible when the authority had not voted the flag.
+                <br><strong>Source:</strong> <a href="https://gitlab.torproject.org/tpo/core/tor/-/blob/release-0.4.8/src/feature/dirauth/voteflags.c" target="_blank" rel="noopener">voteflags.c dirserv_thinks_router_is_hs_dir</a>
+            </p>
+        </div>
+
         <div style="background: #d1ecf1; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #17a2b8;">
             <strong>✅ Valid Flag Calculation Logic</strong>
             <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Valid if:</p>
@@ -680,7 +697,7 @@
             <li><strong>Stable Uptime:</strong> Continuous uptime threshold for Stable flag.</li>
             <li><strong>Stable MTBF:</strong> Mean Time Between Failures threshold. Published value is median; actual minimum ~5-7 days.</li>
             <li><strong>Fast Speed (7/8ths):</strong> Bandwidth threshold for Fast flag (top 7/8ths of network OR ≥100 KB/s).</li>
-            <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag. WFU ≥98% (all authorities). TK per dir-spec: ≥25 hours (most authorities use default); moria1 uses ≥10 days.</li>
+            <li><strong>HSDir:</strong> Fast, Stable, V2Dir, Running, Valid, and ≥96 hours uptime (<code>MinUptimeHidServDirectoryV2</code>). HSDir WFU and Time Known are filled only when that authority publishes them (moria1). They are not a 98% / 25-hour rule for the other authorities.</li>
             <li><strong>Enough MTBF:</strong> Boolean flag from <code>flag-thresholds</code> line (0 or 1). 
                 <span class="al-status-success">✓ (=1)</span> = Authority has collected <strong>sufficient MTBF stability data</strong> to accurately compute stability-related thresholds. 
                 <span class="al-status-danger">✗ (=0)</span> = Authority recently restarted or lacks historical uptime data. 
