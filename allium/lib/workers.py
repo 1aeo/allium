@@ -39,7 +39,8 @@ class TotalTimeoutError(Exception):
     pass
 
 
-def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) -> bytes:
+def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
+                                  response_headers: dict = None) -> bytes:
     """
     Fetch URL content with a guaranteed total timeout.
     
@@ -59,6 +60,9 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
         url: URL to fetch
         timeout: Maximum total time in seconds for the entire request
         headers: Optional dict of HTTP headers to include
+        response_headers: Optional dict. When not None, copy the response
+            Last-Modified header into it if the server sent one. Omit it
+            to keep the previous call shape. The body is still returned.
         
     Returns:
         bytes: Response content
@@ -91,7 +95,12 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
                 f"Connection to {url} timed out after {elapsed:.1f}s"
             )
         raise
-    
+
+    if response_headers is not None:
+        last_modified = response.headers.get("Last-Modified")
+        if last_modified:
+            response_headers["Last-Modified"] = last_modified
+
     # Phase 2: Read response in chunks, checking total elapsed time after each chunk
     chunks = []
     chunk_size = 64 * 1024  # 64KB chunks
