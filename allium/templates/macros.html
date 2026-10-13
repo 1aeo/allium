@@ -220,7 +220,7 @@
     {%- endif -%}
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none, overload_summary=none) -%}
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none, overload_summary=none, aroi_section_hrefs=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -268,18 +268,25 @@
     {%- if has_aroi_domain and (contact_validation_status is none or has_validation) %}
     <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong> 
 <a href="{{ operator_href(aroi_domain, contact_md5|escape, page_ctx.path_prefix if page_ctx else '../../') }}">{{ aroi_domain|escape }}</a>
-{{ aroi_validation_badge(contact_validation_status) -}}
+{{ aroi_validation_badge(contact_validation_status, section_hrefs=aroi_section_hrefs) -}}
     </li>
     {%- elif has_validation %}
     {#- Show validation status even when AROI domain wasn't parsed -#}
     <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong>
-        {{- aroi_validation_badge(contact_validation_status, show_count=true) -}}
+        {{- aroi_validation_badge(contact_validation_status, show_count=true, section_hrefs=aroi_section_hrefs) -}}
     </li>
     {%- endif %}
     {%- if contact_md5 %}
     <li><strong>Contact:</strong> <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{% if contact and contact.strip() %}{{ contact|escape }}{% else %}none{% endif %}</a></li>
     {%- endif %}
 </ul>
+{%- endmacro %}
+
+{# AROI section link target for aroi_validation_badge and aroi_sub_bullets:
+   where page_writer._aroi_section_hrefs found the section (another page of
+   the listing, or the contact page from a relay page), else this page #}
+{% macro aroi_section_href(section, section_hrefs) -%}
+{{ section_hrefs[section] if section_hrefs is mapping and section_hrefs.get(section) else '#' ~ section ~ '-relays' }}
 {%- endmacro %}
 
 {% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps, security_fps=none, pending_fps=none, aroi_version=none) -%}
@@ -316,7 +323,7 @@
    
    Set show_count=true to include relay counts (used when domain isn't displayed)
    ============================================================================= #}
-{% macro aroi_validation_badge(contact_validation_status, show_count=false) -%}
+{% macro aroi_validation_badge(contact_validation_status, show_count=false, section_hrefs=none) -%}
 {% if contact_validation_status -%}
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
@@ -325,16 +332,16 @@
        so a "validated" operator with one leaked-key relay still shows
        "✓ Validated" but ALSO sees "🚨 SECURITY" right next to it. #}
     {% if summary.security_incident_count > 0 -%}
-        <a href="#security_incident-relays" class="al-status-danger-bold al-link-plain" style="margin-left: 5px; padding: 1px 6px; background-color: #f8d7da; border-radius: 3px;" title="{{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} appear to have leaked .secret_family_key. Rotate the family key immediately.">🚨 SECURITY{% if show_count %} ({{ summary.security_incident_count }}){% endif %}</a>
+        <a href="{{ aroi_section_href('security_incident', section_hrefs) }}" class="al-status-danger-bold al-link-plain" style="margin-left: 5px; padding: 1px 6px; background-color: #f8d7da; border-radius: 3px;" title="{{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} appear to have leaked .secret_family_key. Rotate the family key immediately.">🚨 SECURITY{% if show_count %} ({{ summary.security_incident_count }}){% endif %}</a>
     {% endif -%}
     {% if status == 'validated' -%}
         <span class="al-status-success-bold"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
     {% elif status == 'unauthorized' -%}
-        <a href="#unauthorized-relays" class="al-status-danger-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details below">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('unauthorized', section_hrefs) }}" class="al-status-danger-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
     {% elif status == 'misconfigured' -%}
-        <a href="#misconfigured-relays" class="al-status-warning-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.misconfigured_count }} relays with AROI config errors - see details below">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('misconfigured', section_hrefs) }}" class="al-status-warning-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.misconfigured_count }} relays with AROI config errors - see details">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
     {% elif status == 'incomplete' -%}
-        <a href="#not_configured-relays" class="al-status-muted al-link-plain" style="font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain" style="font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
     {# not_configured status shows no badge #}
     {% endif -%}
     {# UX-fix: pending_onionoo peer badge REMOVED from the header.
@@ -379,7 +386,7 @@
    AROI SUB-BULLETS MACRO (DRY - shows category counts as sub-bullets)
    Used in Contact & Network Overview section
    ============================================================================= #}
-{% macro aroi_sub_bullets(contact_validation_status) -%}
+{% macro aroi_sub_bullets(contact_validation_status, section_hrefs=none) -%}
 {% if contact_validation_status -%}
 {% set summary = contact_validation_status.validation_summary -%}
 {% set status = contact_validation_status.validation_status -%}
@@ -423,19 +430,19 @@
 {%- endif -%}</li>
 {% endif -%}
 {% if show_security -%}
-<li><a href="#security_incident-relays" class="al-status-danger al-link-plain">🚨 SECURITY: {{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} — rotate family key now</a></li>
+<li><a href="{{ aroi_section_href('security_incident', section_hrefs) }}" class="al-status-danger al-link-plain">🚨 SECURITY: {{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} — rotate family key now</a></li>
 {% endif -%}
 {% if show_unauthorized -%}
-<li><a href="#unauthorized-relays" class="al-status-danger al-link-plain">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('unauthorized', section_hrefs) }}" class="al-status-danger al-link-plain">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_misconfigured -%}
-<li><a href="#misconfigured-relays" class="al-status-warning al-link-plain">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('misconfigured', section_hrefs) }}" class="al-status-warning al-link-plain">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_incomplete -%}
-<li><a href="#not_configured-relays" class="al-status-muted al-link-plain">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_not_configured -%}
-<li><a href="#not_configured-relays" class="al-status-muted al-link-plain">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
 {% endif -%}
 </ul>
 {% endif -%}
