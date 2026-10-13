@@ -685,8 +685,8 @@ def _fetch_with_cache_fallback(
         cache_hours_override: Override config's cache_max_age_hours (e.g., for bandwidth API)
         return_fresh_cache: If True, return fresh cache immediately without fetching
         validator: Optional function to validate response data structure
-        ignore_cache: Treat the cache as missing and leave HTTP/network errors
-            to the caller (the refetch after a presumed-fresh cache proved unreadable)
+        ignore_cache: Treat the cache as missing, omit conditional headers, and
+            leave HTTP/network errors to the caller after a cache proved unusable
         
     Returns:
         dict: Parsed JSON response or cached data, None if unavailable
@@ -740,8 +740,8 @@ def _fetch_with_cache_fallback(
         return None
 
     def _refetch_without_cache():
-        # The failed fetch presumed a fresh cache (shorter timeout and retries)
-        # that proved unreadable: repeat it the way a missing cache is fetched.
+        # The failed fetch presumed a usable cache: repeat it with the
+        # missing-cache timeout and retries, without conditional headers.
         return _fetch_with_cache_fallback(
             url, config, progress_logger, cache_hours_override,
             return_fresh_cache, validator, ignore_cache=True)
@@ -779,7 +779,7 @@ def _fetch_with_cache_fallback(
     
         # Build request with optional conditional headers
         headers = dict(config.custom_headers) if config.custom_headers else {}
-        if config.use_conditional_requests:
+        if config.use_conditional_requests and not ignore_cache:
             prev_timestamp = _read_timestamp(api_name)
             if prev_timestamp:
                 headers["If-Modified-Since"] = prev_timestamp
@@ -824,8 +824,10 @@ def _fetch_with_cache_fallback(
             )
         
             if not is_timeout:
-                # e.g. HTTP 5xx or a reset connection (a 304 is handled below)
-                if presumed_fresh_cache and getattr(e, "code", None) != 304 and load_cached() is None:
+                # A 304 also needs a refetch if its cached document is unusable,
+                # even when the cache file is old enough for the stale timeout.
+                if (presumed_fresh_cache or (getattr(e, "code", None) == 304 and cache_age is not None)) \
+                        and load_cached() is None:
                     return _refetch_without_cache()
                 raise
             log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
