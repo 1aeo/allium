@@ -376,9 +376,11 @@ def generate_issues_from_consensus(
     # HSDIR FLAG ISSUES
     # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
     #   wants_to_be_hs_dir AND tunnelled-dir (V2Dir) AND Stable AND Fast
-    #   AND observed uptime >= MinUptimeHidServDirectoryV2 (96 hours) AND active
+    #   AND observed uptime >= MinUptimeHidServDirectoryV2 (96 hours)
+    #   AND router_is_active (Running, Valid, not hibernating)
     # WFU and Time Known are not this check, except at authorities that
-    # publish hsdir-wfu / hsdir-tk.
+    # publish hsdir-wfu / hsdir-tk. uptime_met is False only when the
+    # fetcher saw every other requirement pass.
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
     has_v2dir = 'V2Dir' in current_flags
@@ -421,9 +423,10 @@ def generate_issues_from_consensus(
                 'section': 'flag-hsdir-prereq-v2dir',
             })
         
-        # Observed uptime. Votes don't carry it; an authority that passed Fast,
-        # Stable, V2Dir and any published hsdir-wfu/hsdir-tk, then withheld
-        # HSDir, has not seen the relay up for 96 hours straight.
+        # Observed uptime. Votes don't carry it. The fetcher sets uptime_met
+        # False only after Fast, Stable, V2Dir, Running, Valid, and any
+        # published hsdir-wfu/hsdir-tk passed. A missing Running vote is not
+        # an uptime failure.
         hsdir_details = flag_eligibility.get('hsdir', {}).get('details') or []
         uptime_fails = sorted(d.get('authority') or '?' for d in hsdir_details if d.get('uptime_met') is False)
         uptime_passes = sum(1 for d in hsdir_details if d.get('uptime_met') is True)

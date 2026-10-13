@@ -41,13 +41,16 @@ HSDir (voteflags.c dirserv_thinks_router_is_hs_dir):
   - Advertises hidden-service-dir (wants_to_be_hs_dir)
   - Has "V2Dir" (supports tunnelled directory requests)
   - Has "Stable" and "Fast" flags
-  - Is active (Running, Valid, not hibernating)
+  - router_is_active: Running, Valid, not hibernating, descriptor younger
+    than 24 hours (ROUTER_MAX_AGE_TO_PUBLISH), bandwidth capacity > 0
   - Uptime >= MinUptimeHidServDirectoryV2 (default 96 hours)
     * Uptime is the shorter of the authority's observed continuous uptime
       (rep_hist_get_uptime; resets when that authority loses reachability)
       and the relay's self-reported uptime
     * Votes do not publish observed uptime. When every other requirement
-      passed and the authority still withheld HSDir, observed uptime is short
+      passed and the authority still withheld HSDir, observed uptime is short.
+      A vote without Running or Valid failed router_is_active, so uptime is
+      unknown rather than short
   - Authorities that publish hsdir-wfu / hsdir-tk (moria1) apply those too.
     Authorities that omit them do not use WFU or Time Known for HSDir
 
@@ -282,9 +285,11 @@ def hsdir_observed_uptime_met(assigned: bool, prereqs_met: bool,
     Votes do not publish rep_hist_get_uptime. The HSDir vote is that check
     when every other requirement already passed:
     - the authority assigned HSDir → observed uptime passed
-    - Fast, Stable, V2Dir and any published hsdir-wfu/hsdir-tk passed, but
-      HSDir was withheld → observed uptime is under MinUptimeHidServDirectoryV2
-    - some other requirement failed → unknown (None)
+    - Fast, Stable, V2Dir, Running, Valid, and any published hsdir-wfu/hsdir-tk
+      passed, but HSDir was withheld → observed uptime is under
+      MinUptimeHidServDirectoryV2
+    - some other requirement failed, including a missing Running or Valid
+      vote → unknown (None)
     """
     if assigned:
         return True

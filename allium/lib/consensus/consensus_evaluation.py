@@ -763,7 +763,8 @@ METRIC_TOOLTIPS = {
     'uptime_hsdir': ("Continuous time this authority has reached the relay since it last saw the relay down, "
                      "capped by the relay's self-reported uptime. HSDir requires >=96 hours "
                      "(MinUptimeHidServDirectoryV2). This is not Time Known and not WFU. Votes omit the "
-                     "observed value; withholding HSDir after every other requirement passed means it is under 96 hours."),
+                     "observed value; withholding HSDir after Fast, Stable, V2Dir, Running, and Valid "
+                     "passed means it is under 96 hours. A missing Running or Valid vote leaves this unknown."),
     'wfu_hsdir': ("Weighted Fractional Uptime, only for authorities that publish hsdir-wfu (moria1). "
                   "The other authorities do not use WFU when assigning HSDir."),
     'tk_hsdir': ("Time Known, only for authorities that publish hsdir-tk (moria1, about 10 days). "

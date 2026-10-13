@@ -1260,10 +1260,12 @@ class CollectorFetcher:
             })
             
             # HSDir (voteflags.c dirserv_thinks_router_is_hs_dir):
-            # V2Dir, Stable, Fast, active, and observed uptime >= 96h.
-            # Votes don't publish that uptime. Authorities that publish
-            # hsdir-wfu / hsdir-tk (moria1) apply those on top; the others
-            # do not use WFU or Time Known for this flag.
+            # hidden-service-dir, V2Dir, Stable, Fast, router_is_active
+            # (Running, Valid, not hibernating), and observed uptime >= 96h.
+            # Votes don't publish that uptime. A missing Running or Valid
+            # vote is why HSDir was withheld, not evidence the 96h check failed.
+            # Authorities that publish hsdir-wfu / hsdir-tk (moria1) apply
+            # those on top; the others do not use WFU or Time Known.
             raw_hsdir_wfu = thresholds.get('hsdir-wfu')
             wfu_published = raw_hsdir_wfu is not None
             hsdir_wfu = raw_hsdir_wfu if isinstance(raw_hsdir_wfu, (int, float)) else None
@@ -1277,7 +1279,15 @@ class CollectorFetcher:
             tk_met = (not tk_published) or (relay_tk >= hsdir_tk)
             published_metrics_met = wfu_met and tk_met
             has_middleonly = 'MiddleOnly' in auth_flags
-            hsdir_prereqs_met = has_stable and has_fast and has_v2dir and not is_sybil and not has_middleonly
+            has_running = 'Running' in auth_flags
+            has_valid = 'Valid' in auth_flags
+            # router_is_active also rejects a hibernating relay and a descriptor
+            # older than 24h. Votes have no hibernate bit; those relays are not
+            # Running. StaleDesc uses a shorter 18h cutoff, so a StaleDesc vote
+            # can still be active and is not treated as an uptime pass or fail.
+            hsdir_prereqs_met = (
+                has_stable and has_fast and has_v2dir and has_running and has_valid
+                and not is_sybil and not has_middleonly)
 
             has_hsdir_flag = 'HSDir' in auth_flags
             uptime_met = hsdir_observed_uptime_met(
@@ -1295,6 +1305,8 @@ class CollectorFetcher:
                 'has_stable': has_stable,
                 'has_fast': has_fast,
                 'has_v2dir': has_v2dir,
+                'has_running': has_running,
+                'has_valid': has_valid,
                 'metrics_met': published_metrics_met,
                 'uptime_met': uptime_met,
                 'wfu_published': wfu_published,
