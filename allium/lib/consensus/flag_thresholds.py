@@ -37,22 +37,13 @@ Fast:
     * Default: "100 KB" = 102,400 bytes; tor caps the Fast threshold at
       102 KB/s, which votes publish as fast-speed=102000
 
-HSDir (voteflags.c dirserv_thinks_router_is_hs_dir):
-  - Advertises hidden-service-dir (wants_to_be_hs_dir)
-  - Has "V2Dir" (supports tunnelled directory requests)
-  - Has "Stable" and "Fast" flags
-  - router_is_active: Running, Valid, not hibernating, descriptor younger
-    than 24 hours (ROUTER_MAX_AGE_TO_PUBLISH), bandwidth capacity > 0
-  - Uptime >= MinUptimeHidServDirectoryV2 (default 96 hours)
-    * Uptime is the shorter of the authority's observed continuous uptime
-      (rep_hist_get_uptime; resets when that authority loses reachability)
-      and the relay's self-reported uptime
-    * Votes do not publish observed uptime. When every other requirement
-      passed and the authority still withheld HSDir, observed uptime is short.
-      A vote without Running or Valid failed router_is_active, so uptime is
-      unknown rather than short
-  - Authorities that publish hsdir-wfu / hsdir-tk (moria1) apply those too.
-    Authorities that omit them do not use WFU or Time Known for HSDir
+HSDir:
+  - Has "Stable" flag
+  - Has "Running" flag  
+  - WFU >= hsdir-wfu threshold (dir-spec default: same as guard-wfu, 0.98)
+  - TK >= hsdir-tk threshold
+    * dir-spec default: 25 hours (90,000 seconds)
+    * NOTE: In practice, moria1 uses ~10 days; most authorities don't set explicitly
 
 Running:
   - Authority could establish OR connection to relay within last 45 minutes
@@ -115,16 +106,14 @@ GUARD_WFU_DEFAULT = 0.98
 # Per dir-spec Section 3.4.2
 # ============================================================================
 
-# MinUptimeHidServDirectoryV2: minimum uptime for the HSDir flag.
-# Default "96 hours" (dirauth_options.inc). Authorities compare the shorter of
-# their observed continuous uptime and the relay's self-reported uptime.
-HSDIR_UPTIME_DEFAULT = 96 * SECONDS_PER_HOUR  # 345600 seconds
-
-# Optional published HSDir thresholds. Only authorities that put hsdir-tk /
-# hsdir-wfu on their flag-thresholds line use them (moria1). They are not the
-# rule the other authorities apply; those use HSDIR_UPTIME_DEFAULT.
-# dir-spec's historical hsdir-tk default was 25 hours. moria1 publishes ~10 days.
+# Default HSDir time-known (TK) threshold per dir-spec: 25 hours
+# NOTE: In practice, moria1 authority uses ~10 days (848498 seconds).
+# Other authorities don't set hsdir-tk explicitly, relying on the dir-spec default.
+# We use 25 hours as per the dir-spec specification.
 HSDIR_TK_DEFAULT = 25 * SECONDS_PER_HOUR  # 90000 seconds (25 hours)
+
+# Default HSDir weighted fractional uptime (WFU) threshold: 98%
+# Same as Guard WFU per dir-spec
 HSDIR_WFU_DEFAULT = 0.98
 
 # ============================================================================
@@ -277,27 +266,6 @@ def check_guard_eligibility(
     }
 
 
-def hsdir_observed_uptime_met(assigned: bool, prereqs_met: bool,
-                              published_metrics_met: bool) -> Optional[bool]:
-    """
-    Whether this authority's HSDir uptime check passed.
-
-    Votes do not publish rep_hist_get_uptime. The HSDir vote is that check
-    when every other requirement already passed:
-    - the authority assigned HSDir → observed uptime passed
-    - Fast, Stable, V2Dir, Running, Valid, and any published hsdir-wfu/hsdir-tk
-      passed, but HSDir was withheld → observed uptime is under
-      MinUptimeHidServDirectoryV2
-    - some other requirement failed, including a missing Running or Valid
-      vote → unknown (None)
-    """
-    if assigned:
-        return True
-    if prereqs_met and published_metrics_met:
-        return False
-    return None
-
-
 def check_hsdir_eligibility(
     wfu: Optional[float],
     tk: Optional[float],
@@ -305,11 +273,11 @@ def check_hsdir_eligibility(
     tk_threshold: float = HSDIR_TK_DEFAULT
 ) -> Dict[str, Any]:
     """
-    Check published hsdir-wfu / hsdir-tk thresholds.
-
-    Standard authorities do not use these. They require observed uptime
-    >= HSDIR_UPTIME_DEFAULT (see hsdir_observed_uptime_met). This helper
-    covers authorities that publish the optional thresholds, such as moria1.
+    Check if a relay meets HSDir flag eligibility requirements.
+    
+    HSDir requires:
+    - WFU >= hsdir-wfu threshold
+    - TK >= hsdir-tk threshold
     
     Args:
         wfu: Relay's weighted fractional uptime

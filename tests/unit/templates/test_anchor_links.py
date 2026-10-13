@@ -137,7 +137,7 @@ class TestIssueSectionLinks:
             'total_authorities': 9,
             'authority_votes': [
                 {'voted': True, 'flags': ['StaleDesc', 'Running'],
-                 'wfu': 0.90, 'tk': 20 * 3600},
+                 'wfu': 0.90, 'tk': 20 * 3600},  # under HSDir's 25h too
             ],
             'reachability': {
                 'ipv4_reachable_count': 3,
@@ -166,7 +166,7 @@ class TestIssueSectionLinks:
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types
         sections = {i['section'] for i in issues}
-        assert len(sections) == 24  # fixture reaches every link target it can trigger
+        assert len(sections) == 26  # fixture reaches every link target
         rows = format_relay_consensus_evaluation(consensus_data, current_flags=relay['flags'])['flag_requirements_table']
         row_ids = {row['anchor'] for row in rows}
         assert '<tr id="{{ row.anchor }}">' in template_content

@@ -32,7 +32,8 @@ from .consensus.flag_thresholds import (
     GUARD_WFU_DEFAULT,
     GUARD_BW_GUARANTEE,
     FAST_BW_GUARANTEE,
-    HSDIR_UPTIME_DEFAULT,
+    HSDIR_TK_DEFAULT,
+    HSDIR_WFU_DEFAULT,
     BW_SOURCE_MEASURED,
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
@@ -373,14 +374,11 @@ def generate_issues_from_consensus(
             })
     
     # =========================================================================
-    # HSDIR FLAG ISSUES
+    # HSDIR FLAG ISSUES (5 issue types) - all warning severity
     # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
-    #   wants_to_be_hs_dir AND tunnelled-dir (V2Dir) AND Stable AND Fast
-    #   AND observed uptime >= MinUptimeHidServDirectoryV2 (96 hours)
-    #   AND router_is_active (Running, Valid, not hibernating)
-    # WFU and Time Known are not this check, except at authorities that
-    # publish hsdir-wfu / hsdir-tk. uptime_met is False only when the
-    # fetcher saw every other requirement pass.
+    #   HSDir requires: wants_to_be_hs_dir AND supports_tunnelled_dir_requests
+    #   AND is_stable AND is_fast AND uptime >= threshold AND is_active
+    # supports_tunnelled_dir_requests maps to the V2Dir flag.
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
     has_v2dir = 'V2Dir' in current_flags
@@ -423,32 +421,27 @@ def generate_issues_from_consensus(
                 'section': 'flag-hsdir-prereq-v2dir',
             })
         
-        # Observed uptime. Votes don't carry it. The fetcher sets uptime_met
-        # False only after Fast, Stable, V2Dir, Running, Valid, and any
-        # published hsdir-wfu/hsdir-tk passed. A missing Running vote is not
-        # an uptime failure.
-        hsdir_details = flag_eligibility.get('hsdir', {}).get('details') or []
-        uptime_fails = sorted(d.get('authority') or '?' for d in hsdir_details if d.get('uptime_met') is False)
-        uptime_passes = sum(1 for d in hsdir_details if d.get('uptime_met') is True)
-        uptime_total = len(hsdir_details) or auth_count
-        if has_fast and has_stable and has_v2dir and uptime_fails and uptime_passes < majority_threshold:
+        # WFU check
+        if relay_wfu is not None and relay_wfu < HSDIR_WFU_DEFAULT:
             issues.append({
-                'severity': 'warning',
+                'severity': 'warning',  # Changed from 'info'
                 'category': 'hsdir',
-                'title': 'HSDir: observed uptime below 96 hours',
-                'description': (
-                    f"{uptime_passes}/{uptime_total} authorities have observed this relay up continuously "
-                    f"for {HSDIR_UPTIME_DEFAULT // 3600} hours (MinUptimeHidServDirectoryV2). "
-                    f"{', '.join(uptime_fails)} have not."
-                ),
-                'suggestion': (
-                    'HSDir needs each authority to have reached the relay, without a gap that authority '
-                    'noticed, for at least 96 hours. A restart or a period when that authority could not '
-                    'reach the relay resets its clock. Self-reported uptime and Time Known can be much longer. '
-                    'Keep the relay reachable from the directory authorities.'
-                ),
-                'section': 'flag-hsdir-uptime',
-                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+                'title': 'HSDir: WFU below threshold',
+                'description': f"WFU {relay_wfu*100:.1f}% below 98% required for HSDir",
+                'suggestion': 'HSDir requires ≥98% WFU, Stable flag, and Time Known ≥25 hours (or ~10 days for moria1). Improve uptime consistency.',
+                'section': 'flag-hsdir-wfu',
+            })
+        
+        # CHANGED: info → warning
+        if relay_tk is not None and relay_tk < HSDIR_TK_DEFAULT:
+            tk_hours = relay_tk / 3600
+            issues.append({
+                'severity': 'warning',  # Changed from 'info'
+                'category': 'hsdir',
+                'title': 'HSDir: Time Known below threshold',
+                'description': f"Time Known {tk_hours:.1f} hours below 25 hours (dir-spec default)",
+                'suggestion': 'Most authorities use 25 hours for HSDir TK. moria1 uses ~10 days. Keep running stably.',
+                'section': 'flag-hsdir-time-known',
             })
     
     # =========================================================================

@@ -14,7 +14,6 @@ from allium.lib.consensus.flag_thresholds import (
     GUARD_TK_DEFAULT,
     GUARD_WFU_DEFAULT,
     HSDIR_TK_DEFAULT,
-    HSDIR_UPTIME_DEFAULT,
     HSDIR_WFU_DEFAULT,
     FAST_BW_GUARANTEE,
     FLAG_ORDER,
@@ -23,7 +22,6 @@ from allium.lib.consensus.flag_thresholds import (
     parse_wfu_threshold,
     check_guard_eligibility,
     check_hsdir_eligibility,
-    hsdir_observed_uptime_met,
     check_fast_eligibility,
     check_stable_eligibility,
     get_flag_thresholds_summary,
@@ -56,14 +54,9 @@ class TestConstants:
         """Test Guard WFU default is 98%."""
         assert GUARD_WFU_DEFAULT == 0.98
     
-    def test_hsdir_uptime_default(self):
-        """HSDir uptime default is MinUptimeHidServDirectoryV2, 96 hours."""
-        assert HSDIR_UPTIME_DEFAULT == 96 * 3600
-
     def test_hsdir_tk_default(self):
-        """Optional published hsdir-tk default stays 25 hours."""
-        # Only authorities that publish hsdir-tk use this. The flag itself
-        # requires HSDIR_UPTIME_DEFAULT.
+        """Test HSDir TK default is 25 hours per dir-spec."""
+        # Per dir-spec Section 3.4.2, default hsdir-tk is 25 hours
         assert HSDIR_TK_DEFAULT == 25 * 3600  # 25 hours
         assert HSDIR_TK_DEFAULT == 90000
     
@@ -175,20 +168,6 @@ class TestCheckGuardEligibility:
         assert result['bw_meets_guarantee'] == False
         assert result['bw_in_top25'] == True
         assert result['bw_eligible'] == True
-
-
-class TestHSDirObservedUptime:
-    """Votes omit observed uptime, so the HSDir vote is the uptime result."""
-
-    def test_assigned_means_uptime_passed(self):
-        assert hsdir_observed_uptime_met(True, True, True) is True
-
-    def test_withheld_after_other_requirements_means_uptime_failed(self):
-        assert hsdir_observed_uptime_met(False, True, True) is False
-
-    def test_unknown_when_another_requirement_failed(self):
-        assert hsdir_observed_uptime_met(False, False, True) is None
-        assert hsdir_observed_uptime_met(False, True, False) is None
 
 
 class TestCheckHsdirEligibility:

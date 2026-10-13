@@ -1321,69 +1321,7 @@ class TestMiddleOnlyFlagTracking:
         assert eligibility['middleonly']['eligible_count'] == 0
         assert len(eligibility['middleonly']['details']) == 1
         assert eligibility['middleonly']['details'][0]['assigned'] is False
-
-    def test_hsdir_uptime_not_inferred_from_wfu_and_tk(self):
-        """High WFU and Time Known do not make HSDir eligible when the vote withheld it.
-
-        Standard authorities require 96 hours of observed uptime. They do not
-        publish hsdir-wfu or hsdir-tk, so those metrics passing is not the flag.
-        """
-        fetcher = CollectorFetcher()
-        fetcher.flag_thresholds = {
-            'bastet': {'stable-mtbf': 1000000, 'fast-speed': 100000},
-            'moria1': {'stable-mtbf': 1000000, 'fast-speed': 100000,
-                       'hsdir-wfu': 0.98, 'hsdir-tk': 843698},
-        }
-        shared = {'wfu': 0.994, 'tk': 2500000, 'bandwidth': 10000, 'measured': 20000, 'mtbf': 800000}
-        relay = {'votes': {
-            'bastet': {**shared, 'flags': ['Fast', 'Guard', 'HSDir', 'Running', 'Stable', 'V2Dir', 'Valid']},
-            'moria1': {**shared, 'tk': 818995,
-                       'flags': ['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid']},
-        }}
-        # A third shape: prereqs pass, no published HSDir thresholds, flag withheld.
-        fetcher.flag_thresholds['dannenberg'] = {'stable-mtbf': 1000000, 'fast-speed': 100000}
-        relay['votes']['dannenberg'] = {
-            **shared, 'flags': ['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid'],
-        }
-
-        eligibility = fetcher._analyze_flag_eligibility(relay)
-        by_auth = {d['authority']: d for d in eligibility['hsdir']['details']}
-
-        assert eligibility['hsdir']['assigned_count'] == 1
-        assert eligibility['hsdir']['eligible_count'] == 1
-        assert by_auth['bastet']['uptime_met'] is True
-        assert by_auth['dannenberg']['uptime_met'] is False
-        assert by_auth['dannenberg']['wfu_published'] is False
-        assert by_auth['moria1']['uptime_met'] is None  # failed published hsdir-tk
-        assert by_auth['moria1']['tk_met'] is False
-        assert by_auth['moria1']['tk_published'] is True
-
-    def test_hsdir_uptime_unknown_when_not_active(self):
-        """A missing Running or Valid vote failed router_is_active, not the 96h check.
-
-        dirserv_thinks_router_is_hs_dir requires router_is_active. StaleDesc
-        uses an 18-hour cutoff, shorter than the 24-hour activity cutoff, so
-        it does not by itself make the uptime result unknown.
-        """
-        fetcher = CollectorFetcher()
-        fetcher.flag_thresholds = {
-            'bastet': {'fast-speed': 100000},
-            'dannenberg': {'fast-speed': 100000},
-            'gabelmoo': {'fast-speed': 100000},
-        }
-        shared = {'wfu': 0.99, 'tk': 2_500_000, 'bandwidth': 10000, 'measured': 20000, 'mtbf': 800000}
-        relay = {'votes': {
-            'bastet': {**shared, 'flags': ['Fast', 'Stable', 'V2Dir', 'Valid']},
-            'dannenberg': {**shared, 'flags': ['Fast', 'Stable', 'V2Dir', 'Running']},
-            'gabelmoo': {**shared, 'flags': ['Fast', 'Stable', 'V2Dir', 'Running', 'Valid', 'StaleDesc']},
-        }}
-        by_auth = {d['authority']: d for d in fetcher._analyze_flag_eligibility(relay)['hsdir']['details']}
-        assert by_auth['bastet']['uptime_met'] is None
-        assert by_auth['bastet']['has_running'] is False
-        assert by_auth['dannenberg']['uptime_met'] is None
-        assert by_auth['dannenberg']['has_valid'] is False
-        assert by_auth['gabelmoo']['uptime_met'] is False
-
+    
     def test_middleonly_partial_authorities(self):
         """Test MiddleOnly flagged by some but not all authorities."""
         fetcher = CollectorFetcher()

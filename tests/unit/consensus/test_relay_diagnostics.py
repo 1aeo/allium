@@ -1,13 +1,13 @@
 """
 Tests for relay_diagnostics module.
 
-Tests all 25 issue types across 11 categories:
+Tests all 26 issue types across 11 categories:
 - consensus (1): Not in consensus
 - reachability (3): IPv4 issues, IPv6 not reachable, Partial IPv4
 - fast (1): Not getting the Fast flag
 - guard (5): BW below, WFU below, TK below, requires Stable, requires Fast
 - stable (1): Not eligible
-- hsdir (4): requires V2Dir, requires Stable, requires Fast, observed uptime below 96h
+- hsdir (5): requires V2Dir, requires Stable, requires Fast, WFU below, TK below
 - bandwidth (1): High deviation
 - descriptor (1): StaleDesc
 - flags (1): BadExit
@@ -32,6 +32,7 @@ SECONDS_PER_DAY = 86400
 GUARD_BW_GUARANTEE = 2_097_000  # AuthDirGuardBWGuarantee "2 MB", compared as 2097 KB/s
 GUARD_WFU_DEFAULT = 0.98
 GUARD_TK_DEFAULT = 691200  # 8 days
+HSDIR_TK_DEFAULT = 90000  # 25 hours
 
 
 class TestGenerateRelayIssues:
@@ -258,47 +259,43 @@ class TestConsensusIssues:
         assert len(stable_issues) >= 1
         assert stable_issues[0]['severity'] == 'warning'  # Changed from 'info'
     
-    def test_hsdir_wfu_alone_is_not_an_hsdir_issue(self):
-        """A low WFU does not by itself explain a missing HSDir flag."""
+    def test_hsdir_wfu_below_is_warning(self):
+        """Test HSDir WFU below threshold is WARNING (changed from info)."""
         consensus_data = {
             'in_consensus': True,
-            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
+            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],  # WFU below 98%
             'reachability': {'ipv4_reachable_count': 9},
             'flag_eligibility': {},
         }
-
+        
         issues = generate_issues_from_consensus(
             consensus_data,
-            current_flags=['Guard', 'Stable', 'Fast', 'V2Dir'],
+            current_flags=['Guard', 'Stable', 'Fast'],  # No HSDir
             observed_bandwidth=3_000_000
         )
-
-        assert [i for i in issues if 'HSDir' in i['title'] and 'WFU' in i['title']] == []
-
-    def test_hsdir_observed_uptime_below_is_warning(self):
-        """Authorities that passed every other HSDir requirement and withheld the flag are under 96h."""
+        
+        hsdir_issues = [i for i in issues if 'HSDir' in i['title'] and 'WFU' in i['title']]
+        assert len(hsdir_issues) >= 1
+        assert hsdir_issues[0]['severity'] == 'warning'  # Changed from 'info'
+    
+    def test_hsdir_tk_below_is_warning(self):
+        """Test HSDir Time Known below threshold is WARNING (changed from info)."""
         consensus_data = {
             'in_consensus': True,
-            'authority_votes': [{'wfu': 0.99, 'tk': 29 * SECONDS_PER_DAY}],
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * 3600}],  # TK below 25 hours (HSDIR_TK_DEFAULT)
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'hsdir': {'details': [
-                {'authority': 'bastet', 'uptime_met': True},
-                {'authority': 'dannenberg', 'uptime_met': False},
-                {'authority': 'gabelmoo', 'uptime_met': False},
-            ]}},
+            'flag_eligibility': {},
         }
-
+        
         issues = generate_issues_from_consensus(
             consensus_data,
-            current_flags=['Guard', 'Stable', 'Fast', 'V2Dir'],
+            current_flags=['Guard', 'Stable', 'Fast'],  # No HSDir
             observed_bandwidth=3_000_000
         )
-
-        uptime = [i for i in issues if 'HSDir' in i['title'] and 'uptime' in i['title']]
-        assert len(uptime) == 1
-        assert uptime[0]['severity'] == 'warning'
-        assert '96' in uptime[0]['description']
-        assert uptime[0]['section'] == 'flag-hsdir-uptime'
+        
+        hsdir_tk_issues = [i for i in issues if 'HSDir' in i['title'] and 'Time Known' in i['title']]
+        assert len(hsdir_tk_issues) >= 1
+        assert hsdir_tk_issues[0]['severity'] == 'warning'  # Changed from 'info'
     
     def test_hsdir_requires_stable_is_warning(self):
         """Test HSDir requires Stable flag is WARNING when Stable missing."""

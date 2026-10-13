@@ -308,7 +308,7 @@ from .flag_thresholds import (
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
-    hsdir_observed_uptime_met,
+    HSDIR_TK_DEFAULT,
     MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
     check_stable_eligibility,
@@ -1259,64 +1259,33 @@ class CollectorFetcher:
                 'sybil': is_sybil,
             })
             
-            # HSDir (voteflags.c dirserv_thinks_router_is_hs_dir):
-            # hidden-service-dir, V2Dir, Stable, Fast, router_is_active
-            # (Running, Valid, not hibernating), and observed uptime >= 96h.
-            # Votes don't publish that uptime. A missing Running or Valid
-            # vote is why HSDir was withheld, not evidence the 96h check failed.
-            # Authorities that publish hsdir-wfu / hsdir-tk (moria1) apply
-            # those on top; the others do not use WFU or Time Known.
-            raw_hsdir_wfu = thresholds.get('hsdir-wfu')
-            wfu_published = raw_hsdir_wfu is not None
-            hsdir_wfu = raw_hsdir_wfu if isinstance(raw_hsdir_wfu, (int, float)) else None
-            if hsdir_wfu is not None and hsdir_wfu > 1:
-                hsdir_wfu = hsdir_wfu / 100.0
-            raw_hsdir_tk = thresholds.get('hsdir-tk')
-            tk_published = bool(raw_hsdir_tk)
-            hsdir_tk = raw_hsdir_tk if tk_published else None
-
-            wfu_met = (not wfu_published) or (hsdir_wfu is not None and relay_wfu >= hsdir_wfu)
-            tk_met = (not tk_published) or (relay_tk >= hsdir_tk)
-            published_metrics_met = wfu_met and tk_met
-            has_middleonly = 'MiddleOnly' in auth_flags
-            has_running = 'Running' in auth_flags
-            has_valid = 'Valid' in auth_flags
-            # router_is_active also rejects a hibernating relay and a descriptor
-            # older than 24h. Votes have no hibernate bit; those relays are not
-            # Running. StaleDesc uses a shorter 18h cutoff, so a StaleDesc vote
-            # can still be active and is not treated as an uptime pass or fail.
-            hsdir_prereqs_met = (
-                has_stable and has_fast and has_v2dir and has_running and has_valid
-                and not is_sybil and not has_middleonly)
-
-            has_hsdir_flag = 'HSDir' in auth_flags
-            uptime_met = hsdir_observed_uptime_met(
-                has_hsdir_flag, hsdir_prereqs_met, published_metrics_met)
-            # Assignment is the authority's decision. Calculated WFU/TK used to
-            # mark relays eligible that these authorities never voted HSDir.
-            if has_hsdir_flag:
+            # HSDir flag eligibility
+            # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
+            #   HSDir requires: supports_tunnelled_dir_requests (V2Dir),
+            #   Stable, Fast flags, plus WFU >= hsdir-wfu and TK >= hsdir-tk
+            hsdir_wfu = thresholds.get('hsdir-wfu', 0.98)
+            hsdir_tk = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
+            
+            hsdir_metrics_met = relay_wfu >= hsdir_wfu and relay_tk >= hsdir_tk
+            hsdir_eligible = has_stable and has_fast and has_v2dir and hsdir_metrics_met
+            if hsdir_eligible:
                 eligibility['hsdir']['eligible_count'] += 1
+            
+            # Count actual HSDir flag assignment by this authority
+            has_hsdir_flag = 'HSDir' in auth_flags
+            if has_hsdir_flag:
                 eligibility['hsdir']['assigned_count'] += 1
-
+            
             eligibility['hsdir']['details'].append({
                 'authority': auth_name,
-                'eligible': has_hsdir_flag,
-                'assigned': has_hsdir_flag,
+                'eligible': hsdir_eligible,
+                'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
                 'has_stable': has_stable,
                 'has_fast': has_fast,
                 'has_v2dir': has_v2dir,
-                'has_running': has_running,
-                'has_valid': has_valid,
-                'metrics_met': published_metrics_met,
-                'uptime_met': uptime_met,
-                'wfu_published': wfu_published,
-                'wfu_value': relay_wfu,
+                'metrics_met': hsdir_metrics_met,
                 'wfu_threshold': hsdir_wfu,
-                'wfu_met': wfu_met,
-                'tk_published': tk_published,
-                'tk_value': relay_tk,
                 'tk_threshold': hsdir_tk,
-                'tk_met': tk_met,
             })
             
             # Simple flag tracking: Exit, MiddleOnly, BadExit
