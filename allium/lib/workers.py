@@ -110,9 +110,10 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
             # Calculate remaining time for this chunk read
             remaining = timeout - elapsed
             
-            # Set socket timeout for this read operation
-            # Use minimum of remaining time and 5 seconds to check frequently
-            read_timeout = min(remaining, 5)
+            # Set socket timeout for this read to the remaining total time.
+            # A shorter cap cannot be retried: after a timeout, socket.SocketIO
+            # refuses later reads ("cannot read from timed out object").
+            read_timeout = remaining
             if hasattr(response, 'fp') and hasattr(response.fp, 'raw'):
                 try:
                     response.fp.raw._sock.settimeout(read_timeout)
@@ -122,15 +123,11 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
             try:
                 chunk = response.read(chunk_size)
             except socket.timeout:
-                # Individual read timed out - check if total timeout exceeded
-                elapsed = time.time() - start_time
-                if elapsed >= timeout:
-                    response.close()
-                    raise TotalTimeoutError(
-                        f"Request to {url} exceeded total timeout of {timeout}s during read"
-                    )
-                # Socket timeout but total not exceeded - retry
-                continue
+                # The per-read timeout is the remaining total, so the limit is used up
+                response.close()
+                raise TotalTimeoutError(
+                    f"Request to {url} exceeded total timeout of {timeout}s during read"
+                )
             
             if not chunk:
                 # End of response
