@@ -196,6 +196,7 @@ class TestFullIntegrationFlow:
                     "or_addresses": ["192.168.1.100:9001"]
                 }
             ],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached"
         }
         
@@ -617,6 +618,7 @@ class TestPerformanceAndCaching:
                 "contact": "cached@example.com",
                 "platform": "Tor 0.4.5.7 on Linux"
             }],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "1.0"
         }
         
