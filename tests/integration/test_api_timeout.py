@@ -25,7 +25,7 @@ from allium.lib.workers import (
     _fetch_with_cache_fallback,
     DETAILS_CONFIG,
     APIConfig,
-    _cache_manager,
+    _save_cache,
 )
 
 
@@ -191,7 +191,7 @@ def test_cache_fallback_on_timeout():
         ],
         'cached_at': datetime.now().isoformat(),
     }
-    _cache_manager.save_cache('test_timeout_api', cache_data)
+    _save_cache('test_timeout_api', cache_data)
     print(f"  ✅ Cache seeded with data")
     
     # Now test with a slow server - should fallback to cache

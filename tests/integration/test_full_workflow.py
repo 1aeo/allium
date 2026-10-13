@@ -65,12 +65,14 @@ class TestFullIntegrationFlow:
         """Test complete successful flow from coordinator through workers to relay processing"""
         # Mock onionoo data
         mock_onionoo_data = {
+            # The downtime filter measures last_seen from here
+            "relays_published": "2024-01-01 12:00:00",
             "relays": [
                 {
                     "nickname": "TestRelay1",
                     "fingerprint": "ABC123DEF456",
-                    # Relays._filter_and_fix_relays drops relays that are not
-                    # running unless last_seen is within filter_downtime_days
+                    # Relays._filter_and_fix_relays drops relays whose last_seen
+                    # is more than filter_downtime_days before relays_published
                     "running": True,
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,

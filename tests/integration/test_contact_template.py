@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 
+import hashlib
 import os
 import pytest
+import shutil
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from allium.lib.file_io_utils import sanitize_path_component
 from allium.lib.page_writer import build_template_args, write_pages_by_key
 from allium.lib.relays import Relays
+
+
+def _every_page_exists(category, key):
+    """Relays.has_page for the dict relay sets below: link every category key."""
+    return True
 
 
 class TestContactTemplateIntegration(unittest.TestCase):
@@ -79,7 +87,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
                 'json': {
                     'relay_subset': [self.sample_relay]  # Keep for backward compat in tests
                 },
-                'use_bits': False
+                'use_bits': False,
+                'has_page': _every_page_exists,
             },
             'page_ctx': {
                 'path_prefix': '../'
@@ -604,6 +613,7 @@ def test_contact_template_non_default_variant_uses_clean_absolute_canonical(
         'relays': {
             'json': {'relay_subset': [sample_relay]},
             'use_bits': False,
+            'has_page': _every_page_exists,
         },
         'sortable_scope': 'contact',
     }
@@ -1074,6 +1084,203 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # by-ipv6.html should NOT exist (no IPv6 in test data)
         self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
+    def _write_validated_contact_pages(self, *aroi_domains, base_url="https://metrics.1aeo.com"):
+        """Run one contact-page generation with a validated 3-relay contact per AROI domain."""
+        relay_data = {"relays": [
+            {"fingerprint": hashlib.sha1(f"{domain}/{number}".encode()).hexdigest().upper(),
+             "nickname": f"V{number}", "contact": f"operator@{domain}",
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 1000000 * number, "consensus_weight": 100 * number,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": [f"1.1.1.{number}:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []}
+            for domain in aroi_domains for number in (1, 2, 3)
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url=base_url,
+        )
+        for contact_data in relay_set.json["sorted"]["contact"].values():
+            contact_data["is_validated_aroi"] = True
+            contact_data["aroi_domain"] = contact_data["contact"].split("@", 1)[1]
+        write_pages_by_key(relay_set, "contact")
+
+    def _write_output_file(self, relative_path, content="keep"):
+        """Write content to relative_path under the output root and return the full path."""
+        path = os.path.join(self.temp_dir, relative_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf8") as handle:
+            handle.write(content)
+        return path
+
+    def test_contact_page_generation_removes_stale_vanity_dir_for_absent_domain(self):
+        """A vanity folder for a domain no longer rendered is removed on the next run.
+
+        Two generations share one output directory, as with a reused ./www:
+        the first validates example.org, the second only example.net (the
+        operator moved domains, or example.org's relays were all dropped).
+        Hand-made folders and everything else in the root survive.
+        """
+        unrelated_paths = [
+            "index.html",
+            "robots.txt",
+            "sitemap.xml",
+            "search-index.json",
+            os.path.join("relay", "A" * 40, "index.html"),
+            os.path.join("family", "B" * 40, "index.html"),
+            os.path.join("misc", "all.html"),
+            os.path.join("static", "css", "style.css"),
+            # Only generated-looking files, but not named like a domain:
+            # no dot (as with every core site folder), or a version number
+            os.path.join("about", "index.html"),
+            os.path.join("v1.2", "index.html"),
+            # Named like a domain, but holding a file allium never writes there
+            os.path.join("notes.example.com", "index.html"),
+            os.path.join("notes.example.com", "README.txt"),
+            # Named like a domain, but holding a subdirectory
+            os.path.join("nested.example.com", "index.html"),
+            os.path.join("nested.example.com", "sub", "index.html"),
+            # Named like a domain and holding only an index.html, but hand-made
+            os.path.join("handmade.example.com", "index.html"),
+        ]
+        for relative_path in unrelated_paths:
+            self._write_output_file(relative_path)
+        # A page that is not UTF-8 cannot be allium's
+        binary_page = os.path.join(self.temp_dir, "binary.example.com", "index.html")
+        os.makedirs(os.path.dirname(binary_page))
+        with open(binary_page, "wb") as handle:
+            handle.write(b"\xff\xfe<html><head></head></html>")
+        # A symlinked domain-named folder is never followed or removed
+        link_target = os.path.join(self.temp_dir, "outside")
+        os.makedirs(link_target)
+        self._write_output_file(os.path.join("outside", "index.html"))
+        link_path = os.path.join(self.temp_dir, "linked.example.com")
+        try:
+            os.symlink(link_target, link_path)
+        except (OSError, NotImplementedError):  # Windows without symlink privilege
+            link_path = None
+
+        self._write_validated_contact_pages("example.org", "half.example.org")
+        stale_vanity_dir = os.path.join(self.temp_dir, "example.org")
+        with open(os.path.join(stale_vanity_dir, "index.html"), encoding="utf8") as handle:
+            first_page = handle.read()
+        canonical = '<link rel="canonical" href="https://metrics.1aeo.com/example.org/">'
+        self.assertIn(canonical, first_page)
+        self.assertTrue(os.path.isfile(os.path.join(stale_vanity_dir, "by-status.html")))
+        # Pages left by an earlier, longer listing are generated output too
+        self._write_output_file(os.path.join("example.org", "page-2.html"),
+                                first_page.replace(canonical, canonical.replace('org/"', 'org/page-2"')))
+        # An interrupted rewrite can leave a vanity folder without index.html
+        half_written = os.path.join(self.temp_dir, "half.example.org")
+        for filename in os.listdir(half_written):
+            if filename != "by-status.html":
+                os.remove(os.path.join(half_written, filename))
+        # Builds before 2026-08 wrote the raw domain into the canonical, while
+        # the folder carries the sanitized name
+        legacy_dir = os.path.dirname(self._write_output_file(
+            os.path.join(sanitize_path_component("example.com:8443"), "index.html"),
+            first_page.replace(canonical, '<link rel="canonical" href="https://metrics.1aeo.com/example.com:8443/" />')))
+        # Allium's page copied under another name is not that folder's output
+        copied_page = os.path.join(self.temp_dir, "copied.example.com", "index.html")
+        os.makedirs(os.path.dirname(copied_page))
+        shutil.copyfile(os.path.join(stale_vanity_dir, "index.html"), copied_page)
+        # Hand-made pages: a self-canonical (an https build needs one on every
+        # page) is no proof, and markup HTMLParser rejects must not stop the run
+        hand_made_pages = {
+            os.path.join("selfcanonical.example.com", "index.html"): (
+                '<html><head><link rel="canonical" href="https://metrics.1aeo.com/selfcanonical.example.com/">'
+                '</head><body>Mirror notes</body></html>'),
+            os.path.join("oddmarkup.example.com", "index.html"): (
+                '<html><head><![foo[ x ]]><link rel="canonical" href="https://metrics.1aeo.com/oddmarkup.example.com/">'
+                '</head><body>Notes</body></html>'),
+        }
+        for relative_path, content in hand_made_pages.items():
+            self._write_output_file(relative_path, content)
+
+        self._write_validated_contact_pages("example.net")
+
+        self.assertFalse(os.path.exists(stale_vanity_dir))
+        self.assertFalse(os.path.exists(half_written))
+        self.assertFalse(os.path.exists(legacy_dir))
+        for relative_path, content in hand_made_pages.items():
+            with open(os.path.join(self.temp_dir, relative_path), encoding="utf8") as handle:
+                self.assertEqual(handle.read(), content, f"{relative_path} was modified")
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "by-status.html")))
+        for relative_path in unrelated_paths:
+            with open(os.path.join(self.temp_dir, relative_path), encoding="utf8") as handle:
+                self.assertEqual(handle.read(), "keep", f"{relative_path} was modified")
+        self.assertTrue(os.path.isfile(binary_page))
+        self.assertTrue(os.path.isfile(copied_page))
+        if link_path:
+            self.assertTrue(os.path.islink(link_path))
+        self.assertTrue(os.path.isfile(os.path.join(link_target, "index.html")))
+
+    @staticmethod
+    def _scandir_denying(denied_path):
+        """Return an os.scandir stand-in that raises PermissionError for denied_path."""
+        real_scandir = os.scandir
+
+        def scandir(path="."):
+            """Deny denied_path, list everything else."""
+            if path == denied_path:
+                raise PermissionError(13, "Permission denied", path)
+            return real_scandir(path)
+        return scandir
+
+    def test_contact_page_generation_skips_unreadable_vanity_like_dir(self):
+        """A stale vanity folder the sweep cannot read is left alone, not fatal."""
+        self._write_validated_contact_pages("locked.example.com")
+        unreadable = os.path.join(self.temp_dir, "locked.example.com")
+
+        with patch("allium.lib.page_writer.os.scandir", side_effect=self._scandir_denying(unreadable)):
+            self._write_validated_contact_pages("example.org")
+
+        self.assertTrue(os.path.isfile(os.path.join(unreadable, "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+
+    def test_contact_page_generation_skips_vanity_dir_resolving_outside_root(self):
+        """A stale-looking folder that resolves outside the output root (a Windows junction) is kept."""
+        self._write_validated_contact_pages("example.org")
+        junction = os.path.join(self.temp_dir, "example.org")
+        real_realpath = os.path.realpath
+
+        def realpath(path, *args, **kwargs):
+            """Resolve the junction to a folder outside the output root."""
+            if path == junction:
+                return os.path.join(real_realpath(self.temp_dir) + "-elsewhere", "example.org")
+            return real_realpath(path, *args, **kwargs)
+
+        with patch("allium.lib.page_writer.os.path.realpath", side_effect=realpath):
+            self._write_validated_contact_pages("example.net")
+
+        self.assertTrue(os.path.isfile(os.path.join(junction, "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
+
+    def test_contact_page_generation_completes_when_output_root_is_unlistable(self):
+        """An output root that cannot be listed skips the sweep, not the run."""
+        self._write_validated_contact_pages("example.org")
+
+        with patch("allium.lib.page_writer.os.scandir", side_effect=self._scandir_denying(self.temp_dir)):
+            self._write_validated_contact_pages("example.net")
+
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.net", "index.html")))
+
+    def test_contact_page_generation_without_base_url_keeps_existing_vanity_dirs(self):
+        """Without a base URL no vanity pages are written, and none are swept."""
+        self._write_validated_contact_pages("example.org")
+
+        self._write_validated_contact_pages("example.net", base_url="")
+
+        self.assertTrue(os.path.isfile(os.path.join(self.temp_dir, "example.org", "index.html")))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, "example.net")))
+
 
 class TestB3V3RelayInfoRendering(unittest.TestCase):
     """B3.2 (re-opened): integration tests for v3 awareness in
@@ -1378,6 +1585,7 @@ class TestContactTemplateIPv6Column:
         return relay
 
     def _base_context(self, relay_subset):
+        """A contact.html context for a contact running relay_subset."""
         return {
             'contact': 'test@example.com',
             'contact_hash': 'abcd1234',
@@ -1393,6 +1601,7 @@ class TestContactTemplateIPv6Column:
                 'json': {'relay_subset': relay_subset},
                 'use_bits': False,
                 'timestamp': '2026-01-01 00:00:00',
+                'has_page': _every_page_exists,
             },
             'page_ctx': {'path_prefix': '../'},
             'contact_rankings': [],

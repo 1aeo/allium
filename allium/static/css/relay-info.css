@@ -21,17 +21,6 @@
 }
 .subsection-card dl { margin-bottom: 0; }
 
-/* Subsection headers - Level 2 in information hierarchy */
-.subsection-header {
-    margin-top: 0;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--color-text-dark);
-    border-bottom: 2px solid var(--color-border-light);
-}
-
 .section-header {
     position: relative;
     display: inline-block;
@@ -54,8 +43,9 @@
     color: var(--color-primary);
 }
 
-/* Highlight section when targeted (outline avoids layout shift/overlap) */
-:target {
+/* Highlight section when targeted (outline avoids layout shift/overlap);
+   history charts use :target to switch periods, not to highlight */
+:target:not(.chart-hero):not(.chart-period) {
     scroll-margin-top: 72px;
     background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;
