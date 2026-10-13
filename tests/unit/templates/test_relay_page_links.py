@@ -12,6 +12,7 @@ from allium.lib import page_writer
 from allium.lib.consensus.collector_fetcher import AUTHORITIES_BY_NAME
 from allium.lib.consensus.consensus_evaluation import format_relay_consensus_evaluation
 from allium.lib.relays import Relays
+from helpers.html_links import dead_fragment_links
 
 PUBLISHED = "2026-10-11 12:00:00"
 OWNER = "A" * 40
@@ -171,3 +172,9 @@ def test_exit_dns_first_hop_links_only_relays_with_a_page(tmp_path):
                      rf'{re.escape(NOT_IN_NETWORK)}', dropped)
     assert re.search(rf'owner \(DE\)\s+<a href="\.\./{OWNER}/" title="Guard relay used to build test circuit"',
                      first_hop(KEPT))
+
+
+def test_no_relay_page_links_a_missing_fragment(tmp_path):
+    """Every #fragment link on a relay page names an element of the page it opens."""
+    _render_relay_pages(tmp_path)
+    assert dead_fragment_links(tmp_path) == []

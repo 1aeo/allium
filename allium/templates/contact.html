@@ -39,8 +39,8 @@
                     {%- set has_validation_status = contact_validation_status and contact_validation_status.validation_status != 'not_configured' -%}
                     {% if has_aroi_domain %}
                     <li><strong>AROI:</strong> {{ aroi_domain|escape }}
-                        {{- aroi_validation_badge(contact_validation_status) }}
-                        {{ aroi_sub_bullets(contact_validation_status) }}
+                        {{- aroi_validation_badge(contact_validation_status, section_hrefs=aroi_section_hrefs) }}
+                        {{ aroi_sub_bullets(contact_validation_status, section_hrefs=aroi_section_hrefs) }}
                     </li>
                     {% if is_validated_aroi and base_url %}
                     <li style="margin-left: 20px;">
@@ -49,8 +49,8 @@
                     {% endif %}
                     {% elif has_validation_status %}
                     <li><strong>AROI:</strong> <span style="color: #6c757d; font-style: italic;">Not Provided.</span>
-                        {{ aroi_validation_badge(contact_validation_status, show_count=true) }}
-                        {{ aroi_sub_bullets(contact_validation_status) }}
+                        {{ aroi_validation_badge(contact_validation_status, show_count=true, section_hrefs=aroi_section_hrefs) }}
+                        {{ aroi_sub_bullets(contact_validation_status, section_hrefs=aroi_section_hrefs) }}
                     </li>
                     {% endif %}
                     {# Phase 1: source-faithful ContactInfo display.

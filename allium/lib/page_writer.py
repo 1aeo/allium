@@ -20,6 +20,7 @@ from urllib.parse import unquote, urlsplit
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
 from .contact_sorting import (
+    AROI_SECTION_LISTS,
     CONTACT_SORT_FILE_MAP,
     CONTACT_SORT_MODES,
     CONTACT_DEFAULT_SORT_MODE,
@@ -29,6 +30,7 @@ from .contact_sorting import (
     build_contact_variant_args as _build_contact_variant_args,
     contact_has_ipv6 as _contact_has_ipv6,
     contact_relay_count as _contact_relay_count,
+    sort_contact_relays as _sort_contact_relays,
 )
 from .bandwidth_formatter import (
     format_bandwidth_with_unit,
@@ -128,6 +130,40 @@ def _paginated_validation_status(status, visible_relays):
                 in visible_fingerprints
             ]
     return page_status
+
+
+def _aroi_section_hrefs(status, ordered_relays, base_filename, page_number=None, page_dir=""):
+    """Where each AROI section of a contact or family relay listing renders.
+
+    contact-relay-list.html shows the sections only in its sectioned layout,
+    and on each page only for that page's relays (_paginated_validation_status),
+    so a section can be on another page of the listing. Returns {section: href}:
+    "#<section>-relays" on page_number, else the first page of ordered_relays
+    that shows it (page_dir plus its clean route). Sections no page shows are
+    left out.
+    """
+    if not (isinstance(status, dict) and status.get('has_aroi')
+            and status.get('validation_status') != 'not_configured'):
+        return {}
+    positions = {relay.get('fingerprint'): index for index, relay in enumerate(ordered_relays)}
+    hrefs = {}
+    for section, keys in AROI_SECTION_LISTS.items():
+        indexes = [
+            positions[entry['relay'].get('fingerprint')]
+            for key in keys for entry in status.get(key) or ()
+            if isinstance(entry, dict)
+            and entry.get('relay', {}).get('fingerprint') in positions
+        ]
+        if not indexes:
+            continue
+        page = min(indexes) // RELAY_PAGE_SIZE + 1
+        if page == page_number:
+            target = ""
+        else:
+            route = clean_href(paginated_filename(base_filename, page))
+            target = page_dir if page_dir and route == "./" else page_dir + route
+        hrefs[section] = f"{target}#{section}-relays"
+    return hrefs
 
 
 # Template bytecode cache directory for improved rendering performance
@@ -1317,6 +1353,11 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
                 template_args['contact_validation_status'] = (
                     _paginated_validation_status(status, visible_relays)
                 )
+            # A section's relays can all be on another page of this listing
+            if total_pages > 1:
+                template_args['aroi_section_hrefs'] = _aroi_section_hrefs(
+                    status, sorted_relays, base_filename, page_number
+                )
 
             rendered = template.render(relays=relay_set, **template_args)
 
@@ -1588,12 +1629,16 @@ def build_template_args(
 
     full_contact_validation_status = None
     rendered_contact_validation_status = contact_validation_status
+    aroi_section_hrefs = None
     if k == "family" and total_pages > 1 and isinstance(
         contact_validation_status, dict
     ):
         full_contact_validation_status = contact_validation_status
         rendered_contact_validation_status = _paginated_validation_status(
             contact_validation_status, visible_members
+        )
+        aroi_section_hrefs = _aroi_section_hrefs(
+            contact_validation_status, members, "index.html", page_number
         )
 
     safe_value = _sanitize_path_component(v)
@@ -1635,6 +1680,8 @@ def build_template_args(
         'primary_country_data': primary_country_data,
         'contact_validation_status': rendered_contact_validation_status,
         'contact_validation_status_full': full_contact_validation_status,
+        # Contact pages set theirs per sort variant (_render_contact_variants)
+        'aroi_section_hrefs': aroi_section_hrefs,
         'aroi_validation_timestamp': aroi_validation_timestamp,
         # Family-specific data (extracted once, not per-field)
         **({'family_aroi_domain': i.get("aroi_domain", ""),
@@ -1768,12 +1815,27 @@ class _RelayPageRenderer:
         self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
         self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
         self.chart_writer = getattr(relay_set, 'chart_writer', None)
+        self.operator_section_hrefs = {}  # contact hash -> _aroi_section_hrefs
+
+    def _operator_section_hrefs(self, contact_hash, contact_data, status, path_prefix):
+        """Where the operator badge's AROI sections are on the contact page."""
+        if not (isinstance(status, dict) and status.get('has_aroi')
+                and status.get('validation_status') != 'not_configured'):
+            return {}
+        hrefs = self.operator_section_hrefs.get(contact_hash)
+        if hrefs is None:
+            members = [self.relay_set.json["relays"][index] for index in contact_data.get("relays", ())]
+            hrefs = self.operator_section_hrefs[contact_hash] = _aroi_section_hrefs(
+                status, _sort_contact_relays(members, CONTACT_DEFAULT_SORT_MODE), "index.html",
+                page_dir=f"{path_prefix}contact/{contact_hash}/")
+        return hrefs
 
     def write(self, relay):
         """Render one relay page to relay/FINGERPRINT/index.html."""
         contact_hash = relay.get('contact_md5')
         contact_display_data = {}
         contact_validation_status = None
+        aroi_section_hrefs = {}
 
         if contact_hash and contact_hash in self.contact_map:
             contact_data = self.contact_map[contact_hash]
@@ -1781,6 +1843,9 @@ class _RelayPageRenderer:
             contact_validation_status = contact_data.get('contact_validation_status')
 
         page_ctx = self.standard_contexts.get_relay_page_context(relay, contact_display_data)
+        if contact_validation_status:
+            aroi_section_hrefs = self._operator_section_hrefs(
+                contact_hash, contact_data, contact_validation_status, page_ctx['path_prefix'])
 
         # Partition family lists by family-cert status for template display
         _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
@@ -1796,6 +1861,7 @@ class _RelayPageRenderer:
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
             contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
+            aroi_section_hrefs=aroi_section_hrefs,
             aroi_validation_timestamp=self.aroi_validation_timestamp,
             validated_aroi_domains=self.validated_aroi_domains,
             base_url=self.base_url,
