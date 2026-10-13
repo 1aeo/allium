@@ -126,9 +126,10 @@ def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
             if r.get('ip') and q in r['ip']:
                 return {'type': 'relay', 'fingerprint': r['f'], 'nickname': r.get('n', ''), 'hint': 'ip'}
     
-    # Step 9: Platform or flag
-    if q_lower in lookups['platforms']:
-        return {'type': 'platform', 'platform': q_lower}
+    # Step 9: Platform or flag (platforms keep their page folder's case)
+    platform = next((p for p in lookups['platforms'] if p.lower() == q_lower), None)
+    if platform:
+        return {'type': 'platform', 'platform': platform}
     if q_lower in lookups['flags']:
         return {'type': 'flag', 'flag': q_lower}
     
