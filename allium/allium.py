@@ -17,7 +17,7 @@ import sys
 import time
 import urllib.parse
 from lib import optional_deps
-from lib.coordinator import create_relay_set_with_coordinator
+from lib.coordinator import create_relay_set_with_coordinator, relay_count
 from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
 
@@ -370,6 +370,11 @@ if __name__ == "__main__":
             print("⚠️  No onionoo data available - this might be due to network issues or the service being temporarily unavailable")
             print("🔧 In CI environments, this is often a temporary issue that resolves on retry")
             sys.exit(0)
+        if relay_count(RELAY_SET) == 0:
+            progress_logger.log("Relay data contains 0 relays, stopping before page generation")
+            print("❌ Error: the Onionoo details data has no relays. "
+                  "Check allium/data/cache/onionoo_details.json, or delete it to force a fresh download.")
+            sys.exit(1)
     except Exception as e:
         # Progress-style error context message (conditional on progress flag)
         progress_logger.log(f"Failed to initialize relay data: {e}")

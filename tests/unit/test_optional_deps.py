@@ -193,12 +193,13 @@ def test_the_way_out_uses_options_allium_accepts():
 ])
 def test_allium_checks_before_fetching(tmp_path, options, code, shown, built):
     """allium.py with cairocffi unimportable, run to the end with nothing fetched and the site generator stubbed."""
+    # One relay: an empty details document is broken input, and allium.py exits before the stubbed generator.
     script = ("import runpy, sys\n"
               "from types import SimpleNamespace\n"
               "sys.path.insert(0, '.')\n"
               "sys.modules['cairocffi'] = None\n"
               "import lib.coordinator, lib.site_generator\n"
-              "lib.coordinator.create_relay_set_with_coordinator = lambda *a, **k: SimpleNamespace(json={'relays': []})\n"
+              "lib.coordinator.create_relay_set_with_coordinator = lambda *a, **k: SimpleNamespace(json={'relays': [{}]})\n"
               "lib.site_generator.generate_site = lambda relay_set, args, log: print("
               "'charts=%s chart_format=%s' % (args.charts, args.chart_format))\n"
               "sys.argv = ['allium.py'] + sys.argv[1:]\n"
