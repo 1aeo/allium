@@ -267,6 +267,7 @@ def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
     
     mock_cached_data = {
         "relays": [{"fingerprint": "CACHED123", "uptime": {"1_month": 92.0}}],
+        "relays_published": "2024-01-01 12:00:00",
         "version": "cached_data"
     }
     
@@ -336,6 +337,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -365,6 +367,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "DEF456", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_uptime"
         }
         
@@ -475,6 +478,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -500,6 +504,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "BOUNDARY", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "boundary_cached_uptime"
         }
         
@@ -536,6 +541,7 @@ class TestOnionooDetailsCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "nickname": "TestRelay"}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_details"
         }
         
@@ -599,6 +605,7 @@ class TestOnionooBandwidthCaching:
         """Test that fresh cache is returned without making a request"""
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_bandwidth"
         }
         
@@ -624,6 +631,7 @@ class TestOnionooBandwidthCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_bandwidth"
         }
         

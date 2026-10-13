@@ -55,7 +55,11 @@ class TestHttpErrorCacheKeys(unittest.TestCase):
         workers._worker_status.update(self._saved_status)
 
     def test_304_with_cache_returns_cached_and_marks_ready_under_machine_key(self):
-        cached = {"relays": [{"nickname": "seeded"}], "version": "test"}
+        cached = {
+            "relays": [{"nickname": "seeded"}],
+            "relays_published": "2024-01-01 12:00:00",
+            "version": "test",
+        }
         logs = []
         with tempfile.TemporaryDirectory() as td:
             cm = create_cache_manager(td)
@@ -126,7 +130,11 @@ class TestHttpErrorCacheKeys(unittest.TestCase):
 
     def test_http_5xx_logs_and_reraises(self):
         """Non-304 HTTP errors log and re-raise; no cache fallback occurs."""
-        cached = {"relays": [{"nickname": "seeded"}], "version": "test"}
+        cached = {
+            "relays": [{"nickname": "seeded"}],
+            "relays_published": "2024-01-01 12:00:00",
+            "version": "test",
+        }
         logs = []
         with tempfile.TemporaryDirectory() as td:
             cm = create_cache_manager(td)
@@ -148,7 +156,11 @@ class TestHttpErrorCacheKeys(unittest.TestCase):
 
     def test_urlerror_logs_and_reraises(self):
         """Non-timeout URLErrors log network-error messages and re-raise."""
-        cached = {"relays": [{"nickname": "seeded"}], "version": "test"}
+        cached = {
+            "relays": [{"nickname": "seeded"}],
+            "relays_published": "2024-01-01 12:00:00",
+            "version": "test",
+        }
         logs = []
         err = urllib.error.URLError(ConnectionRefusedError(61, "refused"))
         with tempfile.TemporaryDirectory() as td:

@@ -257,6 +257,19 @@ class APIConfig:
     progress_name: str = ''          # Coordinator progress prefix (e.g. 'Details API')
     enabled: bool = True             # Registry entries can exist but stay dormant
     feature_flag: str = ''           # Named feature gate checked by the coordinator
+    cache_validator: Optional[Callable[[Any], bool]] = None  # checked on cached data before it is used
+
+
+def _validate_onionoo_document(data) -> bool:
+    """True for an Onionoo response document: a relays_published string and a relays list."""
+    if not isinstance(data, dict):
+        return False
+    published = data.get("relays_published")
+    return (
+        isinstance(published, str)
+        and published != ""
+        and isinstance(data.get("relays"), list)
+    )
 
 
 # Pre-configured API settings
@@ -270,6 +283,7 @@ DETAILS_CONFIG = APIConfig(
     retry_delay_base=2.0,        # 2s → 4s → 8s backoff
     allow_exit_on_304=True,
     critical=True,
+    cache_validator=_validate_onionoo_document,
 )
 
 UPTIME_CONFIG = APIConfig(
@@ -282,6 +296,7 @@ UPTIME_CONFIG = APIConfig(
     retry_delay_base=2.0,
     allow_exit_on_304=False,
     critical=False,
+    cache_validator=_validate_onionoo_document,
 )
 
 BANDWIDTH_CONFIG = APIConfig(
@@ -294,6 +309,7 @@ BANDWIDTH_CONFIG = APIConfig(
     retry_delay_base=2.0,
     allow_exit_on_304=False,
     critical=False,
+    cache_validator=_validate_onionoo_document,
 )
 
 AROI_CONFIG = APIConfig(
@@ -659,6 +675,8 @@ def _fetch_with_cache_fallback(
     - HTTP 304: return cached data, or mark stale when no cache exists
     - Other HTTP errors and network errors: log and re-raise
     - Any other error: mark stale and fall back to cached data
+    - Cached copies are used only when config.cache_validator is unset or accepts them.
+      Freshly downloaded responses are not passed through cache_validator.
 
     Args:
         url: URL to fetch data from
@@ -667,8 +685,8 @@ def _fetch_with_cache_fallback(
         cache_hours_override: Override config's cache_max_age_hours (e.g., for bandwidth API)
         return_fresh_cache: If True, return fresh cache immediately without fetching
         validator: Optional function to validate response data structure
-        ignore_cache: Treat the cache as missing and leave HTTP/network errors
-            to the caller (the refetch after a presumed-fresh cache proved unreadable)
+        ignore_cache: Treat the cache as missing, omit conditional headers, and
+            leave HTTP/network errors to the caller after a cache proved unusable
         
     Returns:
         dict: Parsed JSON response or cached data, None if unavailable
@@ -696,7 +714,13 @@ def _fetch_with_cache_fallback(
         if not cache_read and cache_age is not None:
             cache_read = True
             cached_data = _load_cache(api_name)
-            if cached_data is None:
+            if (cached_data is not None and config.cache_validator
+                    and not config.cache_validator(cached_data)):
+                cached_data = None
+                cache_age = None
+                log_progress(
+                    f"cache file exists but is not a valid {display_name} document, treating as no cache...")
+            elif cached_data is None:
                 cache_age = None
                 log_progress("cache file exists but is invalid, treating as no cache...")
         return cached_data
@@ -716,8 +740,8 @@ def _fetch_with_cache_fallback(
         return None
 
     def _refetch_without_cache():
-        # The failed fetch presumed a fresh cache (shorter timeout and retries)
-        # that proved unreadable: repeat it the way a missing cache is fetched.
+        # The failed fetch presumed a usable cache: repeat it with the
+        # missing-cache timeout and retries, without conditional headers.
         return _fetch_with_cache_fallback(
             url, config, progress_logger, cache_hours_override,
             return_fresh_cache, validator, ignore_cache=True)
@@ -755,7 +779,7 @@ def _fetch_with_cache_fallback(
     
         # Build request with optional conditional headers
         headers = dict(config.custom_headers) if config.custom_headers else {}
-        if config.use_conditional_requests:
+        if config.use_conditional_requests and not ignore_cache:
             prev_timestamp = _read_timestamp(api_name)
             if prev_timestamp:
                 headers["If-Modified-Since"] = prev_timestamp
@@ -800,8 +824,10 @@ def _fetch_with_cache_fallback(
             )
         
             if not is_timeout:
-                # e.g. HTTP 5xx or a reset connection (a 304 is handled below)
-                if presumed_fresh_cache and getattr(e, "code", None) != 304 and load_cached() is None:
+                # A 304 also needs a refetch if its cached document is unusable,
+                # even when the cache file is old enough for the stale timeout.
+                if (presumed_fresh_cache or (getattr(e, "code", None) == 304 and cache_age is not None)) \
+                        and load_cached() is None:
                     return _refetch_without_cache()
                 raise
             log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
@@ -892,8 +918,15 @@ def _fetch_with_cache_fallback(
         _mark_stale(api_name, error_msg)
 
         # Try to return cached data as fallback (not re-reading a cache file
-        # whose current contents were already read)
-        cached = cached_data if cache_read else _load_cache(api_name)
+        # whose current contents were already read). Unread contents go
+        # through load_cached() so cache_validator applies. A save clears
+        # cache_read because the file now holds the response; cache_age can
+        # still be unset (ignore_cache), so recover it before loading.
+        if not cache_read:
+            if cache_age is None:
+                cache_age = _cache_manager.get_cache_age(api_name)
+            load_cached()
+        cached = cached_data
         if cached:
             log_progress(f"using cached {display_name} data as fallback")
             return cached
