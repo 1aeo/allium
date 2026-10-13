@@ -63,6 +63,29 @@ class _StallHandler(_QuietHandler):
             return
 
 
+class _TrickleHandler(_QuietHandler):
+    """Send bytes often enough to keep resetting a socket inactivity timeout."""
+
+    def do_GET(self):
+        chunked = self.path == "/chunked"
+        self.send_response(200)
+        if chunked:
+            self.send_header("Transfer-Encoding", "chunked")
+        elif self.path == "/length":
+            self.send_header("Content-Length", "40")
+        self.end_headers()
+        try:
+            for _ in range(40):
+                self.wfile.write(b"1\r\nx\r\n" if chunked else b"x")
+                self.wfile.flush()
+                time.sleep(0.05)
+            if chunked:
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
+
+
 @contextmanager
 def _listening_server(handler):
     """Serve `handler` on 127.0.0.1 with an ephemeral port.
@@ -97,3 +120,16 @@ def test_stall_past_total_timeout_raises():
             _fetch_url_with_total_timeout(url, timeout=3)
         elapsed = time.monotonic() - started
     assert elapsed < 6
+
+
+@pytest.mark.parametrize("path", ["length", "chunked", "eof"])
+def test_trickle_response_stops_at_total_deadline(path):
+    timeout = 0.5
+    with _listening_server(_TrickleHandler) as server:
+        port = server.server_address[1]
+        url = "http://127.0.0.1:%d/%s" % (port, path)
+        started = time.monotonic()
+        with pytest.raises(TotalTimeoutError):
+            _fetch_url_with_total_timeout(url, timeout=timeout)
+        elapsed = time.monotonic() - started
+    assert timeout <= elapsed < timeout + 0.5

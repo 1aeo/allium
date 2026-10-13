@@ -331,7 +331,7 @@ class TestCoordinatorIntegration:
             # fresh mock per urlopen call: each API worker calls urlopen
             # and reads until EOF; a shared side_effect list would exhaust
             resp = MagicMock()
-            resp.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            resp.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             return resp
         
         with tempfile.TemporaryDirectory() as temp_dir:
