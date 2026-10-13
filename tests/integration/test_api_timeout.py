@@ -10,7 +10,6 @@ This script tests that:
 
 import http.server
 import os
-import socketserver
 import sys
 import threading
 import time
@@ -39,6 +38,7 @@ class SlowResponseHandler(http.server.BaseHTTPRequestHandler):
     
     # Class variable to control behavior
     delay_seconds = 120  # How long to delay (longer than timeout)
+    stream_interval_seconds = 0.1  # Keep bytes arriving within the socket timeout
     response_data = b'{"relays": [{"fingerprint": "test123", "nickname": "TestRelay"}], "version": "test"}'
     
     def log_message(self, format, *args):
@@ -54,17 +54,20 @@ class SlowResponseHandler(http.server.BaseHTTPRequestHandler):
             return
         
         elif self.path == '/slow':
-            # Send data very slowly (1 byte every 10 seconds)
+            # Trickle bytes frequently, but take longer than the total timeout
             print(f"[SlowServer] Received request to /slow - will send data slowly")
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             
             # Send data byte by byte with delays
-            for byte in self.response_data:
-                self.wfile.write(bytes([byte]))
-                self.wfile.flush()
-                time.sleep(10)  # 10 seconds per byte
+            try:
+                for byte in self.response_data:
+                    self.wfile.write(bytes([byte]))
+                    self.wfile.flush()
+                    time.sleep(self.stream_interval_seconds)
+            except (BrokenPipeError, ConnectionResetError):
+                return  # The timeout closes the client connection mid-stream
             return
         
         elif self.path == '/delay':
@@ -96,9 +99,8 @@ class SlowResponseHandler(http.server.BaseHTTPRequestHandler):
 
 def start_slow_server():
     """Start a slow test server on an OS-assigned localhost port."""
-    # Allow socket reuse to avoid "Address already in use" errors
-    socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("127.0.0.1", 0), SlowResponseHandler)
+    # Daemon request threads let cleanup finish while delayed handlers sleep.
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowResponseHandler)
     port = server.server_address[1]
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
@@ -198,6 +200,7 @@ def test_cache_fallback_on_timeout():
         assert (
             result and result.get('relays', [{}])[0].get('fingerprint') == 'CACHED123'
         ), f"Did not get cached data. Result: {result}"
+        assert any("request exceeded total timeout" in msg for msg in messages), messages
         print(f"  ✅ Correctly used cached data after {elapsed:.2f}s timeout")
         print(f"  Cached fingerprint: {result['relays'][0]['fingerprint']}")
     finally:
@@ -217,17 +220,18 @@ def test_compare_old_vs_new_timeout():
     try:
         time.sleep(0.5)
 
-        # Test old behavior with slow response
-        print("\n[Test 3a] Old urllib timeout with /slow endpoint...")
-        print("  (Sends 1 byte every 10 seconds - old timeout won't trigger)")
-        print("  Testing with 5s timeout - this should NOT timeout with old method")
-        print("  (but would take 10+ minutes to complete)")
-        print("  Skipping actual old test to save time - see production logs for evidence")
-
-        # The user's logs show:
-        # - Details API: 90s timeout -> took 7 minutes
-        # - Uptime API: 30s timeout -> took 9 minutes
-        # This proves the old socket timeout doesn't work for slow streaming responses
+        print("\n[Test 3a] Total timeout with /slow endpoint...")
+        timeout = 5
+        # Bytes arrive before the socket inactivity timeout, while the full
+        # response takes longer than the total deadline.
+        assert SlowResponseHandler.stream_interval_seconds < timeout
+        assert len(SlowResponseHandler.response_data) * SlowResponseHandler.stream_interval_seconds > timeout
+        start = time.monotonic()
+        with pytest.raises(TotalTimeoutError, match="exceeded total timeout"):
+            _fetch_url_with_total_timeout(f"http://127.0.0.1:{port}/slow", timeout=timeout)
+        elapsed = time.monotonic() - start
+        assert timeout <= elapsed < timeout + 2, f"Streaming timeout took {elapsed:.2f}s (expected ~{timeout}s)"
+        print(f"  ✅ Streaming stopped at the total deadline after {elapsed:.2f}s")
 
         print("\n[Test 3b] New total timeout with /delay endpoint...")
         print("  Testing 5s total timeout on 30s delayed response")
