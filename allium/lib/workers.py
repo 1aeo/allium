@@ -73,20 +73,20 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
     else:
         req = urllib.request.Request(url)
     
-    start_time = time.time()
+    start_time = time.monotonic()
     
     # Phase 1: Open connection with socket timeout equal to total timeout
     # This ensures we don't wait forever for response headers from a hanging server
     try:
         response = urllib.request.urlopen(req, timeout=timeout)
     except socket.timeout:
-        elapsed = time.time() - start_time
+        elapsed = time.monotonic() - start_time
         raise TotalTimeoutError(
             f"Connection to {url} timed out waiting for response after {elapsed:.1f}s"
         )
     except urllib.error.URLError as e:
         if isinstance(e.reason, socket.timeout):
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             raise TotalTimeoutError(
                 f"Connection to {url} timed out after {elapsed:.1f}s"
             )
@@ -99,7 +99,7 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
     try:
         while True:
             # Check total elapsed time before reading next chunk
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             if elapsed >= timeout:
                 response.close()
                 raise TotalTimeoutError(
@@ -110,27 +110,27 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
             # Calculate remaining time for this chunk read
             remaining = timeout - elapsed
             
-            # Set socket timeout for this read operation
-            # Use minimum of remaining time and 5 seconds to check frequently
-            read_timeout = min(remaining, 5)
+            # Set socket timeout for this read to the remaining total time.
+            # A shorter cap cannot be retried: after a timeout, socket.SocketIO
+            # refuses later reads ("cannot read from timed out object").
             if hasattr(response, 'fp') and hasattr(response.fp, 'raw'):
                 try:
-                    response.fp.raw._sock.settimeout(read_timeout)
+                    response.fp.raw._sock.settimeout(remaining)
                 except (AttributeError, OSError):
                     pass  # Some response types don't support this
             
             try:
-                chunk = response.read(chunk_size)
+                # read() can make repeated socket reads to fill the chunk,
+                # resetting the inactivity timeout as bytes trickle in.
+                # read1() returns after one underlying read so the next loop
+                # iteration checks the deadline and updates the socket timeout.
+                chunk = response.read1(chunk_size)
             except socket.timeout:
-                # Individual read timed out - check if total timeout exceeded
-                elapsed = time.time() - start_time
-                if elapsed >= timeout:
-                    response.close()
-                    raise TotalTimeoutError(
-                        f"Request to {url} exceeded total timeout of {timeout}s during read"
-                    )
-                # Socket timeout but total not exceeded - retry
-                continue
+                # The per-read timeout is the remaining total, so the limit is used up
+                response.close()
+                raise TotalTimeoutError(
+                    f"Request to {url} exceeded total timeout of {timeout}s during read"
+                )
             
             if not chunk:
                 # End of response

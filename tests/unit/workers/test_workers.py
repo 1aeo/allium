@@ -200,7 +200,7 @@ class TestOnionooDetailsWorker:
                 mock_response = MagicMock()
                 # payload once, then EOF - the production chunk loop reads until
                 # an empty read; a constant return_value spun until total timeout
-                mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -228,7 +228,7 @@ class TestOnionooUptimeWorker:
                 mock_response = MagicMock()
                 # payload once, then EOF - the production chunk loop reads until
                 # an empty read; a constant return_value spun until total timeout
-                mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -251,7 +251,7 @@ def test_fetch_onionoo_uptime_success():
             mock_response = MagicMock()
             # payload once, then EOF - the production chunk loop reads until
             # an empty read; a constant return_value spun until total timeout
-            mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -317,7 +317,7 @@ def test_fetch_onionoo_uptime_progress_steps():
             mock_response = MagicMock()
             # payload once, then EOF - the production chunk loop reads until
             # an empty read; a constant return_value spun until total timeout
-            mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -403,7 +403,7 @@ class TestOnionooUptimeCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -457,7 +457,7 @@ class TestOnionooUptimeCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.side_effect = [socket.timeout("timed out"), mock_response]
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -577,7 +577,7 @@ class TestOnionooDetailsCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -725,7 +725,7 @@ class TestAROIValidationCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_invalid_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_invalid_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     from allium.lib.workers import fetch_aroi_validation

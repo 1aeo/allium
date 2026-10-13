@@ -53,7 +53,7 @@ def _fresh_response_factory(payload_bytes):
     empty read, and each API worker makes its own urlopen call."""
     def _factory(*args, **kwargs):
         resp = MagicMock()
-        resp.read.side_effect = [payload_bytes, b'']
+        resp.read1.side_effect = [payload_bytes, b'']
         return resp
     return _factory
 
