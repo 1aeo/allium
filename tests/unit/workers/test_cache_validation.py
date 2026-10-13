@@ -147,6 +147,44 @@ def test_unexpected_error_returns_valid_cache():
     assert result == VALID
 
 
+def test_fresh_invalid_bandwidth_cache_is_fetched_unconditionally():
+    """Bandwidth returns a fresh cache before requesting. Rejecting that file
+    clears its age; the download must not still send If-Modified-Since, or a
+    304 leaves bandwidth missing until the bad file ages out."""
+    workers._save_cache("onionoo_bandwidth", JUNK)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      return_value=json.dumps(VALID).encode("utf-8")) as fetch:
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    assert fetch.call_args_list == [
+        call(URL, workers.BANDWIDTH_CONFIG.timeout_stale_cache, None),
+    ]
+    assert result == VALID
+    assert workers._load_cache("onionoo_bandwidth") == VALID
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "ready"
+
+
+def test_fresh_invalid_bandwidth_cache_refetches_when_server_still_returns_304():
+    """A 304 after the file was already rejected must not skip the refetch."""
+    workers._save_cache("onionoo_bandwidth", JUNK)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    with patch.object(workers, "_fetch_url_with_total_timeout", side_effect=[
+            urllib.error.HTTPError(URL, 304, "", {}, None),
+            json.dumps(VALID).encode("utf-8"),
+         ]) as fetch:
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    assert fetch.call_args_list == [
+        call(URL, workers.BANDWIDTH_CONFIG.timeout_stale_cache, None),
+        call(URL, workers.BANDWIDTH_CONFIG.timeout_stale_cache, None),
+    ]
+    assert result == VALID
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "ready"
+
+
 def test_fresh_download_is_not_cache_validated():
     with patch.object(workers, "_fetch_url_with_total_timeout",
                       return_value=json.dumps(JUNK).encode("utf-8")):

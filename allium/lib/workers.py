@@ -705,12 +705,16 @@ def _fetch_with_cache_fallback(
     # Whether the cache file's current contents were read already (with
     # ignore_cache, the refetching caller found them unreadable)
     cache_read = ignore_cache
+    # Set when those contents were loaded and then discarded. cache_age is
+    # cleared at the same time, so later 304 handling cannot rediscover the
+    # file by age and must not send If-Modified-Since for it.
+    cache_rejected = False
 
     def load_cached():
         """Load the cache on first use; a cache that fails to load counts as
         missing. Most runs fetch new data and never need the cache, and
         parsing then freeing the ~240MB uptime cache cost ~10s per run."""
-        nonlocal cache_age, cached_data, cache_read
+        nonlocal cache_age, cached_data, cache_read, cache_rejected
         if not cache_read and cache_age is not None:
             cache_read = True
             cached_data = _load_cache(api_name)
@@ -718,10 +722,12 @@ def _fetch_with_cache_fallback(
                     and not config.cache_validator(cached_data)):
                 cached_data = None
                 cache_age = None
+                cache_rejected = True
                 log_progress(
                     f"cache file exists but is not a valid {display_name} document, treating as no cache...")
             elif cached_data is None:
                 cache_age = None
+                cache_rejected = True
                 log_progress("cache file exists but is invalid, treating as no cache...")
         return cached_data
 
@@ -777,9 +783,12 @@ def _fetch_with_cache_fallback(
             timeout_seconds = config.timeout_fresh_cache
             log_progress(f"cache is {cache_minutes:.1f} minutes old (<{cache_max_age_hours}h), using {timeout_seconds} second timeout...")
     
-        # Build request with optional conditional headers
+        # Build request with optional conditional headers. A cache already
+        # rejected above (the bandwidth fresh-cache shortcut loads before this)
+        # must be fetched unconditionally: If-Modified-Since would 304, and
+        # cache_age was cleared so the 304 path would not refetch it.
         headers = dict(config.custom_headers) if config.custom_headers else {}
-        if config.use_conditional_requests and not ignore_cache:
+        if config.use_conditional_requests and not ignore_cache and not cache_rejected:
             prev_timestamp = _read_timestamp(api_name)
             if prev_timestamp:
                 headers["If-Modified-Since"] = prev_timestamp
@@ -824,10 +833,14 @@ def _fetch_with_cache_fallback(
             )
         
             if not is_timeout:
-                # A 304 also needs a refetch if its cached document is unusable,
-                # even when the cache file is old enough for the stale timeout.
-                if (presumed_fresh_cache or (getattr(e, "code", None) == 304 and cache_age is not None)) \
-                        and load_cached() is None:
+                # A 304 also needs a refetch if its cached document is unusable.
+                # cache_age may already have been cleared when the fresh-cache
+                # shortcut rejected the file; cache_rejected still records that.
+                unusable_304 = (
+                    getattr(e, "code", None) == 304
+                    and (cache_age is not None or cache_rejected)
+                )
+                if (presumed_fresh_cache or unusable_304) and load_cached() is None:
                     return _refetch_without_cache()
                 raise
             log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
