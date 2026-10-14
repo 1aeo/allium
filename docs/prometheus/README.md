@@ -88,7 +88,7 @@ and failed resolver runs emit none of these series, never zeros. Additive: schem
 | `aeo1_exit_dns_resolver_queries_count` | `fingerprint`, `familyid`, `provider` | Estimated queries from the exit by resolver, decayed (per relay; only resolvers with data) |
 
 `provider` values for `aeo1_exit_dns_public_resolver_share_ratio`: `google`, `cloudflare`, `quad9`, `opendns`, `ffmuc` (Freifunk München), `all`; all six are emitted whenever the share block is present  
-`provider` values for `aeo1_exit_dns_resolver_queries_count`: the five above plus `local` (the exit's own address or origin AS), `other`, `unknown` (origin AS lookup failed)
+`provider` values for `aeo1_exit_dns_resolver_queries_count`: the five above plus `local` (version-1 reports: the exit's own address or origin AS), `local_24` (same IPv4 /24 or IPv6 /64, including the exit's own address), `local_22` (same IPv4 /22 or IPv6 /48), `local_as` (same origin AS, outside those prefixes), `local_operator` (same operator, other network), `other`, `unknown` (origin AS lookup failed). `local` stays valid for version-1 reports. The four `local_*` values are additive; schema v2 is unchanged.
 
 ```promql
 # Resolver mix of your exits

@@ -167,7 +167,9 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
         'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
         'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
-        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
         'exit_dns_health_resolver_unknown_percentage',
     ]
 

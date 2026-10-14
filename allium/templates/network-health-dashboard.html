@@ -1054,7 +1054,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
                         <span class="metric-label">All Public</span>
                     </div>
-                    <div class="metric-item" title="Share of exit DNS lookups resolved from the exit's own address or its network (same origin AS): the operator's or hoster's resolver.">
+                    <div class="metric-item" title="Share of exit DNS lookups resolved on the exit's own network. Version-2 reports: local /24 + /22 + AS + operator. Version-1 reports: one local bucket (the exit's own address or origin AS).">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
                         <span class="metric-label">Local</span>
                     </div>
@@ -1071,6 +1071,26 @@ Network Health Dashboard
                         <span class="metric-label">Exits Covered</span>
                     </div>
                 </div>
+                {% if _nh.exit_dns_health_resolver_local_24_percentage is not none or _nh.exit_dns_health_resolver_local_22_percentage is not none or _nh.exit_dns_health_resolver_local_as_percentage is not none or _nh.exit_dns_health_resolver_local_operator_percentage is not none %}
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="metric-item" title="Resolver in the same IPv4 /24 or IPv6 /64 as the exit, including the exit's own address.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_24_percentage_formatted }}</span>
+                        <span class="metric-label">Local /24</span>
+                    </div>
+                    <div class="metric-item" title="Same IPv4 /22 or IPv6 /48 as the exit, but not the same /24 or /64.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_22_percentage_formatted }}</span>
+                        <span class="metric-label">Local /22</span>
+                    </div>
+                    <div class="metric-item" title="Same origin AS as the exit, outside its IPv4 /22 or IPv6 /48.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_as_percentage_formatted }}</span>
+                        <span class="metric-label">Local AS</span>
+                    </div>
+                    <div class="metric-item" title="Run by the same operator as the exit, but outside the exit's prefix and origin AS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_operator_percentage_formatted }}</span>
+                        <span class="metric-label">Local operator</span>
+                    </div>
+                </div>
+                {% endif %}
                 {% else %}
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">Upstream resolvers: not available.</div>
                 {% endif %}
