@@ -339,10 +339,17 @@ def calculate_exit_dns_health_metrics(exit_dns_health_data: Optional[Dict] = Non
 
 
 def _local_percentage(share: Dict) -> Optional[float]:
-    """Version-2 local total (the four tiers) or, when none are present, version-1's local share."""
+    """Version-2 local total, or version-1's local share when no tier is present.
+
+    A version-2 report that includes some tiers and omits others has no total: summing
+    the present ones would publish an under-count as if it were complete. Zero is a
+    real share; None is a missing one.
+    """
     tiers = [share.get(tier) for tier in RESOLVER_TIERS]
     if any(value is not None for value in tiers):
-        return round(sum(value or 0.0 for value in tiers), 2)
+        if any(value is None for value in tiers):
+            return None
+        return round(sum(tiers), 2)
     return share.get('local')
 
 
@@ -351,7 +358,7 @@ def _resolver_metrics(summary: Optional[Dict]) -> Dict:
     is None and exit_dns_health_resolvers_available is False, so it renders as not available.
 
     exit_dns_health_resolver_local_percentage stays the single local number: version 1's
-    "local", or the sum of local_24, local_22, local_as and local_operator on version 2.
+    "local", or the sum of the four tiers when a version-2 report includes every tier.
     """
     summary = summary or {}
     public_share = summary.get('public_share_pct', {})

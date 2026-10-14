@@ -316,6 +316,17 @@ def test_metrics_version2_local_is_the_sum_of_tiers():
     assert m["exit_dns_health_resolver_local_operator_percentage_formatted"] == "7.6%"
 
 
+def test_partial_version2_tiers_are_not_summed():
+    """A version-2 report that omits a tier does not publish the rest as the Local total."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {"google": 10.0, "local_24": 55.0, "other": 35.0, "unknown": 0.0}
+    metrics = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    assert metrics["exit_dns_health_resolver_local_24_percentage"] == 55.0
+    assert metrics["exit_dns_health_resolver_local_operator_percentage"] is None
+    assert metrics["exit_dns_health_resolver_local_percentage"] is None
+
+
 def test_version2_tier_primary_is_not_public():
     """A local_24 or local_operator primary stays that category and is not public."""
     tier = _resolver_of({"primary": "local_24", "public": False,
