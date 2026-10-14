@@ -609,13 +609,15 @@ def test_resolver_label_values_bounded_and_lowercase(tmp_path, make_relay, make_
     """Provider labels come only from the fixed lowercase sets."""
     relays = [_resolver_relay(make_relay, "AAAA", {c: 1 for c in
                                                    ("google", "cloudflare", "quad9", "opendns", "ffmuc",
-                                                    "local", "other", "unknown", "NextDNS", "Google")})]
+                                                    "local", "local_24", "local_22", "local_as", "local_operator",
+                                                    "other", "unknown", "NextDNS", "Google")})]
     content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays,
                            dns_data=_dns_with_resolvers(sample_dns_metadata))
     share = set(re.findall(r'aeo1_exit_dns_public_resolver_share_ratio\{provider="([^"]+)"\}', content))
     queries = set(re.findall(r'aeo1_exit_dns_resolver_queries_count\{[^}]*provider="([^"]+)"\}', content))
     assert share == {"google", "cloudflare", "quad9", "opendns", "ffmuc", "all"}
-    assert queries == {"google", "cloudflare", "quad9", "opendns", "ffmuc", "local", "other", "unknown"}
+    assert queries == {"google", "cloudflare", "quad9", "opendns", "ffmuc", "local",
+                       "local_24", "local_22", "local_as", "local_operator", "other", "unknown"}
 
 
 def test_resolver_families_have_one_help_type_and_unique_prefixes(tmp_path, make_relay, make_relay_set,

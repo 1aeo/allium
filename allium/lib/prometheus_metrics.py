@@ -420,7 +420,8 @@ def _write_resolver_queries(lines: _LineAppender, dns_rows: List[dict]) -> None:
     lines.append("")
     _emit_help_type(lines, "aeo1_exit_dns_resolver_queries_count",
                     "Estimated DNS queries from the exit relay by upstream resolver, sampled and decayed "
-                    "with a 3.5-day half-life. provider ∈ {google,cloudflare,quad9,opendns,ffmuc,local,other,unknown}")
+                    "with a 3.5-day half-life. provider ∈ {google,cloudflare,quad9,opendns,ffmuc,local,"
+                    "local_24,local_22,local_as,local_operator,other,unknown}")
     for row, provider, count in samples:
         _emit(lines, "aeo1_exit_dns_resolver_queries_count", {
             "fingerprint": row["fingerprint"],

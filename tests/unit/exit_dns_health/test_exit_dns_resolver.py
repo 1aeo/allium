@@ -264,6 +264,7 @@ def test_metrics_resolvers_present():
     assert m["exit_dns_health_resolver_ffmuc_percentage"] == 1.12
     assert m["exit_dns_health_resolver_public_percentage"] == 21.61
     assert m["exit_dns_health_resolver_local_percentage"] == 66.69
+    assert m["exit_dns_health_resolver_local_24_percentage"] is None  # version 1 has no tiers
     assert m["exit_dns_health_resolver_other_percentage"] == 11.7
     assert m["exit_dns_health_resolver_unknown_percentage"] == 0.0
     assert m["exit_dns_health_resolver_exits_covered"] == 2670
@@ -289,6 +290,51 @@ def test_metrics_existing_keys_unchanged_by_resolvers():
     new_keys = {k for k in with_resolvers if k.startswith("exit_dns_health_resolver")}
     assert {k: v for k, v in with_resolvers.items() if k not in new_keys} == \
         {k: v for k, v in without.items() if k not in new_keys}
+
+
+def test_metrics_version2_local_is_the_sum_of_tiers():
+    """Version 2's local percentage is local_24 + local_22 + local_as + local_operator."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {
+        "google": 10.83, "cloudflare": 8.04, "quad9": 1.88, "opendns": 0.0, "ffmuc": 1.02,
+        "local_24": 55.58, "local_22": 1.54, "local_as": 10.92, "local_operator": 7.59,
+        "other": 2.82, "unknown": 0.0,
+    }
+    summary = parse_resolver_summary({"resolvers": resolvers})
+    assert summary["share_pct"]["local"] is None
+    assert summary["share_pct"]["local_24"] == 55.58
+    assert summary["share_pct"]["local_operator"] == 7.59
+    m = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    assert m["exit_dns_health_resolver_local_percentage"] == 75.63
+    assert m["exit_dns_health_resolver_local_24_percentage"] == 55.58
+    assert m["exit_dns_health_resolver_local_22_percentage"] == 1.54
+    assert m["exit_dns_health_resolver_local_as_percentage"] == 10.92
+    assert m["exit_dns_health_resolver_local_operator_percentage"] == 7.59
+    preformat_network_health_template_strings(m)
+    assert m["exit_dns_health_resolver_local_percentage_formatted"] == "75.6%"
+    assert m["exit_dns_health_resolver_local_operator_percentage_formatted"] == "7.6%"
+
+
+def test_partial_version2_tiers_are_not_summed():
+    """A version-2 report that omits a tier does not publish the rest as the Local total."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {"google": 10.0, "local_24": 55.0, "other": 35.0, "unknown": 0.0}
+    metrics = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    assert metrics["exit_dns_health_resolver_local_24_percentage"] == 55.0
+    assert metrics["exit_dns_health_resolver_local_operator_percentage"] is None
+    assert metrics["exit_dns_health_resolver_local_percentage"] is None
+
+
+def test_version2_tier_primary_is_not_public():
+    """A local_24 or local_operator primary stays that category and is not public."""
+    tier = _resolver_of({"primary": "local_24", "public": False,
+                         "queries": {"local_24": 40, "local_operator": 8}})
+    assert tier == {"primary": "local_24", "public": False, "queries": {"local_24": 40.0, "local_operator": 8.0}}
+    operator = _resolver_of({"primary": "local_operator", "public": False, "queries": {"local_operator": 12}})
+    assert operator["primary"] == "local_operator"
+    assert operator["public"] is False
 
 
 def test_formatted_strings():
