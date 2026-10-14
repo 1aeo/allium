@@ -1054,7 +1054,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
                         <span class="metric-label">All Public</span>
                     </div>
-                    <div class="metric-item" title="Share of exit DNS lookups resolved on the exit's own network. Version-2 reports: local /24 + /22 + AS + operator. Version-1 reports: one local bucket (the exit's own address or origin AS).">
+                    <div class="metric-item" title="Share of exit DNS lookups resolved by the exit's own network or operator: local /24 + /22 + AS + operator (older reports: one local bucket, the exit's own address or origin AS).">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
                         <span class="metric-label">Local</span>
                     </div>

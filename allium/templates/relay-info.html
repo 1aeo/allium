@@ -1334,7 +1334,7 @@ Platform: unknown
             {% if relay.get('exit_dns_health_resolver_queries') is not none %}
             {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'local_24': 'Local /24', 'local_22': 'Local /22', 'local_as': 'Local AS', 'local_operator': 'Local operator', 'other': 'Other', 'unknown': 'Unknown'} %}
             {% set resolver_total = relay.exit_dns_health_resolver_queries.values()|sum %}
-            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local: the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
+            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local /24: same IPv4 /24 or IPv6 /64 as the exit, including its own address. Local /22: same IPv4 /22 or IPv6 /48. Local AS: same origin AS, outside those prefixes. Local operator: run by the same operator in another network. Local (older reports): the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
             <dd>
                 {% if relay.exit_dns_health_resolver_primary %}
                     {{ resolver_names.get(relay.exit_dns_health_resolver_primary, relay.exit_dns_health_resolver_primary) }}
