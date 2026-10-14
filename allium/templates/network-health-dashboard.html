@@ -1028,7 +1028,7 @@ Network Health Dashboard
                     Upstream resolvers: estimated share of exit DNS lookups{% if _nh.exit_dns_health_resolver_weighted %}, weighted by exit probability{% elif _nh.exit_dns_health_resolver_weighted is sameas false %}, unweighted{% endif %}.
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
-                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services. Every lookup is in exactly one of All Public, Local, Other and Unknown, so the four add up to 100%.">
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services. Every lookup is in exactly one of All Public, Local, Other and Unknown.">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
                         <span class="metric-label">All Public</span>
                     </div>
