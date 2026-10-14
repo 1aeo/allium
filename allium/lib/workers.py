@@ -96,10 +96,11 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
             )
         raise
 
+    # Hold the header until the body is complete. A retry reuses the same
+    # dict, and a value copied before a failed read would describe the wrong body.
+    pending_last_modified = None
     if response_headers is not None:
-        last_modified = response.headers.get("Last-Modified")
-        if last_modified:
-            response_headers["Last-Modified"] = last_modified
+        pending_last_modified = response.headers.get("Last-Modified")
 
     # Phase 2: Read response in chunks, checking total elapsed time after each chunk
     chunks = []
@@ -146,7 +147,9 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
                 break
             
             chunks.append(chunk)
-        
+
+        if response_headers is not None and pending_last_modified:
+            response_headers["Last-Modified"] = pending_last_modified
         return b''.join(chunks)
         
     finally:
@@ -808,12 +811,29 @@ def _fetch_with_cache_fallback(
             effective_retries = config.retry_count
     
         # Try to fetch with TOTAL timeout (not just socket timeout) + retry with backoff
-        # Falls back to cache on exhausted retries or non-retryable errors
+        # Falls back to cache on exhausted retries or non-retryable errors.
+        # Onionoo answers 304 only when If-Modified-Since is exactly its
+        # Last-Modified value, so keep that header for the next request.
         fetch_start = time.time()
+        response_headers = None
+        retry_kwargs = None
+        if config.use_conditional_requests:
+            response_headers = {}
+            retry_kwargs = {"response_headers": response_headers}
+
+            def fetch_fn(url, timeout, headers=None, response_headers=None):
+                """Fetch one attempt, dropping a header from an unfinished read."""
+                if response_headers is not None:
+                    response_headers.clear()
+                return _fetch_url_with_total_timeout(
+                    url, timeout, headers, response_headers=response_headers)
+        else:
+            fetch_fn = _fetch_url_with_total_timeout
         try:
             api_response = _retry_with_backoff(
-                fetch_fn=_fetch_url_with_total_timeout,
+                fetch_fn=fetch_fn,
                 args=(url, timeout_seconds, headers if headers else None),
+                kwargs=retry_kwargs,
                 retry_count=effective_retries,
                 retry_delay_base=config.retry_delay_base,
                 log_fn=log_progress,
@@ -872,12 +892,20 @@ def _fetch_with_cache_fallback(
     
         # Cache the data
         log_progress(f"caching {display_name} data...")
-        _save_cache(api_name, data)
+        saved = _save_cache(api_name, data)
         cache_read = False  # the cache file now holds this response
     
-        # Write timestamp for future conditional requests
-        if config.use_conditional_requests:
-            timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
+        # Write timestamp for future conditional requests only after the cache
+        # file is actually saved. Prefer the server's Last-Modified; without
+        # that header, keep the local clock time used before.
+        if config.use_conditional_requests and saved:
+            timestamp_str = None
+            if response_headers is not None:
+                candidate = response_headers.get("Last-Modified")
+                if isinstance(candidate, str) and candidate:
+                    timestamp_str = candidate
+            if not timestamp_str:
+                timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
             _write_timestamp(api_name, timestamp_str)
     
         # Mark as ready
@@ -897,6 +925,10 @@ def _fetch_with_cache_fallback(
             # No update since last run - use cached data
             log_progress(f"no {display_name} update since last run, using cached data...")
             if load_cached():
+                # The server confirmed this copy is current. Cache age selects
+                # the next run's timeout and retries, so refresh the file mtime.
+                # Leave the timestamp file unchanged: it is the Last-Modified value.
+                os.utime(_cache_manager.get_file_path(f"{api_name}.json"))
                 _mark_ready(api_name)
                 return cached_data
             elif config.allow_exit_on_304:
