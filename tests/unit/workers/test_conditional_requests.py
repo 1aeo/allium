@@ -73,6 +73,38 @@ def test_next_call_sends_stored_last_modified():
     assert fetch.calls[1]["headers"]["If-Modified-Since"] == LAST_MODIFIED
 
 
+def test_retry_drops_last_modified_from_failed_attempt():
+    """A body that fails after headers must not supply the next timestamp."""
+    failed_stamp = "Mon, 12 Oct 2026 13:00:00 GMT"
+    local_stamp = "Tue, 13 Oct 2026 05:00:00 GMT"
+    seen_at_start = []
+    calls = {"n": 0}
+
+    def fetch(url, timeout, headers=None, response_headers=None):
+        seen_at_start.append(
+            None if response_headers is None else dict(response_headers))
+        calls["n"] += 1
+        if calls["n"] == 1:
+            if response_headers is not None:
+                response_headers["Last-Modified"] = failed_stamp
+            raise workers.TotalTimeoutError("body failed after headers")
+        return BODY
+
+    def fake_strftime(fmt, when):
+        return local_stamp
+
+    with patch.object(workers, "_fetch_url_with_total_timeout", fetch), \
+         patch.object(workers.time, "strftime", fake_strftime), \
+         patch.object(workers.time, "sleep"):
+        result = workers._fetch_with_cache_fallback(
+            URL, workers.DETAILS_CONFIG, progress_logger=lambda message: None)
+
+    assert result == DOCUMENT
+    assert seen_at_start[0] == {}
+    assert seen_at_start[1] == {}
+    assert workers._read_timestamp("onionoo_details") == local_stamp
+
+
 def test_200_without_last_modified_still_writes_timestamp():
     fetch = _fetch([{"body": BODY}])
     local_stamp = "Tue, 13 Oct 2026 05:00:00 GMT"

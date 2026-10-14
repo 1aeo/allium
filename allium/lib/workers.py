@@ -96,10 +96,11 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
             )
         raise
 
+    # Hold the header until the body is complete. A retry reuses the same
+    # dict, and a value copied before a failed read would describe the wrong body.
+    pending_last_modified = None
     if response_headers is not None:
-        last_modified = response.headers.get("Last-Modified")
-        if last_modified:
-            response_headers["Last-Modified"] = last_modified
+        pending_last_modified = response.headers.get("Last-Modified")
 
     # Phase 2: Read response in chunks, checking total elapsed time after each chunk
     chunks = []
@@ -146,7 +147,9 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
                 break
             
             chunks.append(chunk)
-        
+
+        if response_headers is not None and pending_last_modified:
+            response_headers["Last-Modified"] = pending_last_modified
         return b''.join(chunks)
         
     finally:
@@ -817,9 +820,18 @@ def _fetch_with_cache_fallback(
         if config.use_conditional_requests:
             response_headers = {}
             retry_kwargs = {"response_headers": response_headers}
+
+            def fetch_fn(url, timeout, headers=None, response_headers=None):
+                """Fetch one attempt, dropping a header from an unfinished read."""
+                if response_headers is not None:
+                    response_headers.clear()
+                return _fetch_url_with_total_timeout(
+                    url, timeout, headers, response_headers=response_headers)
+        else:
+            fetch_fn = _fetch_url_with_total_timeout
         try:
             api_response = _retry_with_backoff(
-                fetch_fn=_fetch_url_with_total_timeout,
+                fetch_fn=fetch_fn,
                 args=(url, timeout_seconds, headers if headers else None),
                 kwargs=retry_kwargs,
                 retry_count=effective_retries,
