@@ -72,6 +72,20 @@ fontconfig's `fc-match` is installed to check.
   so a page only references charts that were written. They return
   `{period: height}` (one per chart type) so the page reserves every image's
   box before it loads.
+- `--chart-layout charts` writes the same files to `charts/relay/<fingerprint>/`
+  and `charts/contact/<hash>/` instead (a folder only for a relay or operator
+  with a chart), so a host can serve them apart from the pages. The pages link
+  them relative to their own folder (`../../charts/relay/<fingerprint>/bandwidth-1m.png`,
+  and `../charts/contact/<hash>/...` from a vanity-domain copy), so the site still
+  works from a subdirectory or `file://`.
+- The page writer rebuilds `relay/` and `contact/` every run, which drops the
+  charts beside the pages, and `allium.py` removes `charts/relay/` and
+  `charts/contact/` before every build (`clear_chart_tree`; `charts/` goes too
+  unless it holds other files; one it cannot remove stops the build). A build
+  so leaves only its own charts, in its own layout, whichever layout the last
+  build used. A host that passes `--chart-layout charts` needs an allium with
+  this option and this clear: an older one rejects the option, and leaves
+  `charts/` behind after a switch back to `beside`.
 - About 68k charts for the whole network, drawn in those existing workers.
 - A section shows its first period; the thumbnails above it (four across the
   card's width) link to

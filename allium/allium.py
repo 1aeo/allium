@@ -283,6 +283,13 @@ if __name__ == "__main__":
         default="64",
         help="PNG chart colors: 64 (default, a fixed palette: about a third of the size, looks the same) or full",
     )
+    parser.add_argument(
+        "--chart-layout",
+        choices=("beside", "charts"),
+        default="beside",
+        help="where history charts go: beside (default, next to their relay or contact page) or charts "
+             "(charts/relay/<fingerprint>/ and charts/contact/<hash>/, to serve them apart from the pages)",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
@@ -384,14 +391,23 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # History charts are written next to the relay and contact pages. Their
-    # peer medians need every relay, so build the writer before forking.
+    # History charts are written next to the relay and contact pages, or with
+    # --chart-layout charts under charts/. Every build removes the charts/
+    # tree first, as the page writer does relay/ and contact/ (and the charts
+    # beside the pages with them), so a build never keeps the charts of an
+    # earlier build in the other layout. Their peer medians need every relay,
+    # so build the writer before forking.
+    from lib.charts.render import CHARTS_DIR, clear_chart_tree
+    clear_chart_tree(args.output_dir)
     if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
         from lib.charts.render import ChartWriter
         from lib.page_writer import ENV
+        apart = args.chart_layout == "charts"
         RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format, scale=args.chart_scale,
-                                             colors=args.chart_colors)
+                                             colors=args.chart_colors,
+                                             root=os.path.join(args.output_dir, CHARTS_DIR) if apart else None)
         ENV.globals["chart_ext"] = args.chart_format
+        ENV.globals["chart_root"] = CHARTS_DIR + "/" if apart else ""
 
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid

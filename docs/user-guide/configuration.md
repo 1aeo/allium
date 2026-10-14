@@ -30,6 +30,7 @@ python3 allium.py [options]
 | `--chart-format` | `png` | `png` (needs cairocffi, numpy and the cairo library, see the README's PNG charts section: without them the default writes SVG with a notice naming the install commands, and an explicit `png` stops; DejaVu Sans keeps the chart font) or `svg` |
 | `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
 | `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
+| `--chart-layout` | `beside` | `beside` (next to each relay and contact page) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, to serve them apart from the pages) |
 
 ## Common Profiles
 
