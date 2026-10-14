@@ -14,6 +14,7 @@ GOTOR = "Tor 0.4.9.11 (gotor) on linux"
 
 
 def _relay(i, platform):
+    """Build an Onionoo relay record with the given identity and platform."""
     return {"fingerprint": f"{i:040X}", "nickname": f"relay{i}", "running": True,
             "observed_bandwidth": 1_000_000, "consensus_weight": 100, "flags": ["Running", "Valid", "Fast"],
             "first_seen": "2024-01-01 00:00:00", "last_seen": PUBLISHED, "last_restarted": "2026-10-01 00:00:00",
@@ -23,12 +24,14 @@ def _relay(i, platform):
 
 
 def _relay_set(tmp_path, platforms):
+    """Build a processed relay set from the supplied platform strings."""
     return Relays(output_dir=str(tmp_path), onionoo_url="https://onionoo.example.invalid/details",
                   relay_data={"version": "8.0", "relays_published": PUBLISHED,
                               "relays": [_relay(i, p) for i, p in enumerate(platforms, 1)]}, mp_workers=0)
 
 
 def test_gotor_lowercase_platform_files_under_the_tor_spelling(tmp_path):
+    """Group gotor's lowercase Linux with C Tor while preserving raw platforms."""
     platforms = ["Tor 0.4.8.10 on Linux"] * 2 + [GOTOR]
     relay_set = _relay_set(tmp_path, platforms)
     relays = relay_set.json["relays"]
@@ -39,6 +42,7 @@ def test_gotor_lowercase_platform_files_under_the_tor_spelling(tmp_path):
 
 
 def test_known_platforms_keep_the_tor_spelling_when_lowercase_outnumbers_it(tmp_path):
+    """Use canonical spellings for known platforms regardless of relay counts."""
     platforms = (["Tor 0.4.8.10 on FreeBSD"]
                  + ["Tor 0.4.9.11 (gotor) on freebsd"] * 2
                  + ["Tor 0.4.9.11 (gotor) on darwin", "Tor 0.4.9.11 (gotor) on windows"])
@@ -47,6 +51,7 @@ def test_known_platforms_keep_the_tor_spelling_when_lowercase_outnumbers_it(tmp_
 
 
 def test_unknown_platforms_differing_by_case_prefer_the_capitalised_then_most_reported_spelling(tmp_path):
+    """Prefer mixed or uppercase unknown names, then the most reported spelling."""
     platforms = (["Tor 0.4.8.10 on haiku"] * 2
                  + ["Tor 0.4.8.10 on Haiku"]
                  + ["Tor 0.4.8.10 on Plan9"]
@@ -56,17 +61,20 @@ def test_unknown_platforms_differing_by_case_prefer_the_capitalised_then_most_re
 
 
 def test_unknown_platform_keeps_its_reported_spelling(tmp_path):
+    """Preserve an unknown platform's spelling when no case variants exist."""
     relay_set = _relay_set(tmp_path, ["Tor 0.4.8.10 on plan9"])
     assert relay_set.json["relays"][0]["platform"] == "plan9"
 
 
 def test_platform_spellings_table_is_case_only():
+    """Ensure canonical platform mappings change only letter case."""
     from allium.lib.relays import PLATFORM_SPELLINGS
     assert PLATFORM_SPELLINGS["linux"] == "Linux"
     assert all(value.lower() == key for key, value in PLATFORM_SPELLINGS.items())
 
 
 def test_known_names_keep_their_tor_spelling(tmp_path):
+    """Keep canonical platform names after trimming prefixes and versions."""
     relay_set = _relay_set(tmp_path, [
         "Tor 0.4.8.10 on GNU/Linux-libre",
         "Tor 0.4.8.10 on Windows 10 [or later]",
@@ -76,6 +84,7 @@ def test_known_names_keep_their_tor_spelling(tmp_path):
 
 
 def test_platform_case_variants_get_one_page_and_one_link(tmp_path):
+    """Render one platform directory and canonical relay links for case variants."""
     relay_set = _relay_set(tmp_path, ["Tor 0.4.8.10 on Linux", GOTOR])
     write_pages_by_key(relay_set, "platform")
     page_writer.write_relay_info(relay_set)
@@ -88,6 +97,7 @@ def test_platform_case_variants_get_one_page_and_one_link(tmp_path):
 
 
 def test_search_lists_one_platform_for_case_variants(tmp_path):
+    """List case variants under one canonical platform in the search index."""
     relay_set = _relay_set(tmp_path, ["Tor 0.4.8.10 on Linux", GOTOR])
     index_path = tmp_path / "search-index.json"
     generate_search_index(relay_set.json, str(index_path), use_parallel=False)
