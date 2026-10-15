@@ -657,6 +657,8 @@ Platform: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
+{# The charts are beside this page, or under charts/relay/<fingerprint>/ with --chart-layout charts #}
+{% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'relay/' ~ relay['fingerprint'] ~ '/' if chart_root else '' %}
 {% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
@@ -796,7 +798,7 @@ Platform: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', ext=chart_ext) }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1039,7 +1041,7 @@ Platform: unknown
 </div>
 {% endif %}
 
-{{ chart_history('uptime', uptime_periods, 'Uptime', ext=chart_ext) }}
+{{ chart_history('uptime', uptime_periods, 'Uptime', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
