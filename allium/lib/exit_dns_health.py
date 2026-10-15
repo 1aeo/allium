@@ -376,6 +376,43 @@ def _resolver_metrics(summary: Optional[Dict]) -> Dict:
     return metrics
 
 
+def resolver_share_tenths(metrics: Dict) -> Optional[Dict[str, int]]:
+    """Dashboard resolver shares in whole tenths of a percent that add up like the categories do.
+
+    Every lookup is in exactly one leaf category: a public provider, a local tier (version 1: its
+    single local share), other or unknown. Rounding each share on its own can show All Public +
+    Local + Other + Unknown as 99.9% or 100.1%, so the leaves are rounded together by largest
+    remainder (ties to the earlier category) to total exactly 100.0%, and All Public and Local are
+    the sums of their rounded parts. This is the same rounding as the exitdnshealth.1aeo.com
+    dashboard. Returns {metric key: tenths}, or None when a leaf is missing or the leaves do not
+    total about 100%; each share is then formatted on its own. Raw metric values are unchanged.
+    """
+    key = 'exit_dns_health_resolver_{}_percentage'.format
+    tiers = [metrics.get(key(tier)) for tier in RESOLVER_TIERS]
+    if all(value is not None for value in tiers):
+        local_leaves = RESOLVER_TIERS
+    elif all(value is None for value in tiers):
+        local_leaves = ('local',)
+    else:
+        return None
+    leaves = RESOLVER_PROVIDERS + local_leaves + ('other', 'unknown')
+    values = [metrics.get(key(leaf)) for leaf in leaves]
+    if any(_as_number(value) is None for value in values):
+        return None
+    total = sum(values)
+    if abs(total - 100) > 0.5:
+        return None
+    exact = [math.floor(value * 1000 / total * 1e6 + 0.5) / 1e6 for value in values]
+    tenths = [math.floor(value) for value in exact]
+    order = sorted(range(len(leaves)), key=lambda i: (-(exact[i] - tenths[i]), i))
+    for i in order[:max(0, 1000 - sum(tenths))]:
+        tenths[i] += 1
+    result = {key(leaf): t for leaf, t in zip(leaves, tenths)}
+    result[key('public')] = sum(result[key(provider)] for provider in RESOLVER_PROVIDERS)
+    result[key('local')] = sum(result[key(leaf)] for leaf in local_leaves)
+    return result
+
+
 def get_operator_exit_dns_health_summary(members: List[Dict], exit_count: int = None) -> Optional[Dict]:
     """
     Summarize exit DNS health for a group of relays.
