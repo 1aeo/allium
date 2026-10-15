@@ -209,8 +209,8 @@ def test_dashboard_resolver_row(rendered):
 
 
 def test_dashboard_rows_all_then_public_then_local(tmp_path):
-    """The all-resolvers row (All Public, Local, Other, Unknown, Exits Covered) comes first, then the
-    public providers, then the local tiers."""
+    """The all-resolvers row (Exits Covered, All Public, Local, Other, Unknown) comes first, then the
+    public providers, then the local tiers: the same order as exitdnshealth.1aeo.com."""
     resolvers = copy.deepcopy(RESOLVERS)
     resolvers["version"] = 2
     resolvers["share_pct"] = {
@@ -219,9 +219,9 @@ def test_dashboard_rows_all_then_public_then_local(tmp_path):
     }
     _, html = _render(tmp_path, resolvers)
     labels = list(_dashboard_tiles(html))
-    order = ["All Public", "Local", "Other", "Unknown", "Exits Covered", "Google", "Cloudflare", "Quad9", "OpenDNS",
+    order = ["Exits Covered", "All Public", "Local", "Other", "Unknown", "Google", "Cloudflare", "Quad9", "OpenDNS",
              "Freifunk München", "Local /24", "Local /22", "Local AS", "Local operator"]
-    assert labels[labels.index("All Public"):labels.index("All Public") + len(order)] == order
+    assert labels[labels.index("Exits Covered"):labels.index("Exits Covered") + len(order)] == order
 
 
 def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
