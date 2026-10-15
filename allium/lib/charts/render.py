@@ -40,9 +40,12 @@ def clear_chart_tree(output_dir):
     Call it on every build before any page is written. With relay/ and contact/, which the page writer rebuilds
     (and the charts beside the pages with them), it leaves only the charts this build writes, in its own layout:
     a build that writes them beside the pages, or none, drops the tree an earlier --chart-layout charts build left.
-    Anything else in charts/ stays. A tree it cannot remove stops the build, as relay/ and contact/ do.
+    Anything else in charts/ stays. A tree it cannot remove stops the build, as relay/ and contact/ do, and so
+    does a charts/ that is a symbolic link: deleting through it would reach outside the output directory.
     """
     root = os.path.join(output_dir, CHARTS_DIR)
+    if os.path.islink(root):
+        raise OSError(f"{root} is a symbolic link; refusing to delete chart trees through it")
     for kind in ("relay", "contact"):
         path = os.path.join(root, kind)
         if os.path.exists(path):

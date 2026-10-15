@@ -582,3 +582,17 @@ def test_a_chart_tree_that_cannot_be_removed_stops_the_build(tmp_path):
             clear_chart_tree(str(tmp_path))
     finally:
         folder.chmod(0o755)
+
+
+def test_a_symlinked_chart_tree_stops_the_build_and_is_not_followed(tmp_path):
+    """clear_chart_tree() refuses a charts/ that is a symbolic link instead of deleting the linked directory's
+    relay/ and contact/, which lie outside the output directory."""
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "relay" / ("A" * 40)).mkdir(parents=True)
+    (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").write_bytes(b"keep")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "charts").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(OSError, match="symbolic link"):
+        clear_chart_tree(str(out))
+    assert (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").read_bytes() == b"keep"
