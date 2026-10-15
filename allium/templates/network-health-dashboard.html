@@ -1028,6 +1028,28 @@ Network Health Dashboard
                     Upstream resolvers: estimated share of exit DNS lookups{% if _nh.exit_dns_health_resolver_weighted %}, weighted by exit probability{% elif _nh.exit_dns_health_resolver_weighted is sameas false %}, unweighted{% endif %}.
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services. Every lookup is in exactly one of All Public, Local, Other and Unknown.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
+                        <span class="metric-label">All Public</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups resolved by the exit's own network or operator: local /24 + /22 + AS + operator (older reports: one local bucket, the exit's own address or origin AS).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
+                        <span class="metric-label">Local</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
+                        <span class="metric-label">Other</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
+                        <span class="metric-label">Unknown</span>
+                    </div>
+                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
+                        <span class="metric-label">Exits Covered</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
                     <div class="metric-item" title="Share of exit DNS lookups sent via Google Public DNS.">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_google_percentage_formatted }}</span>
                         <span class="metric-label">Google</span>
@@ -1047,28 +1069,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Share of exit DNS lookups sent via Freifunk München public DNS.">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_ffmuc_percentage_formatted }}</span>
                         <span class="metric-label">Freifunk München</span>
-                    </div>
-                </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
-                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
-                        <span class="metric-label">All Public</span>
-                    </div>
-                    <div class="metric-item" title="Share of exit DNS lookups resolved by the exit's own network or operator: local /24 + /22 + AS + operator (older reports: one local bucket, the exit's own address or origin AS).">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
-                        <span class="metric-label">Local</span>
-                    </div>
-                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
-                        <span class="metric-label">Other</span>
-                    </div>
-                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
-                        <span class="metric-label">Unknown</span>
-                    </div>
-                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
-                        <span class="metric-label">Exits Covered</span>
                     </div>
                 </div>
                 {% if _nh.exit_dns_health_resolver_local_24_percentage is not none or _nh.exit_dns_health_resolver_local_22_percentage is not none or _nh.exit_dns_health_resolver_local_as_percentage is not none or _nh.exit_dns_health_resolver_local_operator_percentage is not none %}

@@ -208,6 +208,22 @@ def test_dashboard_resolver_row(rendered):
     assert "Upstream resolvers: not available." not in html
 
 
+def test_dashboard_rows_all_then_public_then_local(tmp_path):
+    """The all-resolvers row (All Public, Local, Other, Unknown, Exits Covered) comes first, then the
+    public providers, then the local tiers."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {
+        "google": 10.5, "cloudflare": 7.99, "quad9": 2.0, "opendns": 0.0, "ffmuc": 1.12,
+        "local_24": 55.58, "local_22": 1.54, "local_as": 10.92, "local_operator": 7.59, "other": 2.76, "unknown": 0.0,
+    }
+    _, html = _render(tmp_path, resolvers)
+    labels = list(_dashboard_tiles(html))
+    order = ["All Public", "Local", "Other", "Unknown", "Exits Covered", "Google", "Cloudflare", "Quad9", "OpenDNS",
+             "Freifunk München", "Local /24", "Local /22", "Local AS", "Local operator"]
+    assert labels[labels.index("All Public"):labels.index("All Public") + len(order)] == order
+
+
 def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
     """Upstream's placeholder zeros render as n/a, with the coverage counts."""
     _, html = _render(tmp_path, COLD_START)
