@@ -12,6 +12,7 @@ circular references.
 import ipaddress as _ipaddress
 from datetime import datetime as _dt
 
+from .bandwidth_formatter import BEST_PERIOD_ORDER as TOTAL_DATA_PERIOD_ORDER
 from .flag_analysis import FLAG_PRIORITY as _FLAG_PRIORITY
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 
@@ -30,6 +31,7 @@ CONTACT_SORT_FILE_MAP = {
     'ipv4': 'by-ipv4.html',
     'flags': 'by-flags.html',
     'dns': 'by-dns.html',
+    'overload': 'by-overload.html',  # linked from the Overloaded summary bullet, not a column header
     'family': 'by-family.html',
     'country': 'by-country.html',
     'as_number': 'by-as-number.html',
@@ -51,7 +53,19 @@ CONTACT_SECTION_KEYS = (
     'not_configured_relays',
 )
 
-TOTAL_DATA_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+# contact-relay-list.html's AROI sections: each aroi_section_header's id is
+# "<section>-relays", and it lists the relays of these validation status lists
+AROI_SECTION_LISTS = {
+    'security_incident': ('security_incident_relays',),
+    'pending_onionoo': ('pending_onionoo_relays',),
+    'validated': ('validated_relays',),
+    'misconfigured': ('misconfigured_relays',),
+    'unauthorized': ('unauthorized_relays',),
+    'not_configured': ('incomplete_relays', 'not_configured_relays'),
+}
+
+# TOTAL_DATA_PERIOD_ORDER (longest-first period lookup order) is imported
+# above from bandwidth_formatter — single source of truth.
 DNS_SORT_RANK = {'success': 0, 'fail': 1, 'untested': 2}
 FAMILY_SORT_RANK = {'both': 0, 'happy_families': 1, 'my_family': 2, 'none': 3}
 
@@ -254,6 +268,10 @@ def relay_sort_key(relay, sort_mode):
     if sort_mode == 'dns':
         rank = DNS_SORT_RANK.get(relay.get('exit_dns_health_status'), 3)
         return (rank, safe_lower(relay.get('nickname')), fingerprint)
+    if sort_mode == 'overload':
+        # Overloaded relays first, highest bandwidth (impact) first within each group
+        return (0 if relay.get('stability_is_overloaded') else 1,
+                -int(relay.get('observed_bandwidth', 0) or 0), fingerprint)
     if sort_mode == 'family':
         family_type = relay.get('family_support_type', 'none')
         family_len = len(relay.get('effective_family') or [])

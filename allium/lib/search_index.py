@@ -14,12 +14,13 @@ Design principles:
 import json
 import os
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Import existing utilities (DRY - avoid reimplementing)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .string_utils import is_valid_aroi
+from .aroi_validation import get_v3_search_index_thresholds
 
 
 # =============================================================================
@@ -117,8 +118,12 @@ def compact_relay_entry(
 ) -> Dict[str, Any]:
     """
     Create a compact relay entry for the search index.
-    
-    Only includes non-empty fields to minimize JSON size.
+
+    Only includes non-empty fields to minimize JSON size. Schema version
+    1.6 adds the optional `vn` field (CIISS ContactInfo declared
+    ciissversion: '2' or '3') so the search frontend (Cloudflare Pages
+    Function in the separate allium-deploy repo) can show version
+    indicators in disambiguation pages without a separate API call.
     """
     entry = {
         'f': relay['fingerprint'],
@@ -148,6 +153,12 @@ def compact_relay_entry(
 
     if family_id:
         entry['fam'] = family_id
+
+    # B5.1 (v1.6): CIISS spec version this relay declares. Only emitted
+    # when present (sparse-field convention). Values: '2' or '3'.
+    aroi_version = relay.get('aroi_version')
+    if aroi_version:
+        entry['vn'] = aroi_version
 
     return entry
 
@@ -183,12 +194,20 @@ def compact_family_entry(
     # (avoids 300k+ .lower() calls per search query)
     nickname_counts = dict(Counter(name.lower() for name in nicknames))
 
+    # B5.1 (v1.6): tally v3 declarations across the family's relays so
+    # the search frontend can show a tier badge without per-relay scan.
+    v3_count = sum(1 for m in members if m.get('aroi_version') == '3')
+
     # Build base entry
     entry: Dict[str, Any] = {
         'id': family_id,
         'sz': len(members),
         'nn': nickname_counts,  # {nickname: count} format for compactness
     }
+
+    # v3 percentage as int 0-100. Sparse: only emitted when > 0.
+    if v3_count > 0 and len(members) > 0:
+        entry['v3p'] = int(round(v3_count / len(members) * 100))
 
     # Add prefix if detected (non-generic preferred for search relevance)
     prefix = extract_common_prefix(nicknames)
@@ -240,7 +259,6 @@ def _collect_lookup_data(
     relay: Dict[str, Any],
     as_names: Dict[str, str],
     country_names: Dict[str, str],
-    platforms: Set[str],
     flags: Set[str]
 ) -> None:
     """
@@ -258,11 +276,6 @@ def _collect_lookup_data(
     if country and country_name:
         country_names[country.lower()] = country_name
 
-    # Platform
-    platform = relay.get('platform')
-    if platform:
-        platforms.add(platform.lower())
-
     # Flags
     flags.update(flag.lower() for flag in relay.get('flags', []))
 
@@ -271,27 +284,42 @@ def _process_relay_batch(
     batch: List[Tuple[int, Dict[str, Any]]],
     family_membership: Dict[str, str],
     valid_family_ids: Set[str]
-) -> Tuple[List[Tuple[int, Dict[str, Any]]], Dict[str, str], Dict[str, str], Set[str], Set[str]]:
+) -> Tuple[List[Tuple[int, Dict[str, Any]]], Dict[str, str], Dict[str, str], Set[str]]:
     """
     Process a batch of relays for parallel execution.
     
     Returns:
-        Tuple of (indexed_entries, as_names, country_names, platforms, flags)
+        Tuple of (indexed_entries, as_names, country_names, flags)
         where indexed_entries is List[(original_index, entry)]
     """
     indexed_entries: List[Tuple[int, Dict[str, Any]]] = []
     as_names: Dict[str, str] = {}
     country_names: Dict[str, str] = {}
-    platforms: Set[str] = set()
     flags: Set[str] = set()
 
     for idx, relay in batch:
         family_id = _get_valid_family_id(relay['fingerprint'], family_membership, valid_family_ids)
         entry = compact_relay_entry(relay, family_id)
         indexed_entries.append((idx, entry))
-        _collect_lookup_data(relay, as_names, country_names, platforms, flags)
+        _collect_lookup_data(relay, as_names, country_names, flags)
 
-    return indexed_entries, as_names, country_names, platforms, flags
+    return indexed_entries, as_names, country_names, flags
+
+
+def _platform_page_keys(platform_pages: Dict[str, Any]) -> List[str]:
+    """The platforms search redirects to: keys of their /platform/<key>/ pages.
+
+    Search matches a platform case-insensitively, so of keys that differ only
+    by case ("Linux", "linux") this lists the one with the most relays, the
+    first in sorted order on a tie.
+    """
+    listed: Dict[str, str] = {}
+    for key in sorted(platform_pages):
+        folded = key.lower()
+        kept = listed.get(folded)
+        if kept is None or len(platform_pages[key]['relays']) > len(platform_pages[kept]['relays']):
+            listed[folded] = key
+    return sorted(listed.values())
 
 
 # =============================================================================
@@ -352,7 +380,6 @@ def generate_search_index(
     # Initialize lookup collectors
     as_names: Dict[str, str] = {}
     country_names: Dict[str, str] = {}
-    platforms: Set[str] = set()
     flags: Set[str] = set()
     relay_entries: List[Dict[str, Any]] = []
 
@@ -371,12 +398,16 @@ def generate_search_index(
                 executor.submit(_process_relay_batch, batch, family_membership, valid_family_ids)
                 for batch in batches
             ]
-            for future in as_completed(futures):
-                batch_entries, batch_as, batch_countries, batch_platforms, batch_flags = future.result()
+            # Iterate in SUBMISSION order, not as_completed: completion
+            # order varies with thread scheduling, which made the merged
+            # lookup dicts' key order - and therefore the serialized JSON -
+            # nondeterministic run-to-run (breaks byte-level regression
+            # diffs of generated site trees)
+            for future in futures:
+                batch_entries, batch_as, batch_countries, batch_flags = future.result()
                 indexed_entries.extend(batch_entries)
                 as_names.update(batch_as)
                 country_names.update(batch_countries)
-                platforms.update(batch_platforms)
                 flags.update(batch_flags)
 
         # Sort by original index to maintain order
@@ -388,14 +419,18 @@ def generate_search_index(
             family_id = _get_valid_family_id(relay['fingerprint'], family_membership, valid_family_ids)
             entry = compact_relay_entry(relay, family_id)
             relay_entries.append(entry)
-            _collect_lookup_data(relay, as_names, country_names, platforms, flags)
+            _collect_lookup_data(relay, as_names, country_names, flags)
 
     # ==========================================================================
     # PHASE 3: Process families (O(f) where f = valid families)
     # ==========================================================================
     
     family_entries: List[Dict[str, Any]] = []
-    for family_id in valid_family_ids:
+    # sorted() for byte-deterministic output: valid_family_ids is a set, and
+    # per-process hash randomization made the families array order (and thus
+    # the serialized JSON) differ run-to-run, breaking byte-level regression
+    # diffs of generated site trees (same fix as the lookups maps below)
+    for family_id in sorted(valid_family_ids):
         fdata = family_data[family_id]
         relay_indices = fdata.get('relays', [])
         
@@ -418,16 +453,29 @@ def generate_search_index(
             'generated_at': relays_data.get('relays_published', ''),
             'relay_count': len(relays),
             'family_count': len(valid_family_ids),
-            'version': '1.5'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase, 1.4: v (validated) field, 1.5: validated_aroi_domains in lookups
+            # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase,
+            # 1.4: v (validated) field, 1.5: validated_aroi_domains in lookups,
+            # 1.6: per-relay 'vn' (ciissversion) + per-family 'v3p'
+            #      (v3 percentage int 0-100) + lookups.v3_thresholds,
+            # 1.7: lookups.platforms are /platform/<key>/ page keys, case
+            #      kept, one per case-insensitive name
+            'version': '1.7'
         },
         'relays': relay_entries,
         'families': family_entries,
         'lookups': {
-            'as_names': as_names,
-            'country_names': country_names,
-            'platforms': sorted(platforms),
+            # sorted for byte-deterministic output (JSON maps are
+            # order-insensitive to consumers)
+            'as_names': dict(sorted(as_names.items())),
+            'country_names': dict(sorted(country_names.items())),
+            'platforms': _platform_page_keys(sorted_data.get('platform', {})),
             'flags': sorted(flags),
-            'validated_aroi_domains': validated_aroi_list
+            'validated_aroi_domains': validated_aroi_list,
+            # B5.1 (v1.6): tier thresholds for the Cloudflare Pages Function
+            # to use without hardcoding. Sourced from aroi_validation.py so
+            # contact-page pills, listing icons, leaderboard badges, and
+            # search-frontend badges all agree.
+            'v3_thresholds': get_v3_search_index_thresholds(),
         }
     }
 

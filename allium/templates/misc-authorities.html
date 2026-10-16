@@ -3,10 +3,11 @@
 {% block title -%}
     Relay Radar :: Directory Authorities by Network Health
 {% endblock -%}
+{% block meta_description %}Live Tor directory authority status, votes, reachability, latency, versions, uptime, consensus methods, and bandwidth thresholds.{% endblock %}
 {% block body -%}
-    <h2>
+    <h1 class="page-title">
         Directory Authorities by Network Health
-    </h2>
+    </h1>
     
     {{ navigation('authorities', page_ctx) }}
     
@@ -15,7 +16,13 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)</li>
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)
+            {% if relays.authorities_summary.offline_count %}
+            <ul style="margin-top: 4px;">
+                <li><span class="al-status-danger">🔴 {{ relays.authorities_summary.offline_count }} offline</span>: {{ relays.authorities_summary.offline_names | join(', ') }} <span style="font-size: 0.85em; color: #666;">(shown for historical context)</span></li>
+            </ul>
+            {% endif %}
+        </li>
         
         {# Consensus status from CollecTor #}
         {% if relays.consensus_status %}
@@ -87,7 +94,7 @@
     <br>
 
     <!-- MAIN AUTHORITY TABLE -->
-    <h3>Directory Authority Status</h3>
+    <h2>Directory Authority Status</h2>
     <br>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -146,11 +153,16 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
+                    {% if authority.is_known_offline %}
+                    {# Removed authority aged out of live data: no relay page exists, so plain text (no 404 link) #}
+                    <span style="color: #dc3545; font-weight: bold;">{{ authority.nickname }}</span> <span class="al-status-muted" style="font-size: 0.85em;" title="{{ authority.offline_note }}">(Onionoo removed due to offline longer than 1 week — shown for context)</span>
+                    {% else %}
                     <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
                        {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
                        {% else %}class="al-link-plain"{% endif %}>
                         {{ authority.nickname }}
                     </a>
+                    {% endif %}
                 </td>
                 <td>
                     {% if authority.running -%}
@@ -226,7 +238,7 @@
                     {%- endif %}
                 </td>
                 <td>
-                    {% if authority.country -%}
+                    {% if relays.has_page('country', authority.country) -%}
                         <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country|lower }}.png"
                                  title="{{ authority.country_name }}"
@@ -284,9 +296,9 @@
                 </td>
                 <td>
                     {% if authority.first_seen_relative -%}
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen_timestamp }}">{{ authority.first_seen_relative }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ', 1)[0] }}/" title="{{ authority.first_seen_timestamp }}">{{ authority.first_seen_relative }}</a>
                     {% elif authority.first_seen -%}
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ', 1)[0] }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
                     {% else -%}
                         Unknown
                     {%- endif %}
@@ -316,6 +328,7 @@
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
             <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
+            <li><strong>🔴 "Onionoo removed due to offline longer than 1 week — shown for context":</strong> A directory authority that stopped voting and was then dropped by Onionoo, which only lists relays seen in a network status within the past week (~7 days, per the <a href="https://metrics.torproject.org/onionoo.html" target="_blank" rel="noopener">Onionoo protocol</a>). Retained here as a hardcoded placeholder for historical context after such a critical change; all other data on this page is dynamic. If the authority returns, its live data automatically supersedes this placeholder.</li>
             <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span class="al-status-success-bold">Green (&gt;1)</span> = Vote received with relays, <span class="al-status-danger-bold">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
             <li><strong>BW Auth:</strong> <span class="al-status-success-bold">Yes</span> = Runs bandwidth scanner (sbws), <span class="al-status-muted">No</span> = Does not run scanner</li>
             <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span class="al-status-warning">Orange = &gt;200ms</span>, <span class="al-status-danger-bold">Red = &gt;500ms</span>, <span class="al-status-danger-bold">Timeout</span> = &gt;2s, <span class="al-status-danger-bold">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>
@@ -636,7 +649,7 @@
             <p style="margin: 5px 0; font-size: 12px; color: #666;">
                 <strong>⚠️ Study Finding:</strong> Our analysis of 10k+ relays shows authorities assigning Stable to relays with MTBF as low as ~5 days, 
                 below both the published threshold and 7-day minimum. The <code>stable-mtbf</code> in flag-thresholds is the <em>median</em> MTBF value, not the minimum threshold.
-                See <a href="../docs/studies/stable-flag-threshold-study.md">Stable Flag Threshold Study</a>.
+                See Stable Flag Threshold Study.
                 <br><strong>Sources:</strong> 
                 <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec</a> |
                 <a href="https://research.torproject.org/techreports/relay-stability-2011-06-30.pdf" target="_blank" rel="noopener">Relay Stability Research (2011)</a>
@@ -691,4 +704,4 @@
     <p><i>Data sources: <a href="https://onionoo.torproject.org" target="_blank" rel="noopener">Onionoo API</a>{% if relays.collector_flag_thresholds %}, <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>{% endif %}</i></p>
     <p><i>Last updated: {{ relays.timestamp }} (updates every 15-60 minutes depending on data source)</i></p>
 
-{% endblock -%} 
+{% endblock -%}

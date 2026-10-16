@@ -43,7 +43,7 @@
 .aroi-category-table thead th:nth-child(7) { width: 10%; }
 .aroi-category-table thead th:nth-child(8) { width: 15%; }
 
-/* Geographic Champions (Non-EU Leaders) */
+/* Geographic diversity boards (Global Powerhouses / Jurisdiction Globetrotters) */
 .aroi-geographic-table thead th:nth-child(3) { width: 15%; }
 .aroi-geographic-table thead th:nth-child(4) { width: 10%; }
 .aroi-geographic-table thead th:nth-child(5) { width: 8%; }
@@ -55,25 +55,31 @@
 .aroi-frontier-table thead th:nth-child(5) { width: 10%; }
 .aroi-frontier-table thead th:nth-child(6) { width: 23%; }
 
-/* Platform Diversity (Non-Linux Heroes) */
+/* Platform diversity boards (Non-Linux Powerhouses / OS Polyglots) */
 .aroi-platform-table thead th:nth-child(3) { width: 10%; }
 .aroi-platform-table thead th:nth-child(4) { width: 8%; }
 .aroi-platform-table thead th:nth-child(5) { width: 22%; }
 
-/* AROI Validation Champions */
-.aroi-validation-table thead th:nth-child(3) { width: 12%; }
-.aroi-validation-table thead th:nth-child(4) { width: 18%; }
-.aroi-validation-table thead th:nth-child(5) { width: 15%; }
-.aroi-validation-table thead th:nth-child(6) { width: 12%; }
-.aroi-validation-table thead th:nth-child(7) { width: 8%; }
+/* AROI Validation Champions — 10 columns.
+   Columns 1–2 (5% + 25%) come from .aroi-rankings-table.
+   Widths cover the v2/v3 split; a 7-column guess would crush the last three. */
+.aroi-validation-table thead th:nth-child(3) { width: 11%; }
+.aroi-validation-table thead th:nth-child(4) { width: 7%; }
+.aroi-validation-table thead th:nth-child(5) { width: 7%; }
+.aroi-validation-table thead th:nth-child(6) { width: 8%; }
+.aroi-validation-table thead th:nth-child(7) { width: 14%; }
+.aroi-validation-table thead th:nth-child(8) { width: 10%; }
+.aroi-validation-table thead th:nth-child(9) { width: 8%; }
+.aroi-validation-table thead th:nth-child(10) { width: 5%; }
 
-/* IPv4/IPv6 Address Leaders */
-.aroi-ip-address-table thead th:nth-child(3) { width: 10%; }
+/* IPv4/IPv6 Address Leaders — 9 columns.
+   Columns 1–2 (5% + 25%) come from .aroi-rankings-table. */
+.aroi-ip-address-table thead th:nth-child(3) { width: 12%; }
 .aroi-ip-address-table thead th:nth-child(4) { width: 8%; }
-.aroi-ip-address-table thead th:nth-child(5) { width: 13%; }
-.aroi-ip-address-table thead th:nth-child(6) { width: 12%; }
-.aroi-ip-address-table thead th:nth-child(7) { width: 7%; }
-.aroi-ip-address-table thead th:nth-child(8) { width: 7%; }
+.aroi-ip-address-table thead th:nth-child(5) { width: 14%; }
+.aroi-ip-address-table thead th:nth-child(6) { width: 13%; }
+.aroi-ip-address-table thead th:nth-child(7) { width: 8%; }
+.aroi-ip-address-table thead th:nth-child(8) { width: 8%; }
 .aroi-ip-address-table thead th:nth-child(9) { width: 7%; }
 
 /* AROI Champion Badge Styles - Harmonized Color Tier System */

@@ -7,7 +7,6 @@ components, including memory usage reporting and time formatting.
 
 import time
 import sys
-import os
 import resource
 import threading
 

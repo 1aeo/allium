@@ -21,17 +21,6 @@
 }
 .subsection-card dl { margin-bottom: 0; }
 
-/* Subsection headers - Level 2 in information hierarchy */
-.subsection-header {
-    margin-top: 0;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--color-text-dark);
-    border-bottom: 2px solid var(--color-border-light);
-}
-
 .section-header {
     position: relative;
     display: inline-block;
@@ -42,8 +31,22 @@
     color: inherit;
 }
 
-/* Highlight section when targeted (outline avoids layout shift/overlap) */
-:target {
+/* Issue/note links in the Issues Detected box: keep severity color,
+   underline signals clickability, :target highlights the section */
+.issue-link {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.issue-link:hover,
+.issue-link:focus {
+    color: var(--color-primary);
+}
+
+/* Highlight section when targeted (outline avoids layout shift/overlap);
+   history charts use :target to switch periods, not to highlight */
+:target:not(.chart-hero):not(.chart-period) {
+    scroll-margin-top: 72px;
     background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;
     outline: 3px solid var(--color-highlight-border);
@@ -53,6 +56,18 @@
 dt:target {
     padding: 4px 6px;
     margin: -4px -6px 6px;
+    outline-offset: -3px;  /* inside the padding: an outer outline crosses the line above */
+}
+th:target {
+    outline-offset: 0;  /* header cells sit in a scrolling table that clips outlines drawn outside them */
+}
+/* A column link (#col-*) highlights the whole column, not just its header cell */
+table:has(#col-running:target) [headers="col-running"],
+table:has(#col-flags:target) [headers="col-flags"],
+table:has(#col-fast:target) [headers="col-fast"],
+table:has(#col-desc-published:target) [headers="col-desc-published"],
+table:has(#col-cons-wt:target) [headers="col-cons-wt"] {
+    background-color: var(--color-highlight-bg);
 }
 
 /* Backward-compat anchor aliases: invisible but still scrollable */

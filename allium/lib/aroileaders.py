@@ -6,30 +6,92 @@ Processes operator rankings based on Onionoo API data grouped by contact informa
 Reuses existing contact calculations and only computes new metrics not already available
 """
 
-import hashlib
-from collections import defaultdict
-import re
-import html
-
 # Import centralized IP parsing from ip_utils (canonical home)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+# B4.1: shared classifier so leaderboard tier matches contact-page pill tier.
+from .aroi_validation import classify_v3_tier as _classify_v3_tier_local
 
 # Import centralized country utilities
 from .country_utils import (
     count_non_eu_countries, 
-    count_frontier_countries_weighted_with_existing_data,
     calculate_diversity_score, 
     calculate_geographic_achievement,
     calculate_operator_as_diversity_score,
     EU_POLITICAL_REGION
 )
 
+# Diversity Index (Diversity All-Rounders board): network-adaptive scoring
+from .diversity_index import annotate_operators, count_diverse_relays, RARE_AS_TIERS
+
 # Import HTML escaping utility
-from .string_utils import safe_html_escape
+from .html_escape_utils import safe_html_escape
+from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
+from .time_utils import ONIONOO_HISTORY_PERIODS, parse_onionoo_timestamp
 
 
+# Shared url-token regex (string_utils is the single source of truth) for the
+# Option A incomplete-AROI fallback. Matches the CIISS `url:` field token in a
+# raw contact string. We intentionally accept any plausible domain (we are not
+# validating CIISS conformance here — the caller already confirmed AROI parsing
+# FAILED, we just want a recognisable display name).
+_URL_FIELD_FALLBACK_RE = URL_FIELD_TOKEN_RE
 
-def _top_n(operators, metric, n=50, filter_fn=None):
+# Maximum length of a derived display name returned by
+# extract_contact_display_name() that we accept for the incomplete-AROI
+# leaderboard row. Values longer than this are rejected so the row falls
+# through to the truncation cascade (cascade 3) and the leaderboard cell
+# stays compact / readable.
+MAX_DERIVED_LENGTH = 60
+
+
+def _incomplete_aroi_display_name(contact_info, contact_hash) -> str:
+    """Build a friendly display name for an operator whose AROI parsing
+    failed but whose ContactInfo still contains a recognisable identifier.
+
+    Cascade:
+      1. If contact contains `url:<domain>`, return
+         "<domain> (incomplete AROI)" so the row is attributable to the
+         operator's domain even when the relay forgot to declare
+         ciissversion. Domain is normalised (drops https:// prefix and
+         trailing path/query if present).
+      2. Else fall back to extract_contact_display_name() (email/name/url
+         derivation used by the contact-listing tooltip code).
+      3. Else truncated raw contact string (legacy behaviour).
+      4. Else contact_hash prefix (last-resort fallback).
+    """
+    if contact_info and contact_info.strip():
+        clean_contact = contact_info.strip()
+        url_match = _URL_FIELD_FALLBACK_RE.search(clean_contact)
+        if url_match:
+            domain = url_match.group(1)
+            # Normalise: drop scheme if present, then trailing path/query.
+            if '://' in domain:
+                domain = domain.split('://', 1)[1]
+            domain = domain.split('/', 1)[0].split('?', 1)[0]
+            # Canonicalise to lowercase before the www-prefix check so
+            # values like "WWW.Example.com" are normalised correctly.
+            domain = domain.lower()
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            domain = domain.rstrip('.,;:')
+            if domain:
+                return f"{domain} (incomplete AROI)"
+
+        # Cascade 2: email/name/url-derivation helper.
+        derived = extract_contact_display_name(clean_contact, None)
+        if derived and derived != 'none' and len(derived) <= MAX_DERIVED_LENGTH:
+            return derived
+
+        # Cascade 3: truncated raw contact (preserved legacy behaviour).
+        if len(clean_contact) > 30:
+            return clean_contact[:30] + '...'
+        return clean_contact
+
+    # Cascade 4: contact-hash prefix.
+    return f"contact_{contact_hash[:8]}"
+
+
+def _top_n(operators, metric, n=50, filter_fn=None, tiebreakers=None):
     """
     Return the top-n operators sorted by a metric key, optionally pre-filtered.
     
@@ -40,27 +102,23 @@ def _top_n(operators, metric, n=50, filter_fn=None):
         metric (str): Key in the metrics dict to sort by
         n (int): Number of top entries to return (default 50)
         filter_fn (callable, optional): If provided, only include operators where filter_fn(v) is True
+        tiebreakers (list, optional): Ordered list of secondary metric keys used to
+            break ties on the primary metric. All keys sort descending (higher is
+            better), matching the primary metric's direction.
     
     Returns:
         list: Top-n (operator_key, metrics) tuples sorted by metric descending
     """
     source = operators if filter_fn is None else {k: v for k, v in operators.items() if filter_fn(v)}
-    return sorted(source.items(), key=lambda x: x[1][metric], reverse=True)[:n]
-
-
-def normalize_contact_info(contact_info):
-    """
-    Normalize contact information by removing common artifacts and standardizing.
-    
-    This function cleans up contact information to improve grouping accuracy.
-    
-    Args:
-        contact_info (str): Raw contact information string
-        
-    Returns:
-        str: Normalized contact information
-    """
-    return contact_info.strip()
+    # Explicit tiebreakers (if any) break ties on the primary metric; remaining
+    # ties break by relay count (bigger operator wins), then operator key purely
+    # to pin byte-stable output across runs (dict insertion order previously
+    # decided ties nondeterministically).
+    extra_keys = list(tiebreakers or [])
+    return sorted(source.items(),
+                  key=lambda x: (-x[1][metric],
+                                 *(-x[1].get(k, 0) for k in extra_keys),
+                                 -x[1].get('total_relays', 0), x[0]))[:n]
 
 
 def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decimal_places=1):
@@ -181,12 +239,17 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
             for relay in operator_relays:
                 percentages = relay.get('uptime_percentages') or {}
                 uptime_pct = percentages.get(time_period, 0.0) or 0.0
-                if uptime_pct > 0.0:
+                data_points = (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                # Include relays that HAVE uptime data for the period, even at
+                # 0% uptime (excluding them inflated operator averages); skip
+                # only relays with insufficient data (<30 daily points, the
+                # same validity threshold the percentage computation uses).
+                if data_points >= 30:
                     uptime_values.append(uptime_pct)
                     breakdown[relay.get('nickname', 'Unknown')] = {
                         'fingerprint': relay.get('fingerprint', ''),
                         'uptime': uptime_pct,
-                        'data_points': (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                        'data_points': data_points
                     }
             
             if not uptime_values:
@@ -285,31 +348,23 @@ def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
     if formatter_func is None:
         formatter_func = lambda count, country: f"{count} in {country}"
     
-    # Create full breakdown for tooltip and short breakdown for display
-    full_breakdown = []
-    short_breakdown = []
-    
-    for country, count in breakdown_items:
-        detail = formatter_func(count, country)
-        full_breakdown.append(detail)
-        short_breakdown.append(detail)
-    
-    tooltip_text = ", ".join(full_breakdown)
-    
+    details = [formatter_func(count, country) for country, count in breakdown_items]
+    tooltip_text = ", ".join(details)
+
     # Create short version with truncation
-    short_text = ", ".join(short_breakdown)
+    short_text = tooltip_text
     if len(short_text) > max_chars:
         # Find the last complete entry that fits
         chars_used = 0
-        for i, detail in enumerate(short_breakdown):
+        for i, detail in enumerate(details):
             if i > 0:
                 chars_used += 2  # for ", "
             if chars_used + len(detail) <= max_chars - 3:  # leave 3 chars for "..."
                 chars_used += len(detail)
             else:
-                short_breakdown = short_breakdown[:i]
+                details = details[:i]
                 break
-        details_text = ", ".join(short_breakdown) + "..."
+        details_text = ", ".join(details) + "..."
     else:
         details_text = short_text
     
@@ -342,6 +397,15 @@ def _calculate_aroi_leaderboards(relays_instance):
     aroi_operators = _collect_operator_metrics(relays_instance)
     if not aroi_operators:
         return {}
+    
+    # Step 1.5: Annotate every operator with Diversity Index sub-scores +
+    # tooltips. Runs AFTER collection because the index yardsticks are derived
+    # from the full operator population + network structure (adaptive caps).
+    annotate_operators(
+        aroi_operators,
+        n_countries=len(relays_instance.json.get('sorted', {}).get('country', {})),
+        n_ases=len(relays_instance.json.get('sorted', {}).get('as', {})),
+    )
     
     # Step 2: Sort operators into leaderboard category rankings
     leaderboards = _rank_operators(aroi_operators)
@@ -437,20 +501,41 @@ def _collect_operator_metrics(relays_instance):
         if len(contact_info.strip()) < 3:
             continue
             
-        # Use AROI domain as key if available, otherwise use first 24 chars of contact_info
+        # Use AROI domain as key if available, otherwise build a
+        # friendlier fallback display name from the raw contact info.
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            # Use first 30 characters of contact info for better readability (extended from 24)
-            if contact_info and len(contact_info.strip()) > 0:
-                clean_contact = contact_info.strip()
-                if len(clean_contact) > 30:
-                    operator_key = clean_contact[:30] + '...'
-                else:
-                    operator_key = clean_contact
-            else:
-                # Fallback to contact hash only if no contact info available
-                operator_key = f"contact_{contact_hash[:8]}"
+            # Option A (incomplete-AROI fallback): when an operator has a
+            # parseable `url:<domain>` token in their contact string but
+            # is missing one of the other AROI fields (typically
+            # ciissversion), aroi_domain is None — but we can still
+            # derive a recognisable display name from the url token and
+            # tag it as "(incomplete AROI)" so the leaderboard row is
+            # still attributable to the operator's domain instead of
+            # rendering as a truncated raw blob like
+            # 'email:tor[]foo.com url:https:...'.
+            #
+            # Falls back through two earlier layers when no url: token
+            # is present:
+            #   1. extract_contact_display_name() — same email/name/url
+            #      derivation used elsewhere in the site
+            #   2. raw contact-info string truncated to 30 chars
+            #   3. contact_hash prefix as last resort
+            operator_key = _incomplete_aroi_display_name(contact_info, contact_hash)
+            # Collision guard: two different contact_hash groups can
+            # resolve to the same fallback display name (e.g. two
+            # operators both publishing url:example.com but with
+            # different ContactInfo variants and no ciissversion). The
+            # later iteration would otherwise overwrite the earlier
+            # entry in aroi_operators, silently dropping the first
+            # operator's metrics. Append a short contact_hash suffix on
+            # collision so both rows are preserved. Proper cross-
+            # contact_hash *merging* is a larger refactor (would need to
+            # re-aggregate from raw relays) and is intentionally
+            # deferred — preventing data loss is the priority here.
+            if operator_key in aroi_operators:
+                operator_key = f"{operator_key}#{contact_hash[:8]}"
         
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data
@@ -501,7 +586,24 @@ def _collect_operator_metrics(relays_instance):
         validated_bandwidth = 0
         validated_consensus_weight = 0.0
         validated_countries = set()
-        td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+        # B4.1: per-version split (used by leaderboard tier badge + new columns)
+        validated_v2_relay_count = 0
+        validated_v3_relay_count = 0
+        v2_relay_count = 0  # ANY ciissversion:2 declaration (valid or not)
+        v3_relay_count = 0  # ANY ciissversion:3 declaration
+        td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
+
+        # Country breakdowns, running count, veteran first_seen, and rare-AS
+        # tracking (merged into the same loop - previously 7 extra passes)
+        operator_countries = []          # per-relay country list (non-EU VOLUME metric)
+        all_country_breakdown = {}       # country -> relay count
+        non_eu_country_breakdown = {}    # country -> relay count (non-EU only)
+        country_bandwidth = {}           # country -> observed bandwidth sum
+        non_eu_bandwidth = 0
+        running_relays = 0
+        earliest_first_seen = None       # earliest parsed first_seen (veteran score)
+        rare_as_count = 0                # unique ASes in rare/epic/legendary tiers
+        _seen_as_for_rarity = set()
         
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
@@ -521,10 +623,19 @@ def _collect_operator_metrics(relays_instance):
             relay_country = relay.get('country', '')
             if relay_country:
                 countries.add(relay_country)
+                # Country breakdowns + per-country bandwidth (rare-country
+                # metrics are derived from these after the loop, once the
+                # operator's rare-country set is known)
+                operator_countries.append(relay_country)
+                all_country_breakdown[relay_country] = all_country_breakdown.get(relay_country, 0) + 1
+                country_bandwidth[relay_country] = country_bandwidth.get(relay_country, 0) + relay_bandwidth
+                if relay_country not in EU_POLITICAL_REGION:
+                    non_eu_country_breakdown[relay_country] = non_eu_country_breakdown.get(relay_country, 0) + 1
+                    non_eu_bandwidth += relay_bandwidth
             relay_platform = relay.get('platform', '')
             if relay_platform:
                 platforms.add(relay_platform)
-                if not relay_platform.startswith('Linux'):
+                if not relay_platform.lower().startswith('linux'):
                     non_linux_count += 1
                     non_linux_bandwidth += relay_bandwidth
             
@@ -571,6 +682,15 @@ def _collect_operator_metrics(relays_instance):
             
             # Validation tracking (merged into same loop)
             fp = relay.get('fingerprint')
+            # B4.1: tally per-version DECLARATIONS (any v2 or v3 contact)
+            # so we can compute v3_pct_of_total even for operators
+            # whose v3 relays haven't been validated yet.
+            relay_aroi_version = relay.get('aroi_version')
+            if relay_aroi_version == '2':
+                v2_relay_count += 1
+            elif relay_aroi_version == '3':
+                v3_relay_count += 1
+
             if fp in validation_map:
                 result = validation_map[fp]
                 if result.get('valid', False):
@@ -578,12 +698,20 @@ def _collect_operator_metrics(relays_instance):
                     validated_relay_count += 1
                     validated_bandwidth += relay_bandwidth
                     validated_consensus_weight += relay_consensus_weight
-                    
+
+                    # B4.1: per-version validated counts so the leaderboard
+                    # can show "v2: N validated, v3: N validated".
+                    val_version = result.get('ciissversion') or relay_aroi_version
+                    if val_version == '2':
+                        validated_v2_relay_count += 1
+                    elif val_version == '3':
+                        validated_v3_relay_count += 1
+
                     # Track country for validated relays
                     country = relay.get('country', '')
                     if country:
                         validated_countries.add(country)
-                    
+
                     # Count by role (Exit > Guard > Middle priority)
                     if 'Exit' in relay_flags:
                         validated_exit_count += 1
@@ -594,61 +722,68 @@ def _collect_operator_metrics(relays_instance):
                 else:
                     # This relay has AROI but failed validation
                     invalid_relay_count += 1
-            
-            relay_td = relay.get('total_data', {})
-            for _p in ('1_month', '6_months', '1_year', '5_years'):
+
+            relay_td = relay.get('total_data') or {}
+            for _p in ONIONOO_HISTORY_PERIODS:
                 td_sums[_p] += relay_td.get(_p, 0)
+
+            # Uptime approximation input (running status)
+            if relay.get('running', False):
+                running_relays += 1
+
+            # Veteran score input: earliest first_seen across the operator's relays
+            relay_first_seen = parse_onionoo_timestamp(relay.get('first_seen', ''))
+            if relay_first_seen is not None and (
+                    earliest_first_seen is None or relay_first_seen < earliest_first_seen):
+                earliest_first_seen = relay_first_seen
+
+            # Diversity Index input: count unique ASes in rare/epic/legendary tiers
+            _as_num = relay.get('as', '')
+            if _as_num and _as_num not in _seen_as_for_rarity:
+                _seen_as_for_rarity.add(_as_num)
+                _as_entry = as_sorted_data.get(_as_num)
+                if _as_entry and _as_entry.get('as_rarity_tier', 'common') in RARE_AS_TIERS:
+                    rare_as_count += 1
         
         unique_ipv4_count = len(unique_ipv4_addresses)
         unique_ipv6_count = len(unique_ipv6_addresses)
         validated_country_count = len(validated_countries)
         
-        # Non-EU country detection (using centralized utilities)
-        operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
+        # Non-EU country detection (per-relay country list collected in main loop)
         non_eu_count = count_non_eu_countries(operator_countries, use_political=True)
         
-        # Rare/frontier countries (using pre-calculated rare countries from above)
-        # Use unique countries for rare country calculation (not per-relay count)
-        unique_operator_countries = list(set(operator_countries))
-        
-        # Find which of the operator's countries are rare
-        # operator_countries comes from relay.get('country') which is already UPPERCASE
-        operator_rare_countries = set()
-        for country in unique_operator_countries:
-            if country and country in valid_rare_countries:
-                operator_rare_countries.add(country)
+        # Rare/frontier countries (using pre-calculated rare countries from above).
+        # Countries are already UPPERCASE from _preprocess_template_data();
+        # rare-country metrics derive from the main-loop breakdowns - no
+        # further passes over operator_relays needed.
+        operator_rare_countries = {
+            country for country in all_country_breakdown
+            if country in valid_rare_countries
+        }
         
         # Calculate rare country count by counting how many rare countries operator actually operates in
         rare_country_count = len(operator_rare_countries)
         
-        # relay["country"] is already UPPERCASE from _preprocess_template_data()
-        relays_in_rare_countries = sum(1 for relay in operator_relays 
-                                     if relay.get('country', '') in operator_rare_countries)
+        # Per-country relay counts / bandwidth for rare countries only
+        rare_country_breakdown = {country: count
+                                  for country, count in all_country_breakdown.items()
+                                  if country in operator_rare_countries}
+        relays_in_rare_countries = sum(rare_country_breakdown.values())
         
         # Bandwidth capacity for relays in rare countries only (matches diverse relay count)
-        rare_country_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in operator_relays
-                                     if relay.get('country', '') in operator_rare_countries)
-        
-        # Calculate all country breakdowns in a single pass over operator_relays
-        rare_country_breakdown = {}
-        all_country_breakdown = {}
-        non_eu_country_breakdown = {}
-        non_eu_bandwidth = 0
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country:
-                all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
-                if country in operator_rare_countries:
-                    rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
-                if country not in EU_POLITICAL_REGION:
-                    non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
-                    non_eu_bandwidth += relay.get('observed_bandwidth', 0)
+        rare_country_bandwidth = sum(bw for country, bw in country_bandwidth.items()
+                                     if country in operator_rare_countries)
         
         # Sort all breakdowns by relay count (descending) then by country name
         _sort_key = lambda x: (-x[1], x[0])
         sorted_rare_breakdown = sorted(rare_country_breakdown.items(), key=_sort_key)
         sorted_all_country_breakdown = sorted(all_country_breakdown.items(), key=_sort_key)
         sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), key=_sort_key)
+        
+        # Distinct non-EU country count (geographic BREADTH metric for the
+        # Jurisdiction Globetrotters leaderboard; non_eu_count above is the
+        # per-relay VOLUME metric for Global Powerhouses)
+        non_eu_country_count = len(non_eu_country_breakdown)
         
 
         
@@ -665,8 +800,16 @@ def _collect_operator_metrics(relays_instance):
             as_diversity_score=as_diversity_score
         )
         
-        # Uptime approximation (new calculation - from running status)
-        running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
+        # === DIVERSITY INDEX INPUTS (Diversity All-Rounders board) ===
+        # rare_as_count (computed in main loop): how many of the operator's
+        # unique ASes are rare/epic/legendary hosting choices (AS breadth
+        # facet, shown in Network cell). as_diversity_score above already IS
+        # the AS rarity sum (volume facet).
+        # diverse_relay_count: relays differing from the operator's dominant
+        # OS/country/AS profile (Scale component, reviewer-approved Version A).
+        diverse_relay_count = count_diverse_relays(operator_relays)
+        
+        # Uptime approximation (running_relays counted in main loop)
         uptime_percentage = (running_relays / total_relays * 100) if total_relays > 0 else 0.0
         
 
@@ -683,21 +826,13 @@ def _collect_operator_metrics(relays_instance):
         veteran_details = ""
         
         if operator_relays:
-            from datetime import datetime
-            current_date = datetime.now()
+            from datetime import datetime, timezone
+            # UTC-aware, matching every other timestamp consumer; naive
+            # local time made veteran_days drift by up to a day on
+            # non-UTC hosts, breaking cross-machine reproducibility.
+            current_date = datetime.now(timezone.utc)
             
-            # Find earliest first_seen date among all relays
-            earliest_first_seen = None
-            for relay in operator_relays:
-                relay_first_seen_str = relay.get('first_seen', '')
-                if relay_first_seen_str:
-                    try:
-                        relay_first_seen = datetime.strptime(relay_first_seen_str, '%Y-%m-%d %H:%M:%S')
-                        if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
-                            earliest_first_seen = relay_first_seen
-                    except (ValueError, TypeError):
-                        continue
-            
+            # earliest_first_seen was found during the main merged loop
             if earliest_first_seen:
                 # Calculate days since earliest relay
                 veteran_days = (current_date - earliest_first_seen).days
@@ -771,14 +906,18 @@ def _collect_operator_metrics(relays_instance):
             'first_seen': first_seen,
             
             # === NEW CALCULATIONS (ONLY WHAT'S NEEDED) ===
-            'countries': list(countries),
+            # sorted() pins byte-stable output: set iteration order varies
+            # with PYTHONHASHSEED, which made country/platform lists (and
+            # every surface that joins them) differ run-to-run
+            'countries': sorted(countries),
             'country_count': len(countries),
-            'platforms': list(platforms),
+            'platforms': sorted(platforms),
             'platform_count': len(platforms),
             'non_linux_count': non_linux_count,
             'non_linux_bandwidth': non_linux_bandwidth,
             'non_eu_count': non_eu_count,
             'non_eu_bandwidth': non_eu_bandwidth,
+            'non_eu_country_count': non_eu_country_count,
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
             'rare_country_bandwidth': rare_country_bandwidth,
@@ -786,6 +925,12 @@ def _collect_operator_metrics(relays_instance):
             'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
             'non_eu_country_breakdown': sorted_non_eu_country_breakdown,  # Non-EU country breakdown
             'diversity_score': diversity_score,
+            # Diversity Index inputs (scores/index/tooltips are annotated in
+            # bulk by annotate_operators() once all operators are collected,
+            # because the yardsticks derive from the full operator population)
+            'as_rarity_sum': as_diversity_score,
+            'rare_as_count': rare_as_count,
+            'diverse_relay_count': diverse_relay_count,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
             'guard_consensus_weight': guard_consensus_weight,
@@ -847,6 +992,16 @@ def _collect_operator_metrics(relays_instance):
             'validated_bandwidth': validated_bandwidth,
             'validated_consensus_weight': validated_consensus_weight,
             'validated_country_count': validated_country_count,
+
+            # === B4.1: v2/v3 migration metadata for tier badge + columns ===
+            'validated_v2_relay_count': validated_v2_relay_count,
+            'validated_v3_relay_count': validated_v3_relay_count,
+            'v2_relay_count': v2_relay_count,
+            'v3_relay_count': v3_relay_count,
+            'v3_pct_of_total': (
+                v3_relay_count / total_relays * 100 if total_relays > 0 else 0.0
+            ),
+            'v3_tier': _classify_v3_tier_local(v3_relay_count, total_relays),
             
             # === TOTAL DATA TRANSFERRED (NEW) ===
             'total_data_transferred': operator_total_data,
@@ -876,7 +1031,15 @@ def _rank_operators(aroi_operators):
     _bw_masters_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0
     _bw_legends_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0
     _validated_filter = lambda v: v['validated_relay_count'] > 0
+    # OS Polyglots: only operators running >= 2 distinct OSes (incl. Linux) qualify
+    _polyglot_filter = lambda v: v['platform_count'] >= 2
 
+    # DIVERSITY CLUSTER: each diversity dimension has two co-equal boards —
+    # a VOLUME board (scale of non-dominant contribution: relay count) and a
+    # BREADTH board (internal spread: distinct count) — so a 600-relay
+    # single-OS operator and a 15-relay six-OS operator can each top the
+    # board that reflects their kind of diversity. Neither is buried under
+    # the other's metric.
     leaderboards = {
         'bandwidth':          _top_n(aroi_operators, 'total_bandwidth'),
         'consensus_weight':   _top_n(aroi_operators, 'total_consensus_weight'),
@@ -886,10 +1049,27 @@ def _rank_operators(aroi_operators):
         'guard_operators':    _top_n(aroi_operators, 'guard_count'),
         'reliability_masters': _top_n(aroi_operators, 'reliability_6m_score', filter_fn=_reliability_filter),
         'legacy_titans':      _top_n(aroi_operators, 'reliability_5y_score', filter_fn=_legacy_filter),
-        'most_diverse':       _top_n(aroi_operators, 'diversity_score'),
-        'platform_diversity': _top_n(aroi_operators, 'non_linux_count'),
-        'non_eu_leaders':     _top_n(aroi_operators, 'non_eu_count'),
-        'frontier_builders':  _top_n(aroi_operators, 'rare_country_count'),
+        # Overall diversity — ranked by the network-adaptive Diversity Index
+        # (mean of co-equal Geographic/Platform/Network/Scale sub-scores);
+        # legacy diversity_score breaks ties for a deterministic order.
+        'most_diverse':       _top_n(aroi_operators, 'diversity_index',
+                                     tiebreakers=['diversity_score', 'total_bandwidth']),
+        # Platform diversity — Volume: most non-Linux relays contributed
+        'platform_volume':    _top_n(aroi_operators, 'non_linux_count',
+                                     tiebreakers=['platform_count', 'total_bandwidth']),
+        # Platform diversity — Breadth: most distinct OSes (incl. Linux), >=2 to qualify
+        'platform_breadth':   _top_n(aroi_operators, 'platform_count',
+                                     filter_fn=_polyglot_filter,
+                                     tiebreakers=['non_linux_count', 'total_bandwidth']),
+        # Geographic diversity — Volume: most relays outside the EU
+        'non_eu_volume':      _top_n(aroi_operators, 'non_eu_count',
+                                     tiebreakers=['non_eu_country_count', 'total_bandwidth']),
+        # Geographic diversity — Breadth: most distinct non-EU countries
+        'non_eu_breadth':     _top_n(aroi_operators, 'non_eu_country_count',
+                                     tiebreakers=['non_eu_count', 'total_bandwidth']),
+        # Geographic diversity — Rare-country breadth
+        'frontier_builders':  _top_n(aroi_operators, 'rare_country_count',
+                                     tiebreakers=['relays_in_rare_countries', 'total_bandwidth']),
         'network_veterans':   _top_n(aroi_operators, 'veteran_score'),
         'ipv4_leaders':       _top_n(aroi_operators, 'unique_ipv4_count'),
         'ipv6_leaders':       _top_n(aroi_operators, 'unique_ipv6_count'),
@@ -902,23 +1082,288 @@ def _rank_operators(aroi_operators):
     return leaderboards
 
 
+# ---------------------------------------------------------------------------
+# Table-driven per-category formatting config for _format_leaderboard_entries.
+# The VARYING parts of the former 19-category switchboard live in these tables;
+# genuinely unique logic lives in the small _*_extras() helpers below.
+# ---------------------------------------------------------------------------
+
+# Categories whose primary bandwidth column shows a historical average
+# instead of the current total bandwidth.
+_PRIMARY_BANDWIDTH_KEYS = {
+    'bandwidth_masters': 'bandwidth_6m_average',
+    'bandwidth_legends': 'bandwidth_5y_average',
+}
+
+# Achievement titles for top 3 operators: category -> (entry field,
+# metrics key that must be truthy (None = always), {rank: title}).
+_ACHIEVEMENT_TITLES = {
+    'frontier_builders': ('frontier_achievement_title', 'rare_country_breakdown',
+                          {1: "🌟 Frontier Legend", 2: "⭐ Frontier Master", 3: "✨ Frontier Champion"}),
+    'most_diverse': ('diversity_master_title', None,
+                     {1: "🌍 Diversity Legend", 2: "🌟 Diversity Master", 3: "🌐 Diversity Champion"}),
+    'ipv4_leaders': ('ipv4_achievement_title', None,
+                     {1: "🥇 IPv4 Legend", 2: "🥈 IPv4 Master", 3: "🥉 IPv4 Champion"}),
+    'ipv6_leaders': ('ipv6_achievement_title', None,
+                     {1: "🥇 IPv6 Legend", 2: "🥈 IPv6 Master", 3: "🥉 IPv6 Champion"}),
+}
+
+# Historical score categories: category -> (metrics key prefix, period label).
+_SCORE_CATEGORIES = {
+    'reliability_masters': ('reliability_6m', '6-month'),
+    'legacy_titans': ('reliability_5y', '5-year'),
+    'bandwidth_masters': ('bandwidth_6m', '6-month'),
+    'bandwidth_legends': ('bandwidth_5y', '5-year'),
+}
+
+# IP-address categories: category -> (metrics key prefix, display label).
+_IP_CATEGORIES = {
+    'ipv4_leaders': ('ipv4', 'IPv4'),
+    'ipv6_leaders': ('ipv6', 'IPv6'),
+}
+
+# Consensus weight metrics rendered as '<key>_pct' entry fields ("{value * 100:.2f}%").
+_PCT_KEYS = ('total_consensus_weight', 'exit_consensus_weight', 'guard_consensus_weight',
+             'ipv4_total_consensus_weight', 'ipv6_total_consensus_weight', 'validated_consensus_weight')
+
+# Metrics copied through to the formatted entry unchanged.
+_PASSTHROUGH_KEYS = (
+    'aroi_domain', 'contact_hash', 'contact_info', 'total_relays', 'guard_count', 'exit_count',
+    'middle_count', 'measured_count', 'unique_as_count', 'platform_count', 'non_linux_count',
+    'non_eu_count', 'non_eu_country_count', 'rare_country_count', 'relays_in_rare_countries', 'veteran_days',
+    'veteran_relay_scaling_factor', 'unique_ipv4_count', 'unique_ipv6_count', 'ipv4_relay_count',
+    'ipv6_relay_count', 'ipv4_total_bandwidth', 'ipv6_total_bandwidth', 'ipv4_guard_count',
+    'ipv4_exit_count', 'ipv4_middle_count', 'ipv6_guard_count', 'ipv6_exit_count', 'ipv6_middle_count',
+    'validated_relay_count', 'invalid_relay_count', 'validated_guard_count', 'validated_exit_count',
+    'validated_middle_count', 'validated_consensus_weight', 'validated_country_count',
+    'validated_v2_relay_count', 'validated_v3_relay_count', 'v2_relay_count', 'v3_relay_count',
+    'v3_pct_of_total', 'v3_tier',
+    # Diversity Index (annotated by diversity_index.annotate_operators)
+    'diversity_index', 'geo_score', 'platform_score', 'network_score', 'scale_score',
+    'rare_as_count', 'diverse_relay_count',
+)
+
+# Defaults for category-specific entry fields (non-applicable categories keep these).
+_ENTRY_EXTRAS_DEFAULTS = dict.fromkeys((
+    'geographic_achievement', 'geographic_breakdown_details', 'geographic_breakdown_tooltip',
+    'rare_country_details', 'rare_country_tooltip', 'frontier_achievement_title',
+    'platform_breakdown_details', 'platform_breakdown_tooltip',
+    'diversity_master_title', 'diversity_breakdown_details', 'diversity_breakdown_tooltip',
+    'veteran_details_short', 'veteran_tooltip', 'reliability_details_short', 'reliability_tooltip',
+    'bandwidth_details_short', 'bandwidth_tooltip', 'ipv4_achievement_title', 'ipv6_achievement_title',
+    'ip_address_details', 'ip_address_tooltip', 'validated_bandwidth', 'validated_bandwidth_unit',
+    # Diversity All-Rounders Option-2 cells (populated by _diversity_extras)
+    'geo_cell', 'platform_cell', 'network_cell', 'scale_cell',
+    'geo_cell_tooltip', 'platform_cell_tooltip', 'network_cell_tooltip', 'scale_cell_tooltip',
+    'index_tooltip',
+), "")
+# Score fields default to formatted zero/unity values (matching f"{0.0:.1f}" etc.).
+_ENTRY_EXTRAS_DEFAULTS.update({
+    'reliability_score': "0.0", 'reliability_average': "0.0%", 'reliability_weight': "1.0x",
+    'bandwidth_score': "0.0", 'bandwidth_average': "0.0", 'bandwidth_weight': "1.0x",
+})
+
+
+def _truncate_with_ellipsis(text, max_chars):
+    """Truncate to max_chars total, reserving 3 chars for the trailing "..."."""
+    return text[:max_chars - 3] + "..." if len(text) > max_chars else text
+
+
+def _geographic_extras(category, metrics, bandwidth_formatter):
+    """non_eu_volume / non_eu_breadth: dynamic geographic achievement + non-EU
+    country breakdown (used for the specialization column instead of all countries).
+
+    Bugbot fix (PR #217): derive the achievement from the operator's NON-EU
+    countries only — these boards rank non-EU presence, so an EU-heavy operator
+    must not earn EU-derived titles here."""
+    non_eu_countries = [country for country, _count in metrics['non_eu_country_breakdown']]
+    details, tooltip = _format_breakdown_details(metrics['non_eu_country_breakdown'], 52)
+    return {
+        'geographic_achievement': calculate_geographic_achievement(non_eu_countries),
+        'geographic_breakdown_details': details,
+        'geographic_breakdown_tooltip': tooltip,
+    }
+
+
+def _frontier_extras(category, metrics, bandwidth_formatter):
+    """frontier_builders: rare country breakdown with custom "relay/relays" formatter."""
+    if not metrics['rare_country_breakdown']:
+        return {}
+    details, tooltip = _format_breakdown_details(
+        metrics['rare_country_breakdown'], 44,
+        lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
+    )
+    return {'rare_country_details': details, 'rare_country_tooltip': tooltip}
+
+
+def _platform_extras(category, metrics, bandwidth_formatter):
+    """platform_volume / platform_breadth: platform breakdown for the
+    specialization column. platform_volume (Non-Linux Powerhouses) shows
+    non-Linux relays only; platform_breadth (OS Polyglots) counts ALL OSes
+    incl. Linux, so its breakdown includes Linux too."""
+    include_linux = (category == 'platform_breadth')
+    platform_breakdown = {}
+    for relay in metrics['relays']:
+        platform = relay.get('platform', 'Unknown')
+        if platform and (include_linux or not platform.lower().startswith('linux')):
+            # Extract short platform name (before first space or version number)
+            short_platform = platform.split()[0] if platform else 'Unknown'
+            # Map common platform names to shorter versions
+            for prefix, short_name in (('win', 'Win'), ('mac', 'Mac'), ('darwin', 'Mac'),
+                                       ('freebsd', 'FreeBSD'), ('openbsd', 'OpenBSD'), ('netbsd', 'NetBSD')):
+                if short_platform.lower().startswith(prefix):
+                    short_platform = short_name
+                    break
+            platform_breakdown[short_platform] = platform_breakdown.get(short_platform, 0) + 1
+
+    # Sort by relay count (descending) then by platform name
+    sorted_platform_breakdown = sorted(platform_breakdown.items(),
+                                       key=lambda x: (-x[1], x[0]))
+
+    # Create short format (max 32 chars): "Win: 5, Mac: 3, FreeBSD: 2"
+    platform_breakdown_full = ", ".join(f"{platform}: {count}" for platform, count in sorted_platform_breakdown)
+
+    # Create full tooltip with platform details only (countries not relevant for platform diversity)
+    platform_tooltip_text = ", ".join(f"{count} {platform} relays" for platform, count in sorted_platform_breakdown)
+    return {
+        'platform_breakdown_details': _truncate_with_ellipsis(platform_breakdown_full, 32),
+        'platform_breakdown_tooltip': f"Platform Distribution: {platform_tooltip_text}",
+    }
+
+
+def _diversity_extras(category, metrics, bandwidth_formatter):
+    """most_diverse (Diversity All-Rounders): Option-2 display cells.
+
+    Cells show plain counts anyone can read; the exact sub-scores and today's
+    network-derived yardsticks live in the cell tooltips (built alongside the
+    scores in diversity_index.annotate_operators)."""
+    country_count = metrics['country_count']
+    platform_count = metrics['platform_count']
+    as_count = metrics['unique_as_count']
+    diverse_count = metrics['diverse_relay_count']
+
+    # Create short format (max 20 chars): "5 Countries, 3 OS, 8 AS"
+    diversity_breakdown_full = f"{country_count} Countries, {platform_count} OS, {as_count} AS"
+
+    return {
+        'diversity_breakdown_details': _truncate_with_ellipsis(diversity_breakdown_full, 20),
+        'diversity_breakdown_tooltip': metrics['index_tooltip'],
+        # Option-2 cells: counts in cells, scores in tooltips
+        'geo_cell': f"{country_count} countr{'y' if country_count == 1 else 'ies'}",
+        'platform_cell': f"{platform_count} OS{'' if platform_count == 1 else 'es'}",
+        'network_cell': f"{as_count} AS",
+        'scale_cell': f"{diverse_count} diverse relay{'' if diverse_count == 1 else 's'}",
+        'geo_cell_tooltip': metrics['geo_cell_tooltip'],
+        'platform_cell_tooltip': metrics['platform_cell_tooltip'],
+        'network_cell_tooltip': metrics['network_cell_tooltip'],
+        'scale_cell_tooltip': metrics['scale_cell_tooltip'],
+        'index_tooltip': metrics['index_tooltip'],
+    }
+
+
+def _veteran_extras(category, metrics, bandwidth_formatter):
+    """network_veterans: veteran tenure tooltip with 20-char short version."""
+    veteran_tooltip = metrics['veteran_details']
+    if not veteran_tooltip:
+        return {}
+    if len(veteran_tooltip) > 20:
+        # Extract just the days and scaling factor for short display
+        days_part = f"{metrics['veteran_days']} days * {metrics['veteran_relay_scaling_factor']}"
+        if len(days_part) > 17:  # leave room for "..."
+            veteran_details_short = f"{metrics['veteran_days']} days..."
+        else:
+            veteran_details_short = days_part + "..."
+    else:
+        veteran_details_short = veteran_tooltip
+    return {'veteran_details_short': veteran_details_short, 'veteran_tooltip': veteran_tooltip}
+
+
+def _score_extras(category, metrics, bandwidth_formatter):
+    """reliability_masters / legacy_titans / bandwidth_masters / bandwidth_legends:
+    period-matched score, average and simplified tooltip (no weighting info)."""
+    prefix, period_label = _SCORE_CATEGORIES[category]
+    score = metrics[prefix + '_score']
+    average = metrics[prefix + '_average']
+    weight = metrics[prefix + '_weight']
+    if prefix.startswith('reliability'):
+        return {
+            'reliability_score': f"{score:.1f}",
+            'reliability_average': f"{average:.1f}%",
+            'reliability_weight': f"{weight:.1f}x",
+            'reliability_details_short': f"{average:.1f}% avg",
+            'reliability_tooltip': f"{period_label} reliability: {average:.1f}% average uptime ({metrics['total_relays']} relays)",
+        }
+    # Format bandwidth average with unit (reuse existing formatters)
+    formatted_avg, unit = _format_bandwidth_with_auto_unit(average, bandwidth_formatter)
+    return {
+        'bandwidth_score': f"{score:.1f}",
+        'bandwidth_average': f"{average:.1f}",
+        'bandwidth_weight': f"{weight:.1f}x",
+        'bandwidth_details_short': f"{formatted_avg} {unit} avg",
+        'bandwidth_tooltip': f"{period_label} bandwidth: {formatted_avg} {unit} average bandwidth ({metrics['total_relays']} relays)",
+    }
+
+
+def _ip_extras(category, metrics, bandwidth_formatter):
+    """ipv4_leaders / ipv6_leaders: unique-address details + infrastructure tooltip."""
+    prefix, label = _IP_CATEGORIES[category]
+    unique_count = metrics['unique_' + prefix + '_count']
+    # Format IP-specific bandwidth with unit (reuse existing formatters)
+    formatted_ip_bandwidth, ip_bandwidth_unit = _format_bandwidth_with_auto_unit(
+        metrics[prefix + '_total_bandwidth'], bandwidth_formatter
+    )
+    return {
+        'ip_address_details': f"{unique_count} unique {label}",
+        'ip_address_tooltip': f"{label} Infrastructure: {unique_count} unique addresses across {metrics[prefix + '_relay_count']} relays with {formatted_ip_bandwidth} {ip_bandwidth_unit} bandwidth",
+    }
+
+
+def _validated_extras(category, metrics, bandwidth_formatter):
+    """validated_relays: validated-only bandwidth (skipped for other categories)."""
+    formatted, unit = _format_bandwidth_with_auto_unit(metrics['validated_bandwidth'], bandwidth_formatter)
+    return {'validated_bandwidth': formatted, 'validated_bandwidth_unit': unit}
+
+
+# Dispatch table: category -> extras handler (absent categories use defaults only).
+_CATEGORY_EXTRAS = {
+    'non_eu_volume': _geographic_extras,
+    'non_eu_breadth': _geographic_extras,
+    'frontier_builders': _frontier_extras,
+    'platform_volume': _platform_extras,
+    'platform_breadth': _platform_extras,
+    'most_diverse': _diversity_extras,
+    'network_veterans': _veteran_extras,
+    'reliability_masters': _score_extras,
+    'legacy_titans': _score_extras,
+    'bandwidth_masters': _score_extras,
+    'bandwidth_legends': _score_extras,
+    'ipv4_leaders': _ip_extras,
+    'ipv6_leaders': _ip_extras,
+    'validated_relays': _validated_extras,
+}
+
+
 def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
     """
     Format leaderboard entries for Jinja2 template rendering.
     
     Converts raw operator metrics into display-ready strings with units,
     percentages, achievement badges, and tooltips.
-    
+
+    Per-category variations (achievement titles, score periods, IP labels,
+    breakdown details/tooltips) are table-driven via the _CATEGORY_EXTRAS,
+    _ACHIEVEMENT_TITLES and related config tables defined above.
+
     Returns:
         dict with 'leaderboards' (formatted), 'summary' (stats), 'raw_operators'
     """
     from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct
-    
+
     # Get per-period network totals for period-matched percentage calculations
     _net_by_period = {}
     if hasattr(relays_instance, 'json') and relays_instance.json.get('network_health'):
         _net_by_period = relays_instance.json['network_health'].get('network_total_data_by_period', {})
-    
+
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
     for category, data in leaderboards.items():
@@ -926,402 +1371,94 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
         for rank, (operator_key, metrics) in enumerate(data, 1):
             # Use existing bandwidth formatting methods (top10 specific formatting)
             # For bandwidth categories, use historical bandwidth instead of current bandwidth
-            if category in ['bandwidth_masters', 'bandwidth_legends']:
-                if category == 'bandwidth_masters':
-                    bandwidth_value = metrics['bandwidth_6m_average']
-                else:  # bandwidth_legends
-                    bandwidth_value = metrics['bandwidth_5y_average']
-            else:
-                bandwidth_value = metrics['total_bandwidth']
-            
+            bandwidth_value = metrics[_PRIMARY_BANDWIDTH_KEYS.get(category, 'total_bandwidth')]
             formatted_bandwidth, bandwidth_unit = _format_bandwidth_with_auto_unit(
                 bandwidth_value, relays_instance.bandwidth_formatter
             )
-            
-            # Format exit-specific bandwidth for exit categories (exit_authority, exit_operators)
-            formatted_exit_bandwidth, exit_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                metrics['exit_bandwidth'], relays_instance.bandwidth_formatter
-            )
-            
-            # Format guard-specific bandwidth for guard categories (guard_authority, guard_operators)
-            formatted_guard_bandwidth, guard_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                metrics['guard_bandwidth'], relays_instance.bandwidth_formatter
-            )
-            
-            # Format diversity-specific bandwidth (only counts relays matching diversity criteria)
-            formatted_non_linux_bandwidth, non_linux_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                metrics['non_linux_bandwidth'], relays_instance.bandwidth_formatter
-            )
-            formatted_non_eu_bandwidth, non_eu_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                metrics['non_eu_bandwidth'], relays_instance.bandwidth_formatter
-            )
-            formatted_rare_country_bandwidth, rare_country_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                metrics['rare_country_bandwidth'], relays_instance.bandwidth_formatter
-            )
-            
-            # Calculate geographic achievement for non_eu_leaders category
-            geographic_achievement = ""
-            geographic_breakdown_details = ""
-            geographic_breakdown_tooltip = ""
-            if category == 'non_eu_leaders':
-                geographic_achievement = calculate_geographic_achievement(metrics['countries'])
-                # Use non-EU country breakdown for specialization column instead of all countries
-                geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
-                    metrics['non_eu_country_breakdown'], 52
-                )
-            
-            # Format rare country breakdown for frontier_builders category
-            rare_country_details = ""
-            rare_country_tooltip = ""
-            frontier_achievement_title = ""
-            platform_hero_title = ""
-            diversity_master_title = ""
-            
-            if category == 'frontier_builders' and metrics['rare_country_breakdown']:
-                # Use helper function with custom formatter for rare countries (includes "relay/relays")
-                rare_country_details, rare_country_tooltip = _format_breakdown_details(
-                    metrics['rare_country_breakdown'], 44,
-                    lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
-                )
-                
-                # Add achievement titles for top 3 frontier builders
-                if rank == 1:
-                    frontier_achievement_title = "🌟 Frontier Legend"
-                elif rank == 2:
-                    frontier_achievement_title = "⭐ Frontier Master"
-                elif rank == 3:
-                    frontier_achievement_title = "✨ Frontier Champion"
-            
-            # Add achievement titles for top 3 platform diversity heroes
-            platform_breakdown_details = ""
-            platform_breakdown_tooltip = ""
-            if category == 'platform_diversity':
-                if rank == 1:
-                    platform_hero_title = "🏆 Platform Legend"
-                elif rank == 2:
-                    platform_hero_title = "💻 Platform Master"
-                elif rank == 3:
-                    platform_hero_title = "🖥️ Platform Champion"
-                
-                # Format platform breakdown for specialization column (non-Linux only)
-                platform_breakdown = {}
-                for relay in metrics['relays']:
-                    platform = relay.get('platform', 'Unknown')
-                    if platform and not platform.lower().startswith('linux'):
-                        # Extract short platform name (before first space or version number)
-                        short_platform = platform.split()[0] if platform else 'Unknown'
-                        # Map common platform names to shorter versions
-                        if short_platform.lower().startswith('win'):
-                            short_platform = 'Win'
-                        elif short_platform.lower().startswith('mac') or short_platform.lower().startswith('darwin'):
-                            short_platform = 'Mac'
-                        elif short_platform.lower().startswith('freebsd'):
-                            short_platform = 'FreeBSD'
-                        elif short_platform.lower().startswith('openbsd'):
-                            short_platform = 'OpenBSD'
-                        elif short_platform.lower().startswith('netbsd'):
-                            short_platform = 'NetBSD'
-                        platform_breakdown[short_platform] = platform_breakdown.get(short_platform, 0) + 1
-                
-                # Sort by relay count (descending) then by platform name
-                sorted_platform_breakdown = sorted(platform_breakdown.items(), 
-                                                  key=lambda x: (-x[1], x[0]))
-                
-                # Create short format (max 32 chars): "Win: 5, Mac: 3, FreeBSD: 2"
-                platform_parts = []
-                for platform, count in sorted_platform_breakdown:
-                    platform_parts.append(f"{platform}: {count}")
-                
-                platform_breakdown_full = ", ".join(platform_parts)
-                if len(platform_breakdown_full) > 32:
-                    platform_breakdown_details = platform_breakdown_full[:29] + "..."
-                else:
-                    platform_breakdown_details = platform_breakdown_full
-                
-                # Create full tooltip with platform details only (countries not relevant for platform diversity)
-                platform_tooltip_parts = []
-                for platform, count in sorted_platform_breakdown:
-                    platform_tooltip_parts.append(f"{count} {platform} relays")
-                platform_tooltip_text = ", ".join(platform_tooltip_parts)
-                
-                platform_breakdown_tooltip = f"Platform Distribution: {platform_tooltip_text}"
-            
-            # Add achievement titles for top 3 diversity masters
-            diversity_breakdown_details = ""
-            diversity_breakdown_tooltip = ""
-            if category == 'most_diverse':
-                if rank == 1:
-                    diversity_master_title = "🌍 Diversity Legend"
-                elif rank == 2:
-                    diversity_master_title = "🌟 Diversity Master"
-                elif rank == 3:
-                    diversity_master_title = "🌐 Diversity Champion"
-                
-                # Format diversity calculation breakdown
-                country_count = metrics['country_count']
-                platform_count = metrics['platform_count']
-                as_count = metrics['unique_as_count']
-                
-                # Create short format (max 20 chars): "5 Countries, 3 OS, 8 AS"
-                diversity_breakdown_full = f"{country_count} Countries, {platform_count} OS, {as_count} AS"
-                if len(diversity_breakdown_full) > 20:
-                    diversity_breakdown_details = diversity_breakdown_full[:17] + "..."
-                else:
-                    diversity_breakdown_details = diversity_breakdown_full
-                
-                # Create full tooltip with calculation details
-                diversity_breakdown_tooltip = f"Diversity Score: {country_count} countries x 3.0 + {as_count} AS (rarity-weighted) x 2.0 + {platform_count} platforms x 1.0 = {metrics['diversity_score']:.1f}"
-            
-            # Format veteran details for network_veterans category
-            veteran_details_short = ""
-            veteran_tooltip = ""
-            if category == 'network_veterans' and metrics['veteran_details']:
-                veteran_tooltip = metrics['veteran_details']
-                
-                # Create short version (max 20 chars for table)
-                if len(veteran_tooltip) > 20:
-                    # Extract just the days and scaling factor for short display
-                    days_part = f"{metrics['veteran_days']} days * {metrics['veteran_relay_scaling_factor']}"
-                    if len(days_part) > 17:  # leave room for "..."
-                        veteran_details_short = f"{metrics['veteran_days']} days..."
-                    else:
-                        veteran_details_short = days_part + "..."
-                else:
-                    veteran_details_short = veteran_tooltip
 
-            # Format reliability details for reliability categories (REUSE veteran pattern)
-            reliability_details_short = ""
-            reliability_tooltip = ""
-            reliability_score_raw = 0.0
-            reliability_average = 0.0
-            reliability_weight = 1.0
-            
-            if category in ['reliability_masters', 'legacy_titans']:
-                # Determine which reliability data to use
-                if category == 'reliability_masters':
-                    reliability_score_raw = metrics['reliability_6m_score']
-                    reliability_average = metrics['reliability_6m_average']
-                    reliability_weight = metrics['reliability_6m_weight']
-                    period_label = "6-month"
-                else:  # legacy_titans
-                    reliability_score_raw = metrics['reliability_5y_score']
-                    reliability_average = metrics['reliability_5y_average']
-                    reliability_weight = metrics['reliability_5y_weight']
-                    period_label = "5-year"
-                
-                # Create tooltip without weighting information (simplified)
-                reliability_tooltip = f"{period_label} reliability: {reliability_average:.1f}% average uptime ({metrics['total_relays']} relays)"
-                
-                # Create short version for table display (simplified, no weight)
-                reliability_details_short = f"{reliability_average:.1f}% avg"
-            
-            # Format bandwidth details for bandwidth categories (NEW, similar to reliability pattern)
-            bandwidth_details_short = ""
-            bandwidth_tooltip = ""
-            bandwidth_score_raw = 0.0
-            bandwidth_average = 0.0
-            bandwidth_weight = 1.0
-            
-            if category in ['bandwidth_masters', 'bandwidth_legends']:
-                # Determine which bandwidth data to use
-                if category == 'bandwidth_masters':
-                    bandwidth_score_raw = metrics['bandwidth_6m_score']
-                    bandwidth_average = metrics['bandwidth_6m_average']
-                    bandwidth_weight = metrics['bandwidth_6m_weight']
-                    period_label = "6-month"
-                else:  # bandwidth_legends
-                    bandwidth_score_raw = metrics['bandwidth_5y_score']
-                    bandwidth_average = metrics['bandwidth_5y_average']
-                    bandwidth_weight = metrics['bandwidth_5y_weight']
-                    period_label = "5-year"
-                
-                # Format bandwidth with unit (reuse existing formatters)
-                formatted_bandwidth_avg, bandwidth_unit = _format_bandwidth_with_auto_unit(
-                    bandwidth_average, relays_instance.bandwidth_formatter
-                )
-                
-                # Create tooltip without weighting information (simplified)
-                bandwidth_tooltip = f"{period_label} bandwidth: {formatted_bandwidth_avg} {bandwidth_unit} average bandwidth ({metrics['total_relays']} relays)"
-                
-                # Create short version for table display (simplified, no weight)
-                bandwidth_details_short = f"{formatted_bandwidth_avg} {bandwidth_unit} avg"
-            
-            # Format IPv4/IPv6 specific details for IP address categories (NEW)
-            ipv4_achievement_title = ""
-            ipv6_achievement_title = ""
-            ip_address_details = ""
-            ip_address_tooltip = ""
-            
-            if category == 'ipv4_leaders':
-                # Add achievement titles for top 3 IPv4 leaders
-                if rank == 1:
-                    ipv4_achievement_title = "🥇 IPv4 Legend"
-                elif rank == 2:
-                    ipv4_achievement_title = "🥈 IPv4 Master"
-                elif rank == 3:
-                    ipv4_achievement_title = "🥉 IPv4 Champion"
-                
-                # Format IPv4 bandwidth with unit (reuse existing formatters)
-                formatted_ipv4_bandwidth, ipv4_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                    metrics['ipv4_total_bandwidth'], relays_instance.bandwidth_formatter
-                )
-                
-                ip_address_details = f"{metrics['unique_ipv4_count']} unique IPv4"
-                ip_address_tooltip = f"IPv4 Infrastructure: {metrics['unique_ipv4_count']} unique addresses across {metrics['ipv4_relay_count']} relays with {formatted_ipv4_bandwidth} {ipv4_bandwidth_unit} bandwidth"
-                
-            elif category == 'ipv6_leaders':
-                # Add achievement titles for top 3 IPv6 leaders
-                if rank == 1:
-                    ipv6_achievement_title = "🥇 IPv6 Legend"
-                elif rank == 2:
-                    ipv6_achievement_title = "🥈 IPv6 Master"
-                elif rank == 3:
-                    ipv6_achievement_title = "🥉 IPv6 Champion"
-                
-                # Format IPv6 bandwidth with unit (reuse existing formatters)
-                formatted_ipv6_bandwidth, ipv6_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                    metrics['ipv6_total_bandwidth'], relays_instance.bandwidth_formatter
-                )
-                
-                ip_address_details = f"{metrics['unique_ipv6_count']} unique IPv6"
-                ip_address_tooltip = f"IPv6 Infrastructure: {metrics['unique_ipv6_count']} unique addresses across {metrics['ipv6_relay_count']} relays with {formatted_ipv6_bandwidth} {ipv6_bandwidth_unit} bandwidth"
-            
-            # Format validated bandwidth only for validated_relays category (optimization)
-            formatted_validated_bandwidth = ""
-            validated_bandwidth_unit = ""
-            if category == 'validated_relays':
-                formatted_validated_bandwidth, validated_bandwidth_unit = _format_bandwidth_with_auto_unit(
-                    metrics['validated_bandwidth'], relays_instance.bandwidth_formatter
-                )
-            
+            # Category-specific extras: defaults for non-applicable categories,
+            # overridden by the table-driven handler for the current category
+            extras = dict(_ENTRY_EXTRAS_DEFAULTS)
+            handler = _CATEGORY_EXTRAS.get(category)
+            if handler:
+                extras.update(handler(category, metrics, relays_instance.bandwidth_formatter))
+
+            # Add achievement titles for top 3 operators (table-driven)
+            title_config = _ACHIEVEMENT_TITLES.get(category)
+            if title_config and (title_config[1] is None or metrics[title_config[1]]):
+                extras[title_config[0]] = title_config[2].get(rank, "")
+
             # Format total data transferred for all categories (reused in template)
             raw_total_data = metrics.get('total_data_transferred', 0)
             raw_total_data_period = metrics.get('total_data_period')
             formatted_total_data_transferred = format_data_volume_with_unit(raw_total_data)
             total_data_pct = compute_total_data_pct(raw_total_data, raw_total_data_period, _net_by_period) if raw_total_data_period else ""
 
-            
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
 
-            # Calculate percentages for guard and exit relay ratios
+            # Calculate percentages for guard, exit and non-EU relay ratios
             guard_percentage = (metrics['guard_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
             exit_percentage = (metrics['exit_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
-            
-            # Calculate non-EU percentage for geographic champions
             non_eu_percentage = (metrics['non_eu_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
 
-            formatted_entry = {
+            # === VOLUME/BREADTH SUMMARY STRINGS (diversity cluster boards) ===
+            # Every diversity board shows BOTH numbers (volume + breadth) so the
+            # ranking is transparent: the board's primary metric leads, the
+            # other appears in parentheses.
+            _os_n = metrics['platform_count']
+            _nl_n = metrics['non_linux_count']
+            _neu_n = metrics['non_eu_count']
+            _neuc_n = metrics['non_eu_country_count']
+            _os_word = "OS" if _os_n == 1 else "OSes"
+            _nl_word = "relay" if _nl_n == 1 else "relays"
+            _neu_word = "relay" if _neu_n == 1 else "relays"
+            _neuc_word = "country" if _neuc_n == 1 else "countries"
+
+            # Assemble the entry: raw passthrough metrics, per-role bandwidth columns,
+            # consensus weight percentages, computed display fields, then category extras
+            formatted_entry = {key: metrics[key] for key in _PASSTHROUGH_KEYS}
+
+            # Format role/diversity-specific bandwidth columns (exit, guard, non-Linux,
+            # non-EU and rare-country bandwidth only count relays matching each criteria)
+            for prefix in ('exit', 'guard', 'non_linux', 'non_eu', 'rare_country'):
+                bw, unit = _format_bandwidth_with_auto_unit(
+                    metrics[prefix + '_bandwidth'], relays_instance.bandwidth_formatter
+                )
+                formatted_entry[prefix + '_bandwidth'] = bw
+                formatted_entry[prefix + '_bandwidth_unit'] = unit
+
+            formatted_entry.update({key + '_pct': f"{metrics[key] * 100:.2f}%" for key in _PCT_KEYS})
+
+            formatted_entry.update({
                 'rank': rank,
                 'operator_key': operator_key,
                 'display_name': display_name,
-                'aroi_domain': metrics['aroi_domain'],
-                'contact_hash': metrics['contact_hash'],
-                'contact_info': metrics['contact_info'],
                 'contact_info_escaped': safe_html_escape(metrics['contact_info']),
-                'total_relays': metrics['total_relays'],
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,
-                'exit_bandwidth': formatted_exit_bandwidth,
-                'exit_bandwidth_unit': exit_bandwidth_unit,
-                'guard_bandwidth': formatted_guard_bandwidth,
-                'guard_bandwidth_unit': guard_bandwidth_unit,
-                'total_consensus_weight_pct': f"{metrics['total_consensus_weight'] * 100:.2f}%",
-                'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
-                'guard_consensus_weight_pct': f"{metrics['guard_consensus_weight'] * 100:.2f}%",
-                'guard_count': metrics['guard_count'],
-                'exit_count': metrics['exit_count'],
                 'guard_percentage': f"{guard_percentage:.0f}%",
                 'exit_percentage': f"{exit_percentage:.0f}%",
-                'middle_count': metrics['middle_count'],
-                'measured_count': metrics['measured_count'],
-                'unique_as_count': metrics['unique_as_count'],
                 # Frontier Builders should show only rare country count, not total country count
                 'country_count': metrics['rare_country_count'] if category == 'frontier_builders' else metrics['country_count'],
                 'countries': metrics['countries'][:5],  # Top 5 countries for display
-                'platform_count': metrics['platform_count'],
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
-                'non_linux_count': metrics['non_linux_count'],
-                'non_linux_bandwidth': formatted_non_linux_bandwidth,
-                'non_linux_bandwidth_unit': non_linux_bandwidth_unit,
-                'non_eu_count': metrics['non_eu_count'],
-                'non_eu_bandwidth': formatted_non_eu_bandwidth,
-                'non_eu_bandwidth_unit': non_eu_bandwidth_unit,
                 'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
-                'rare_country_count': metrics['rare_country_count'],
-                'relays_in_rare_countries': metrics['relays_in_rare_countries'],
-                'rare_country_bandwidth': formatted_rare_country_bandwidth,
-                'rare_country_bandwidth_unit': rare_country_bandwidth_unit,
-                'rare_country_details': rare_country_details,
-                'rare_country_tooltip': rare_country_tooltip,
-                'frontier_achievement_title': frontier_achievement_title,
-                'platform_hero_title': platform_hero_title,
-                'platform_breakdown_details': platform_breakdown_details,
-                'platform_breakdown_tooltip': platform_breakdown_tooltip,
-                'diversity_master_title': diversity_master_title,
-                'diversity_breakdown_details': diversity_breakdown_details,
-                'diversity_breakdown_tooltip': diversity_breakdown_tooltip,
+                # === VOLUME/BREADTH SUMMARIES (diversity cluster) ===
+                # Primary metric is a bare count (column header already names the
+                # unit); parenthetical keeps the tiebreaker label for clarity.
+                'platform_volume_summary': f"{_nl_n} ({_os_n} {_os_word})",
+                'platform_breadth_summary': f"{_os_n} ({_nl_n} non-Linux {_nl_word})",
+                'non_eu_volume_summary': f"{_neu_n} ({_neuc_n} {_neuc_word})",
+                'non_eu_breadth_summary': f"{_neuc_n} ({_neu_n} {_neu_word})",
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
-                'veteran_days': metrics['veteran_days'],
-                'veteran_relay_scaling_factor': metrics['veteran_relay_scaling_factor'],
-                'veteran_details_short': veteran_details_short,
-                'veteran_tooltip': veteran_tooltip,
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
-                'geographic_achievement': geographic_achievement,  # Add dynamic achievement
-                'geographic_breakdown_details': geographic_breakdown_details,  # Add geographic breakdown
-                'geographic_breakdown_tooltip': geographic_breakdown_tooltip,  # Add geographic tooltip
-                
-                # === RELIABILITY FIELDS (REUSE existing pattern) ===
-                'reliability_score': f"{reliability_score_raw:.1f}",
-                'reliability_average': f"{reliability_average:.1f}%",
-                'reliability_weight': f"{reliability_weight:.1f}x",
-                'reliability_details_short': reliability_details_short,
-                'reliability_tooltip': reliability_tooltip,
-                
-                # === BANDWIDTH FIELDS (NEW) ===
-                'bandwidth_score': f"{bandwidth_score_raw:.1f}",
-                'bandwidth_average': f"{bandwidth_average:.1f}",
-                'bandwidth_weight': f"{bandwidth_weight:.1f}x",
-                'bandwidth_details_short': bandwidth_details_short,
-                'bandwidth_tooltip': bandwidth_tooltip,
-                
-                # === IPv4/IPv6 ADDRESS FIELDS (NEW) ===
-                'unique_ipv4_count': metrics['unique_ipv4_count'],
-                'unique_ipv6_count': metrics['unique_ipv6_count'],
-                'ipv4_relay_count': metrics['ipv4_relay_count'],
-                'ipv6_relay_count': metrics['ipv6_relay_count'],
-                'ipv4_total_bandwidth': metrics['ipv4_total_bandwidth'],
-                'ipv6_total_bandwidth': metrics['ipv6_total_bandwidth'],
-                'ipv4_total_consensus_weight_pct': f"{metrics['ipv4_total_consensus_weight'] * 100:.2f}%",
-                'ipv6_total_consensus_weight_pct': f"{metrics['ipv6_total_consensus_weight'] * 100:.2f}%",
-                'ipv4_guard_count': metrics['ipv4_guard_count'],
-                'ipv4_exit_count': metrics['ipv4_exit_count'],
-                'ipv4_middle_count': metrics['ipv4_middle_count'],
-                'ipv6_guard_count': metrics['ipv6_guard_count'],
-                'ipv6_exit_count': metrics['ipv6_exit_count'],
-                'ipv6_middle_count': metrics['ipv6_middle_count'],
-                'ipv4_achievement_title': ipv4_achievement_title,
-                'ipv6_achievement_title': ipv6_achievement_title,
-                'ip_address_details': ip_address_details,
-                'ip_address_tooltip': ip_address_tooltip,
-                
-                # === AROI VALIDATION FIELDS (NEW) ===
-                'validated_relay_count': metrics['validated_relay_count'],
-                'invalid_relay_count': metrics['invalid_relay_count'],
-                'validated_guard_count': metrics['validated_guard_count'],
-                'validated_exit_count': metrics['validated_exit_count'],
-                'validated_middle_count': metrics['validated_middle_count'],
-                'validated_bandwidth': formatted_validated_bandwidth,
-                'validated_bandwidth_unit': validated_bandwidth_unit,
-                'validated_consensus_weight': metrics['validated_consensus_weight'],
-                'validated_consensus_weight_pct': f"{metrics['validated_consensus_weight'] * 100:.2f}%",
-                'validated_country_count': metrics['validated_country_count'],
-                
-                # === TOTAL DATA TRANSFERRED (NEW) ===
+                'v3_relay_pct_str': f"{metrics['v3_pct_of_total']:.0f}%",
                 'total_data_transferred': formatted_total_data_transferred,
                 'total_data_pct': total_data_pct,
-            }
+            })
+            formatted_entry.update(extras)
             formatted_data.append(formatted_entry)
         
         formatted_leaderboards[category] = formatted_data
@@ -1360,10 +1497,12 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             'legacy_titans': '👑 Legacy Titans (5-Year Uptime)',
             'bandwidth_masters': '🚀 Bandwidth Served Masters (6-Month Historic)',
             'bandwidth_legends': '🌟 Bandwidth Served Legends (5-Year Historic)',
-            'most_diverse': 'Most Diverse Operators',
-            'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
-            'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
-            'frontier_builders': 'Frontier Builders (Rare Countries)',
+            'most_diverse': 'Diversity All-Rounders (Overall)',
+            'platform_volume': 'Non-Linux Powerhouses (Platform Volume)',
+            'platform_breadth': 'OS Polyglots (Platform Breadth)',
+            'non_eu_volume': 'Global Powerhouses (Non-EU Volume)',
+            'non_eu_breadth': 'Jurisdiction Globetrotters (Non-EU Breadth)',
+            'frontier_builders': 'Frontier Builders (Rare-Country Breadth)',
             'network_veterans': 'Network Veterans',
             'ipv4_leaders': 'IPv4 Address Leaders',
             'ipv6_leaders': 'IPv6 Address Leaders',
@@ -1377,5 +1516,3 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
         'summary': summary_stats,
         'raw_operators': aroi_operators  # For potential future use
     }
-
- 

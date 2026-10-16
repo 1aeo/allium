@@ -7,27 +7,9 @@ to enable historic bandwidth leaderboard categories similar to uptime leaderboar
 
 import statistics
 
-def calculate_network_cv_statistics(all_operators_data):
-    """Calculate network-wide CV statistics for dynamic threshold setting."""
-    if not all_operators_data or len(all_operators_data) < 10:
-        return None
-        
-    try:
-        cv_values = sorted([cv for cv in all_operators_data if cv >= 0])
-        if len(cv_values) < 10:
-            return None
-            
-        return {
-            'p25': statistics.quantiles(cv_values, n=4)[0],
-            'p50': statistics.median(cv_values),
-            'p75': statistics.quantiles(cv_values, n=4)[2],
-            'p90': statistics.quantiles(cv_values, n=10)[8],
-            'total_operators': len(cv_values),
-            'mean': statistics.mean(cv_values),
-            'std_dev': statistics.stdev(cv_values)
-        }
-    except Exception:
-        return None
+from .statistical_utils import StatisticalUtils
+from .time_utils import ONIONOO_HISTORY_PERIODS, parse_onionoo_timestamp
+from .uptime_utils import index_relays_by_fingerprint
 
 def calculate_total_data_from_history(history_data):
     """Calculate total bytes transferred from an Onionoo bandwidth history object.
@@ -43,7 +25,7 @@ def calculate_total_data_from_history(history_data):
         dict: {'1_month': bytes, '6_months': bytes, '1_year': bytes, '5_years': bytes}
     """
     result = {}
-    for period in ('1_month', '6_months', '1_year', '5_years'):
+    for period in ONIONOO_HISTORY_PERIODS:
         pd = history_data.get(period, {})
         factor = pd.get('factor', 0)
         interval = pd.get('interval', 0)
@@ -82,17 +64,7 @@ def build_bandwidth_map(bandwidth_data):
     Returns:
         dict: Mapping of fingerprint -> bandwidth relay data
     """
-    bandwidth_map = {}
-    if bandwidth_data and bandwidth_data.get('relays'):
-        for relay in bandwidth_data['relays']:
-            fingerprint = relay.get('fingerprint')
-            if fingerprint:
-                bandwidth_map[fingerprint] = relay
-    return bandwidth_map
-
-
-# Alias for backwards compatibility with internal code
-_build_bandwidth_map = build_bandwidth_map
+    return index_relays_by_fingerprint(bandwidth_data.get('relays') if bandwidth_data else None)
 
 def _get_stability_category(cv, network_cv_stats):
     """Determine stability category from CV value and network thresholds."""
@@ -212,39 +184,11 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
     """Calculate simplified growth trend metrics."""
     if period != '6_months':
         return None
-        
-    # Build relay bandwidth arrays
-    relay_arrays = []
-    for relay in operator_relays:
-        fingerprint = relay.get('fingerprint', '')
-        relay_bandwidth = bandwidth_map.get(fingerprint)
-        if relay_bandwidth and relay_bandwidth.get('read_history'):
-            period_data = relay_bandwidth['read_history'].get(period, {})
-            if period_data.get('values') and period_data.get('factor'):
-                relay_arrays.append({
-                    'values': period_data['values'],
-                    'factor': period_data['factor']
-                })
-    
-    if not relay_arrays:
-        return None
-    
-    # Calculate daily totals
-    max_length = max(len(r['values']) for r in relay_arrays)
-    daily_totals = []
-    
-    for day_index in range(max_length):
-        day_total = valid_count = 0
-        for relay_data in relay_arrays:
-            if day_index < len(relay_data['values']):
-                value = relay_data['values'][day_index]
-                if value is not None and isinstance(value, (int, float)) and value >= 0:
-                    day_total += value * relay_data['factor']
-                    valid_count += 1
-        
-        if valid_count > 0:
-            daily_totals.append(day_total)
-    
+
+    # Shared daily-totals aggregation (bandwidth_map already built by caller)
+    daily_totals = extract_operator_daily_bandwidth_totals(
+        operator_relays, None, period, bandwidth_map)['daily_totals']
+
     if len(daily_totals) < 60:  # Need at least ~2 months
         return None
     
@@ -275,7 +219,6 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
             period_data = relay_bandwidth['read_history'].get(period, {})
             if period_data.get('last'):
                 try:
-                    from .relays import parse_onionoo_timestamp
                     data_end = parse_onionoo_timestamp(period_data['last'])
                     break
                 except:
@@ -302,8 +245,15 @@ def _calculate_growth_trend(operator_relays, bandwidth_map, period):
         'display': display
     }
 
-def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, network_cv_stats=None, bandwidth_formatter=None):
-    """Calculate comprehensive bandwidth reliability metrics for an operator."""
+def calculate_bandwidth_reliability_metrics(
+    operator_relays, bandwidth_data, period, mean_bandwidth, std_dev,
+    network_cv_stats=None, bandwidth_formatter=None, bandwidth_map=None
+):
+    """Calculate comprehensive bandwidth reliability metrics for an operator.
+
+    OPTIMIZATION: Accepts a pre-built bandwidth_map for batch processing so
+    per-contact callers don't rebuild the ~10k-entry map on every call.
+    """
     metrics = {
         'bandwidth_stability': None,
         'peak_performance': None,
@@ -314,8 +264,9 @@ def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, per
     if not operator_relays or not bandwidth_data or mean_bandwidth <= 0:
         return metrics
     
-    # Build shared bandwidth mapping once
-    bandwidth_map = _build_bandwidth_map(bandwidth_data)
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if bandwidth_map is None:
+        bandwidth_map = build_bandwidth_map(bandwidth_data)
     
     # Calculate individual metrics
     metrics['bandwidth_stability'] = _calculate_bandwidth_stability(
@@ -456,11 +407,7 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         return {'relay_bandwidth_data': {}, 'network_flag_statistics': {} if include_flag_analysis else None}
     
     # Create fingerprint mapping
-    relay_fingerprint_map = {}
-    for relay in all_relays:
-        fingerprint = relay.get('fingerprint')
-        if fingerprint:
-            relay_fingerprint_map[fingerprint] = relay
+    relay_fingerprint_map = index_relays_by_fingerprint(all_relays)
     
     # Initialize data structures
     relay_bandwidth_data = {}
@@ -504,7 +451,7 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         write_total = calculate_total_data_from_history(bandwidth_relay.get('write_history', {}))
         read_total = calculate_total_data_from_history(read_history)
         total_data = {p: write_total.get(p, 0) + read_total.get(p, 0)
-                      for p in ('1_month', '6_months', '1_year', '5_years')}
+                      for p in ONIONOO_HISTORY_PERIODS}
         
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,
@@ -522,15 +469,18 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
             network_flag_statistics[flag] = {}
             for period, values in periods.items():
                 if values and len(values) >= 3:
-                    mean_bw = statistics.mean(values)
-                    std_dev = statistics.stdev(values) if len(values) > 1 else 0
-                    
+                    # Use unified statistical utilities (same statistics.mean/
+                    # stdev as before, so values are byte-identical)
+                    stats = StatisticalUtils.calculate_basic_statistics(values)
+                    mean_bw = stats['mean']
+                    std_dev = stats['std_dev']
+
                     network_flag_statistics[flag][period] = {
                         'mean': mean_bw,
                         'std_dev': std_dev,
                         'two_sigma_low': max(0.0, mean_bw - 2 * std_dev),
                         'two_sigma_high': mean_bw + 2 * std_dev,
-                        'count': len(values)
+                        'count': stats['count']
                     }
     
     return {

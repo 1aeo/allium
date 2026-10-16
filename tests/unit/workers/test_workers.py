@@ -23,7 +23,7 @@ from allium.lib.workers import (
     get_worker_status, get_all_worker_status, 
     _write_timestamp as write_timestamp, _read_timestamp as read_timestamp, 
     fetch_onionoo_details, fetch_onionoo_uptime,
-    fetch_collector_data, fetch_consensus_health
+    fetch_consensus_health
 )
 
 
@@ -198,7 +198,9 @@ class TestOnionooDetailsWorker:
             with patch('allium.lib.workers._load_cache') as mock_load_cache:
                 mock_load_cache.return_value = None  # No cached data
                 mock_response = MagicMock()
-                mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                # payload once, then EOF - the production chunk loop reads until
+                # an empty read; a constant return_value spun until total timeout
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -224,7 +226,9 @@ class TestOnionooUptimeWorker:
             with patch('allium.lib.workers._load_cache') as mock_load_cache:
                 mock_load_cache.return_value = None  # No cached data
                 mock_response = MagicMock()
-                mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                # payload once, then EOF - the production chunk loop reads until
+                # an empty read; a constant return_value spun until total timeout
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -245,7 +249,9 @@ def test_fetch_onionoo_uptime_success():
         with patch('allium.lib.workers._load_cache') as mock_load_cache:
             mock_load_cache.return_value = None  # No cached data
             mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+            # payload once, then EOF - the production chunk loop reads until
+            # an empty read; a constant return_value spun until total timeout
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -261,6 +267,7 @@ def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
     
     mock_cached_data = {
         "relays": [{"fingerprint": "CACHED123", "uptime": {"1_month": 92.0}}],
+        "relays_published": "2024-01-01 12:00:00",
         "version": "cached_data"
     }
     
@@ -309,7 +316,9 @@ def test_fetch_onionoo_uptime_progress_steps():
         with patch('allium.lib.workers._load_cache') as mock_load_cache:
             mock_load_cache.return_value = None  # No cached data
             mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+            # payload once, then EOF - the production chunk loop reads until
+            # an empty read; a constant return_value spun until total timeout
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -328,6 +337,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -344,9 +354,11 @@ class TestOnionooUptimeCaching:
                     # Should return cached data on timeout
                     assert result == mock_cached_data
                     # Should have called urlopen with 30 second timeout (fresh cache for uptime)
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == UPTIME_TIMEOUT_FRESH_CACHE
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == UPTIME_TIMEOUT_FRESH_CACHE
+                               for c in mock_urlopen.call_args_list)
                     assert UPTIME_TIMEOUT_FRESH_CACHE == 30  # Uptime stays at 30 seconds
     
     def test_timeout_with_stale_cache_waits_longer(self):
@@ -355,6 +367,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "DEF456", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_uptime"
         }
         
@@ -371,9 +384,11 @@ class TestOnionooUptimeCaching:
                     # Should still return cached data on timeout
                     assert result == mock_cached_data
                     # Should have called urlopen with 1200 second (20 min) timeout
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == 1200
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == 1200
+                               for c in mock_urlopen.call_args_list)
     
     def test_no_cache_uses_long_timeout(self):
         """Test that with no cache, function uses 20 minute timeout"""
@@ -389,7 +404,9 @@ class TestOnionooUptimeCaching:
                     mock_cache_mgr.get_cache_age.return_value = None  # No cache
                     mock_load_cache.return_value = None
                     mock_response = MagicMock()
-                    mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                    # payload once, then EOF - the production chunk loop reads until
+                    # an empty read; a constant return_value spun until total timeout
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -397,9 +414,11 @@ class TestOnionooUptimeCaching:
                     # Should return fresh data
                     assert result is not None
                     # Should have called urlopen with 1200 second (20 min) timeout
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == 1200
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == 1200
+                               for c in mock_urlopen.call_args_list)
     
     def test_timeout_without_cache_returns_none(self):
         """Test that timeout without cache returns None"""
@@ -419,7 +438,13 @@ class TestOnionooUptimeCaching:
                     assert result is None
     
     def test_corrupted_cache_uses_long_timeout(self):
-        """Test that with corrupted cache file, function uses long timeout"""
+        """Test that a corrupted cache still gets the long timeout.
+
+        The cache is only read when needed, so the first attempt treats it as
+        fresh (30s); once that attempt fails and the cache turns out unreadable,
+        the fetch is repeated as if no cache existed (20 min).
+        """
+        import socket
         mock_data = {
             "relays": [{"fingerprint": "GHI789", "uptime": {"1_month": 98.0}}],
             "version": "fresh_uptime"
@@ -433,25 +458,27 @@ class TestOnionooUptimeCaching:
                     # But load returns None (corrupted cache)
                     mock_load_cache.return_value = None
                     mock_response = MagicMock()
-                    mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
-                    mock_urlopen.return_value = mock_response
+                    # payload once, then EOF - the production chunk loop reads until
+                    # an empty read; a constant return_value spun until total timeout
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_urlopen.side_effect = [socket.timeout("timed out"), mock_response]
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
                     
                     # Should return fresh data
                     assert result is not None
-                    # Should have called urlopen with 1200 second (20 min) timeout
-                    # because corrupted cache is treated as no cache
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == 1200
+                    assert result["version"] == "fresh_uptime"
+                    # The short attempt failed; the retry treats the corrupted
+                    # cache as no cache and uses the 1200 second (20 min) timeout
+                    assert [c[1]['timeout'] for c in mock_urlopen.call_args_list] == [30, 1200]
     
-    def test_preloaded_cache_used_on_timeout(self):
-        """Test that pre-loaded cache is reused on timeout (not loaded twice)"""
+    def test_cache_loaded_once_on_timeout(self):
+        """Test that the cache is loaded once, for the timeout fallback"""
         import socket
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -467,8 +494,7 @@ class TestOnionooUptimeCaching:
                     
                     # Should return cached data on timeout
                     assert result == mock_cached_data
-                    # Cache should be loaded once for validation (pre-loading)
-                    # The pre-loaded data is reused on timeout fallback
+                    # Loaded lazily, only for the fallback
                     mock_load_cache.assert_called_once()
     
     def test_boundary_cache_age_uses_long_timeout(self):
@@ -478,6 +504,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "BOUNDARY", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "boundary_cached_uptime"
         }
         
@@ -497,9 +524,11 @@ class TestOnionooUptimeCaching:
                     assert result == mock_cached_data
                     # Should have called urlopen with 1200 second (20 min) timeout
                     # because cache at boundary is considered stale (>= threshold)
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == 1200
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == 1200
+                               for c in mock_urlopen.call_args_list)
 
 
 class TestOnionooDetailsCaching:
@@ -512,6 +541,7 @@ class TestOnionooDetailsCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "nickname": "TestRelay"}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_details"
         }
         
@@ -528,9 +558,11 @@ class TestOnionooDetailsCaching:
                     # Should return cached data on timeout
                     assert result == mock_cached_data
                     # Should have called urlopen with fresh cache timeout (90s for details)
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == DETAILS_TIMEOUT_FRESH_CACHE
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == DETAILS_TIMEOUT_FRESH_CACHE
+                               for c in mock_urlopen.call_args_list)
                     assert DETAILS_TIMEOUT_FRESH_CACHE == 90  # Verify it's 90 seconds
     
     def test_no_cache_uses_long_timeout(self):
@@ -549,7 +581,9 @@ class TestOnionooDetailsCaching:
                     mock_cache_mgr.get_cache_age.return_value = None  # No cache
                     mock_load_cache.return_value = None
                     mock_response = MagicMock()
-                    mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                    # payload once, then EOF - the production chunk loop reads until
+                    # an empty read; a constant return_value spun until total timeout
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -557,9 +591,11 @@ class TestOnionooDetailsCaching:
                     # Should return fresh data
                     assert result is not None
                     # Should have called urlopen with stale cache timeout
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == DETAILS_TIMEOUT_STALE_CACHE
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == DETAILS_TIMEOUT_STALE_CACHE
+                               for c in mock_urlopen.call_args_list)
 
 
 class TestOnionooBandwidthCaching:
@@ -569,6 +605,7 @@ class TestOnionooBandwidthCaching:
         """Test that fresh cache is returned without making a request"""
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_bandwidth"
         }
         
@@ -594,6 +631,7 @@ class TestOnionooBandwidthCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_bandwidth"
         }
         
@@ -611,9 +649,11 @@ class TestOnionooBandwidthCaching:
                     # Should return cached data on timeout
                     assert result == mock_cached_data
                     # Should have used stale cache timeout
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == BANDWIDTH_TIMEOUT_STALE_CACHE
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == BANDWIDTH_TIMEOUT_STALE_CACHE
+                               for c in mock_urlopen.call_args_list)
 
 
 class TestAROIValidationCaching:
@@ -667,9 +707,11 @@ class TestAROIValidationCaching:
                     # Should return cached data on timeout
                     assert result == mock_cached_data
                     # Should have used stale cache timeout
-                    mock_urlopen.assert_called_once()
-                    call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == AROI_TIMEOUT_STALE_CACHE
+                    # retry logic may attempt multiple times; every attempt must
+                    # use the expected timeout
+                    assert mock_urlopen.called
+                    assert all(c[1]['timeout'] == AROI_TIMEOUT_STALE_CACHE
+                               for c in mock_urlopen.call_args_list)
     
     def test_invalid_response_falls_back_to_cache(self):
         """Test that invalid API response falls back to cache"""
@@ -689,7 +731,9 @@ class TestAROIValidationCaching:
                     mock_cache_mgr.get_cache_age.return_value = 2 * 3600  # 2 hours (stale)
                     mock_load_cache.return_value = mock_cached_data
                     mock_response = MagicMock()
-                    mock_response.read.return_value = json.dumps(mock_invalid_data).encode('utf-8')
+                    # payload once, then EOF - the production chunk loop reads until
+                    # an empty read; a constant return_value spun until total timeout
+                    mock_response.read1.side_effect = [json.dumps(mock_invalid_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     from allium.lib.workers import fetch_aroi_validation
@@ -699,32 +743,51 @@ class TestAROIValidationCaching:
                     assert result == mock_cached_data
 
 
-class TestPlaceholderWorkers:
-    """Test placeholder worker functions"""
-    
-    def test_fetch_collector_data(self):
-        """Test collector data worker placeholder"""
-        result = fetch_collector_data()
-        assert result == {"authorities": [], "version": "placeholder"}
-    
-    def test_fetch_consensus_health(self):
-        """Test consensus health worker placeholder"""
-        result = fetch_consensus_health()
-        assert result == {"health_status": {}, "version": "placeholder"}
+class TestKeptWrapperWorkers:
+    """The dormant consensus-health path is intentionally kept.
+    Test its contract hermetically (no network, no production cache)."""
+
+    def test_fetch_consensus_health_disabled_feature_returns_none(self):
+        """With the consensus-evaluation feature off, the dormant
+        consensus-health worker returns None without probing."""
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled',
+                   return_value=False):
+            result = fetch_consensus_health(progress_logger=lambda m: None)
+        assert result is None
 
 
 class TestWorkerErrorHandling:
     """Test worker error handling and state management"""
     
-    def test_placeholder_worker_error_handling(self):
-        """Test that placeholder workers handle errors gracefully"""
-        # Since placeholder workers just return None, verify they don't raise exceptions
-        try:
-            fetch_onionoo_uptime()
-            fetch_collector_data()
-            fetch_consensus_health()
-        except Exception as e:
-            pytest.fail(f"Placeholder worker raised unexpected exception: {e}")
+    def test_worker_error_handling_no_raise(self):
+        """Workers degrade gracefully (no exception) when their backends
+        fail - hermetic: no live network, no production cache.
+
+        All error handling lives INSIDE _fetch_with_cache_fallback
+        (Simplification Phase 2), so the failure must be injected at the
+        network primitive (_fetch_url_with_total_timeout); mocking the
+        wrapper itself to raise would (correctly) propagate the error."""
+        from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir), \
+                 patch('allium.lib.workers._cache_manager', create_cache_manager(temp_dir)), \
+                 patch('allium.lib.workers._timestamp_manager', create_timestamp_manager(temp_dir)), \
+                 patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')), \
+                 patch('allium.lib.workers._fetch_url_with_total_timeout',
+                       side_effect=RuntimeError('backend down')):
+                # RuntimeError is non-retryable: no backoff sleeps, and with
+                # an empty temp cache the worker must swallow the error,
+                # mark itself stale, and return None instead of raising
+                try:
+                    assert fetch_onionoo_uptime(progress_logger=lambda m: None) is None
+                except Exception as e:
+                    pytest.fail(f"Worker raised unexpected exception: {e}")
+                status = get_worker_status("onionoo_uptime")
+                assert status["status"] == "stale"
+                assert "backend down" in status["error"]
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled',
+                   return_value=False):
+            assert fetch_consensus_health(progress_logger=lambda m: None) is None
 
 
 class TestDirectoryCreation:
