@@ -579,29 +579,30 @@ class TestConsolidatedProcessing(unittest.TestCase):
                 }
             })
     
-    @pytest.mark.slow
     def test_consolidated_processing_performance(self):
-        """Test performance of consolidated uptime processing"""
-        start_time = time.time()
-        
+        """Consolidated processing returns one record per relay."""
         result = process_all_uptime_data_consolidated(
             self.large_relay_set,
             self.large_uptime_data,
             include_flag_analysis=False
         )
-        
-        end_time = time.time()
-        processing_time = end_time - start_time
-        
-        # Should complete in reasonable time (less than 5 seconds for 1000 relays)
-        self.assertLess(processing_time, 5.0)
-        
-        # Should return proper structure
+
+        # Structure and coverage stay in the default CI run. The wall-clock
+        # bound is a separate slow test; shared runners flake on it.
         self.assertIn('relay_uptime_data', result)
         self.assertIn('network_statistics', result)
-        
-        # Should process all relays
         self.assertEqual(len(result['relay_uptime_data']), 1000)
+
+    @pytest.mark.slow
+    def test_consolidated_processing_wall_clock(self):
+        """1000 relays should finish in under 5 seconds on a quiet machine."""
+        start_time = time.time()
+        process_all_uptime_data_consolidated(
+            self.large_relay_set,
+            self.large_uptime_data,
+            include_flag_analysis=False
+        )
+        self.assertLess(time.time() - start_time, 5.0)
     
     def test_consolidated_processing_accuracy(self):
         """Test accuracy of consolidated processing vs individual processing"""
@@ -707,27 +708,24 @@ class TestDataIntegrityAndEdgeCases(unittest.TestCase):
             # Function doesn't handle None input - this is acceptable behavior
             pass
     
+    def _very_large_uptime_values(self):
+        """1e6 uptime samples, the input the wall-clock test also uses."""
+        values = []
+        for i in range(10000):
+            values.extend([900 + (i % 100) for _ in range(100)])
+        return values
+
+    def test_large_dataset_average_stays_in_range(self):
+        """A large all-numeric series still averages inside the expected band."""
+        result = calculate_relay_uptime_average(self._very_large_uptime_values())
+        self.assertTrue(80.0 <= result <= 100.0)
+
     @pytest.mark.slow
     def test_memory_efficiency(self):
-        """Test memory efficiency with large datasets"""
-        # This test verifies that large datasets don't cause memory issues
-        
-        # Create large dataset
-        very_large_dataset = []
-        for i in range(10000):
-            uptime_values = [900 + (i % 100) for _ in range(100)]  # 100 data points per relay
-            very_large_dataset.extend(uptime_values)
-        
-        # Should process without memory errors
+        """Wall-clock bound for a 1e6-value average. Skipped in default CI."""
         start_time = time.time()
-        result = calculate_relay_uptime_average(very_large_dataset)
-        end_time = time.time()
-        
-        # Should complete reasonably quickly
-        self.assertLess(end_time - start_time, 10.0)
-        
-        # Should produce reasonable result
-        self.assertTrue(80.0 <= result <= 100.0)
+        calculate_relay_uptime_average(self._very_large_uptime_values())
+        self.assertLess(time.time() - start_time, 10.0)
     
     def test_data_type_validation(self):
         """Test proper handling of different data types"""

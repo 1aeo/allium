@@ -1,6 +1,8 @@
 *.swp
 *.swo
 *.sh
+!setup.sh
+!scripts/ci_onionoo_details.sh
 sandbox
 __pycache__
 timestamp
