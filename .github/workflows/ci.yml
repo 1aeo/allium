@@ -206,10 +206,10 @@ jobs:
       CI: true
       GITHUB_ACTIONS: true
       # Opt-in for this job only. Production builds do not set it, so they
-      # still hit Onionoo and never use the committed details fixture.
-      ALLIUM_CI_DETAILS_FALLBACK: "1"
-      ALLIUM_CI_DETAILS_FIXTURE: /tmp/allium-setup-test/ci-onionoo-details.json
-      ALLIUM_CI_ONIONOO_LIB: /tmp/allium-setup-test/ci_onionoo_details.sh
+      # still hit the network and never install the committed fixtures.
+      ALLIUM_CI_CACHE_FALLBACK: "1"
+      ALLIUM_CI_FIXTURE_DIR: /tmp/allium-setup-test/ci-fixtures
+      ALLIUM_CI_CACHE_LIB: /tmp/allium-setup-test/ci_cache_fallback.sh
     strategy:
       matrix:
         python-version: ["3.8", "3.13"]  # Test on minimum and latest supported versions
@@ -255,24 +255,21 @@ jobs:
         # Make sure the script is executable
         chmod +x setup.sh
 
-        # Fixture and helper come from this commit. setup.sh then clones the
-        # default branch; the env vars point at these downloads so the seed
-        # works before the fixture is on the default branch.
-        echo "📥 Downloading CI Onionoo details fixture and helper..."
+        # Helper and fixtures come from this commit. setup.sh then clones the
+        # default branch; ALLIUM_CI_FIXTURE_DIR points at this download so the
+        # seed works before the fixtures are on the default branch.
+        echo "📥 Downloading CI cache helper and API fixtures..."
         curl -fsSL --connect-timeout 30 --max-time 60 \
-          "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/tests/fixtures/ci/onionoo_details.json" \
-          -o "$ALLIUM_CI_DETAILS_FIXTURE"
-        curl -fsSL --connect-timeout 30 --max-time 60 \
-          "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/ci_onionoo_details.sh" \
-          -o "$ALLIUM_CI_ONIONOO_LIB"
-        python3 -c 'import json,os; d=json.load(open(os.environ["ALLIUM_CI_DETAILS_FIXTURE"])); assert d.get("relays") and d.get("relays_published")'
-        grep -q 'seed_ci_onionoo_details_cache' "$ALLIUM_CI_ONIONOO_LIB"
+          "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/ci_cache_fallback.sh" \
+          -o "$ALLIUM_CI_CACHE_LIB"
+        # shellcheck disable=SC1090
+        source "$ALLIUM_CI_CACHE_LIB"
+        download_ci_fixtures "$ALLIUM_CI_FIXTURE_DIR" "${{ github.repository }}" "${{ github.sha }}"
+        grep -q 'seed_ci_api_caches' "$ALLIUM_CI_CACHE_LIB"
 
         # 900s is only a hang backstop around clone, pip, and generation.
-        # The details fetch is bounded by the fresh-cache timeout: setup.sh
-        # seeds allium/data/cache/onionoo_details.json, and workers.py returns
-        # that cache when the live request exceeds the budget (~90s, no retries).
-        # Do not raise this backstop to paper over a slow Onionoo.
+        # Each seeded API uses its fresh-cache budget (at most 90s, no retries)
+        # and then the fixture. Do not raise this backstop to hide a slow API.
         timeout 900 bash setup.sh
         setup_exit_code=$?
 
@@ -280,7 +277,7 @@ jobs:
           echo "✅ Setup script completed successfully"
         elif [ $setup_exit_code -eq 124 ]; then
           echo "❌ Setup script hit the 15 minute hang backstop"
-          echo "   A slow Onionoo should have fallen back to the CI details cache before this."
+          echo "   A slow API should have fallen back to its CI cache before this."
           exit 1
         else
           echo "❌ Setup script exited with code $setup_exit_code"
@@ -326,44 +323,29 @@ jobs:
         # Make sure we're in the right directory with the allium.py script
         cd allium
         # shellcheck disable=SC1090
-        source "$ALLIUM_CI_ONIONOO_LIB"
-        
-        echo "🔄 Testing data regeneration..."
+        source "$ALLIUM_CI_CACHE_LIB"
+        if [ -z "${API_MODE:-}" ]; then
+          echo "❌ API_MODE was not passed from setup.sh"
+          exit 1
+        fi
+
+        echo "🔄 Testing data regeneration (${API_MODE})..."
         echo "📁 Current directory: $(pwd)"
         echo "📋 Files in current directory:"
         ls -la
-        
-        # One live attempt. The details cache from setup is fresh, so a slow
-        # Onionoo falls back inside allium (fresh-cache budget) instead of
-        # retrying for several minutes. Exit 0 with no index.html means the
-        # API returned nothing; a non-zero exit is a real failure.
-        regeneration_ok=false
-        if timeout 300 python3 allium.py --progress --apis details --out ../test-www; then
-          exit_code=0
-        else
-          exit_code=$?
-        fi
-        outcome=$(ci_live_generation_outcome "$exit_code" ../test-www/index.html)
-        if [ "$outcome" = "ok" ]; then
-          echo "✅ Regeneration test completed from the live details request or its cache"
-          regeneration_ok=true
-        elif [ "$outcome" = "fallback" ]; then
-          echo "⚠️  Regeneration exited 0 without index.html; using the CI details fixture"
-          if generate_from_ci_onionoo_fixture ../test-www allium.py && site_index_ready ../test-www/index.html; then
-            regeneration_ok=true
-          fi
-        else
-          echo "❌ Regeneration failed with exit code $exit_code"
+
+        # One live attempt. Seeded caches are fresh, so a slow API falls back
+        # inside allium instead of retrying for several minutes. A non-zero
+        # exit is a real failure. Exit 0 with no page uses the fixtures once.
+        # timeout(1) cannot see a shell function, so run it in a child shell.
+        if ! timeout 300 bash -c 'source "$ALLIUM_CI_CACHE_LIB"; ci_generate_once ../test-www allium.py'; then
+          echo "❌ Regeneration did not produce test-www/index.html"
           echo "   Working directory: $(pwd)"
           echo "   Python version: $(python3 --version)"
-        fi
-        
-        if [ "$regeneration_ok" != true ]; then
-          echo "❌ Regeneration did not produce test-www/index.html"
           exit 1
         fi
-        echo "✅ Regeneration test passed"
         test -f ../test-www/index.html
+        echo "✅ Regeneration test passed"
         
   template-security-audit:
     name: "Template Security & Quality Audit"

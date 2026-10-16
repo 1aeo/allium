@@ -1406,9 +1406,11 @@ def calculate_network_health_metrics(relay_set):
         network_middle_statistics = relay_set._consolidated_uptime_results.get('network_middle_statistics', {})
         network_other_statistics = relay_set._consolidated_uptime_results.get('network_other_statistics', {})
         
-        # Use 1-month network mean for overall uptime as requested
-        if network_statistics.get('1_month', {}).get('mean') is not None:
-            health_metrics['overall_uptime'] = network_statistics['1_month']['mean']
+        # Use 1-month network mean for overall uptime as requested.
+        # A period with fewer than 3 samples is stored as None, not {}.
+        month_stats = network_statistics.get('1_month') or {}
+        if month_stats.get('mean') is not None:
+            health_metrics['overall_uptime'] = month_stats['mean']
         elif hasattr(relay_set, 'network_uptime_percentiles') and relay_set.network_uptime_percentiles:
             health_metrics['overall_uptime'] = relay_set.network_uptime_percentiles['average']
         else:

@@ -2,7 +2,7 @@
 *.swo
 *.sh
 !setup.sh
-!scripts/ci_onionoo_details.sh
+!scripts/ci_cache_fallback.sh
 sandbox
 __pycache__
 timestamp

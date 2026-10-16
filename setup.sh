@@ -81,6 +81,9 @@ echo "🚀 Running first generation with progress tracking..."
 echo "🔄 Attempting to generate site (may retry on network issues)..."
 
 # Check if we're in a CI environment (GitHub Actions, GitLab CI, etc.)
+# --apis details stays the CI invocation (about 400MB). When the setup job
+# sets ALLIUM_CI_CACHE_FALLBACK, every --apis all worker still gets a seeded
+# cache and a fresh-cache timeout of at most 90s, with no extra retries.
 if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ -n "$GITLAB_CI" ]; then
     echo "🤖 CI environment detected - using details API only to reduce resource usage"
     API_MODE="--apis details"
@@ -96,103 +99,70 @@ else
     ALLIUM_PY_PATH="allium/allium.py"
 fi
 
-# ALLIUM_CI_DETAILS_FALLBACK=1 is set only by the setup end-to-end job.
-# It seeds the existing details cache and, if Onionoo returns no site,
-# generates once from the committed fixture. Production builds leave it unset.
-_load_ci_onionoo_helpers() {
-    local helper="${ALLIUM_CI_ONIONOO_LIB:-}"
+# ALLIUM_CI_CACHE_FALLBACK=1 is set only by the setup end-to-end job.
+# It seeds a cache file for every API that job can fetch and generates once.
+# A non-zero allium exit still fails. Production builds leave the flag unset.
+_load_ci_cache_helpers() {
+    local helper="${ALLIUM_CI_CACHE_LIB:-}"
     if [ -z "$helper" ]; then
         local here
         here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-        if [ -f "${here}/scripts/ci_onionoo_details.sh" ]; then
-            helper="${here}/scripts/ci_onionoo_details.sh"
-        elif [ -f scripts/ci_onionoo_details.sh ]; then
-            helper="scripts/ci_onionoo_details.sh"
+        if [ -f "${here}/scripts/ci_cache_fallback.sh" ]; then
+            helper="${here}/scripts/ci_cache_fallback.sh"
+        elif [ -f scripts/ci_cache_fallback.sh ]; then
+            helper="scripts/ci_cache_fallback.sh"
         fi
     fi
     if [ -z "$helper" ] || [ ! -f "$helper" ]; then
-        echo "❌ ALLIUM_CI_DETAILS_FALLBACK=1 but scripts/ci_onionoo_details.sh was not found"
+        echo "❌ ALLIUM_CI_CACHE_FALLBACK=1 but scripts/ci_cache_fallback.sh was not found"
         exit 1
     fi
     # shellcheck disable=SC1090
     source "$helper"
 }
 
-GEN_ATTEMPTS=3
-if [ "${ALLIUM_CI_DETAILS_FALLBACK:-}" = "1" ]; then
-    _load_ci_onionoo_helpers
-    seed_ci_onionoo_details_cache
-    # One live attempt: a slow Onionoo hits the fresh-cache budget and uses
-    # the seed. Repeating the live fetch would wait out that budget again.
-    GEN_ATTEMPTS=1
-fi
-
-generation_ok=false
-attempt=1
-while [ "$attempt" -le "$GEN_ATTEMPTS" ]; do
-    echo "🔄 Generation attempt $attempt of $GEN_ATTEMPTS..."
-    echo "📁 Running from: $(pwd)"
-    echo "🔧 Using allium.py path: $ALLIUM_PY_PATH"
-
-    if python3 "$ALLIUM_PY_PATH" --progress $API_MODE; then
-        exit_code=0
-    else
-        exit_code=$?
+if [ "${ALLIUM_CI_CACHE_FALLBACK:-}" = "1" ]; then
+    _load_ci_cache_helpers
+    seed_ci_api_caches
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        printf 'API_MODE=%s\n' "$API_MODE" >> "$GITHUB_ENV"
     fi
-    if [ "${ALLIUM_CI_DETAILS_FALLBACK:-}" = "1" ]; then
-        outcome=$(ci_live_generation_outcome "$exit_code" "www/index.html")
-        if [ "$outcome" = "ok" ]; then
+    # One live attempt. Repeating it would wait out the fresh-cache budget again.
+    ci_generate_once "www" "$ALLIUM_PY_PATH" || exit 1
+else
+    for attempt in 1 2 3; do
+        echo "🔄 Generation attempt $attempt of 3..."
+        echo "📁 Running from: $(pwd)"
+        echo "🔧 Using allium.py path: $ALLIUM_PY_PATH"
+
+        if python3 "$ALLIUM_PY_PATH" --progress $API_MODE; then
             echo "✅ Site generation completed successfully on attempt $attempt"
-            generation_ok=true
-            break
-        elif [ "$outcome" = "fallback" ]; then
-            # allium exits 0 when Onionoo details is unavailable and there was
-            # nothing to render. That is an API miss, not a generation crash.
-            echo "⚠️  Generation exited 0 without www/index.html; Onionoo details was unavailable"
             break
         else
-            echo "❌ Generation failed with exit code $exit_code"
-            exit 1
+            exit_code=$?
+            echo "⚠️  Attempt $attempt failed with exit code $exit_code"
+            if [ $attempt -eq 3 ]; then
+                echo "❌ All generation attempts failed"
+                echo "🔧 This might be due to:"
+                echo "   - Network connectivity issues with onionoo.torproject.org"
+                echo "   - Temporary service unavailability"
+                echo "   - System resource constraints"
+                echo ""
+                echo "💡 You can try running the generation manually later with:"
+                if [ -f "allium.py" ]; then
+                    echo "   source venv/bin/activate && python3 allium.py --progress"
+                else
+                    echo "   source venv/bin/activate && python3 allium/allium.py --progress"
+                fi
+                echo ""
+                echo "🔧 For low-memory environments, try: python3 $ALLIUM_PY_PATH --progress --apis details"
+                exit 1
+            else
+                echo "⏳ Waiting 10 seconds before retry..."
+                sleep 10
+            fi
         fi
-    fi
-    if [ "$exit_code" -eq 0 ]; then
-        echo "✅ Site generation completed successfully on attempt $attempt"
-        generation_ok=true
-        break
-    fi
-    echo "⚠️  Attempt $attempt failed with exit code $exit_code"
-    if [ "$attempt" -eq "$GEN_ATTEMPTS" ]; then
-        echo "❌ All generation attempts failed"
-        echo "🔧 This might be due to:"
-        echo "   - Network connectivity issues with onionoo.torproject.org"
-        echo "   - Temporary service unavailability"
-        echo "   - System resource constraints"
-        echo ""
-        echo "💡 You can try running the generation manually later with:"
-        if [ -f "allium.py" ]; then
-            echo "   source venv/bin/activate && python3 allium.py --progress"
-        else
-            echo "   source venv/bin/activate && python3 allium/allium.py --progress"
-        fi
-        echo ""
-        echo "🔧 For low-memory environments, try: python3 $ALLIUM_PY_PATH --progress --apis details"
-        exit 1
-    fi
-    echo "⏳ Waiting 10 seconds before retry..."
-    sleep 10
-    attempt=$((attempt + 1))
-done
-
-if [ "$generation_ok" != true ] && [ "${ALLIUM_CI_DETAILS_FALLBACK:-}" = "1" ]; then
-    if generate_from_ci_onionoo_fixture "www" "$ALLIUM_PY_PATH" && site_index_ready "www/index.html"; then
-        echo "✅ Site generation completed from the CI Onionoo details fixture"
-        generation_ok=true
-    fi
-fi
-
-if [ "${ALLIUM_CI_DETAILS_FALLBACK:-}" = "1" ] && [ "$generation_ok" != true ]; then
-    echo "❌ Setup did not produce www/index.html"
-    exit 1
+    done
 fi
 
 echo ""
