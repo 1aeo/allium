@@ -7,7 +7,8 @@
 {% else %}
     {% set country_name = country_orig %}
 {% endif %}
-{% block title %}Tor Relays :: {{ country_name }}{% endblock %}
+{% block title %}Tor Relays in {{ country_name }}{% endblock %}
+{% block meta_description %}Live metrics for {{ group_relay_count }} Tor relays in {{ country_name }}: bandwidth, consensus weight, roles, operators, networks, and DNS health.{% endblock %}
 {% block header %}View {{ country_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('countries', page_ctx) }}
@@ -34,8 +35,8 @@
     {% endif %}
     {% if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this country. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>{% if exit_dns_health_summary.failing > 0 %},
-            <span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}{% if exit_dns_health_summary.untested > 0 %},
+        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>{% if exit_dns_health_summary.failing > 0 %},
+            <span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}{% if exit_dns_health_summary.untested > 0 %},
             {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
             of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
     </li>

@@ -5,6 +5,7 @@ Time-related utility functions for parsing, formatting, and calculating
 timestamps used throughout the allium codebase.
 """
 
+import functools
 import time as _time_module
 
 from datetime import datetime, timedelta, timezone
@@ -34,14 +35,29 @@ PERIOD_DISPLAY_NAMES = {
     '5_years': '5y',
 }
 
+# The four standard Onionoo history periods processed throughout the codebase
+# (uptime percentages, bandwidth averages, total-data sums). Single source of
+# truth for the canonical short-to-long ordering; reverse it for
+# best-available-period (longest-first) lookups.
+ONIONOO_HISTORY_PERIODS = ('1_month', '6_months', '1_year', '5_years')
 
-def parse_onionoo_timestamp(timestamp_str):
-    """Parse Onionoo timestamp string into datetime object"""
+
+# The same timestamps are parsed over and over (every contact page sort
+# variant formats each relay's dates again, ~1.5M parses per run) and
+# strptime is slow; parsing is pure and datetimes are immutable.
+@functools.lru_cache(maxsize=1 << 16)
+def _parse_onionoo_timestamp(timestamp_str):
     try:
         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
         return timestamp.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+def parse_onionoo_timestamp(timestamp_str):
+    """Parse Onionoo timestamp string into datetime object"""
+    # Non-strings (None, unhashable lists) never parse: keep them out of the cache
+    return _parse_onionoo_timestamp(timestamp_str) if isinstance(timestamp_str, str) else None
 
 
 def create_time_thresholds():
@@ -60,11 +76,16 @@ def create_time_thresholds():
     }
 
 
-def format_timestamp_gmt(timestamp=None):
-    """Format timestamp as GMT string for HTTP headers and display"""
+def format_timestamp_gmt(timestamp=None, fmt="%a, %d %b %Y %H:%M:%S GMT"):
+    """Format timestamp as GMT string for HTTP headers and display.
+
+    Args:
+        timestamp: Unix timestamp in seconds (defaults to now)
+        fmt: strftime format string (default: HTTP-header style)
+    """
     if timestamp is None:
         timestamp = _time_module.time()
-    return _time_module.strftime("%a, %d %b %Y %H:%M:%S GMT", _time_module.gmtime(timestamp))
+    return _time_module.strftime(fmt, _time_module.gmtime(timestamp))
 
 
 def format_time_ago(timestamp_str):

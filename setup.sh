@@ -133,6 +133,26 @@ done
 echo ""
 echo "🎉 Setup complete! Your Tor metrics site is ready."
 echo ""
+# PNG charts (the default) need cairocffi and numpy from pip, plus the cairo library and the DejaVu Sans font:
+# system packages pip cannot install. Say which one failed; until it is fixed, allium writes SVG charts.
+png_missing=$(python3 -c '
+try:
+    import cairocffi, numpy  # noqa: F401
+except ImportError as e:  # a Python package did not install
+    print("package " + " ".join(str(e).split()))
+except OSError as e:  # cairocffi did not find the cairo library
+    print("library " + (str(e).splitlines() or ["OSError"])[0])
+' 2>&1 || true)
+if [[ -n "$png_missing" ]]; then
+    echo "⚠️  PNG charts cannot load (${png_missing#* }); until they can, allium writes SVG charts."
+    if [[ "$png_missing" == package* ]]; then
+        echo "💡 Install the Python packages: source venv/bin/activate && pip install -r config/requirements.txt"
+    else
+        echo "💡 The cairo library and chart font, which pip cannot install, on Debian/Ubuntu: sudo apt install libcairo2 fonts-dejavu-core"
+    fi
+    echo "💡 Or keep SVG charts without the notice: source venv/bin/activate && python3 $ALLIUM_PY_PATH --chart-format svg"
+    echo ""
+fi
 echo "📊 Generated files are in: ./www/"
 echo "🌐 To serve locally, run:"
 echo "   cd www && python3 -m http.server 8000"

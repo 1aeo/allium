@@ -1,0 +1,160 @@
+# 1AEO AROI Monitoring + Freshness Alerts
+# Schema: v2
+# Install: copy to /etc/prometheus/rules/ and reload Prometheus
+# Customize: replace YOUR_FAMILY_ID with your Ed25519 family key (64-char hex)
+#            replace YOUR_DOMAIN with your AROI domain (e.g., www.1aeo.com)
+#
+# Source: https://github.com/1aeo/allium/docs/prometheus/
+# Metrics endpoint: https://metrics.1aeo.com/metrics
+# Optional recording rules: docs/prometheus/recording_rules.yml
+
+groups:
+  - name: aeo1_aroi_monitoring
+    interval: 1m
+    rules:
+
+      # AROI configured and checked, but validation failing
+      - alert: AroiValidationLost
+        expr: >
+          aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_invalid"} == 1
+          and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "AROI validation FAILED for {{ $labels.nick }}"
+          description: "Check proof file for {{ $labels.domain }}"
+          dashboard: "https://metrics.1aeo.com/relay/{{ $labels.fingerprint }}/"
+
+      # Multiple relays failing for same domain (proof server or DNS down)
+      - alert: AroiDomainOutage
+        expr: >
+          count(
+            aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1
+            and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
+          ) > 5
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} relays failing AROI validation for YOUR_DOMAIN"
+
+      # Configured relays are not being checked (validator coverage gap)
+      - alert: AroiUncheckedRelaysPresent
+        expr: >
+          aeo1_aroi_relays_count{state="configured_unchecked"} > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} configured relay(s) missing validator result"
+
+      # Optional if you install recording_rules.yml:
+      # - alert: AroiCheckedCoverageLow
+      #   expr: aeo1_aroi_checked_ratio_derived < 0.95
+      #   for: 1h
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "AROI checked coverage is low ({{ $value | humanizePercentage }})"
+
+      # ----------------------------------------------------------------
+      # B7.2: per-version alerts (CIISS v2 + v3 dual-spec)
+      # Sourced from aeo1_aroi_relays_count_by_version (B7.2 metric) +
+      # the aeo1_aroi_v3_*_derived recording rules.
+      # ----------------------------------------------------------------
+
+      # IMPORTANT: AroiV3SuccessRateLow depends on the recording rule
+      # `aeo1_aroi_v3_success_ratio_derived` defined in
+      # docs/prometheus/recording_rules.yml. If you have NOT installed
+      # recording_rules.yml alongside this file, the alert query will
+      # never match anything (silent no-op) — same precedent as
+      # AroiCheckedCoverageLow above. Either install recording_rules.yml
+      # before relying on this alert, or comment it out until you do.
+      #
+      # v3 success rate dropped sharply — possible upstream regression
+      # (validator broke a rule, schema bumped, or operators
+      # mass-mismigrated). Threshold deliberately permissive to avoid
+      # noise during the migration funnel; tighten once v3 stabilises.
+      - alert: AroiV3SuccessRateLow
+        expr: aeo1_aroi_v3_success_ratio_derived < 0.80
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI v3 success rate low ({{ $value | humanizePercentage }})"
+          description: "Possible upstream regression or mass operator misconfig. Investigate aroivalidator schema + recent v3 declarations."
+
+      # SECURITY: any relay leaking .secret_family_key. Always page.
+      # If aeo1_aroi_relays_count_by_version emits a non-zero count with
+      # ciissversion="3" + state="configured_checked_invalid", and the
+      # operator's relay-info metric has secret_key_leaked error
+      # category, this is a credential incident.
+      # NOTE: this requires a future per-error-category metric; for now,
+      # operators should subscribe to allium build logs which warn on
+      # the secret_key_leaked category via _warn_unknown_error_categories
+      # observability path. Documenting here as planned future work.
+      # - alert: AroiSecretKeyLeaked
+      #   expr: aeo1_aroi_secret_key_leaked_count > 0
+      #   for: 0m
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: "{{ $value }} relays appear to have leaked .secret_family_key"
+
+  - name: aeo1_freshness
+    interval: 1m
+    rules:
+
+      # Metrics file not regenerated (allium hasn't run)
+      - alert: MetricsFileStale
+        expr: time() - aeo1_generation_timestamp_seconds > 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus metrics file is stale (last generated {{ $value | humanizeDuration }} ago)"
+
+      # Metrics endpoint completely unreachable
+      - alert: MetricsEndpointDown
+        expr: absent(aeo1_build_info)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cannot reach metrics.1aeo.com/metrics"
+
+      # Exit DNS health source data unavailable
+      - alert: DnsHealthSourceDown
+        expr: aeo1_source_up{source="exitdnshealth"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exit DNS health data source unavailable"
+
+      # AROI validation source data unavailable
+      - alert: AroiSourceDown
+        expr: aeo1_source_up{source="aroi"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI validation data source unavailable"
+
+      # DNS health scan hasn't run in 24 hours
+      - alert: DnsHealthScanStale
+        expr: time() - aeo1_exit_scan_timestamp_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS health scan is stale (last ran {{ $value | humanizeDuration }} ago)"
+
+      # AROI validation scan hasn't run in 24 hours
+      - alert: AroiScanStale
+        expr: time() - aeo1_aroi_scan_timestamp_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI validation scan is stale (last ran {{ $value | humanizeDuration }} ago)"

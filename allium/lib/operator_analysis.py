@@ -9,60 +9,161 @@ Extracted from relays.py for better modularity.
 import html as _html
 import statistics
 
-from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES
-from .uptime_utils import (
-    extract_relay_uptime_for_period,
-    calculate_statistical_outliers,
-    find_operator_percentile_position,
-    format_network_percentiles_display,
-)
-from .bandwidth_utils import (
-    extract_relay_bandwidth_for_period,
-    extract_operator_daily_bandwidth_totals,
-    calculate_bandwidth_reliability_metrics,
-)
+from .bandwidth_utils import build_bandwidth_map
+from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES, ONIONOO_HISTORY_PERIODS
+from .uptime_utils import build_uptime_map
+
+
+def _build_contact_rankings_index(relay_set):
+    """Build a contact_hash -> rankings list dict in a SINGLE pass over the
+    leaderboard categories.
+
+    Optimization (item A from feedback): the legacy
+    generate_contact_rankings(contact_hash, relay_set) scans every
+    category × every top-25 entry per contact, costing
+    O(N_contacts * N_categories * 25). For ~3,000 contacts × ~14
+    categories that's ~1M iterations of category scanning per build,
+    even though the underlying leaderboard data only changes once
+    when the leaderboards are computed.
+
+    This helper inverts the iteration: ONE pass over (category, top-25
+    entries) builds the full {contact_hash: [ranking dict, ...]} map.
+    Each contact's rankings list is already pre-sorted by rank ascending
+    because we visit ranks 1..25 in order.
+
+    Returns:
+        dict: contact_hash -> list of ranking dicts (same shape as the
+              legacy output)
+    """
+    if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
+        return {}
+
+    leaderboards = relay_set.json['aroi_leaderboards'].get('leaderboards', {})
+    # Cache get_leaderboard_category_info() results — same category info
+    # is reused across all contacts that win that category.
+    _category_info_cache = {}
+
+    def _category_info(category):
+        info = _category_info_cache.get(category)
+        if info is None:
+            info = get_leaderboard_category_info(category)
+            _category_info_cache[category] = info
+        return info
+
+    index = {}
+    for category, leaders in leaderboards.items():
+        # Bind once per category to avoid repeated dict lookups inside
+        # the inner loop.
+        info = _category_info(category)
+        category_name = info['name']
+        emoji = info['emoji']
+        title = info['title']
+        link = f"aroi-leaderboards.html#{category}"
+
+        # P2 (legacy-parity dedupe): the legacy
+        # generate_contact_rankings() called `break` after the first
+        # match per (contact, category) so a malformed leaderboard
+        # repeating the same contact within one category never
+        # produced duplicate rankings. Mirror that contract here with
+        # a per-category seen-set; the FIRST (lowest rank) occurrence
+        # wins because we visit in rank-ascending order.
+        seen_in_category = set()
+
+        for rank, entry in enumerate(leaders, 1):
+            if rank > 25:
+                # Same cap as the legacy implementation. Stop early.
+                break
+            # Entry can be a dict (formatted) or a (contact_hash, data)
+            # tuple — handle both shapes.
+            if isinstance(entry, dict):
+                leader_contact = entry.get('contact_hash')
+            else:
+                leader_contact = entry[0] if entry else None
+            if not leader_contact:
+                continue
+            if leader_contact in seen_in_category:
+                # Legacy `break`-after-first-match equivalent for the
+                # corner case where one contact appears multiple times
+                # in the SAME category's top-25.
+                continue
+            seen_in_category.add(leader_contact)
+
+            ranking = {
+                'category': category,
+                'category_name': category_name,
+                'rank': rank,
+                'emoji': emoji,
+                'title': title,
+                'statement': f"#{rank} {category_name}",
+                'link': link,
+            }
+            bucket = index.setdefault(leader_contact, [])
+            bucket.append(ranking)
+
+    # Each contact's bucket is sorted by category-iteration order; the
+    # legacy implementation sorted by rank ascending. Apply the same
+    # final sort to preserve identical output for downstream templates.
+    for rankings in index.values():
+        rankings.sort(key=lambda x: x['rank'])
+    return index
+
+
+def _get_contact_rankings_index(relay_set):
+    """Lazy-build and cache the rankings index on the relay_set.
+
+    Cache key is a deterministic monotonic counter
+    (relay_set.leaderboards_version) instead of id(leaderboards_obj).
+    Reviewer-flagged: id()-based keys can theoretically collide if an
+    old leaderboards dict is GC'd and a new one happens to land at the
+    same memory address. Switching to a monotonic counter makes
+    invalidation explicit: every code path that rebuilds or replaces
+    aroi_leaderboards (the only call site is _generate_aroi_leaderboards
+    in relays.py) bumps relay_set.leaderboards_version, which guarantees
+    the cached index is rebuilt from the fresh leaderboards.
+    """
+    if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
+        cache_key = 0
+    else:
+        cache_key = getattr(relay_set, 'leaderboards_version', 0)
+
+    cached = getattr(relay_set, '_contact_rankings_index_cache', None)
+    if cached is not None and cached.get('key') == cache_key:
+        return cached['index']
+
+    index = _build_contact_rankings_index(relay_set)
+    relay_set._contact_rankings_index_cache = {
+        'key': cache_key,
+        'index': index,
+    }
+    return index
 
 
 def generate_contact_rankings(contact_hash, relay_set):
     """
     Generate AROI leaderboard rankings for a specific contact hash.
     Returns list of ranking achievements for display on contact pages.
+
+    Uses the precomputed contact_hash -> rankings index from
+    _get_contact_rankings_index. The first call per build does the
+    full O(N_categories * 25) walk; subsequent calls are O(1) per
+    contact (dict lookup + list/dict copy).
+
+    Mutation-safety contract (P1):
+      Callers receive a fresh list AND fresh dict copies of each
+      ranking, so neither list-level nor dict-level mutation can
+      leak back into the cached index. Cost: ~14 small dict copies
+      per call worst-case (one per ranking); cheap relative to the
+      template render that consumes them.
     """
     if not hasattr(relay_set, 'json') or not relay_set.json.get('aroi_leaderboards'):
         return []
-    
-    leaderboards = relay_set.json['aroi_leaderboards'].get('leaderboards', {})
-    rankings = []
-    
-    # Check each leaderboard category for this contact
-    for category, leaders in leaderboards.items():
-        for rank, entry in enumerate(leaders, 1):
-            # Handle both formatted entries (dict) and raw tuples
-            if isinstance(entry, dict):
-                leader_contact = entry.get('contact_hash')
-            else:
-                # Handle tuple format (leader_contact, data)
-                leader_contact, data = entry
-            
-            if leader_contact == contact_hash:
-                # Only show top 25 rankings
-                if rank <= 25:
-                    category_info = get_leaderboard_category_info(category)
-                    rankings.append({
-                        'category': category,
-                        'category_name': category_info['name'],
-                        'rank': rank,
-                        'emoji': category_info['emoji'],
-                        'title': category_info['title'],
-                        'statement': f"#{rank} {category_info['name']}",
-                        'link': f"aroi-leaderboards.html#{category}"
-                    })
-                break
-    
-    # Sort rankings by rank (1st place first, 25th place last)
-    rankings.sort(key=lambda x: x['rank'])
-    
-    return rankings
+    index = _get_contact_rankings_index(relay_set)
+    cached = index.get(contact_hash, [])
+    # P1: shallow-copy each ranking dict so dict-level mutation
+    # (e.g. callers adding a 'highlighted: True' flag) doesn't
+    # reach the cached index. Each ranking is a flat dict of
+    # primitives — shallow copy is sufficient (no nested objects).
+    return [dict(r) for r in cached]
 
 def get_leaderboard_category_info(category):
     """
@@ -85,9 +186,11 @@ def get_leaderboard_category_info(category):
         'guard_authority': _info('Guard Heavyweight Master', '🛡️'),
         'exit_operators': _info('Exit Champion', '🚪'),
         'guard_operators': _info('Guard Gatekeepers', '🛡️'),
-        'most_diverse': _info('Diversity Master', '🌈'),
-        'platform_diversity': _info('Platform Hero', '💻'),
-        'non_eu_leaders': _info('Non-EU Leader', '🌍'),
+        'most_diverse': _info('Diversity All-Rounder', '🌈'),
+        'platform_volume': _info('Non-Linux Powerhouse', '💻'),
+        'platform_breadth': _info('OS Polyglot', '🧩'),
+        'non_eu_volume': _info('Global Powerhouse', '🌍'),
+        'non_eu_breadth': _info('Jurisdiction Globetrotter', '🧭'),
         'frontier_builders': _info('Frontier Builder', '🏴‍☠️'),
         'network_veterans': _info('Network Veteran', '🏆'),
         'reliability_masters': _info('Reliability Master', '⏰'),
@@ -103,6 +206,21 @@ def get_leaderboard_category_info(category):
     # Default for unknown categories
     default_name = category.replace('_', ' ').title()
     return category_info.get(category, _info(default_name, '🏅'))
+
+
+def history_maps(relay_set):
+    """``(uptime, bandwidth)`` Onionoo rows by fingerprint, built once and cached on the relay set.
+
+    PERFORMANCE: operator reliability runs per contact (~3,000x per site
+    generation) and the charts run per relay; without the cache every call
+    rebuilt these ~10k-entry maps. Lazy, so it also works per-process in
+    forked mp workers.
+    """
+    if getattr(relay_set, '_history_maps', None) is None:
+        relay_set._history_maps = (build_uptime_map(getattr(relay_set, 'uptime_data', None)),
+                                   build_bandwidth_map(getattr(relay_set, 'bandwidth_data', None)))
+    return relay_set._history_maps
+
 
 def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     """
@@ -129,9 +247,14 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     from .uptime_utils import (
         extract_relay_uptime_for_period, 
         calculate_statistical_outliers,
-        find_operator_percentile_position
+        find_operator_percentile_position,
     )
-    from .bandwidth_utils import extract_relay_bandwidth_for_period, extract_operator_daily_bandwidth_totals
+    from .bandwidth_utils import (
+        extract_relay_bandwidth_for_period,
+        extract_operator_daily_bandwidth_totals,
+    )
+
+    uptime_map, bandwidth_map = history_maps(relay_set)
     
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']
@@ -177,7 +300,9 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     if uptime_data:
         for period in uptime_periods:
             # Extract uptime data for this period using shared utility
-            period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, period)
+            # (pre-built uptime_map avoids a full map rebuild per period)
+            period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, period,
+                                                            uptime_map=uptime_map)
         
             if period_result['uptime_values']:
                 mean_uptime = statistics.mean(period_result['uptime_values'])
@@ -233,7 +358,9 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         
         for period in bandwidth_periods:
             # Extract individual relay bandwidth data for this period
-            period_result = extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, period)
+            # (pre-built bandwidth_map avoids a full map rebuild per period)
+            period_result = extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, period,
+                                                               bandwidth_map=bandwidth_map)
             
             if period_result['bandwidth_values']:
                 mean_bandwidth = statistics.mean(period_result['bandwidth_values'])
@@ -255,7 +382,8 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
                 from .bandwidth_utils import calculate_bandwidth_reliability_metrics
                 advanced_metrics = calculate_bandwidth_reliability_metrics(
                     operator_relays, bandwidth_data, period, mean_bandwidth, std_dev, 
-                    bandwidth_formatter=relay_set.bandwidth_formatter
+                    bandwidth_formatter=relay_set.bandwidth_formatter,
+                    bandwidth_map=bandwidth_map
                 )
                 
                 # Add advanced metrics to the period data
@@ -344,7 +472,8 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         
         # Calculate daily total bandwidth averages for this operator using existing logic
         for period in bandwidth_periods:
-            daily_totals_result = extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, period)
+            daily_totals_result = extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, period,
+                                                                          bandwidth_map=bandwidth_map)
             if daily_totals_result['daily_totals']:
                 avg_daily_total = daily_totals_result['average_daily_total']
                 
@@ -402,11 +531,11 @@ def format_intelligence_rating(rating_text):
     rating, details = rating_text.split(', ', 1)
     
     if 'Poor' in rating:
-        return f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+        return f'<span class="al-rating-poor">Poor</span>, {details}'
     elif 'Okay' in rating:
-        return f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+        return f'<span class="al-rating-okay">Okay</span>, {details}'
     else:  # Great or other
-        return f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+        return f'<span class="al-rating-great">Great</span>, {details}'
 
 def _format_bandwidth_breakdown(i, bandwidth_unit, relay_set):
     """Format bandwidth breakdown by role (guard/middle/exit) for contact pages."""
@@ -443,7 +572,7 @@ def _format_uptime_periods(operator_reliability):
             
             if avg >= 99.99 or abs(avg - 100.0) < 0.01:
                 uptime_formatted[period] = {
-                    'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
+                    'display': f'<span class="al-status-success-bold">{display_name} {avg:.1f}%</span>',
                     'relay_count': relay_count
                 }
             else:
@@ -512,20 +641,79 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         dict: Contact-specific display data for template rendering
     """
     display_data = {}
-    
+
+    # 0+2b. Single-pass over members[] for BOTH:
+    #   - source-faithful ContactInfo variants (Phase 1) — distinct raw
+    #     contact strings + per-string relay count + parsed version/proof
+    #   - total_data sums per period (1mo / 6mo / 1y / 5y)
+    #
+    # Optimization (item B): merging the two former passes eliminates a
+    # second iteration over every relay in the operator. For ~3,000
+    # operators × an average of ~3 relays each, that's ~9k fewer dict
+    # lookups; for the largest operators (1aeo.com with 952 relays)
+    # the saving is ~952 dict accesses per page render.
+    variants = {}
+    td_sums = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
+    for r in members:
+        # Variant collection
+        raw = r.get('contact', '') or ''
+        v_entry = variants.get(raw)
+        if v_entry is None:
+            variants[raw] = {
+                'raw': raw,
+                'count': 1,
+                'aroi_version': r.get('aroi_version'),
+                'aroi_proof_type': r.get('aroi_proof_type'),
+                'aroi_domain': r.get('aroi_domain') or 'none',
+                'has_complete_aroi': bool(r.get('aroi_configured')),
+            }
+        else:
+            v_entry['count'] += 1
+
+        # Total-data period sums (folded in from the former second loop)
+        td = r.get('total_data', {})
+        td_sums['1_month'] += td.get('1_month', 0)
+        td_sums['6_months'] += td.get('6_months', 0)
+        td_sums['1_year'] += td.get('1_year', 0)
+        td_sums['5_years'] += td.get('5_years', 0)
+
+    # Sort variants by count desc, then raw string for stable output.
+    # Lambda parameter is renamed from 'v' to 'variant' to avoid shadowing
+    # the outer 'v' (contact_hash) function parameter.
+    contact_variants = sorted(
+        variants.values(),
+        key=lambda variant: (-variant['count'], variant['raw']),
+    )
+    display_data['contact_variants'] = contact_variants
+    display_data['contact_variant_count'] = len(contact_variants)
+
+    # Option B: surface the incomplete-AROI sibling counts on the
+    # operator detail page. Categorisation (categorization.py)
+    # populates two separately-labelled buckets:
+    #   - authenticated_family (mutual effective_family declaration)
+    #   - url_claim (self-asserted url:<this-domain>; could be
+    #     operator's own misconfigured relays OR third-party spoofers)
+    # Forward both verbatim so contact.html can render them under
+    # distinct headings — never confuse self-asserted claims with
+    # the operator's authenticated relays.
+    display_data['incomplete_family_count'] = i.get('incomplete_family_count', 0)
+    display_data['incomplete_family_fingerprints'] = i.get(
+        'incomplete_family_fingerprints', []
+    )
+    display_data['incomplete_url_claim_count'] = i.get('incomplete_url_claim_count', 0)
+    display_data['incomplete_url_claim_fingerprints'] = i.get(
+        'incomplete_url_claim_fingerprints', []
+    )
+
     # 1. Bandwidth breakdown by role
     display_data['bandwidth_breakdown'] = _format_bandwidth_breakdown(i, bandwidth_unit, relay_set)
-    
+
     # 2. Consensus weight breakdown by role
     display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
-    
-    # 2b. Total data transferred (single-pass period sums + best-period selection)
+
+    # 2b. Total data transferred — best-period selection from the sums
+    # we already accumulated in the merged pass above.
     from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period
-    td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
-    for r in members:
-        td = r.get('total_data', {})
-        for p in td_sums:
-            td_sums[p] += td.get(p, 0)
     td_total, td_period = pick_best_period(td_sums)
     display_data['total_data_formatted'] = format_data_volume_with_unit(td_total)
     net_by_period = relay_set.json.get('network_health', {}).get('network_total_data_by_period', {}) if hasattr(relay_set, 'json') else {}
@@ -625,11 +813,11 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         intelligence_formatted['version_compliance'] = '0 compliant'
     elif version_compliant == total_relays:
         # All relays are compliant (recommended_version=True)
-        intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {version_compliant} (100%) compliant'
+        intelligence_formatted['version_compliance'] = f'<span class="al-rating-great">All</span>, {version_compliant} (100%) compliant'
     elif version_compliant > 0 and (version_compliant / total_relays) > 0.5:
         # More than 50% are compliant
         compliant_pct = round((version_compliant / total_relays) * 100)
-        result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, {version_compliant} ({compliant_pct}%) compliant'
+        result = f'<span class="al-rating-okay">Partial</span>, {version_compliant} ({compliant_pct}%) compliant'
         # Add non-zero counts for not compliant and unknown
         parts = []
         if version_not_compliant > 0:
@@ -644,7 +832,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     else:
         # 50% or less are compliant (or no compliant relays)
         compliant_pct = round((version_compliant / total_relays) * 100) if total_relays > 0 else 0
-        result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {version_compliant} ({compliant_pct}%) compliant'
+        result = f'<span class="al-rating-poor">Poor</span>, {version_compliant} ({compliant_pct}%) compliant'
         # Add non-zero counts for not compliant and unknown
         parts = []
         if version_not_compliant > 0:
@@ -659,7 +847,6 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     # Format version status display (only show counts > 0) with version tooltips and percentages
     # Add status indicators based on recommended status ratio (similar to version compliance)
-    version_status_parts = []
     version_status_tooltips = {}
     
     recommended_count = version_status_counts.get('recommended', 0)
@@ -673,7 +860,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
             versions = sorted(list(version_status_versions[status]))
             if versions:
                 tooltip_status = status_display.capitalize()
-                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(_html.escape(v) for v in versions)}"
+                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(_html.escape(ver) for ver in versions)}"
             else:
                 version_status_tooltips[status] = f"{status_display.capitalize()} versions: (no version data)"
     
@@ -684,12 +871,12 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     elif recommended_count == total_relays:
         # All relays have recommended status
         recommended_tooltip = version_status_tooltips.get('recommended', 'All relays have recommended versions')
-        intelligence_formatted['version_status'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} (100%) recommended</span>'
+        intelligence_formatted['version_status'] = f'<span class="al-rating-great">All</span>, <span title="{recommended_tooltip}">{recommended_count} (100%) recommended</span>'
     elif recommended_count > 0 and (recommended_count / total_relays) > 0.5:
         # More than 50% have recommended status
         recommended_pct = round((recommended_count / total_relays) * 100)
         recommended_tooltip = version_status_tooltips.get('recommended', 'Recommended versions')
-        result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} ({recommended_pct}%) recommended</span>'
+        result = f'<span class="al-rating-okay">Partial</span>, <span title="{recommended_tooltip}">{recommended_count} ({recommended_pct}%) recommended</span>'
         
         # Add other status counts with tooltips
         other_parts = []
@@ -698,7 +885,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
                 status_pct = round((count / total_relays) * 100)
                 tooltip = version_status_tooltips.get(status, f'{status_display.capitalize()} versions')
-                other_parts.append(f'<span title="{tooltip}" style="cursor: help;">{count} ({status_pct}%) {status_display}</span>')
+                other_parts.append(f'<span title="{tooltip}">{count} ({status_pct}%) {status_display}</span>')
         
         if other_parts:
             result += ', ' + ', '.join(other_parts)
@@ -707,7 +894,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         # 50% or less have recommended status (or no recommended relays)
         recommended_pct = round((recommended_count / total_relays) * 100) if total_relays > 0 else 0
         recommended_tooltip = version_status_tooltips.get('recommended', 'Recommended versions')
-        result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} ({recommended_pct}%) recommended</span>'
+        result = f'<span class="al-rating-poor">Poor</span>, <span title="{recommended_tooltip}">{recommended_count} ({recommended_pct}%) recommended</span>'
         
         # Add other status counts with tooltips
         other_parts = []
@@ -716,7 +903,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
                 status_pct = round((count / total_relays) * 100)
                 tooltip = version_status_tooltips.get(status, f'{status_display.capitalize()} versions')
-                other_parts.append(f'<span title="{tooltip}" style="cursor: help;">{count} ({status_pct}%) {status_display}</span>')
+                other_parts.append(f'<span title="{tooltip}">{count} ({status_pct}%) {status_display}</span>')
         
         if other_parts:
             result += ', ' + ', '.join(other_parts)
@@ -792,391 +979,354 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     return display_data
 
+def _compute_contact_flag_metric_analysis(members, relay_set, metric, none_msg,
+                                          no_data_msg, failure_prefix,
+                                          collect_flag_periods, process_results):
+    """
+    Shared skeleton for contact flag uptime/bandwidth analysis: pulls the
+    consolidated per-relay flag data off relay_set (attribute and key names
+    derived from metric, 'uptime' or 'bandwidth'), filters it to the flags
+    each member relay currently has, then delegates per-period collection to
+    collect_flag_periods(flag_bucket, flag_periods, relay, fingerprint) and
+    final processing to process_results(operator_flag_data,
+    network_flag_statistics). Variant-specific error wording (none_msg — or
+    None to skip the falsy-results check — no_data_msg, failure_prefix) is
+    parameterized so each variant's output stays byte-identical.
+    """
+    try:
+        # Use consolidated results if available (from the _reprocess_* step)
+        if not hasattr(relay_set, f'_consolidated_{metric}_results'):
+            return {'has_flag_data': False, 'error': f'Consolidated {metric} processing not available'}
+
+        consolidated_results = getattr(relay_set, f'_consolidated_{metric}_results')
+        if none_msg is not None and not consolidated_results:
+            return {'has_flag_data': False, 'error': none_msg}
+
+        relay_metric_data = consolidated_results[f'relay_{metric}_data']
+        network_flag_statistics = consolidated_results.get('network_flag_statistics', {})
+
+        # Extract flag data for operator relays using pre-computed data,
+        # only for flags each relay currently has
+        operator_flag_data = {}
+        for relay in members:
+            fingerprint = relay.get('fingerprint', '')
+            relay_flags = set(relay.get('flags', []))
+            if fingerprint in relay_metric_data:
+                for flag, flag_periods in relay_metric_data[fingerprint]['flag_data'].items():
+                    if flag in relay_flags:
+                        if flag not in operator_flag_data:
+                            operator_flag_data[flag] = {}
+                        collect_flag_periods(operator_flag_data[flag], flag_periods, relay, fingerprint)
+
+        if not operator_flag_data:
+            return {'has_flag_data': False, 'error': no_data_msg}
+
+        # Process flag reliability using pre-computed network statistics
+        results = process_results(operator_flag_data, network_flag_statistics)
+        return {
+            'has_flag_data': True,
+            'flag_reliabilities': results['flag_reliabilities'],
+            'available_periods': results['available_periods'],
+            'period_display': results['period_display'],
+            'source': 'consolidated_processing'
+        }
+
+    except Exception as e:
+        return {
+            'has_flag_data': False,
+            'error': f'{failure_prefix}: {str(e)}',
+            'source': 'error'
+        }
+
 def compute_contact_flag_analysis(contact_hash, members, relay_set):
     """
     Compute flag reliability analysis for contact operator using consolidated uptime data.
-    
+
     This method uses pre-computed results from _reprocess_uptime_data(). If consolidated
     processing isn't available, no flag data is returned (section won't be shown).
-    
+
     Args:
         contact_hash: Contact hash for the operator
         members: List of relay objects for the operator
-        
+
     Returns:
         dict: Flag reliability analysis data or indication that no data is available
     """
-    try:
-        # Use consolidated uptime results if available (from _reprocess_uptime_data)
-        if hasattr(relay_set, '_consolidated_uptime_results'):
-            consolidated_results = relay_set._consolidated_uptime_results
-            relay_uptime_data = consolidated_results['relay_uptime_data']
-            network_flag_statistics = consolidated_results.get('network_flag_statistics', {})
-            
-            # Extract flag data for operator relays using pre-computed data
-            operator_flag_data = {}
-            
-            for relay in members:
-                fingerprint = relay.get('fingerprint', '')
-                nickname = relay.get('nickname', 'Unknown')
-                
-                # Get actual flags this relay currently has (same approach as line 561)
-                relay_flags = set(relay.get('flags', []))
-                
-                if fingerprint in relay_uptime_data:
-                    flag_data = relay_uptime_data[fingerprint]['flag_data']
-                    
-                    for flag, periods in flag_data.items():
-                        # Only include flag data for flags the relay currently has
-                        if flag in relay_flags:
-                            if flag not in operator_flag_data:
-                                operator_flag_data[flag] = {}
-                            for period, data in periods.items():
-                                if period not in operator_flag_data[flag]:
-                                    operator_flag_data[flag][period] = []
-                                operator_flag_data[flag][period].append({
-                                    'relay_nickname': data['relay_info']['nickname'],
-                                    'relay_fingerprint': data['relay_info']['fingerprint'],
-                                    'uptime': data['uptime'],
-                                    'data_points': data['data_points']
-                                })
-            
-            if not operator_flag_data:
-                return {'has_flag_data': False, 'error': 'No flag data available for operator relays'}
-            
-            # Process flag reliability using pre-computed network statistics
-            flag_reliability_results = process_operator_flag_reliability(
-                operator_flag_data, network_flag_statistics
-            )
-            
-            return {
-                'has_flag_data': True,
-                'flag_reliabilities': flag_reliability_results['flag_reliabilities'],
-                'available_periods': flag_reliability_results['available_periods'],
-                'period_display': flag_reliability_results['period_display'],
-                'source': 'consolidated_processing'
-            }
-            
-        else:
-            # No consolidated results available - don't show flag reliability section
-            return {'has_flag_data': False, 'error': 'Consolidated uptime processing not available'}
-            
-    except Exception as e:
-        return {
-            'has_flag_data': False, 
-            'error': f'Flag analysis processing failed: {str(e)}',
-            'source': 'error'
-        }
+    def collect_flag_periods(flag_bucket, flag_periods, relay, fingerprint):
+        for period, data in flag_periods.items():
+            if period not in flag_bucket:
+                flag_bucket[period] = []
+            flag_bucket[period].append({
+                'relay_nickname': data['relay_info']['nickname'],
+                'relay_fingerprint': data['relay_info']['fingerprint'],
+                'uptime': data['uptime'],
+                'data_points': data['data_points']
+            })
+
+    return _compute_contact_flag_metric_analysis(
+        members, relay_set, 'uptime', none_msg=None,
+        no_data_msg='No flag data available for operator relays',
+        failure_prefix='Flag analysis processing failed',
+        collect_flag_periods=collect_flag_periods,
+        process_results=process_operator_flag_reliability
+    )
 
 def compute_contact_flag_bandwidth_analysis(contact_hash, members, relay_set):
     """
     Compute flag bandwidth analysis for contact operator using consolidated bandwidth data.
-    
+
     This method uses pre-computed results from _reprocess_bandwidth_data(). If consolidated
     processing isn't available, no flag bandwidth data is returned.
-    
+
     Args:
         contact_hash: Contact hash for the operator
         members: List of relay objects for the operator
-        
+
     Returns:
         dict: Flag bandwidth analysis data or indication that no data is available
     """
-    try:
-        # Use consolidated bandwidth results if available (from _reprocess_bandwidth_data)
-        if not hasattr(relay_set, '_consolidated_bandwidth_results'):
-            return {'has_flag_data': False, 'error': 'Consolidated bandwidth processing not available'}
-        
-        consolidated_results = relay_set._consolidated_bandwidth_results
-        if not consolidated_results:
-            return {'has_flag_data': False, 'error': 'Consolidated bandwidth results are None'}
-        
-        relay_bandwidth_data = consolidated_results['relay_bandwidth_data']
-        network_flag_statistics = consolidated_results.get('network_flag_statistics', {})
-        
-        # Extract flag bandwidth data for operator relays using pre-computed data
-        operator_flag_data = {}
-        
-        for relay in members:
-            fingerprint = relay.get('fingerprint', '')
-            nickname = relay.get('nickname', 'Unknown')
-            
-            # Get actual flags this relay currently has
-            relay_flags = set(relay.get('flags', []))
-            
-            if fingerprint in relay_bandwidth_data:
-                flag_data = relay_bandwidth_data[fingerprint]['flag_data']
-                
-                for flag, bandwidth_averages in flag_data.items():
-                    # Only include flag data for flags the relay currently has
-                    if flag in relay_flags:
-                        if flag not in operator_flag_data:
-                            operator_flag_data[flag] = {}
-                        for period in ['6_months', '1_year', '5_years']:
-                            if period in bandwidth_averages and bandwidth_averages[period] > 0:
-                                if period not in operator_flag_data[flag]:
-                                    operator_flag_data[flag][period] = []
-                                operator_flag_data[flag][period].append({
-                                    'relay_nickname': nickname,
-                                    'relay_fingerprint': fingerprint,
-                                    'bandwidth': bandwidth_averages[period],
-                                    'data_points': 0  # Not tracked in simplified structure
-                                })
-        
-        if not operator_flag_data:
-            return {'has_flag_data': False, 'error': 'No flag bandwidth data available for operator relays'}
-            
-        # Process flag bandwidth reliability using pre-computed network statistics
-        flag_bandwidth_results = process_operator_flag_bandwidth_reliability(
+    def collect_flag_periods(flag_bucket, bandwidth_averages, relay, fingerprint):
+        nickname = relay.get('nickname', 'Unknown')
+        for period in ['6_months', '1_year', '5_years']:
+            if period in bandwidth_averages and bandwidth_averages[period] > 0:
+                if period not in flag_bucket:
+                    flag_bucket[period] = []
+                flag_bucket[period].append({
+                    'relay_nickname': nickname,
+                    'relay_fingerprint': fingerprint,
+                    'bandwidth': bandwidth_averages[period],
+                    'data_points': 0  # Not tracked in simplified structure
+                })
+
+    def process_results(operator_flag_data, network_flag_statistics):
+        return process_operator_flag_bandwidth_reliability(
             operator_flag_data, network_flag_statistics, relay_set
         )
-        
-        return {
-            'has_flag_data': True,
-            'flag_reliabilities': flag_bandwidth_results['flag_reliabilities'],
-            'available_periods': flag_bandwidth_results['available_periods'],
-            'period_display': flag_bandwidth_results['period_display'],
-            'source': 'consolidated_processing'
+
+    return _compute_contact_flag_metric_analysis(
+        members, relay_set, 'bandwidth', none_msg='Consolidated bandwidth results are None',
+        no_data_msg='No flag bandwidth data available for operator relays',
+        failure_prefix='Flag bandwidth analysis processing failed',
+        collect_flag_periods=collect_flag_periods,
+        process_results=process_results
+    )
+
+def _process_operator_flag_metric(operator_flag_data, network_flag_statistics,
+                                  flag_order, flag_display_mapping, periods,
+                                  period_order, build_period_entry):
+    """
+    Shared skeleton for operator flag uptime/bandwidth reliability processing:
+    iterates flags in flag_order (skipping ones absent from operator_flag_data
+    or flag_display_mapping), tracks which short periods have data, and
+    assembles the template-ready result dict. All metric-specific work
+    (averaging field, formatting, color coding, tooltip wording) lives in
+    build_period_entry, which maps (flag, period_short, period_relays,
+    net_stats or None) to a period entry dict — or None to skip — keeping
+    each variant's output byte-identical.
+    """
+    flag_reliabilities = {}
+
+    # Track which time periods have data across all flags
+    periods_with_data = set()
+
+    # Process flags in the specified order
+    for flag in flag_order:
+        if flag not in operator_flag_data:
+            continue
+
+        flag_periods = operator_flag_data[flag]
+
+        if flag not in flag_display_mapping:
+            continue
+
+        flag_info = {
+            'icon': flag_display_mapping[flag]['icon'],
+            'display_name': flag_display_mapping[flag]['display_name'],
+            'periods': {}
         }
-            
-    except Exception as e:
-        return {
-            'has_flag_data': False, 
-            'error': f'Flag bandwidth analysis processing failed: {str(e)}',
-            'source': 'error'
-        }
+
+        for period in periods:
+            period_short = PERIOD_SHORT_NAMES.get(period, period)
+
+            if period in flag_periods and flag_periods[period]:
+                # Network comparison statistics, if available
+                if (flag in network_flag_statistics and
+                    period in network_flag_statistics[flag] and
+                    network_flag_statistics[flag][period]):
+                    net_stats = network_flag_statistics[flag][period]
+                else:
+                    net_stats = None
+
+                entry = build_period_entry(flag, period_short, flag_periods[period], net_stats)
+                if entry is not None:
+                    periods_with_data.add(period_short)
+                    flag_info['periods'][period_short] = entry
+
+        # Only include flag if it has data for at least one period
+        if flag_info['periods']:
+            flag_reliabilities[flag] = flag_info
+
+    # Generate dynamic period display string
+    available_periods = [p for p in period_order if p in periods_with_data]
+    period_display = '/'.join(available_periods) if available_periods else 'No Data'
+
+    return {
+        'flag_reliabilities': flag_reliabilities,
+        'available_periods': available_periods,
+        'period_display': period_display,
+        'has_data': bool(available_periods)
+    }
 
 def process_operator_flag_bandwidth_reliability(operator_flag_data, network_flag_statistics, relay_set):
     """
     Process operator flag bandwidth data into display format with color coding.
     Mirrors the uptime flag processing but for bandwidth metrics.
-    
+
     Args:
         operator_flag_data (dict): Flag bandwidth data for the operator
         network_flag_statistics (dict): Network-wide flag bandwidth statistics
-        
+
     Returns:
         dict: Processed flag bandwidth data for template display
     """
-    flag_reliabilities = {}
-    periods_with_data = set()
-    
-    # Flag processing order (Exit > Guard > Fast > Running)
-    flag_order = ['Exit', 'Guard', 'Fast', 'Running', 'Authority', 'HSDir', 'Stable', 'V2Dir']
-    
-    # Flag display configuration
-    flag_display_mapping = {
-        'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
-        'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
-        'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
-        'Running': {'icon': '🟢', 'display_name': 'Running'},
-        'Authority': {'icon': '👑', 'display_name': 'Directory Authority'},
-        'HSDir': {'icon': '📁', 'display_name': 'Hidden Service Directory'},
-        'Stable': {'icon': '🎯', 'display_name': 'Stable Relay'},
-        'V2Dir': {'icon': '📋', 'display_name': 'Version 2 Directory'}
-    }
-    
-    # Process flags in the specified order
-    for flag in flag_order:
-        if flag not in operator_flag_data:
-            continue
-            
-        periods = operator_flag_data[flag]
-        
-        if flag not in flag_display_mapping:
-            continue
-            
-        flag_info = {
-            'icon': flag_display_mapping[flag]['icon'],
-            'display_name': flag_display_mapping[flag]['display_name'],
-            'periods': {}
+    formatter = relay_set.bandwidth_formatter
+
+    def build_period_entry(flag, period_short, period_relays, net_stats):
+        # Average bandwidth for operator relays with this flag; include all
+        # values >= 0 (0 is valid data meaning relay had no bandwidth)
+        bandwidth_values = [relay_data['bandwidth'] for relay_data in period_relays]
+        avg_bandwidth = sum(bandwidth_values) / len(bandwidth_values)
+        if not avg_bandwidth >= 0:
+            return None
+
+        unit = formatter.determine_unit(avg_bandwidth)
+        formatted_bw = formatter.format_bandwidth_with_unit(avg_bandwidth, unit)
+        bandwidth_display = f"{formatted_bw} {unit}"
+
+        color_class = ''  # Default: no special coloring (black text)
+        tooltip = f'{flag} flag bandwidth over {period_short}: {bandwidth_display}'
+
+        if net_stats:
+            net_mean_unit = formatter.determine_unit(net_stats["mean"])
+            net_mean_formatted = formatter.format_bandwidth_with_unit(net_stats["mean"], net_mean_unit)
+            tooltip += f' (network μ: {net_mean_formatted} {net_mean_unit})'
+
+            # Enhanced color coding logic for bandwidth - match legend
+            if avg_bandwidth <= net_stats['two_sigma_low']:
+                color_class = 'statistical-outlier-low'  # Red - Poor (≥2σ from network μ)
+            elif avg_bandwidth > net_stats['mean'] * 1.5:  # High performance threshold
+                color_class = 'high-performance'  # Green - High performance (>1.5x μ)
+            elif avg_bandwidth < net_stats['mean']:
+                color_class = 'below-mean'  # Yellow - Below average (<μ of network)
+            # EXPLICIT: Values between mean and 1.5x mean get no color_class (black)
+
+        else:
+            # Fallback color coding when no network statistics available
+            if avg_bandwidth <= 0:
+                color_class = 'statistical-outlier-low'
+            # Default: no special coloring (black)
+
+        return {
+            'value': avg_bandwidth,
+            'value_display': bandwidth_display,
+            'color_class': color_class,
+            'tooltip': tooltip,
+            'relay_count': len(period_relays)
         }
-        
-        for period in ['6_months', '1_year', '5_years']:
-            period_short = PERIOD_SHORT_NAMES.get(period, period)
-            
-            if period in periods and periods[period]:
-                # Calculate average bandwidth for operator relays with this flag
-                bandwidth_values = [relay_data['bandwidth'] for relay_data in periods[period]]
-                avg_bandwidth = sum(bandwidth_values) / len(bandwidth_values)
-                
-                # Include all values >= 0 (0 is valid data meaning relay had no bandwidth)
-                if avg_bandwidth >= 0:
-                    periods_with_data.add(period_short)
-                    
-                    # Format bandwidth for display
-                    unit = relay_set.bandwidth_formatter.determine_unit(avg_bandwidth)
-                    formatted_bw = relay_set.bandwidth_formatter.format_bandwidth_with_unit(avg_bandwidth, unit)
-                    bandwidth_display = f"{formatted_bw} {unit}"
-                    
-                    # Determine color coding and tooltip
-                    color_class = ''  # Default: no special coloring (black text)
-                    tooltip = f'{flag} flag bandwidth over {period_short}: {bandwidth_display}'
-                    
-                    # Add network comparison if available
-                    if (flag in network_flag_statistics and 
-                        period in network_flag_statistics[flag] and
-                        network_flag_statistics[flag][period]):
-                        
-                        net_stats = network_flag_statistics[flag][period]
-                        net_mean_unit = relay_set.bandwidth_formatter.determine_unit(net_stats["mean"])
-                        net_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(net_stats["mean"], net_mean_unit)
-                        tooltip += f' (network μ: {net_mean_formatted} {net_mean_unit})'
-                        
-                        # Enhanced color coding logic for bandwidth - match legend
-                        if avg_bandwidth <= net_stats['two_sigma_low']:
-                            color_class = 'statistical-outlier-low'  # Red - Poor (≥2σ from network μ)
-                        elif avg_bandwidth > net_stats['mean'] * 1.5:  # High performance threshold
-                            color_class = 'high-performance'  # Green - High performance (>1.5x μ)
-                        elif avg_bandwidth < net_stats['mean']:
-                            color_class = 'below-mean'  # Yellow - Below average (<μ of network)
-                        # EXPLICIT: Values between mean and 1.5x mean get no color_class (black)
-                    
-                    else:
-                        # Fallback color coding when no network statistics available
-                        if avg_bandwidth <= 0:
-                            color_class = 'statistical-outlier-low'
-                        # Default: no special coloring (black)
-                    
-                    flag_info['periods'][period_short] = {
-                        'value': avg_bandwidth,
-                        'value_display': bandwidth_display,
-                        'color_class': color_class,
-                        'tooltip': tooltip,
-                        'relay_count': len(periods[period])
-                    }
-            
-        # Only include flag if it has data for at least one period
-        if flag_info['periods']:
-            flag_reliabilities[flag] = flag_info
-    
-    # Generate dynamic period display string
-    period_order = ['6M', '1Y', '5Y']
-    available_periods = [p for p in period_order if p in periods_with_data]
-    period_display = '/'.join(available_periods) if available_periods else 'No Data'
-    
-    return {
-        'flag_reliabilities': flag_reliabilities,
-        'available_periods': available_periods,
-        'period_display': period_display,
-        'has_data': bool(available_periods)
-    }
+
+    return _process_operator_flag_metric(
+        operator_flag_data, network_flag_statistics,
+        # Flag processing order (Exit > Guard > Fast > Running)
+        flag_order=['Exit', 'Guard', 'Fast', 'Running', 'Authority', 'HSDir', 'Stable', 'V2Dir'],
+        # Flag display configuration
+        flag_display_mapping={
+            'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
+            'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
+            'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
+            'Running': {'icon': '🟢', 'display_name': 'Running'},
+            'Authority': {'icon': '👑', 'display_name': 'Directory Authority'},
+            'HSDir': {'icon': '📁', 'display_name': 'Hidden Service Directory'},
+            'Stable': {'icon': '🎯', 'display_name': 'Stable Relay'},
+            'V2Dir': {'icon': '📋', 'display_name': 'Version 2 Directory'}
+        },
+        periods=['6_months', '1_year', '5_years'],
+        period_order=['6M', '1Y', '5Y'],
+        build_period_entry=build_period_entry
+    )
 
 def process_operator_flag_reliability(operator_flag_data, network_flag_statistics):
     """
     Process flag reliability metrics for an operator using pre-computed network statistics.
-    
+
     Args:
         operator_flag_data: Operator's flag-specific uptime data
         network_flag_statistics: Network-wide flag statistics for comparison
-        
+
     Returns:
         dict: Processed flag reliability metrics with available periods info
     """
-    flag_display_mapping = {
-        'Running': {'icon': '🟢', 'display_name': 'Running Operation'},
-        'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
-        'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'}, 
-        'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
-        'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
-        'HSDir': {'icon': '📂', 'display_name': 'Hidden Services'},
-        'Authority': {'icon': '⚖️', 'display_name': 'Directory Authority'},
-        'V2Dir': {'icon': '📁', 'display_name': 'Directory Services'},
-        'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
-    }
-    
-    # Define flag ordering for consistent display - Hidden Services before Directory Services
-    flag_order = ['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'HSDir', 'V2Dir']
-    
-    flag_reliabilities = {}
-    
-    # Track which time periods have data across all flags
-    periods_with_data = set()
-    
-    # Process flags in the specified order
-    for flag in flag_order:
-        if flag not in operator_flag_data:
-            continue
-            
-        periods = operator_flag_data[flag]
-        
-        if flag not in flag_display_mapping:
-            continue
-            
-        flag_info = {
-            'icon': flag_display_mapping[flag]['icon'],
-            'display_name': flag_display_mapping[flag]['display_name'],
-            'periods': {}
+    def build_period_entry(flag, period_short, period_relays, net_stats):
+        # Average uptime for operator relays with this flag; include all
+        # values >= 0 (0% is valid data meaning relay never had this flag)
+        uptime_values = [relay_data['uptime'] for relay_data in period_relays]
+        avg_uptime = sum(uptime_values) / len(uptime_values)
+        if not avg_uptime >= 0:
+            return None
+
+        color_class = ''
+        tooltip = f'{flag} flag uptime over {period_short}: {avg_uptime:.1f}%'
+
+        if net_stats:
+            tooltip += f' (network μ: {net_stats["mean"]:.1f}%, 2σ: {net_stats["two_sigma_low"]:.1f}%)'
+
+            # Enhanced color coding logic: prioritize statistical outliers over >99%
+            # Special handling for very low values (≤1%) - likely to be statistical outliers
+            if avg_uptime <= 1.0:
+                color_class = 'statistical-outlier-low'
+            elif avg_uptime <= net_stats['two_sigma_low']:
+                color_class = 'statistical-outlier-low'
+            elif avg_uptime >= 99.0:
+                color_class = 'high-performance'
+            elif avg_uptime > net_stats['two_sigma_high']:
+                color_class = 'statistical-outlier-high'
+            elif avg_uptime < net_stats['mean']:
+                color_class = 'below-mean'
+            # Note: Removed default above-mean green coloring per user feedback
+
+        else:
+            # Fallback color coding when no network statistics available
+            if avg_uptime <= 1.0:
+                color_class = 'statistical-outlier-low'
+            elif avg_uptime >= 99.0:
+                color_class = 'high-performance'
+            # Default: no special coloring
+
+        return {
+            'value': avg_uptime,
+            'color_class': color_class,
+            'tooltip': tooltip,
+            'relay_count': len(period_relays)
         }
-        
-        for period in ['1_month', '6_months', '1_year', '5_years']:
-            period_short = PERIOD_SHORT_NAMES.get(period, period)
-            
-            if period in periods and periods[period]:
-                # Calculate average uptime for operator relays with this flag
-                uptime_values = [relay_data['uptime'] for relay_data in periods[period]]
-                avg_uptime = sum(uptime_values) / len(uptime_values)
-                
-                # Include all values >= 0 (0% is valid data meaning relay never had this flag)
-                if avg_uptime >= 0:
-                    periods_with_data.add(period_short)
-                    
-                    # Determine color coding and tooltip
-                    color_class = ''
-                    tooltip = f'{flag} flag uptime over {period_short}: {avg_uptime:.1f}%'
-                    
-                    # Add network comparison if available
-                    if (flag in network_flag_statistics and 
-                        period in network_flag_statistics[flag] and
-                        network_flag_statistics[flag][period]):
-                        
-                        net_stats = network_flag_statistics[flag][period]
-                        tooltip += f' (network μ: {net_stats["mean"]:.1f}%, 2σ: {net_stats["two_sigma_low"]:.1f}%)'
-                        
-                        # Enhanced color coding logic: prioritize statistical outliers over >99%
-                        # Special handling for very low values (≤1%) - likely to be statistical outliers
-                        if avg_uptime <= 1.0:
-                            color_class = 'statistical-outlier-low'
-                        elif avg_uptime <= net_stats['two_sigma_low']:
-                            color_class = 'statistical-outlier-low'
-                        elif avg_uptime >= 99.0:
-                            color_class = 'high-performance'
-                        elif avg_uptime > net_stats['two_sigma_high']:
-                            color_class = 'statistical-outlier-high'
-                        elif avg_uptime < net_stats['mean']:
-                            color_class = 'below-mean'
-                        # Note: Removed default above-mean green coloring per user feedback
-                    
-                    else:
-                        # Fallback color coding when no network statistics available
-                        if avg_uptime <= 1.0:
-                            color_class = 'statistical-outlier-low'
-                        elif avg_uptime >= 99.0:
-                            color_class = 'high-performance'
-                        # Default: no special coloring
-                    
-                    flag_info['periods'][period_short] = {
-                        'value': avg_uptime,
-                        'color_class': color_class,
-                        'tooltip': tooltip,
-                        'relay_count': len(periods[period])
-                    }
-            
-        # Only include flag if it has data for at least one period
-        if flag_info['periods']:
-            flag_reliabilities[flag] = flag_info
-    
-    # Generate dynamic period display string
-    period_order = ['1M', '6M', '1Y', '5Y']
-    available_periods = [p for p in period_order if p in periods_with_data]
-    period_display = '/'.join(available_periods) if available_periods else 'No Data'
-    
-    return {
-        'flag_reliabilities': flag_reliabilities,
-        'available_periods': available_periods,
-        'period_display': period_display,
-        'has_data': bool(available_periods)
-    }
+
+    return _process_operator_flag_metric(
+        operator_flag_data, network_flag_statistics,
+        # Define flag ordering for consistent display - Hidden Services before Directory Services
+        flag_order=['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'HSDir', 'V2Dir'],
+        flag_display_mapping={
+            'Running': {'icon': '🟢', 'display_name': 'Running Operation'},
+            'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
+            'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'},
+            'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
+            'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
+            'HSDir': {'icon': '📂', 'display_name': 'Hidden Services'},
+            'Authority': {'icon': '⚖️', 'display_name': 'Directory Authority'},
+            'V2Dir': {'icon': '📁', 'display_name': 'Directory Services'},
+            'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
+        },
+        periods=ONIONOO_HISTORY_PERIODS,
+        period_order=['1M', '6M', '1Y', '5Y'],
+        build_period_entry=build_period_entry
+    )
 
 def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_data, bandwidth_unit, relay_set):
     """
@@ -1200,8 +1350,9 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
     downtime_alerts = {
         'offline_counts': {
             'guard': 0,
-            'middle': 0, 
-            'exit': 0
+            'middle': 0,
+            'exit': 0,
+            'total': 0
         },
         'offline_bandwidth_impact': {
             'total_offline_bandwidth': 0,  # bytes
@@ -1278,18 +1429,18 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
                 'display_text': f"{nickname} ({last_seen_formatted})"
             }
             
-            # Categorize by relay type based on flags
-            if 'Guard' in flags:
+            # Categorize each offline relay into exactly one bucket using the
+            # same Exit > Guard > Middle priority as contact_sorting.role_rank
+            # and categorization.py role counting, so bucket sums match the
+            # exclusive guard/exit/middle bandwidth denominators.
+            downtime_alerts['offline_counts']['total'] += 1
+            if 'Exit' in flags:
+                downtime_alerts['offline_counts']['exit'] += 1
+                downtime_alerts['offline_relay_details']['exit_relays'].append(relay_info)
+            elif 'Guard' in flags:
                 downtime_alerts['offline_counts']['guard'] += 1
                 downtime_alerts['offline_relay_details']['guard_relays'].append(relay_info)
-                
-            if 'Exit' in flags:
-                downtime_alerts['offline_counts']['exit'] += 1  
-                downtime_alerts['offline_relay_details']['exit_relays'].append(relay_info)
-                
-            # Middle relays are all relays that aren't Guard or Exit only, or relays that are both
-            # This matches the logic used elsewhere in the codebase for middle relay classification
-            if not flags or ('Guard' not in flags and 'Exit' not in flags) or ('Guard' in flags and 'Exit' in flags):
+            else:
                 downtime_alerts['offline_counts']['middle'] += 1
                 downtime_alerts['offline_relay_details']['middle_relays'].append(relay_info)
     
@@ -1384,5 +1535,4 @@ def calculate_uptime_display(relay, _format_time_ago_fn=None):
                 return "DOWN (unknown)"
         else:
             return "DOWN (unknown)"
-
 

@@ -18,10 +18,18 @@ import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 # Configuration
 SLOW_SERVER_PORT = 19100
 HANG_DURATION = 300  # 5 minutes - longer than any timeout
+
+# Repo-relative path to the allium package directory used as cwd for
+# the subprocess invocation. Resolves from this test file's location
+# (tests/system/test_timeout_integration.py) up to the repo root and
+# into ./allium, so the test works regardless of where the repo is
+# checked out (no hard-coded /workspace).
+ALLIUM_CWD = str(Path(__file__).resolve().parents[2] / "allium")
 
 
 class HangingAPIHandler(http.server.BaseHTTPRequestHandler):
@@ -102,7 +110,7 @@ def run_allium_with_hanging_details_api():
     try:
         result = subprocess.run(
             cmd,
-            cwd="/workspace/allium",
+            cwd=ALLIUM_CWD,
             capture_output=True,
             text=True,
             timeout=180,  # 3 minute timeout for the entire test
@@ -191,7 +199,7 @@ def run_allium_with_hanging_uptime_api():
     try:
         result = subprocess.run(
             cmd,
-            cwd="/workspace/allium",
+            cwd=ALLIUM_CWD,
             capture_output=True,
             text=True,
             timeout=180,

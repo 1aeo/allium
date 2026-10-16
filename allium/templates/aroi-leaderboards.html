@@ -1,361 +1,11 @@
 {% from "macros.html" import navigation %}
 {% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, validated_relays_table_complete, generic_ranking_table_paginated, ipv4_ipv6_table_paginated, ipv4_ipv6_section_paginated, pagination_section %}
 {% extends "skeleton.html" -%}
-{% block page_css %}
-/* =============================================================================
-   AROI Leaderboards CSS (page-specific — only loaded on AROI leaderboard pages)
-   ============================================================================= */
-
-/* Section Spacing */
-.aroi-section {
-    margin-bottom: 40px;
-    scroll-margin-top: 20px;
-}
-
-.aroi-champion-badge { margin-bottom: 20px; }
-
-/* Top 3 Summary Tables */
-.aroi-top3-table thead th:nth-child(1) { width: 30%; }
-.aroi-top3-table thead th:nth-child(2) { width: 25%; }
-.aroi-top3-table thead th:nth-child(3) { width: 45%; }
-
-/* Complete Rankings Tables - Common patterns */
-.aroi-rankings-table thead th:nth-child(1) { width: 5%; }
-.aroi-rankings-table thead th:nth-child(2) { width: 25%; }
-
-/* Standard bandwidth/consensus table layout */
-.aroi-standard-table thead th:nth-child(3) { width: 12%; }
-.aroi-standard-table thead th:nth-child(4) { width: 11%; }
-.aroi-standard-table thead th:nth-child(5) { width: 12%; }
-.aroi-standard-table thead th:nth-child(6) { width: 15%; }
-.aroi-standard-table thead th:nth-child(7) { width: 10%; }
-.aroi-standard-table thead th:nth-child(8) { width: 10%; }
-
-/* Specialized table for Exit/Guard operators */
-.aroi-specialized-table thead th:nth-child(3) { width: 10%; }
-.aroi-specialized-table thead th:nth-child(4) { width: 8%; }
-.aroi-specialized-table thead th:nth-child(5) { width: 15%; }
-.aroi-specialized-table thead th:nth-child(6) { width: 12%; }
-.aroi-specialized-table thead th:nth-child(7) { width: 10%; }
-.aroi-specialized-table thead th:nth-child(8) { width: 15%; }
-
-/* Diversity/Category table layout */
-.aroi-category-table thead th:nth-child(3) { width: 8%; }
-.aroi-category-table thead th:nth-child(4) { width: 15%; }
-.aroi-category-table thead th:nth-child(5) { width: 12%; }
-.aroi-category-table thead th:nth-child(6) { width: 10%; }
-.aroi-category-table thead th:nth-child(7) { width: 10%; }
-.aroi-category-table thead th:nth-child(8) { width: 15%; }
-
-/* Geographic Champions (Non-EU Leaders) */
-.aroi-geographic-table thead th:nth-child(3) { width: 15%; }
-.aroi-geographic-table thead th:nth-child(4) { width: 10%; }
-.aroi-geographic-table thead th:nth-child(5) { width: 8%; }
-.aroi-geographic-table thead th:nth-child(6) { width: 25%; }
-
-/* Frontier Builders (Rare Countries) */
-.aroi-frontier-table thead th:nth-child(3) { width: 10%; }
-.aroi-frontier-table thead th:nth-child(4) { width: 12%; }
-.aroi-frontier-table thead th:nth-child(5) { width: 10%; }
-.aroi-frontier-table thead th:nth-child(6) { width: 23%; }
-
-/* Platform Diversity (Non-Linux Heroes) */
-.aroi-platform-table thead th:nth-child(3) { width: 10%; }
-.aroi-platform-table thead th:nth-child(4) { width: 8%; }
-.aroi-platform-table thead th:nth-child(5) { width: 22%; }
-
-/* AROI Champion Badge Styles - Harmonized Color Tier System */
-
-/* Authority/Network Control (Gold/Orange spectrum) */
-.aroi-champion-platinum {
-    background: linear-gradient(45deg, #FFD700, #FFA500);
-    color: #000;
-    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
-}
-
-/* DRY: merged .aroi-champion-network + .aroi-champion-bandwidth-legend (identical styles) */
-.aroi-champion-network,
-.aroi-champion-bandwidth-legend {
-    background: linear-gradient(45deg, #FFB300, #FF8C00);
-    color: #000;
-    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
-}
-
-.aroi-champion-exit-authority {
-    background: linear-gradient(45deg, #FFAA00, #FF9500);
-    color: #000;
-    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
-}
-
-.aroi-champion-guard-authority {
-    background: linear-gradient(45deg, #FF6B35, #F7931E);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
-}
-
-.aroi-champion-guard {
-    background: linear-gradient(45deg, #E67E22, #D35400);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
-}
-
-.aroi-champion-exit {
-    background: linear-gradient(45deg, #FF8C42, #FF7315);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
-}
-
-/* Innovation & Technology (Purple/Blue spectrum) */
-.aroi-champion-platform {
-    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
-}
-
-.aroi-champion-ipv4 {
-    background: linear-gradient(45deg, #0984e3, #74b9ff);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
-}
-
-.aroi-champion-ipv6 {
-    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
-}
-
-/* DRY: merged .aroi-champion-diversity + .aroi-champion-bandwidth (identical styles) */
-.aroi-champion-diversity,
-.aroi-champion-bandwidth {
-    background: linear-gradient(45deg, #00b894, #55a3ff);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
-}
-
-.aroi-champion-global {
-    background: linear-gradient(45deg, #00cec9, #55efc4);
-    color: #000;
-    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
-}
-
-.aroi-champion-frontier {
-    background: linear-gradient(45deg, #27ae60, #2ecc71);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
-}
-
-/* Reliability & Legacy (Earth tones) */
-.aroi-champion-reliability {
-    background: linear-gradient(45deg, #8b7355, #a0845c);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
-}
-
-.aroi-champion-veteran {
-    background: linear-gradient(45deg, #cd7f32, #b8860b);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
-}
-
-.aroi-champion-legacy {
-    background: linear-gradient(45deg, #8b4513, #a0522d);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
-}
-
-/* Total Data Champions (Blue/Teal spectrum) */
-.aroi-champion-total-data {
-    background: linear-gradient(45deg, #0984e3, #00b894);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
-}
-
-/* AROI Validation Champions (Green verification spectrum) */
-.aroi-champion-validation {
-    background: linear-gradient(45deg, #00b894, #28a745);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
-}
-
-/* Enhanced hover effects for all badges */
-.aroi-champion-badge .panel-body {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.aroi-champion-badge .panel-body:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* AROI Ranking Badge Styles */
-.aroi-rank-gold { background-color: #FFD700; }
-.aroi-rank-silver { background-color: #C0C0C0; }
-.aroi-rank-bronze { background-color: #CD7F32; }
-
-/* AROI Link Styles */
-.aroi-underline-link { text-decoration: underline; color: inherit; }
-.aroi-contact-link { text-decoration: underline; }
-
-/* AROI Layout Styles */
-.aroi-flex-nav { display: flex; flex-wrap: wrap; gap: 10px; }
-.aroi-nav-spacing { margin-bottom: 20px; }
-.aroi-nav-spacing h4 { margin-top: 5px; }
-
-.aroi-primary-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 15px;
-    justify-content: center;
-}
-
-.aroi-category-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding-top: 15px;
-    border-top: 1px solid var(--color-border-light);
-    justify-content: center;
-}
-
-/* Compact Navigation Styles */
-.aroi-compact-nav { margin-bottom: 15px; padding: 10px 15px; }
-
-.aroi-compact-nav-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 15px;
-    font-size: 14px;
-}
-
-.aroi-nav-label { font-weight: bold; color: var(--color-nav-active-text); white-space: nowrap; }
-
-.aroi-primary-nav-centered {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-.aroi-category-links-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
-}
-
-.aroi-nav-link {
-    color: var(--color-link);
-    text-decoration: none;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 13px;
-    white-space: nowrap;
-}
-
-.aroi-nav-link:hover {
-    color: var(--color-link-hover);
-    background-color: var(--color-bg-light);
-    text-decoration: none;
-}
-
-/* Responsive adjustments for compact nav */
-@media (max-width: 768px) {
-    .aroi-primary-nav-centered { flex-direction: column; align-items: center; gap: 8px; }
-    .aroi-category-links-row { justify-content: center; }
-    .aroi-nav-link { font-size: 12px; }
-}
-
-.aroi-nav-separator { border-top: 1px solid var(--color-border-light); margin: 15px 0; }
-.aroi-top-margin { margin-top: 10px; }
-.aroi-compact-summary { margin-bottom: 8px; padding: 8px 12px; }
-.aroi-compact-summary h5 { margin-top: 0; margin-bottom: 4px; font-size: 15px; line-height: 1.2; }
-.aroi-compact-summary .row { margin-bottom: 2px; }
-.aroi-compact-summary .col-md-3 { padding-top: 2px; padding-bottom: 2px; }
-.aroi-compact-footer { margin-top: 4px; padding-top: 3px; border-top: 1px solid rgba(255,255,255,0.3); }
-.aroi-compact-footer small { font-size: 11px; line-height: 1.3; }
-.aroi-header-spacing { margin-top: 0; }
-.aroi-fixed-nav { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
-.aroi-footer-section { margin-top: 50px; border-top: 2px solid var(--color-border-light); padding-top: 30px; }
-
-/* AROI Pagination — pure CSS, no JavaScript, backward-compatible.
-   Works on all browsers with flexbox + :target support (Firefox 20+, all Tor Browser versions).
-   
-   Strategy: DOM order puts the default page (1-10) LAST among siblings so the CSS ~ general
-   sibling combinator can hide it when any preceding sibling is :target. Flexbox `order` 
-   restores the correct visual sequence (1-10 first, 11-20 second, 21-25 third). */
-
-/* Flex container for visual reordering */
-.pagination-container {
-    display: flex;
-    flex-direction: column;
-}
-
-/* All pagination sections hidden by default */
-.pagination-section { display: none; scroll-margin-top: 80px; }
-.pagination-section h4 { margin-top: 20px; margin-bottom: 15px; }
-
-/* Default: show first page (1-10) — last in DOM, first visually via order */
-[id$="-1-10"].pagination-section { display: block; order: 1; }
-[id$="-11-20"].pagination-section { order: 2; }
-[id$="-21-25"].pagination-section { order: 3; }
-
-/* Show any targeted pagination section */
-.pagination-section:target { display: block; }
-
-/* Hide ALL non-targeted sections when any section is :target.
-   Works because default page (1-10) is LAST in DOM order — the ~ combinator
-   reaches it from any :target preceding sibling. Non-default pages that precede
-   the :target in DOM are already display:none and unaffected. */
-.pagination-section:target ~ .pagination-section:not(:target) { display: none !important; }
-
-/* Compact table styling */
-.aroi-rankings-table.aroi-standard-table td,
-.aroi-rankings-table.aroi-standard-table th {
-    padding: 6px 8px;
-    vertical-align: middle;
-}
-.aroi-rankings-table.aroi-standard-table { margin-bottom: 10px; }
-
-/* Pagination nav below tables */
-.pagination-nav-bottom {
-    margin: 0 0 30px 0;
-    text-align: center;
-    border: 1px solid var(--color-border-light);
-    border-radius: 5px;
-    padding: 4px;
-    background-color: var(--color-bg-light);
-}
-.pagination-nav-bottom a {
-    display: inline-block;
-    padding: 4px 8px;
-    margin: 0 2px;
-    border: 1px solid var(--color-link);
-    border-radius: 3px;
-    color: var(--color-link);
-    text-decoration: none;
-    background-color: white;
-    font-size: 14px;
-    line-height: 1.2;
-}
-.pagination-nav-bottom a:hover,
-.pagination-nav-bottom a.active {
-    background-color: var(--color-link);
-    color: white;
-}
-
-/* AROI Panel Background Colors for Champion Badges */
-.panel-danger .panel-body { background-color: #f2dede; border-color: #ebccd1; }
-.panel-warning .panel-body { background-color: #fcf8e3; border-color: #faebcc; }
-.panel-info .panel-body { background-color: #d9edf7; border-color: #bce8f1; }
-.panel-success .panel-body { background-color: #dff0d8; border-color: #d6e9c6; }
-.panel-primary { border-color: #bce8f1; }
-.panel-primary .panel-body { background-color: #d9edf7; }
-{% endblock %}
+{% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/aroi-leaderboards.css">{% endblock %}
 {% block title -%}
-    🏆 Tor Network Operator Champion Dashboard
+    Tor Network Operator Champion Dashboard
 {% endblock -%}
+{% block meta_description %}Live rankings of Tor relay operators by bandwidth, consensus weight, diversity, reliability, validation, address coverage, and longevity.{% endblock %}
 {% block body -%}
 
 <div class="aroi-center-text aroi-subsection">
@@ -382,10 +32,12 @@
         <a href="#guard_authority" class="aroi-nav-link" title="Guard Authority: Control over guard consensus weight, determining which relays handle the first hop where Tor traffic enters the network">🛡️ Guard Authority</a>
         <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
         <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 3.0), AS rarity-weighted network diversity (× 2.0), and platform variety (platforms × 1.0) to measure operational resilience">🌈 Most Diverse</a>
-        <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
-        <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
-        <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders: Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
+        <a href="#most_diverse" class="aroi-nav-link" title="Diversity All-Rounders: Diversity Index (0-100) averaging four co-equal sub-scores — Geographic, Platform, Network and Scale (diverse relays) — each measured against yardsticks derived from today's live network">🌈 Diversity All-Rounders</a>
+        <a href="#platform_volume" class="aroi-nav-link" title="Non-Linux Powerhouses (Platform Volume): Most non-Linux relays contributed to the network — volume diversity that shifts Tor away from a Linux monoculture">💻 Non-Linux Powerhouses</a>
+        <a href="#platform_breadth" class="aroi-nav-link" title="OS Polyglots (Platform Breadth): Most distinct operating systems (including Linux) run by one operator, minimum 2 to qualify — breadth diversity that makes an operator resilient to any single OS vulnerability">🧩 OS Polyglots</a>
+        <a href="#non_eu_volume" class="aroi-nav-link" title="Global Powerhouses (Non-EU Volume): Most relays operated outside the European Union — volume diversity expanding Tor's capacity beyond EU concentration">🌍 Global Powerhouses</a>
+        <a href="#non_eu_breadth" class="aroi-nav-link" title="Jurisdiction Globetrotters (Non-EU Breadth): Most distinct non-EU countries with relay presence — breadth diversity that spreads an operator across many jurisdictions">🧭 Jurisdiction Globetrotters</a>
+        <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders (Rare-Country Breadth): Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
         <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
         <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month average uptime scores for operators with 25+ relays, measuring operational excellence">⏰ Reliability Masters</a>
         <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year average uptime scores for operators with 25+ relays, recognizing long-term operational stability">👑 Legacy Titans</a>
@@ -440,11 +92,15 @@
         
         {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Gatekeepers", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌈", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity All-Rounder", "🌈", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("platform_volume", relays.json.aroi_leaderboards.leaderboards.platform_volume, "Non-Linux Powerhouse", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("platform_breadth", relays.json.aroi_leaderboards.leaderboards.platform_breadth, "OS Polyglot", "🧩", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("non_eu_volume", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, "Global Powerhouse", "🌍", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("non_eu_breadth", relays.json.aroi_leaderboards.leaderboards.non_eu_breadth, "Jurisdiction Globetrotter", "🧭", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix, relays.use_bits) }}
         
@@ -493,14 +149,20 @@
     <!-- Guard Gatekeepers -->
     {{ top3_table("Guard Gatekeepers", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx, relays.use_bits) }}
 
-    <!-- Diversity Masters -->
-    {{ top3_table("Diversity Masters", "🌈", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
+    <!-- Diversity All-Rounders -->
+    {{ top3_table("Diversity All-Rounders", "🌈", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
 
-    <!-- Platform Heroes -->
-    {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx, relays.use_bits) }}
+    <!-- Non-Linux Powerhouses (Platform Volume) -->
+    {{ top3_table("Non-Linux Powerhouses", "💻", relays.json.aroi_leaderboards.leaderboards.platform_volume, ["🏆 Powerhouse Legend", "💻 Powerhouse Master", "🖥️ Powerhouse Champion"], "platform_volume", page_ctx, relays.use_bits) }}
 
-    <!-- Global Expansion Leaders -->
-    {{ top3_table("Global Expansion Leaders", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, ["Global Pioneer", "Global Explorer", "Global Ambassador"], "non_eu_leaders", page_ctx, relays.use_bits) }}
+    <!-- OS Polyglots (Platform Breadth) -->
+    {{ top3_table("OS Polyglots", "🧩", relays.json.aroi_leaderboards.leaderboards.platform_breadth, ["🏆 Polyglot Legend", "🧩 Polyglot Master", "🔧 Polyglot Champion"], "platform_breadth", page_ctx, relays.use_bits) }}
+
+    <!-- Global Powerhouses (Non-EU Volume) -->
+    {{ top3_table("Global Powerhouses", "🌍", relays.json.aroi_leaderboards.leaderboards.non_eu_volume, ["🏆 Global Powerhouse", "🌍 Global Master", "🌐 Global Champion"], "non_eu_volume", page_ctx, relays.use_bits) }}
+
+    <!-- Jurisdiction Globetrotters (Non-EU Breadth) -->
+    {{ top3_table("Jurisdiction Globetrotters", "🧭", relays.json.aroi_leaderboards.leaderboards.non_eu_breadth, ["🏆 Globetrotter Legend", "🧭 Globetrotter Master", "🗺️ Globetrotter Champion"], "non_eu_breadth", page_ctx, relays.use_bits) }}
 
     <!-- Frontier Pioneers -->
     {{ top3_table("Frontier Pioneers", "🏴‍☠️", relays.json.aroi_leaderboards.leaderboards.frontier_builders, ["Frontier Pioneer", "Frontier Pioneer", "Frontier Pioneer"], "frontier_builders", page_ctx, relays.use_bits) }}
@@ -578,16 +240,18 @@
     </section>
 
     <!-- Paginated Generic Categories -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions'] %}
+    {% for category_key in ['most_diverse', 'platform_volume', 'platform_breadth', 'non_eu_volume', 'non_eu_breadth', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🚀' if category_key == 'bandwidth_masters' else '🌟' if category_key == 'bandwidth_legends' else '📦' if category_key == 'total_data_champions' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
+        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_volume' else '🧩' if category_key == 'platform_breadth' else '🌍' if category_key == 'non_eu_volume' else '🧭' if category_key == 'non_eu_breadth' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🚀' if category_key == 'bandwidth_masters' else '🌟' if category_key == 'bandwidth_legends' else '📦' if category_key == 'total_data_champions' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3 title="Operators ranked by 
-            {%- if category_key == 'most_diverse' -%}combined geographic, AS rarity-weighted network, and platform diversity scores
-            {%- elif category_key == 'platform_diversity' -%}number of non-Linux relays promoting OS diversity
-            {%- elif category_key == 'non_eu_leaders' -%}number of relays operated outside the European Union
+            {%- if category_key == 'most_diverse' -%}the Diversity Index (0-100): the average of four co-equal 0-100 sub-scores — Geographic (countries + non-EU relays), Platform (distinct OSes + non-Linux relays), Network (unique ASes + AS rarity) and Scale (diverse relays: relays differing from the operator's most-common OS, country or AS). Every yardstick is derived from today's live network and recomputed each update
+            {%- elif category_key == 'platform_volume' -%}volume diversity: number of non-Linux relays contributed to the network (distinct OS count breaks ties). Rewards operators shifting Tor away from a Linux monoculture at scale
+            {%- elif category_key == 'platform_breadth' -%}breadth diversity: number of distinct operating systems including Linux, minimum 2 to qualify (non-Linux relay count breaks ties). Rewards operators whose own fleet spans many OSes
+            {%- elif category_key == 'non_eu_volume' -%}volume diversity: number of relays operated outside the European Union (distinct country count breaks ties). Rewards operators expanding Tor capacity beyond EU concentration at scale
+            {%- elif category_key == 'non_eu_breadth' -%}breadth diversity: number of distinct non-EU countries with relay presence (non-EU relay count breaks ties). Rewards operators spreading across many jurisdictions
             {%- elif category_key == 'frontier_builders' -%}rare country scores from strategically important countries
             {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
             {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
@@ -598,7 +262,7 @@
             {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
             {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
             {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
-            {{ pagination_section(category_key, emoji if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] else '', category_data, 'generic_ranking_table_paginated', page_ctx, relays.use_bits) }}
+            {{ pagination_section(category_key, emoji if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] else '', category_data, 'most_diverse_table_paginated' if category_key == 'most_diverse' else 'generic_ranking_table_paginated', page_ctx, relays.use_bits) }}
         </section>
     {% endfor %}
 
@@ -637,14 +301,16 @@
                     <li><strong>🛡️ Guard Authorities:</strong> Guard consensus weight percentage (authority over entry traffic)</li>
                     <li><strong>🚪 Exit Champions:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Gatekeepers:</strong> Number of guard relays operated</li>
-                    <li><strong>🌈 Most Diverse:</strong> Geographic, AS rarity-weighted network, and platform diversity score</li>
+                    <li><strong>🌈 Diversity All-Rounders:</strong> Diversity Index (0-100) averaging four co-equal sub-scores — Geographic, Platform, Network, Scale — against yardsticks from today's live network</li>
                 </ul>
             </div>
             <div class="col-md-6">
                 <ul>
-                    <li><strong>💻 Platform Diversity:</strong> Non-Linux relay operators promoting OS diversity</li>
-                    <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
-                    <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
+                    <li><strong>💻 Non-Linux Powerhouses (Platform Volume):</strong> Most non-Linux relays contributed — volume diversity at scale</li>
+                    <li><strong>🧩 OS Polyglots (Platform Breadth):</strong> Most distinct operating systems incl. Linux (2+ to qualify) — breadth diversity within one operator</li>
+                    <li><strong>🌍 Global Powerhouses (Non-EU Volume):</strong> Most relays outside the EU — volume diversity at scale</li>
+                    <li><strong>🧭 Jurisdiction Globetrotters (Non-EU Breadth):</strong> Most distinct non-EU countries — breadth diversity across jurisdictions</li>
+                    <li><strong>🏴‍☠️ Frontier Builders (Rare-Country Breadth):</strong> Operators in rare or underrepresented countries</li>
                     <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
                     <li><strong>⏰ Reliability Masters:</strong> 6-month average uptime scores (25+ relays, operational excellence)</li>
                     <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
@@ -655,6 +321,14 @@
                 </ul>
             </div>
         </div>
+        
+        <h4>🌈 Two Kinds of Diversity — Volume and Breadth:</h4>
+        <p>The diversity leaderboards celebrate <strong>two co-equal kinds of diversity</strong>, ranked on separate boards so neither is buried under the other's metric:</p>
+        <ul>
+            <li><strong>Volume diversity (contribution at scale):</strong> An operator running hundreds of relays on a non-dominant platform (e.g. 300 FreeBSD relays) or outside the EU pours real capacity into the underrepresented side of the network. Scale is the point. Measured by <em>relay count</em> (💻 Non-Linux Powerhouses, 🌍 Global Powerhouses).</li>
+            <li><strong>Breadth diversity (internal spread):</strong> An operator running many different operating systems or spanning many countries is diverse within their own fleet — no single kernel vulnerability or legal action can take it all down at once. Variety is the point. Measured by <em>distinct count</em> (🧩 OS Polyglots, 🧭 Jurisdiction Globetrotters, 🏴‍☠️ Frontier Builders).</li>
+        </ul>
+        <p>Each board ranks by its own primary metric and uses the other kind's metric only as a tiebreaker; both numbers are always displayed together. The 🧩 OS Polyglots board counts <strong>all operating systems including Linux</strong> and only lists operators running <strong>2 or more distinct OSes</strong>.</p>
         
         <h4>⏰ Reliability Masters Scoring (6-Month):</h4>  
         <p><strong>6-Month Reliability Score Calculation:</strong> The Reliability Masters category measures recent operational excellence using simple average uptime data from the Onionoo API over the past 6 months. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
@@ -721,21 +395,40 @@
         <p><em>Example:</em> An operator with 50 relays: 45 relays with valid AROI proofs (DNS-RSA or URI-RSA), 5 relays with failed validation would score: <strong>45 validated relays</strong>, ranking by the count of successfully validated relays.</p>
         <p><strong>Focus:</strong> Promotes operator accountability and transparency by recognizing those who maintain proper AROI cryptographic verification across their relay infrastructure, demonstrating commitment to verified identity and network trust.</p>
         
-        <h4>🌈 Diversity Champion Scoring:</h4>
-        <p><strong>Diversity Score Calculation:</strong> The diversity score combines geographic, network, and platform diversity:</p>
+        <h4>🌈 Diversity All-Rounders Scoring (Diversity Index):</h4>
+        <p><strong>Diversity Index Calculation:</strong> The Diversity Index (0–100) is the average of four <strong>co-equal</strong> 0–100 sub-scores. Each sub-score combines a <em>breadth</em> half (distinct counts, linear ramp) and a <em>volume</em> half (relay counts, logarithmic ramp so raw size can't dominate):</p>
         <ul>
-            <li><strong>Geographic Component:</strong> Number of countries × 3.0 (highest weight for jurisdictional spread)</li>
-            <li><strong>Network Component:</strong> Each unique AS (Autonomous System) is scored 0–5 for rarity, then the sum is divided by 2.5.
-            <ul>
-                <li><strong>Base (0–3) — Consensus Weight:</strong> How much of the network's authority does this AS hold? Dominant ≥5% CW = 0 pts; Major 0.5–5% = 1 pt; Moderate 0.05–0.5% = 2 pts; Small &lt;0.05% = 3 pts</li>
-                <li><strong>Bonus (0–2) — Operator Count:</strong> How many distinct operators share this AS? Popular (10+) = 0 pts; Few (2–10) = +1 pt; Sole operator = +2 pts</li>
-            </ul>
-            <em>Examples: OVH (≥5% CW, 190+ operators) = 0. Flokinet (&lt;0.05% CW, 3 operators) = 3+1 = 4. A sole-operator private AS (&lt;0.05% CW) = 3+2 = 5.</em>
-            </li>
-            <li><strong>Platform Component:</strong> Number of operating systems × 1.0 (promotes OS diversity beyond Linux)</li>
+            <li><strong>Geographic:</strong> ½ × (distinct countries ÷ geo yardstick) + ½ × log-ramp(non-EU relays vs volume yardstick)</li>
+            <li><strong>Platform:</strong> ½ × (distinct OSes incl. Linux − 1, ÷ OS yardstick) + ½ × log-ramp(non-Linux relays vs volume yardstick)</li>
+            <li><strong>Network:</strong> ½ × (unique ASes ÷ AS yardstick) + ½ × log-ramp(AS rarity sum vs volume yardstick)</li>
+            <li><strong>Scale:</strong> log-ramp(<em>diverse relays</em> vs volume yardstick). A <em>diverse relay</em> is one differing from the operator's most-common OS, country, or AS — the relays adding spread beyond the main deployment. A perfect monoculture scores 0 regardless of fleet size.</li>
+        </ul>
+        <p><strong>Network-adaptive yardsticks (no fixed magic numbers):</strong> every yardstick is recomputed from the live network each update — geo: 10% of countries hosting relays; OS: the most OSes any single operator runs; AS: 1% of ASes hosting relays; all volume yardsticks: the 5th-highest operator value ("top-5 cohort"). "100" always means "matches today's network leaders/structure", and the bar moves as the network evolves.</p>
+        <p><strong>Index Formula:</strong> diversity_index = (geographic + platform + network + scale) / 4</p>
+        <p><em>Example:</em> An operator with 14 countries, 6 OSes, 10 rare ASes and 15 of 15 relays off their dominant profile scores roughly geo 80 + platform 67 + network 90 + scale 75 → <strong>Index 78</strong>.</p>
+        <p><strong>Network Component — AS rarity scoring (0–5 per AS):</strong></p>
+        <ul>
+            <li><strong>Base (0–3) — Consensus Weight:</strong> How much of the network's authority does this AS hold? Dominant ≥5% CW = 0 pts; Major 0.5–5% = 1 pt; Moderate 0.05–0.5% = 2 pts; Small &lt;0.05% = 3 pts</li>
+            <li><strong>Bonus (0–2) — Operator Count:</strong> How many distinct operators share this AS? Popular (10+) = 0 pts; Few (2–10) = +1 pt; Sole operator = +2 pts</li>
         </ul>
         <p><strong>AS Rarity Tiers:</strong> <strong>Legendary</strong> (4–5): minimal footprint, sole/few operators; <strong>Epic</strong> (3): small provider or moderate with few operators; <strong>Rare</strong> (2): moderate provider; <strong>Emerging</strong> (1): major provider; <strong>Common</strong> (0): dominant providers like OVH and Hetzner.</p>
-        <p><em>Example:</em> An operator with 4 countries, 2 platforms, and 2 epic AS (score 3 each, sum=6) would score: (4 × 3.0) + (6 / 2.5) + (2 × 1.0) = 12.0 + 2.4 + 2.0 = <strong>16.4 diversity points</strong>.</p>
+        <p><strong>Focus:</strong> Rewards true all-rounders — operators diverse on every dimension <em>and</em> at meaningful scale — instead of letting one dimension (e.g. country count) drown the rest.</p>
+        
+        <h4>💻 Non-Linux Powerhouses Scoring (Platform Volume):</h4>
+        <p><strong>Primary metric:</strong> count of non-Linux relays contributed to the network. <strong>Tiebreakers:</strong> distinct OS count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 633 FreeBSD relays ranks above 32 FreeBSD relays, regardless of how many OSes either operator runs — this board rewards shifting Tor away from a Linux monoculture <em>at scale</em>.</p>
+        
+        <h4>🧩 OS Polyglots Scoring (Platform Breadth):</h4>
+        <p><strong>Primary metric:</strong> count of distinct operating systems <em>including Linux</em> across the operator's fleet. <strong>Tiebreakers:</strong> non-Linux relay count, then bandwidth. <strong>Eligibility:</strong> 2+ distinct OSes.</p>
+        <p><em>Example:</em> 6 OSes on 15 relays (Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, SunOS) ranks above 2 OSes on 1,000 relays — this board rewards fleets that are diverse <em>within themselves</em>, resilient to any single kernel vulnerability.</p>
+        
+        <h4>🌍 Global Powerhouses Scoring (Non-EU Volume):</h4>
+        <p><strong>Primary metric:</strong> count of relays operated outside the European Union. <strong>Tiebreakers:</strong> distinct non-EU country count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 1,000 relays in 2 non-EU countries ranks above 100 relays in 10 non-EU countries — this board rewards expanding Tor capacity beyond EU concentration <em>at scale</em>.</p>
+        
+        <h4>🧭 Jurisdiction Globetrotters Scoring (Non-EU Breadth):</h4>
+        <p><strong>Primary metric:</strong> count of distinct non-EU countries with relay presence. <strong>Tiebreakers:</strong> non-EU relay count, then bandwidth. <strong>Eligibility:</strong> all operators.</p>
+        <p><em>Example:</em> 15 relays across 14 non-EU countries ranks above 1,000 relays in 2 non-EU countries — this board rewards spreading across many legal jurisdictions so no single legal action can reach the whole fleet.</p>
         
         <h4>🏴‍☠️ Frontier Builder Scoring:</h4>
         <p><strong>Rare Country Score Calculation:</strong> The rare country score sums up points from all countries where an operator runs relays using a weighted scoring system:</p>
