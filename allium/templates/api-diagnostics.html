@@ -99,6 +99,18 @@ API Diagnostics
                         <span class="al-status-muted">({{ api.extra_info }})</span>
                     {% endif %}
                 </dd>
+                {% if api.document_times and api.document_times.consensus_valid_after %}
+                <dt>Consensus valid-after</dt>
+                <dd>{{ api.document_times.consensus_valid_after|collector_time }}</dd>
+                {% endif %}
+                {% if api.document_times and api.document_times.latest_vote_time %}
+                <dt>Vote time</dt>
+                <dd>{{ api.document_times.oldest_vote_time|collector_span(api.document_times.latest_vote_time) }}</dd>
+                {% endif %}
+                {% if api.document_times and api.document_times.newest_descriptor_file %}
+                <dt>Newest descriptor file</dt>
+                <dd>{{ api.document_times.newest_descriptor_file|collector_time }}</dd>
+                {% endif %}
                 {% else %}
                 <dt>Status</dt>
                 <dd><span class="al-status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>

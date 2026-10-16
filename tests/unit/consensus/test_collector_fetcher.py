@@ -11,6 +11,8 @@ file format has changed and our parsing code needs to be updated.
 Vote file format reference: https://spec.torproject.org/dir-spec/
 """
 
+from datetime import datetime, timezone
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
@@ -1152,7 +1154,7 @@ class TestConsensusMethodInference:
             }
         
         # Mock _fetch_current_consensus_method to return None (simulates failure)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Should infer method 34 (highest with 9/9 support, threshold = 7)
@@ -1160,6 +1162,9 @@ class TestConsensusMethodInference:
         assert result['max_method'] == 34
         assert result['total_voters'] == 9
         assert result['max_method_support'] == 9
+        assert result['consensus_valid_after'] is None
+        assert result['method_inferred'] is True
+        assert result['latest_vote_time'] is None
     
     def test_infer_method_with_split_support(self):
         """Test inference when authorities support different max methods."""
@@ -1180,7 +1185,7 @@ class TestConsensusMethodInference:
                 'params': {},
             }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Method 35 only has 2 supporters (below threshold of 7)
@@ -1201,19 +1206,22 @@ class TestConsensusMethodInference:
             },
         }
         
-        # Mock returns actual method (not None)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=32):
+        # Mock returns the consensus document's method and its own valid-after.
+        with patch.object(fetcher, '_fetch_current_consensus_method',
+                          return_value=(32, '2024-06-01 00:00:00')):
             result = fetcher._compute_consensus_method_info()
         
-        # Should use the actual method, not infer
+        # Should use the actual method, not infer, and keep that document's time.
         assert result['current_method'] == 32
+        assert result['consensus_valid_after'] == '2024-06-01 00:00:00'
+        assert result['method_inferred'] is False
     
     def test_no_inference_when_no_votes(self):
         """Test that inference doesn't crash when no votes available."""
         fetcher = CollectorFetcher()
         fetcher.votes = {}
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # No votes = no inference possible
@@ -1238,13 +1246,123 @@ class TestConsensusMethodInference:
             },
         }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Family params should be extracted regardless of inference
         assert 'use-family-ids' in result['family_params_votes']
         assert result['family_params_votes']['use-family-ids']['moria1'] == 1
         assert result['family_params_votes']['use-family-ids']['tor26'] == 1
+
+
+class TestCollectorDocumentTimes:
+    """Vote and consensus times are the document headers, not the wall clock."""
+
+    def test_missing_published_time_is_not_invented(self):
+        fetcher = CollectorFetcher()
+        vote = """@type network-status-vote-3 1.0
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote, 'TEST123')
+        relay = next(iter(result['relays'].values()))
+        assert result['published'] is None
+        assert result['valid_after'] is None
+        assert result['vote_time'] is None
+        assert relay['descriptor_published'] == '2025-12-27 11:01:03'
+        assert result['vote_time'] != relay['descriptor_published']
+
+        published_only = """published 2024-06-01 00:00:00
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+s Fast Running Valid
+"""
+        parsed = fetcher._parse_vote(published_only, 'TEST123')
+        assert parsed['published'] == '2024-06-01 00:00:00'
+        assert parsed['valid_after'] is None
+        assert parsed['vote_time'] == '2024-06-01 00:00:00'
+
+    def test_per_authority_vote_times_differ(self):
+        fetcher = CollectorFetcher()
+        fetcher.votes = {
+            'moria1': {
+                'consensus_methods': [33, 34],
+                'params': {},
+                'valid_after': '2024-06-01 00:00:00',
+                'published': '2024-05-31 23:50:00',
+            },
+            'tor26': {
+                'consensus_methods': [33, 34, 35],
+                'params': {},
+                'valid_after': '2024-06-01 12:00:00',
+                'published': '2024-06-01 11:50:00',
+            },
+        }
+        with patch.object(fetcher, '_fetch_current_consensus_method',
+                          return_value=(33, '2024-06-01 00:00:00')):
+            result = fetcher._compute_consensus_method_info()
+
+        assert result['vote_times']['moria1'] == '2024-06-01 00:00:00'
+        assert result['vote_times']['tor26'] == '2024-06-01 12:00:00'
+        assert result['oldest_vote_time'] == '2024-06-01 00:00:00'
+        assert result['latest_vote_time'] == '2024-06-01 12:00:00'
+        assert result['consensus_valid_after'] == '2024-06-01 00:00:00'
+
+    def test_stale_consensus_document_keeps_its_own_time(self):
+        stale = '2024-06-01 00:00:00'
+        header = (
+            "network-status-version 3\n"
+            "vote-status consensus\n"
+            "consensus-method 33\n"
+            "valid-after %s\n" % stale
+        )
+        listing = 'href="2024-06-01-00-00-00-consensus"'
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, _n):
+                return header.encode()
+
+        fetcher = CollectorFetcher(retry_count=0, retry_delay_base=0)
+        fetcher.votes = {
+            'moria1': {
+                'consensus_methods': [33],
+                'params': {},
+                'vote_time': stale,
+            },
+            'tor26': {
+                'consensus_methods': [35],
+                'params': {},
+                'vote_time': '2024-06-01 12:00:00',
+            },
+        }
+        urlopen = 'allium.lib.consensus.collector_fetcher.urllib.request.urlopen'
+        with patch.object(fetcher, '_fetch_url', return_value=listing), \
+                patch(urlopen, return_value=_Resp()):
+            result = fetcher._compute_consensus_method_info()
+
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        assert result['current_method'] == 33
+        assert result['consensus_valid_after'] == stale
+        assert result['consensus_valid_after'] != now
+        assert result['vote_times']['moria1'] == stale
+        assert result['vote_times']['tor26'] == '2024-06-01 12:00:00'
+        assert now not in result['vote_times'].values()
+
+    def test_formatter_keeps_document_time(self):
+        from allium.lib.time_utils import format_collector_span, format_collector_time
+        assert format_collector_time(None) == ""
+        assert format_collector_time("2024-06-01 00:00:00") == "2024-06-01 00:00:00 UTC"
+        assert format_collector_time("2024-06-01T18:00:00+00:00") == "2024-06-01 18:00:00 UTC"
+        same = format_collector_span("2024-06-01 00:00:00", "2024-06-01 00:00:00")
+        assert same == "2024-06-01 00:00:00 UTC"
+        span = format_collector_span("2024-06-01 00:00:00", "2024-06-01 12:00:00")
+        assert span == "2024-06-01 00:00:00 UTC – 2024-06-01 12:00:00 UTC"
 
 
 class TestMiddleOnlyFlagTracking:

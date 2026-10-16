@@ -88,6 +88,34 @@ def format_timestamp_gmt(timestamp=None, fmt="%a, %d %b %Y %H:%M:%S GMT"):
     return _time_module.strftime(fmt, _time_module.gmtime(timestamp))
 
 
+def format_collector_time(value):
+    """Format a CollecTor document time as 'YYYY-MM-DD HH:MM:SS UTC'.
+
+    Accepts dir-spec timestamps and ISO-8601 file times. Returns '' when the
+    document has no time. Does not consult the wall clock.
+    """
+    if not isinstance(value, str):
+        return ""
+    text = value.strip().replace("T", " ")
+    for suffix in ("+00:00", "Z"):
+        if text.endswith(suffix):
+            text = text[:-len(suffix)].strip()
+    if "." in text:
+        text = text.split(".", 1)[0]
+    if len(text) < 19 or text[4] != "-" or text[10] != " ":
+        return ""
+    return text[:19] + " UTC"
+
+
+def format_collector_span(oldest, latest):
+    """Format one document time, or a range when the vote files differ."""
+    start = format_collector_time(oldest)
+    end = format_collector_time(latest)
+    if start and end and start != end:
+        return start + " – " + end
+    return start or end
+
+
 def format_time_ago(timestamp_str):
     """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
     try:

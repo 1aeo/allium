@@ -70,13 +70,61 @@ def route_for_html(relative_path):
     return quote(route, safe="/-._~")
 
 
+def _browser_normalized_base_url(url):
+    """Return ``url`` after the normalizations a browser applies to an href.
+
+    WHATWG parsers delete TAB, CR, and LF, and treat backslash as a slash.
+    This matches the CLI check in ``allium.allium`` and is used only to decide
+    whether a root-relative base is a safe canonical prefix. The stored value
+    is not rewritten.
+    """
+    return (
+        url.replace("\t", "")
+        .replace("\r", "")
+        .replace("\n", "")
+        .replace("\\", "/")
+        .strip()
+    )
+
+
+def root_relative_base_prefix(base_url):
+    """Return a root-relative subdirectory prefix, or ``None``.
+
+    ``/tor-metrics`` and ``/tor-metrics/`` both yield ``/tor-metrics``.
+    Absolute http(s) URLs are not prefixes; :func:`public_base_url` owns
+    those, including a path such as ``https://example.com/tor-metrics``.
+    A bare ``/``, scheme-relative ``//`` values, and values browsers
+    normalize into either of those are not prefixes. The CLI already rejects
+    them before generation.
+    """
+    if not isinstance(base_url, str) or not base_url:
+        return None
+    normalized = _browser_normalized_base_url(base_url)
+    # urlsplit("///tor-metrics") collapses to path "/tor-metrics". The CLI
+    # rejects every "//..." value, including an empty host, so do that first.
+    if not normalized.startswith("/") or normalized.startswith("//"):
+        return None
+    parsed = urlsplit(normalized)
+    if parsed.query or parsed.fragment:
+        return None
+    prefix = parsed.path.rstrip("/")
+    if not prefix.startswith("/"):
+        return None
+    return prefix
+
+
 def canonical_url_for_output(base_url, relative_path):
     """Return an absolute canonical when possible, otherwise root-relative."""
     route = route_for_html(canonical_output_path(relative_path))
     if route is None:
         return None
     base = public_base_url(base_url)
-    return f"{base}{route}" if base else route
+    if base:
+        return f"{base}{route}"
+    prefix = root_relative_base_prefix(base_url)
+    if prefix:
+        return f"{prefix}{route}"
+    return route
 
 
 def clean_href(path):

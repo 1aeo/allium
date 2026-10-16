@@ -34,7 +34,7 @@
             {% else %}
                 <span class="al-status-danger-bold">{{ relays.consensus_status.freshness|upper }}</span>
             {% endif %}
-            | {{ relays.consensus_status.voted_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} Voted at {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] if relays.collector_fetched_at else relays.timestamp }} (fetch time, votes from same consensus period)
+            | {{ relays.consensus_status.voted_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} voted{% if relays.consensus_method_info and relays.consensus_method_info.latest_vote_time %} ({{ relays.consensus_method_info.oldest_vote_time|collector_span(relays.consensus_method_info.latest_vote_time) }}){% endif %}
             {% if relays.consensus_status.next_consensus_time %}
             | Next: {{ relays.consensus_status.next_consensus_time }}
             {% endif %}
@@ -45,7 +45,7 @@
         {% if relays.consensus_method_info and relays.consensus_method_info.current_method %}
         <li><strong>Consensus Method:</strong> 
             <span style="font-weight: bold;">{{ relays.consensus_method_info.current_method }}</span>
-            (from consensus document)
+            {% if relays.consensus_method_info.consensus_valid_after %}(consensus {{ relays.consensus_method_info.consensus_valid_after|collector_time }}){% elif relays.consensus_method_info.method_inferred %}(inferred from votes){% else %}(from consensus document){% endif %}
             {% if relays.consensus_method_info.max_method and relays.consensus_method_info.max_method > relays.consensus_method_info.current_method %}
             | Max available: <strong>{{ relays.consensus_method_info.max_method }}</strong> (supported by {{ relays.consensus_method_info.max_method_support }}/{{ relays.consensus_method_info.total_voters }} authorities)
             {% endif %}
@@ -138,6 +138,7 @@
             <th title="Source: CollecTor | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
             <th title="TCP connection test to authority's directory port | Response time in milliseconds">Latency (ms)</th>
             <th title="Source: CollecTor | Consensus method this authority supports (from consensus-methods line in vote)">Consensus Method</th>
+            <th title="Source: CollecTor | valid-after of this authority's vote, or published if valid-after is absent. Green matches the newest vote; red is older.">Vote time</th>
             {# Existing columns #}
             <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
             <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
@@ -220,6 +221,15 @@
                         <span class="{% if network_max and auth_max >= network_max %}al-status-success-bold{% elif auth_max %}al-status-danger{% endif %}" title="This authority supports consensus method {{ auth_max }}{% if network_max and auth_max < network_max %} (network highest: {{ network_max }}){% endif %}">{{ auth_max }}</span>
                     {% else %}
                         <span class="al-status-muted" title="No vote data available">—</span>
+                    {% endif %}
+                </td>
+                <td style="white-space: nowrap;">
+                    {% if authority.collector_data and authority.collector_data.vote_time %}
+                        {% set vote_time = authority.collector_data.vote_time %}
+                        {% set newest = relays.consensus_method_info.latest_vote_time if relays.consensus_method_info else none %}
+                        <span class="{% if newest and vote_time < newest %}al-status-danger-bold{% else %}al-status-success{% endif %}">{{ vote_time|collector_time }}</span>
+                    {% else %}
+                        <span class="al-status-muted" title="No vote document time">—</span>
                     {% endif %}
                 </td>
                 
@@ -330,6 +340,7 @@
             <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
             <li><strong>🔴 "Onionoo removed due to offline longer than 1 week — shown for context":</strong> A directory authority that stopped voting and was then dropped by Onionoo, which only lists relays seen in a network status within the past week (~7 days, per the <a href="https://metrics.torproject.org/onionoo.html" target="_blank" rel="noopener">Onionoo protocol</a>). Retained here as a hardcoded placeholder for historical context after such a critical change; all other data on this page is dynamic. If the authority returns, its live data automatically supersedes this placeholder.</li>
             <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span class="al-status-success-bold">Green (&gt;1)</span> = Vote received with relays, <span class="al-status-danger-bold">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
+            <li><strong>Vote time:</strong> That authority's vote document (valid-after, or published if valid-after is missing). <span class="al-status-success">Green</span> matches the newest vote; <span class="al-status-danger-bold">red</span> is older.</li>
             <li><strong>BW Auth:</strong> <span class="al-status-success-bold">Yes</span> = Runs bandwidth scanner (sbws), <span class="al-status-muted">No</span> = Does not run scanner</li>
             <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span class="al-status-warning">Orange = &gt;200ms</span>, <span class="al-status-danger-bold">Red = &gt;500ms</span>, <span class="al-status-danger-bold">Timeout</span> = &gt;2s, <span class="al-status-danger-bold">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>
             <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
@@ -347,7 +358,8 @@
     </h3>
     <p class="text-muted" style="font-size: 13px; margin-bottom: 15px;">
         Each directory authority has different thresholds for assigning flags to relays. 
-        Values extracted from authority votes via <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a>{% if relays.collector_fetched_at %} (fetched: {{ relays.collector_fetched_at }}){% endif %}.
+        Values extracted from authority votes via <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a>.
+        {% if relays.consensus_method_info and relays.consensus_method_info.vote_times %}Each column header is that vote's document time.{% elif relays.collector_fetched_at %}Cache fetched {{ relays.collector_fetched_at|collector_time }}.{% endif %}
     </p>
     
     <div style="overflow-x: auto; overflow-y: visible; position: relative;">
@@ -356,7 +368,7 @@
             <tr>
                 <th>Threshold</th>
                 {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
-                <th style="text-align: center;">{{ auth_name }}</th>
+                <th style="text-align: center;">{{ auth_name }}{% if relays.consensus_method_info and relays.consensus_method_info.vote_times and auth_name in relays.consensus_method_info.vote_times %}<br><span class="al-text-small-muted">{{ relays.consensus_method_info.vote_times[auth_name]|collector_time }}</span>{% endif %}</th>
                 {% endfor %}
             </tr>
         </thead>
