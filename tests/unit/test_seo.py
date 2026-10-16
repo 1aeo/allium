@@ -4,9 +4,11 @@ import multiprocessing
 import os
 import random
 import re
+from types import SimpleNamespace
 from urllib.parse import urlsplit, urlunsplit
 from xml.etree import ElementTree as ET
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 import pytest
 
 from allium.lib import seo
@@ -22,6 +24,7 @@ from allium.lib.seo import (
     public_base_url,
     rewrite_internal_html_links,
     rewrite_internal_links,
+    root_relative_base_prefix,
     route_for_html,
 )
 
@@ -72,6 +75,129 @@ def test_canonical_url_is_absolute_or_root_relative():
     ) == "/country/US/"
     assert public_base_url("https://example.test/metrics/") == (
         "https://example.test/metrics"
+    )
+
+
+def test_canonical_url_preserves_root_relative_subdirectory_prefix():
+    """Documented --base-url /tor-metrics must prefix every canonical route.
+
+    The route shape from route_for_html is preserved; only the prefix is
+    added. skeleton.html uses the same canonical_url for og:url.
+    """
+    assert canonical_url_for_output(
+        "/tor-metrics", "index.html"
+    ) == "/tor-metrics/"
+    assert canonical_url_for_output(
+        "/tor-metrics/", "index.html"
+    ) == "/tor-metrics/"
+    assert canonical_url_for_output(
+        "/tor-metrics/", "country/US/index.html"
+    ) == "/tor-metrics/country/US/"
+    assert canonical_url_for_output(
+        "/tor-metrics", "country/US.html"
+    ) == "/tor-metrics/country/US"
+    assert canonical_url_for_output(
+        "/tor-metrics", "misc/all-page-2.html"
+    ) == "/tor-metrics/misc/all-page-2"
+    assert canonical_url_for_output(
+        "/tor-metrics", "example.org/page-2.html"
+    ) == "/tor-metrics/example.org/page-2"
+    assert canonical_url_for_output(
+        "/tor-metrics", "misc/contacts-by-consensus-weight.html"
+    ) == "/tor-metrics/misc/contacts-by-bandwidth"
+    assert canonical_url_for_output("/tor-metrics", "404.html") is None
+    assert root_relative_base_prefix("/tor-metrics/") == "/tor-metrics"
+
+
+def test_absolute_base_with_path_stays_on_public_base_url():
+    """http(s) bases, including a path prefix, are unchanged."""
+    assert canonical_url_for_output(
+        "https://example.com/tor-metrics", "country/US/index.html"
+    ) == "https://example.com/tor-metrics/country/US/"
+    assert canonical_url_for_output(
+        "https://example.com/tor-metrics/", "index.html"
+    ) == "https://example.com/tor-metrics/"
+    assert canonical_url_for_output(
+        "http://example.com/tor-metrics", "misc/all-page-2.html"
+    ) == "http://example.com/tor-metrics/misc/all-page-2"
+    assert public_base_url("https://example.com/tor-metrics/") == (
+        "https://example.com/tor-metrics"
+    )
+    assert root_relative_base_prefix("https://example.com/tor-metrics") is None
+
+
+def test_unsafe_root_relative_bases_are_not_canonical_prefixes():
+    """Bare '/', scheme-relative, and browser-normalized equivalents stay out.
+
+    The CLI rejects these before generation. Canonical construction must not
+    turn the ones browsers collapse into '//' into an off-site href.
+    """
+    assert root_relative_base_prefix("/") is None
+    assert root_relative_base_prefix("") is None
+    assert root_relative_base_prefix(None) is None
+    assert canonical_url_for_output("/", "country/US/index.html") == "/country/US/"
+    assert canonical_url_for_output(
+        "//evil.example/tor-metrics", "index.html"
+    ) == "/"
+    for base_url in (
+        "/",
+        "/ ",
+        " /",
+        "\t/\n",
+        "\\",
+        "/\\",
+        "/\t/evil.example",
+        "/\n/evil.example",
+        "/\r/evil.example",
+        "//evil.example/path",
+        "///tor-metrics",
+        "/tor-metrics?preview=1",
+        "/tor-metrics#frag",
+    ):
+        prefix = root_relative_base_prefix(base_url)
+        assert prefix is None, base_url
+        canonical = canonical_url_for_output(base_url, "country/US/index.html")
+        assert canonical == "/country/US/", base_url
+        assert not canonical.startswith("//")
+
+
+def test_subdirectory_canonical_is_also_the_og_url():
+    """og:url reuses canonical_url; relative page links stay path-relative."""
+    canonical = canonical_url_for_output("/tor-metrics", "country/US/index.html")
+    template_dir = os.path.join(
+        os.path.dirname(__file__), "..", "..", "allium", "templates"
+    )
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        autoescape=select_autoescape(["html"]),
+    )
+    template = env.from_string(
+        '{% extends "skeleton.html" %}'
+        "{% block title %}United States{% endblock %}"
+        "{% block body %}<p>US</p>{% endblock %}"
+    )
+    html = template.render(
+        canonical_url=canonical,
+        page_ctx=SimpleNamespace(path_prefix="../../"),
+        relays=SimpleNamespace(timestamp="2026-01-01"),
+    )
+    assert '<link rel="canonical" href="/tor-metrics/country/US/">' in html
+    assert '<meta property="og:url" content="/tor-metrics/country/US/">' in html
+    assert 'href="../../static/favicon.ico"' in html
+    assert "/tor-metrics/static/" not in html
+
+
+def test_link_rewrite_does_not_inject_subdirectory_prefix():
+    """Internal links are relative to the generated tree, not the public prefix."""
+    html = (
+        '<a href="country/US/index.html">US</a>'
+        '<a href="/misc/all.html">All</a>'
+    )
+    rewritten, changed = rewrite_internal_links(html)
+    assert changed == 2
+    assert rewritten == (
+        '<a href="country/US/">US</a>'
+        '<a href="/misc/all">All</a>'
     )
 
 
