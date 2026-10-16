@@ -84,6 +84,22 @@ def _tooling_active():
         monitoring.get_tool(tool_id) is not None for tool_id in range(6))
 
 
+def _browser_normalized_base_url(url):
+    """Return url after the normalizations a browser applies to an href.
+
+    WHATWG parsers delete TAB, CR, and LF, and treat backslash as a slash.
+    The result is used only to decide whether a root-relative --base-url is
+    safe. The stored value is not rewritten.
+    """
+    return (
+        url.replace('\t', '')
+        .replace('\r', '')
+        .replace('\n', '')
+        .replace('\\', '/')
+        .strip()
+    )
+
+
 def validate_url_arguments(args):
     """
     Validate that all URL arguments use http:// or https:// scheme.
@@ -121,16 +137,23 @@ def validate_url_arguments(args):
         # inherit the page's protocol and redirect to an attacker-controlled host.
         if attr == 'base_url':
             # "/" looks like "site root", but vanity links are "{base}/{domain}/"
-            # and a bare slash becomes scheme-relative "//domain/". Whitespace
-            # around the slash is the same value. Subdirectory prefixes such as
-            # "/tor-metrics" stay valid, including a trailing slash.
-            if url.strip() == '/':
+            # and a bare slash becomes scheme-relative "//domain/". Browsers
+            # also delete TAB/CR/LF and treat "\" as "/", so "/\\" and
+            # "/\t/host" are the same class of bug. Subdirectory prefixes such
+            # as "/tor-metrics" stay valid, including a trailing slash.
+            browser_url = _browser_normalized_base_url(url)
+            if browser_url == '/':
                 print("❌ Error: --base-url cannot be '/'")
                 print("   Vanity links are built as {base}/{domain}/, so '/' becomes //domain/.")
                 print("   Omit --base-url for site-root output, or use a subdirectory")
                 print("   (for example /tor-metrics) or an absolute http(s) URL.")
                 sys.exit(1)
-            if url.startswith('/') and not url.startswith('//'):
+            if (
+                url.startswith('/')
+                and not url.startswith('//')
+                and browser_url.startswith('/')
+                and not browser_url.startswith('//')
+            ):
                 continue
         scheme = urllib.parse.urlsplit(url).scheme.lower()
         if scheme not in ('http', 'https'):

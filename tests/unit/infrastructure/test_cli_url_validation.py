@@ -98,9 +98,9 @@ def test_validate_url_arguments_rejects_root_slash_base_url(capsys):
     assert "Omit --base-url" in captured
 
 
-@pytest.mark.parametrize("base_url", [" /", "/ ", "\t/\n", " / "])
+@pytest.mark.parametrize("base_url", [" /", "/ ", "\t/\n", " / ", "\\", "\\\t"])
 def test_validate_url_arguments_rejects_whitespace_around_root_slash(base_url, capsys):
-    """A slash with surrounding whitespace is the same unsafe value."""
+    """Whitespace, or a backslash a browser treats as a slash, is still '/'."""
     module = _load_allium_cli_module()
     args = argparse.Namespace(base_url=base_url)
 
@@ -146,7 +146,16 @@ def test_validate_url_arguments_rejects_scheme_relative_base_url(capsys):
     assert "--base-url cannot be '/'" not in captured
 
 
-@pytest.mark.parametrize("base_url", ["///", "//", "file:///tmp/site", " /tor-metrics"])
+@pytest.mark.parametrize("base_url", [
+    "///",
+    "//",
+    "file:///tmp/site",
+    " /tor-metrics",
+    "/\\",
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/\r/evil.example",
+])
 def test_validate_url_arguments_still_rejects_other_unsafe_base_urls(base_url, capsys):
     """Other unsafe values keep the existing scheme error."""
     module = _load_allium_cli_module()
