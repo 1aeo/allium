@@ -723,8 +723,9 @@ class TestDataIntegrityAndEdgeCases(unittest.TestCase):
     @pytest.mark.slow
     def test_memory_efficiency(self):
         """Wall-clock bound for a 1e6-value average. Skipped in default CI."""
+        values = self._very_large_uptime_values()
         start_time = time.time()
-        calculate_relay_uptime_average(self._very_large_uptime_values())
+        calculate_relay_uptime_average(values)
         self.assertLess(time.time() - start_time, 10.0)
     
     def test_data_type_validation(self):

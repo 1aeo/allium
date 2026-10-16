@@ -270,8 +270,13 @@ jobs:
         # 900s is only a hang backstop around clone, pip, and generation.
         # Each seeded API uses its fresh-cache budget (at most 90s, no retries)
         # and then the fixture. Do not raise this backstop to hide a slow API.
-        timeout 900 bash setup.sh
-        setup_exit_code=$?
+        # GitHub's default shell has errexit, so a failing timeout would
+        # end the step before the next line could read $?.
+        if timeout 900 bash setup.sh; then
+          setup_exit_code=0
+        else
+          setup_exit_code=$?
+        fi
 
         if [ $setup_exit_code -eq 0 ]; then
           echo "✅ Setup script completed successfully"
