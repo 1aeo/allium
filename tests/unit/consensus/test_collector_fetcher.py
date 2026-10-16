@@ -1163,6 +1163,7 @@ class TestConsensusMethodInference:
         assert result['total_voters'] == 9
         assert result['max_method_support'] == 9
         assert result['consensus_valid_after'] is None
+        assert result['method_inferred'] is True
         assert result['latest_vote_time'] is None
     
     def test_infer_method_with_split_support(self):
@@ -1213,6 +1214,7 @@ class TestConsensusMethodInference:
         # Should use the actual method, not infer, and keep that document's time.
         assert result['current_method'] == 32
         assert result['consensus_valid_after'] == '2024-06-01 00:00:00'
+        assert result['method_inferred'] is False
     
     def test_no_inference_when_no_votes(self):
         """Test that inference doesn't crash when no votes available."""

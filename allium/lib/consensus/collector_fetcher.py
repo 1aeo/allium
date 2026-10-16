@@ -982,6 +982,7 @@ class CollectorFetcher:
         # Uses the same supermajority algorithm as Tor's dirvote.c:
         #   threshold = floor(n * 2 / 3) + 1  (strictly more than 2/3)
         # The active consensus method is the highest method supported by >= threshold voters.
+        method_inferred = False
         if current_method is None:
             # No consensus document, so an inferred method has no document time.
             consensus_valid_after = None
@@ -990,10 +991,12 @@ class CollectorFetcher:
                 for method in sorted(method_counts.keys(), reverse=True):
                     if method_counts[method] >= threshold:
                         current_method = method
+                        method_inferred = True
                         break
         
         return {
             'current_method': current_method,
+            'method_inferred': method_inferred,
             'max_method': max_method,
             'max_method_support': max_method_support,
             'total_voters': total_voters,

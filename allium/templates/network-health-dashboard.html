@@ -798,6 +798,8 @@ Network Health Dashboard
                         <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} ≥{{ relays.json.network_health.hf_consensus_method_max }}{% endif %}</span>
                         {% if cm and cm.consensus_valid_after %}
                         <div class="al-text-small-muted metric-subtext">{{ cm.consensus_valid_after|collector_time }}</div>
+                        {% elif cm and cm.method_inferred %}
+                        <div class="al-text-small-muted metric-subtext">inferred from votes</div>
                         {% endif %}
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
