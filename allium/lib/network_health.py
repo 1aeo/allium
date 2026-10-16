@@ -119,11 +119,15 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
         'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
         'exit_dns_health_socks_error', 'exit_dns_health_network_error',
+        # Exit DNS upstream resolver coverage (None when the report has no resolver data)
+        'exit_dns_health_resolver_exits_total', 'exit_dns_health_resolver_exits_covered',
+        'exit_dns_health_resolver_exits_labelled', 'exit_dns_health_resolver_exits_using_public',
     ]
-    
+
     for key in integer_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:,}"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:,}" if value is not None else "n/a"
     
     # Format all percentage values with 1 decimal place (12+ format operations eliminated)
     percentage_format_keys = [
@@ -159,8 +163,16 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
         'hf_ready_cw_percentage', 'hf_some_operators_percentage',
         'hf_all_operators_percentage', 'hf_not_ready_relays_percentage',
+        # Exit DNS upstream resolver shares (None when the report has no resolver data)
+        'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
+        'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
+        'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_unknown_percentage',
     ]
-    
+
     # Add 1_month period formatting keys (used directly in templates) 
     roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
     stat_types = ['mean', 'median']
@@ -170,7 +182,13 @@ def preformat_network_health_template_strings(health_metrics):
     
     for key in percentage_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:.1f}%"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:.1f}%" if value is not None else "n/a"
+
+    # Resolver shares are rounded together, so All Public + Local + Other + Unknown show 100.0%
+    from .exit_dns_health import resolver_share_tenths
+    for key, tenths in (resolver_share_tenths(health_metrics) or {}).items():
+        health_metrics[f'{key}_formatted'] = f"{tenths / 10:.1f}%"
     
     # Format uptime time series data (4+ format operations eliminated)
     # Using consistent naming pattern: {role}_uptime_{period}_mean

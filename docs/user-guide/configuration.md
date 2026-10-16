@@ -15,7 +15,7 @@ python3 allium.py [options]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--out` | `./www` | Output directory |
-| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`); root-relative values are for previews/subdirectory hosting |
+| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`). `""` is site-root output. A subdirectory prefix such as `/tor-metrics` is for previews. A bare `/` is rejected |
 | `--display-bandwidth-units` | `bits` | `bits` (Kbit/s) or `bytes` (KB/s) |
 | `-p, --progress` | false | Show progress with memory usage |
 | `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Details API endpoint |
@@ -24,8 +24,13 @@ python3 allium.py [options]
 | `--aroi-url` | `https://aroivalidator.1aeo.com/latest.json` | AROI validator endpoint |
 | `--bandwidth-cache-hours` | `12` | Hours to cache bandwidth data |
 | `--apis` | `all` | `details` (~400MB) or `all` (~2.4GB) |
-| `--filter-downtime` | `7` | Filter relays offline >N days (0=disable) |
+| `--filter-downtime` | `7` | Filter relays not seen for >N days, even if Onionoo still marks them running (0=disable) |
 | `--workers` | `4` | Parallel workers (0=disable multiprocessing) |
+| `--no-charts` | charts on | Skip the relay and contact history charts (drawn only with `--apis all`) |
+| `--chart-format` | `png` | `png` (needs cairocffi, numpy and the cairo library, see the README's PNG charts section: without them the default writes SVG with a notice naming the install commands, and an explicit `png` stops; DejaVu Sans keeps the chart font) or `svg` |
+| `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
+| `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
+| `--chart-layout` | `beside` | `beside` (next to each relay and contact page) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, to serve them apart from the pages) |
 
 ## Common Profiles
 
@@ -97,11 +102,13 @@ crontab -e
 - Log output for debugging
 - Don't use `--progress` (creates large logs)
 - Run as non-root user
+- After updating allium, check the next run's log for `⚠️` and `💡` lines: when an optional feature such as PNG charts lacks a package, they name it and the command that installs it for the Python cron runs (they print without `--progress` too)
 
 ## Virtual Environment
 
 ```bash
 cd allium
+sudo apt install python3-venv libcairo2 fonts-dejavu-core  # Debian/Ubuntu: venv support, then PNG charts
 python3 -m venv venv
 source venv/bin/activate
 pip install -r config/requirements.txt

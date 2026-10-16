@@ -42,6 +42,8 @@ bash setup.sh
 
 ```bash
 git clone https://github.com/1aeo/allium.git && cd allium
+# Debian/Ubuntu: venv support, then the cairo library and chart font for PNG charts (without libcairo2 they are SVG)
+sudo apt install python3-venv libcairo2 fonts-dejavu-core
 
 # Create and activate virtual environment (recommended)
 python3 -m venv venv
@@ -66,7 +68,7 @@ cd www && python3 -m http.server 8000
 
 - **Memory**: Plan for **~3GB RAM** available (the uptime dataset alone peaks around ~2GB)
 - **Time**: Full generation takes ~2-5 minutes producing ~21,700 HTML pages
-- **Disk**: Output is approximately ~500MB
+- **Disk**: Output is ~500MB of HTML plus ~3.6GB of PNG charts (hard-linked from `data/cache/charts` on the build host; ~0.7GB as `--chart-format svg`)
 
 📖 **[Full Quick Start Guide](docs/user-guide/quick-start.md)** — detailed setup instructions, troubleshooting, and deployment options.
 
@@ -90,8 +92,9 @@ cd www && python3 -m http.server 8000
 
 - Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
 - Multiprocessing page generation (configurable via `--workers`)
-- Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
+- Downtime filtering: excludes relays not seen for >7 days before the Onionoo snapshot, including relays Onionoo still marks as running (configurable via `--filter-downtime`)
 - Generates relay, contact, country, AS, family, platform, and flag pages
+- History charts (1M/6M/1Y/5Y), bandwidth and uptime on relay pages and the operator's summed bandwidth on contact pages, drawn at build time with no JavaScript: PNG by default so they show at Tor Browser's Safest level (see the `--chart-*` options), reused from `data/cache/charts` while unchanged. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
 </details>
 
@@ -180,8 +183,13 @@ Pre-computed analysis attached to contact pages:
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
 | `--progress` | `false` | Show detailed progress with memory usage |
 | `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
-| `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
+| `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
+| `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
+| `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) plus the cairo library ([PNG charts](#png-charts)), without which the default writes SVG with a notice naming the install commands and an explicit `--chart-format png` stops; DejaVu Sans (`fonts-dejavu-core`) keeps the chart font; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~10 KB per chart, no extra packages, blank at Safest |
+| `--chart-scale` | `2` | PNG resolution: `2` (2160 px wide, sharp on HiDPI screens), `1.5` or `1`; the page lays charts out at 1080 px either way |
+| `--chart-colors` | `64` | PNG colors: `64` (a fixed palette, ~53 KB a chart at 2x, looks the same) or `full` (~150 KB) |
+| `--chart-layout` | `beside` | Where the charts go: `beside` (in each relay's and contact's page folder) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, linked relative to each page, to serve them apart from the pages); a build leaves no charts of the other layout behind |
 
 **Examples**:
 
@@ -288,10 +296,27 @@ the upstream bug is fixed.
 
 ## Requirements
 
-### Production (Minimal)
+### Production
 
 - **Python 3.8+**
 - **Jinja2 ≥2.11.2**
+
+### PNG charts
+
+PNG is the default chart format; `--chart-format svg` and `--no-charts` need none of this. It needs
+**cairocffi ≥1.2.0** and **numpy ≥1.17** from `config/requirements.txt` (and optionally **zlib-ng**, ~4x faster
+deflate), plus the cairo library, which pip cannot install. Without them allium writes SVG charts and prints the
+commands that install them for the Python it runs on. The DejaVu Sans font, also a system package, keeps the chart
+font: without it allium warns, and the PNG text falls back to another font.
+
+```bash
+# A virtualenv, after pip install -r config/requirements.txt
+sudo apt install libcairo2 fonts-dejavu-core   # Debian/Ubuntu
+sudo dnf install cairo dejavu-sans-fonts       # Fedora
+
+# Debian/Ubuntu's own python3, no virtualenv (on Ubuntu, python3-cairocffi is in universe)
+sudo apt install python3-jinja2 python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
+```
 
 ### Development (Additional)
 

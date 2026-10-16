@@ -62,6 +62,10 @@ www/
 │   └── <date>/
 │       └── index.html              # Relays first seen on date
 │
+├── <aroi-domain>/                  # With --base-url: copy of a validated AROI
+│   ├── index.html                  # operator's contact pages (index, by-*.html,
+│   └── by-*.html                   # page-N.html); removed once the domain is gone
+│
 └── static/
     ├── favicon.ico                  # Multi-resolution 1AEO favicon
     ├── *.css                       # Stylesheets
@@ -119,6 +123,7 @@ Directory authority monitoring page with uptime statistics, Z-score analysis, an
 | Family | `/family/e5f6g7h8/` |
 | Platform | `/platform/Linux/` |
 | Flag | `/flag/Exit/` |
+| Validated AROI operator (with `--base-url`) | `/example.org/` |
 
 Standalone `.html` files are published as clean routes: `top500.html` is linked
 as `/top500`, and `misc/all.html` as `/misc/all`. Generated HTML files remain on

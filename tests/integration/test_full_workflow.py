@@ -53,7 +53,7 @@ def _fresh_response_factory(payload_bytes):
     empty read, and each API worker makes its own urlopen call."""
     def _factory(*args, **kwargs):
         resp = MagicMock()
-        resp.read.side_effect = [payload_bytes, b'']
+        resp.read1.side_effect = [payload_bytes, b'']
         return resp
     return _factory
 
@@ -65,12 +65,14 @@ class TestFullIntegrationFlow:
         """Test complete successful flow from coordinator through workers to relay processing"""
         # Mock onionoo data
         mock_onionoo_data = {
+            # The downtime filter measures last_seen from here
+            "relays_published": "2024-01-01 12:00:00",
             "relays": [
                 {
                     "nickname": "TestRelay1",
                     "fingerprint": "ABC123DEF456",
-                    # Relays._filter_and_fix_relays drops relays that are not
-                    # running unless last_seen is within filter_downtime_days
+                    # Relays._filter_and_fix_relays drops relays whose last_seen
+                    # is more than filter_downtime_days before relays_published
                     "running": True,
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,
@@ -194,6 +196,7 @@ class TestFullIntegrationFlow:
                     "or_addresses": ["192.168.1.100:9001"]
                 }
             ],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached"
         }
         
@@ -615,6 +618,7 @@ class TestPerformanceAndCaching:
                 "contact": "cached@example.com",
                 "platform": "Tor 0.4.5.7 on Linux"
             }],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "1.0"
         }
         

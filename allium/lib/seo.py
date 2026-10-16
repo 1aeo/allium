@@ -1,11 +1,15 @@
 """SEO URL helpers and crawler discovery files for generated sites."""
 
-from concurrent.futures import ProcessPoolExecutor
+import functools
+import logging
 import os
 from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import quote, urlsplit, urlunsplit
 
+from .worker_pool import fork_map
+
+logger = logging.getLogger(__name__)
 
 MAX_HTML_BYTES = 1_900_000
 
@@ -17,6 +21,8 @@ _HREF_RE = re.compile(
     r"(?P<prefix>\bhref\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']+)(?P=quote)",
     re.IGNORECASE,
 )
+# ".html", also split by the tab/CR/LF that urlsplit strips from hrefs
+_HTML_SUFFIX_RE = re.compile(r"\.[\t\r\n]*h[\t\r\n]*t[\t\r\n]*m[\t\r\n]*l")
 
 
 def public_base_url(base_url):
@@ -64,21 +70,46 @@ def route_for_html(relative_path):
     return quote(route, safe="/-._~")
 
 
-def root_relative_base_prefix(base_url):
-    """Return a normalized root-relative path prefix, or ``None``.
+def _browser_normalized_base_url(url):
+    """Return ``url`` after the normalizations a browser applies to an href.
 
-    Supports subdirectory previews such as ``/tor-metrics``. A bare ``/`` is
-    rejected because templates build vanity links as ``{base}/{domain}/``, which
-    would produce scheme-relative ``//{domain}/`` URLs.
+    WHATWG parsers delete TAB, CR, and LF, and treat backslash as a slash.
+    This matches the CLI check in ``allium.allium`` and is used only to decide
+    whether a root-relative base is a safe canonical prefix. The stored value
+    is not rewritten.
     """
-    if not base_url or not base_url.startswith("/") or base_url.startswith("//"):
+    return (
+        url.replace("\t", "")
+        .replace("\r", "")
+        .replace("\n", "")
+        .replace("\\", "/")
+        .strip()
+    )
+
+
+def root_relative_base_prefix(base_url):
+    """Return a root-relative subdirectory prefix, or ``None``.
+
+    ``/tor-metrics`` and ``/tor-metrics/`` both yield ``/tor-metrics``.
+    Absolute http(s) URLs are not prefixes; :func:`public_base_url` owns
+    those, including a path such as ``https://example.com/tor-metrics``.
+    A bare ``/``, scheme-relative ``//`` values, and values browsers
+    normalize into either of those are not prefixes. The CLI already rejects
+    them before generation.
+    """
+    if not isinstance(base_url, str) or not base_url:
         return None
-    prefix = base_url.rstrip("/")
-    if not prefix:
-        raise ValueError(
-            "base_url '/' is not supported; use a subdirectory prefix "
-            "(e.g. '/tor-metrics') or an absolute http(s) URL"
-        )
+    normalized = _browser_normalized_base_url(base_url)
+    # urlsplit("///tor-metrics") collapses to path "/tor-metrics". The CLI
+    # rejects every "//..." value, including an empty host, so do that first.
+    if not normalized.startswith("/") or normalized.startswith("//"):
+        return None
+    parsed = urlsplit(normalized)
+    if parsed.query or parsed.fragment:
+        return None
+    prefix = parsed.path.rstrip("/")
+    if not prefix.startswith("/"):
+        return None
     return prefix
 
 
@@ -107,51 +138,127 @@ def clean_href(path):
     return path[:-5]
 
 
-def _rewrite_html_file(html_path):
-    """Rewrite one HTML file and return changed-file and changed-link counts."""
+@functools.lru_cache(maxsize=1 << 17)
+def _clean_route_href(value):
+    """Return the clean-route form of an internal ``.html`` href, else ``None``.
+
+    Cached because the same links (navigation, relay/AS/country links) repeat
+    across thousands of generated pages.
+    """
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+        return None
+    if not parsed.path.endswith(".html"):
+        return None
+    return urlunsplit(
+        ("", "", clean_href(parsed.path), parsed.query, parsed.fragment)
+    )
+
+
+def _href_match_before(html, index):
+    """Return the ``_HREF_RE`` match opening at the last quote before ``index``, else ``None``.
+
+    Walks back from that quote over ``\\s*=\\s*`` (``\\s`` follows
+    ``str.isspace``, as the regex engine does) to where ``href`` must start
+    and lets the regex check the rest.
+    """
+    # Bound the search for the (rare) single quote by the nearest double quote
+    double = html.rfind('"', 0, index)
+    end = max(double, html.rfind("'", max(double, 0), index))
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    if end <= 0 or html[end - 1] != "=":
+        return None
+    end -= 1
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    return _HREF_RE.match(html, end - 4) if end >= 4 else None
+
+
+def rewrite_internal_links(html):
+    """Return ``(html, changed_links)`` with internal ``.html`` hrefs in clean-route form.
+
+    Pages carry few ``.html`` links but thousands of other hrefs, so only the
+    ``_HREF_RE`` match around each ``.html`` is rewritten: a match's value
+    holds no quotes, so it opens at the last quote before the ``.html``.
+    """
     changed_links = 0
 
     def replacement(match):
         nonlocal changed_links
-        value = match.group("value")
-        parsed = urlsplit(value)
-        if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+        rewritten = _clean_route_href(match.group("value"))
+        if rewritten is None:
             return match.group(0)
-        if not parsed.path.endswith(".html"):
-            return match.group(0)
-        rewritten = urlunsplit(
-            ("", "", clean_href(parsed.path), parsed.query, parsed.fragment)
-        )
         changed_links += 1
         quote_char = match.group("quote")
         return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
 
+    parts = []
+    position = 0
+    found = _HTML_SUFFIX_RE.search(html)
+    while found:
+        match = _href_match_before(html, found.start())
+        if match:
+            if _href_match_before(html, match.start()):
+                # A value ending in "href=" makes the regex consume this
+                # attribute's opening quote as its closing one: scan it all.
+                changed_links = 0
+                return _HREF_RE.sub(replacement, html), changed_links
+            parts += (html[position:match.start()], replacement(match))
+            position = match.end()
+        found = _HTML_SUFFIX_RE.search(html, (match or found).end())
+    parts.append(html[position:])
+    return "".join(parts), changed_links
+
+
+# Below this many files a worker pool costs more than it saves
+_PARALLEL_MIN_FILES = 256
+
+
+def map_html_files(function, html_paths, chunksize):
+    """Yield ``function(path)`` for each path in order, in worker processes
+    for large builds. If the pool fails (e.g. BrokenProcessPool when a worker
+    is OOM-killed), the paths still without a result run in this process."""
+    done = 0
+    if len(html_paths) >= _PARALLEL_MIN_FILES:
+        try:
+            for done, result in enumerate(fork_map(min(8, os.cpu_count() or 1), function, html_paths, chunksize), 1):
+                yield result
+        except Exception as exc:
+            logger.warning("HTML file worker pool failed (%s), processing %d of %d files sequentially",
+                           exc, len(html_paths) - done, len(html_paths))
+    yield from map(function, html_paths[done:])
+
+
+def _rewrite_html_file(html_path):
+    """Rewrite one HTML file and return changed-file and changed-link counts."""
     path = Path(html_path)
     original = path.read_text(encoding="utf-8")
-    rewritten = _HREF_RE.sub(replacement, original)
+    rewritten, changed_links = rewrite_internal_links(original)
     if rewritten == original:
         return 0, changed_links
     path.write_text(rewritten, encoding="utf-8")
     return 1, changed_links
 
 
-def rewrite_internal_html_links(output_dir):
-    """Rewrite internal ``.html`` hrefs to their public clean-route forms."""
+def rewrite_internal_html_links(output_dir, modified_before=None):
+    """Rewrite internal ``.html`` hrefs to their public clean-route forms.
+
+    ``modified_before`` (a POSIX timestamp) limits the pass to files last
+    written before it. Pages rendered by the current run are already
+    rewritten as they are written, so only older leftovers need a pass.
+    """
     output_path = Path(output_dir)
     html_paths = [
         str(path)
         for path in sorted(output_path.rglob("*.html"))
         if path.is_file()
+        and (modified_before is None or path.stat().st_mtime < modified_before)
     ]
-    if not html_paths:
-        return {"changed_files": 0, "changed_links": 0}
     changed_files = changed_links = 0
-    max_workers = min(8, os.cpu_count() or 1)
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for file_count, link_count in executor.map(
-                _rewrite_html_file, html_paths, chunksize=24):
-            changed_files += file_count
-            changed_links += link_count
+    for file_count, link_count in map_html_files(_rewrite_html_file, html_paths, 24):
+        changed_files += file_count
+        changed_links += link_count
     return {"changed_files": changed_files, "changed_links": changed_links}
 
 

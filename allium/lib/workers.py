@@ -39,7 +39,8 @@ class TotalTimeoutError(Exception):
     pass
 
 
-def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) -> bytes:
+def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
+                                  response_headers: dict = None) -> bytes:
     """
     Fetch URL content with a guaranteed total timeout.
     
@@ -59,6 +60,9 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
         url: URL to fetch
         timeout: Maximum total time in seconds for the entire request
         headers: Optional dict of HTTP headers to include
+        response_headers: Optional dict. When not None, copy the response
+            Last-Modified header into it if the server sent one. Omit it
+            to keep the previous call shape. The body is still returned.
         
     Returns:
         bytes: Response content
@@ -73,25 +77,31 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
     else:
         req = urllib.request.Request(url)
     
-    start_time = time.time()
+    start_time = time.monotonic()
     
     # Phase 1: Open connection with socket timeout equal to total timeout
     # This ensures we don't wait forever for response headers from a hanging server
     try:
         response = urllib.request.urlopen(req, timeout=timeout)
     except socket.timeout:
-        elapsed = time.time() - start_time
+        elapsed = time.monotonic() - start_time
         raise TotalTimeoutError(
             f"Connection to {url} timed out waiting for response after {elapsed:.1f}s"
         )
     except urllib.error.URLError as e:
         if isinstance(e.reason, socket.timeout):
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             raise TotalTimeoutError(
                 f"Connection to {url} timed out after {elapsed:.1f}s"
             )
         raise
-    
+
+    # Hold the header until the body is complete. A retry reuses the same
+    # dict, and a value copied before a failed read would describe the wrong body.
+    pending_last_modified = None
+    if response_headers is not None:
+        pending_last_modified = response.headers.get("Last-Modified")
+
     # Phase 2: Read response in chunks, checking total elapsed time after each chunk
     chunks = []
     chunk_size = 64 * 1024  # 64KB chunks
@@ -99,7 +109,7 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
     try:
         while True:
             # Check total elapsed time before reading next chunk
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             if elapsed >= timeout:
                 response.close()
                 raise TotalTimeoutError(
@@ -110,34 +120,36 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) 
             # Calculate remaining time for this chunk read
             remaining = timeout - elapsed
             
-            # Set socket timeout for this read operation
-            # Use minimum of remaining time and 5 seconds to check frequently
-            read_timeout = min(remaining, 5)
+            # Set socket timeout for this read to the remaining total time.
+            # A shorter cap cannot be retried: after a timeout, socket.SocketIO
+            # refuses later reads ("cannot read from timed out object").
             if hasattr(response, 'fp') and hasattr(response.fp, 'raw'):
                 try:
-                    response.fp.raw._sock.settimeout(read_timeout)
+                    response.fp.raw._sock.settimeout(remaining)
                 except (AttributeError, OSError):
                     pass  # Some response types don't support this
             
             try:
-                chunk = response.read(chunk_size)
+                # read() can make repeated socket reads to fill the chunk,
+                # resetting the inactivity timeout as bytes trickle in.
+                # read1() returns after one underlying read so the next loop
+                # iteration checks the deadline and updates the socket timeout.
+                chunk = response.read1(chunk_size)
             except socket.timeout:
-                # Individual read timed out - check if total timeout exceeded
-                elapsed = time.time() - start_time
-                if elapsed >= timeout:
-                    response.close()
-                    raise TotalTimeoutError(
-                        f"Request to {url} exceeded total timeout of {timeout}s during read"
-                    )
-                # Socket timeout but total not exceeded - retry
-                continue
+                # The per-read timeout is the remaining total, so the limit is used up
+                response.close()
+                raise TotalTimeoutError(
+                    f"Request to {url} exceeded total timeout of {timeout}s during read"
+                )
             
             if not chunk:
                 # End of response
                 break
             
             chunks.append(chunk)
-        
+
+        if response_headers is not None and pending_last_modified:
+            response_headers["Last-Modified"] = pending_last_modified
         return b''.join(chunks)
         
     finally:
@@ -257,6 +269,19 @@ class APIConfig:
     progress_name: str = ''          # Coordinator progress prefix (e.g. 'Details API')
     enabled: bool = True             # Registry entries can exist but stay dormant
     feature_flag: str = ''           # Named feature gate checked by the coordinator
+    cache_validator: Optional[Callable[[Any], bool]] = None  # checked on cached data before it is used
+
+
+def _validate_onionoo_document(data) -> bool:
+    """True for an Onionoo response document: a relays_published string and a relays list."""
+    if not isinstance(data, dict):
+        return False
+    published = data.get("relays_published")
+    return (
+        isinstance(published, str)
+        and published != ""
+        and isinstance(data.get("relays"), list)
+    )
 
 
 # Pre-configured API settings
@@ -270,6 +295,7 @@ DETAILS_CONFIG = APIConfig(
     retry_delay_base=2.0,        # 2s → 4s → 8s backoff
     allow_exit_on_304=True,
     critical=True,
+    cache_validator=_validate_onionoo_document,
 )
 
 UPTIME_CONFIG = APIConfig(
@@ -282,6 +308,7 @@ UPTIME_CONFIG = APIConfig(
     retry_delay_base=2.0,
     allow_exit_on_304=False,
     critical=False,
+    cache_validator=_validate_onionoo_document,
 )
 
 BANDWIDTH_CONFIG = APIConfig(
@@ -294,6 +321,7 @@ BANDWIDTH_CONFIG = APIConfig(
     retry_delay_base=2.0,
     allow_exit_on_304=False,
     critical=False,
+    cache_validator=_validate_onionoo_document,
 )
 
 AROI_CONFIG = APIConfig(
@@ -594,14 +622,14 @@ def _retry_with_backoff(
     if kwargs is None:
         kwargs = {}
 
-    last_exception = None
     max_attempts = 1 + retry_count  # 1 initial attempt + retry_count retries
 
     for attempt in range(max_attempts):
         try:
             return fetch_fn(*args, **kwargs)
         except Exception as exc:
-            last_exception = exc
+            # exc is never stored: its traceback holds this frame, and the cycle
+            # would keep a partial download alive while allium.py pauses the GC.
 
             # Don't retry if this is not a transient error
             if not _is_retryable_error(exc):
@@ -629,9 +657,6 @@ def _retry_with_backoff(
 
             time.sleep(delay)
 
-    # Should not reach here, but just in case
-    raise last_exception  # type: ignore[misc]
-
 # ============================================================================
 
 
@@ -646,12 +671,13 @@ def _fetch_with_cache_fallback(
     cache_hours_override: Optional[float] = None,
     return_fresh_cache: bool = False,
     validator: Optional[Callable[[dict], bool]] = None,
+    ignore_cache: bool = False,
 ) -> Optional[dict]:
     """
     Generic function to fetch API data with smart caching and timeout fallback.
     
     This function implements the common pattern used by all API workers:
-    1. Check cache age and validate cache can be loaded
+    1. Check cache age (the cache itself is only loaded when it is needed)
     2. Determine timeout based on cache freshness
     3. Make HTTP request with appropriate timeout
     4. Fall back to cached data on timeout
@@ -661,6 +687,8 @@ def _fetch_with_cache_fallback(
     - HTTP 304: return cached data, or mark stale when no cache exists
     - Other HTTP errors and network errors: log and re-raise
     - Any other error: mark stale and fall back to cached data
+    - Cached copies are used only when config.cache_validator is unset or accepts them.
+      Freshly downloaded responses are not passed through cache_validator.
 
     Args:
         url: URL to fetch data from
@@ -669,6 +697,8 @@ def _fetch_with_cache_fallback(
         cache_hours_override: Override config's cache_max_age_hours (e.g., for bandwidth API)
         return_fresh_cache: If True, return fresh cache immediately without fetching
         validator: Optional function to validate response data structure
+        ignore_cache: Treat the cache as missing, omit conditional headers, and
+            leave HTTP/network errors to the caller after a cache proved unusable
         
     Returns:
         dict: Parsed JSON response or cached data, None if unavailable
@@ -682,12 +712,37 @@ def _fetch_with_cache_fallback(
         if progress_logger:
             progress_logger(message)
 
+    cache_age = None
+    cached_data = None
+    # Whether the cache file's current contents were read already (with
+    # ignore_cache, the refetching caller found them unreadable)
+    cache_read = ignore_cache
+
+    def load_cached():
+        """Load the cache on first use; a cache that fails to load counts as
+        missing. Most runs fetch new data and never need the cache, and
+        parsing then freeing the ~240MB uptime cache cost ~10s per run."""
+        nonlocal cache_age, cached_data, cache_read
+        if not cache_read and cache_age is not None:
+            cache_read = True
+            cached_data = _load_cache(api_name)
+            if (cached_data is not None and config.cache_validator
+                    and not config.cache_validator(cached_data)):
+                cached_data = None
+                cache_age = None
+                log_progress(
+                    f"cache file exists but is not a valid {display_name} document, treating as no cache...")
+            elif cached_data is None:
+                cache_age = None
+                log_progress("cache file exists but is invalid, treating as no cache...")
+        return cached_data
+
     def _cache_fallback(reason, stale_msg, no_cache_log=None):
         """Shared fallback path: return cached data (marking the worker
         ready) or mark it stale and return None. `reason` feeds the
         "using cached ... due to <reason>" log; `no_cache_log` (when set)
         is logged before marking stale."""
-        if cached_data:
+        if load_cached():
             log_progress(f"using cached {display_name} data due to {reason}")
             _mark_ready(api_name)
             return cached_data
@@ -695,21 +750,24 @@ def _fetch_with_cache_fallback(
             log_progress(no_cache_log)
         _mark_stale(api_name, stale_msg)
         return None
+
+    def _refetch_without_cache():
+        # The failed fetch presumed a usable cache: repeat it with the
+        # missing-cache timeout and retries, without conditional headers.
+        return _fetch_with_cache_fallback(
+            url, config, progress_logger, cache_hours_override,
+            return_fresh_cache, validator, ignore_cache=True)
+
+    def _fetch_failed(reason, stale_msg, no_cache_log):
+        if presumed_fresh_cache and load_cached() is None:
+            return _refetch_without_cache()
+        return _cache_fallback(reason, stale_msg, no_cache_log=no_cache_log)
     
     try:
-        # Check cache age AND validate cache can be loaded
-        cache_age = _cache_manager.get_cache_age(api_name)
-    
-        # Pre-load cache to verify it's valid (will be reused on timeout fallback)
-        cached_data = None
-        if cache_age is not None:
-            cached_data = _load_cache(api_name)
-            if cached_data is None:
-                cache_age = None
-                log_progress("cache file exists but is invalid, treating as no cache...")
+        cache_age = None if ignore_cache else _cache_manager.get_cache_age(api_name)
     
         # If cache is fresh and valid, optionally return immediately
-        if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
+        if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and load_cached():
             log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
             _mark_ready(api_name)
             item_count = len(cached_data.get(config.count_field, []))
@@ -733,7 +791,7 @@ def _fetch_with_cache_fallback(
     
         # Build request with optional conditional headers
         headers = dict(config.custom_headers) if config.custom_headers else {}
-        if config.use_conditional_requests:
+        if config.use_conditional_requests and not ignore_cache:
             prev_timestamp = _read_timestamp(api_name)
             if prev_timestamp:
                 headers["If-Modified-Since"] = prev_timestamp
@@ -746,19 +804,36 @@ def _fetch_with_cache_fallback(
             urllib.request.Request(url)
     
         # Determine retry count: skip retries when fresh cache is available (fast fallback)
-        has_fresh_cache = cached_data is not None and cache_age is not None and cache_age < cache_max_age_seconds
-        if has_fresh_cache and not config.retry_on_fresh_cache:
+        presumed_fresh_cache = cache_age is not None and cache_age < cache_max_age_seconds
+        if presumed_fresh_cache and not config.retry_on_fresh_cache:
             effective_retries = 0
         else:
             effective_retries = config.retry_count
     
         # Try to fetch with TOTAL timeout (not just socket timeout) + retry with backoff
-        # Falls back to cache on exhausted retries or non-retryable errors
+        # Falls back to cache on exhausted retries or non-retryable errors.
+        # Onionoo answers 304 only when If-Modified-Since is exactly its
+        # Last-Modified value, so keep that header for the next request.
         fetch_start = time.time()
+        response_headers = None
+        retry_kwargs = None
+        if config.use_conditional_requests:
+            response_headers = {}
+            retry_kwargs = {"response_headers": response_headers}
+
+            def fetch_fn(url, timeout, headers=None, response_headers=None):
+                """Fetch one attempt, dropping a header from an unfinished read."""
+                if response_headers is not None:
+                    response_headers.clear()
+                return _fetch_url_with_total_timeout(
+                    url, timeout, headers, response_headers=response_headers)
+        else:
+            fetch_fn = _fetch_url_with_total_timeout
         try:
             api_response = _retry_with_backoff(
-                fetch_fn=_fetch_url_with_total_timeout,
+                fetch_fn=fetch_fn,
                 args=(url, timeout_seconds, headers if headers else None),
+                kwargs=retry_kwargs,
                 retry_count=effective_retries,
                 retry_delay_base=config.retry_delay_base,
                 log_fn=log_progress,
@@ -767,7 +842,7 @@ def _fetch_with_cache_fallback(
         except TotalTimeoutError:
             elapsed = time.time() - fetch_start
             log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
-            return _cache_fallback(
+            return _fetch_failed(
                 "timeout", f"Total timeout after {timeout_seconds}s with no cache",
                 no_cache_log="no cached data available after timeout")
         except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
@@ -778,16 +853,21 @@ def _fetch_with_cache_fallback(
             )
         
             if not is_timeout:
+                # A 304 also needs a refetch if its cached document is unusable,
+                # even when the cache file is old enough for the stale timeout.
+                if (presumed_fresh_cache or (getattr(e, "code", None) == 304 and cache_age is not None)) \
+                        and load_cached() is None:
+                    return _refetch_without_cache()
                 raise
             log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
-            return _cache_fallback(
+            return _fetch_failed(
                 "timeout", f"Timeout after {timeout_seconds}s with no cache",
                 no_cache_log="no cached data available after timeout")
         except Exception as e:
             # Non-retryable error after exhausting retries
             elapsed = time.time() - fetch_start
             log_progress(f"request failed after {elapsed:.1f}s: {type(e).__name__}: {e}")
-            return _cache_fallback(
+            return _fetch_failed(
                 "error", f"Error: {type(e).__name__}: {e}",
                 no_cache_log="no cached data available after error")
     
@@ -804,7 +884,7 @@ def _fetch_with_cache_fallback(
         # Validate response if validator provided
         if validator and not validator(data):
             log_progress(f"warning: invalid {display_name} data structure")
-            if cached_data:
+            if load_cached():
                 log_progress("using cached data due to invalid response structure")
                 _mark_ready(api_name)
                 return cached_data
@@ -812,11 +892,20 @@ def _fetch_with_cache_fallback(
     
         # Cache the data
         log_progress(f"caching {display_name} data...")
-        _save_cache(api_name, data)
+        saved = _save_cache(api_name, data)
+        cache_read = False  # the cache file now holds this response
     
-        # Write timestamp for future conditional requests
-        if config.use_conditional_requests:
-            timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
+        # Write timestamp for future conditional requests only after the cache
+        # file is actually saved. Prefer the server's Last-Modified; without
+        # that header, keep the local clock time used before.
+        if config.use_conditional_requests and saved:
+            timestamp_str = None
+            if response_headers is not None:
+                candidate = response_headers.get("Last-Modified")
+                if isinstance(candidate, str) and candidate:
+                    timestamp_str = candidate
+            if not timestamp_str:
+                timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
             _write_timestamp(api_name, timestamp_str)
     
         # Mark as ready
@@ -830,11 +919,16 @@ def _fetch_with_cache_fallback(
         return data
 
     except urllib.error.HTTPError as err:
+        if ignore_cache:
+            raise  # the refetching caller handles and logs it
         if err.code == 304:
             # No update since last run - use cached data
             log_progress(f"no {display_name} update since last run, using cached data...")
-            cached_data = _load_cache(api_name)
-            if cached_data:
+            if load_cached():
+                # The server confirmed this copy is current. Cache age selects
+                # the next run's timeout and retries, so refresh the file mtime.
+                # Leave the timestamp file unchanged: it is the Last-Modified value.
+                os.utime(_cache_manager.get_file_path(f"{api_name}.json"))
                 _mark_ready(api_name)
                 return cached_data
             elif config.allow_exit_on_304:
@@ -852,6 +946,8 @@ def _fetch_with_cache_fallback(
             raise
 
     except urllib.error.URLError as err:
+        if ignore_cache:
+            raise  # the refetching caller handles and logs it
         log_progress(f"network error fetching {display_name} data: {err}")
         log_progress("check your internet connection and try again")
         log_progress("in CI environments, this might be a temporary network issue")
@@ -862,11 +958,19 @@ def _fetch_with_cache_fallback(
         log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
 
-        # Try to return cached data as fallback
-        cached_data = _load_cache(api_name)
-        if cached_data:
+        # Try to return cached data as fallback (not re-reading a cache file
+        # whose current contents were already read). Unread contents go
+        # through load_cached() so cache_validator applies. A save clears
+        # cache_read because the file now holds the response; cache_age can
+        # still be unset (ignore_cache), so recover it before loading.
+        if not cache_read:
+            if cache_age is None:
+                cache_age = _cache_manager.get_cache_age(api_name)
+            load_cached()
+        cached = cached_data
+        if cached:
             log_progress(f"using cached {display_name} data as fallback")
-            return cached_data
+            return cached
         else:
             if config.critical:
                 log_progress("no cached data available, cannot continue")

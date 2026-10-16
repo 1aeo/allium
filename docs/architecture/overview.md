@@ -162,7 +162,7 @@ XSS protection via Jinja2 autoescape. All user-controlled data escaped by defaul
 | Peak memory (`--apis all`) | ~2.4GB |
 | Peak memory (`--apis details`) | ~400MB |
 | Output pages | ~21,700 |
-| Output size | ~500MB |
+| Output size | ~500MB HTML + ~3.6GB PNG charts |
 
 ## See Also
 

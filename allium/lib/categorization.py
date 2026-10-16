@@ -6,14 +6,27 @@ AS rarity scoring, contact derived data, and display value precomputation.
 Extracted from relays.py for better modularity.
 """
 
+import functools
 import html as _html
 import re
 from typing import Dict, List
 
+from .file_io_utils import sanitize_path_component
 from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
 
-# Pre-compiled regex for sort key validation (called ~49K times per run)
+# Pre-compiled regex for sort key validation (through _is_page_key, cached)
 _VALID_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+@functools.lru_cache(maxsize=None)
+def _is_page_key(v):
+    """True if v gets a page at its own name: <k>/<v>/, the folder links point at.
+
+    Pages are written to <k>/<sanitize_path_component(v)>/, which renames a key
+    with a leading or trailing "_", a trailing newline or over 240 characters.
+    Cached: sort_relay sees the same keys ~650K times per run.
+    """
+    return bool(_VALID_KEY_RE.match(v)) and sanitize_path_component(v) == v
 
 
 def calculate_network_totals(relay_set):
@@ -145,7 +158,7 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         cw:    consensus weight for this relay (passed to avoid repeated extraction)
         cw_fraction: consensus weight fraction (API value preferred, computed fallback)
     """
-    if not v or not _VALID_KEY_RE.match(v):
+    if not v or not _is_page_key(v):
         return
 
     if not k in relay_set.json["sorted"]:

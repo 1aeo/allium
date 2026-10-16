@@ -10,8 +10,9 @@
 cd allium
 (
   set -eu
-  staging_dir="$(mktemp -d)"
+  staging_dir="$(mkdir -p data && mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
   trap 'rm -rf -- "$staging_dir"' EXIT
+  chmod 755 "$staging_dir"  # mktemp makes it 0700, and rsync -a gives the web root its mode
   python3 allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
   rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
@@ -45,6 +46,11 @@ python3 allium.py --out /var/www/tor-metrics --base-url "/tor-metrics"
 ```
 
 This ensures all internal links use the correct path prefix.
+
+Do not pass `--base-url /` for a site served at the host root. Vanity links are
+built as `{base}/{domain}/`, so a bare slash becomes a scheme-relative
+`//domain/` URL. Omit `--base-url` instead. That is the default and leaves
+ordinary root-relative links unchanged.
 
 ## nginx Configuration
 

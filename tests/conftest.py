@@ -76,6 +76,26 @@ TEST_BANDWIDTH_CACHE_HOURS = 1
 ACTIVE_VOTING_AUTHORITIES_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
                                'longclaw', 'maatuska', 'moria1', 'tor26']
 
+# Relay forest44 in the 2026-10-08 04:00 CollecTor votes, the case Roger Dingledine
+# answered on tor-relays ("Relay suddenly stopped relaying traffic", 2026-10-04).
+# Per authority: 's' flags, 'w' Bandwidth= and Measured= (KB/s), then its
+# flag-thresholds fast-speed, guard-bw-inc-exits, guard-bw-exc-exits (bytes/s)
+# and ignoring-advertised-bws. Bandwidth authorities faravahar and longclaw had an
+# empty bandwidth-file-headers line and no Measured= values in their votes.
+FOREST44_FINGERPRINT = '0EF2A357140FCBDAE2F948CC2228909695B81B35'
+FOREST44_VOTES = {
+    'bastet': ('Running Stable V2Dir Valid', 854, 68, 102000, 25000000, 26000000, 1),
+    'dannenberg': ('Running Stable V2Dir Valid', 854, 53, 102000, 36000000, 35000000, 1),
+    'dizum': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'faravahar': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 40000000, 35000000, 1),
+    'gabelmoo': ('Running Stable V2Dir Valid', 854, 84, 102000, 35000000, 34000000, 1),
+    'longclaw': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'maatuska': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'moria1': ('Running Stable V2Dir Valid', 854, 230, 1048000, 26000000, 27000000, 1),
+    'tor26': ('Running Stable V2Dir Valid', 854, 32, 102000, 33000000, 34000000, 1),
+}
+FOREST44_BW_AUTHORITIES = {'bastet', 'dannenberg', 'faravahar', 'gabelmoo', 'longclaw', 'moria1', 'tor26'}
+
 
 # ============================================================================
 # PYTEST FIXTURES - Common test data and utilities
@@ -86,6 +106,31 @@ def temp_dir():
     """Fixture that provides a temporary directory that's cleaned up after the test."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+
+
+@pytest.fixture(autouse=True)
+def isolated_worker_data(tmp_path_factory, monkeypatch):
+    """Point every test's API cache, timestamps and worker state at a temp dir.
+
+    allium.lib.workers derives DATA_DIR, CACHE_DIR and STATE_FILE from its own
+    location and builds _cache_manager and _timestamp_manager on CACHE_DIR at
+    import, so a test that reaches a worker would otherwise write fixture data
+    into the real allium/data/ that site builds load from. _worker_status is
+    reset too, since _load_state() seeds it from the real state.json and
+    _save_state() writes the whole registry back out.
+    """
+    from allium.lib import workers
+    from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+
+    data_dir = tmp_path_factory.mktemp('allium-data')
+    cache_dir = os.path.join(str(data_dir), 'cache')
+    monkeypatch.setattr(workers, 'DATA_DIR', str(data_dir))
+    monkeypatch.setattr(workers, 'CACHE_DIR', cache_dir)
+    monkeypatch.setattr(workers, 'STATE_FILE', os.path.join(str(data_dir), 'state.json'))
+    monkeypatch.setattr(workers, '_cache_manager', create_cache_manager(cache_dir))
+    monkeypatch.setattr(workers, '_timestamp_manager', create_timestamp_manager(cache_dir))
+    monkeypatch.setattr(workers, '_worker_status', {})
+    return data_dir
 
 
 @pytest.fixture
@@ -162,6 +207,31 @@ def voting_registry_8_voters():
     registry = get_authority_registry()
     update_voting_authorities(ACTIVE_VOTING_AUTHORITIES_8)
     yield registry
+    registry.clear_voting_authorities()
+
+
+@pytest.fixture
+def forest44_fetcher():
+    """CollectorFetcher indexed with forest44's votes (FOREST44_VOTES), all 9 voting."""
+    from allium.lib.consensus.collector_fetcher import (
+        CollectorFetcher,
+        get_authority_registry,
+        update_voting_authorities,
+    )
+    registry = get_authority_registry()
+    update_voting_authorities(sorted(FOREST44_VOTES))
+    fetcher = CollectorFetcher()
+    fetcher.bw_authorities = set(FOREST44_BW_AUTHORITIES)
+    votes = {}
+    for auth, (flags, bandwidth, measured, fast, inc, exc, ignoring) in FOREST44_VOTES.items():
+        fetcher.flag_thresholds[auth] = {
+            'fast-speed': fast, 'guard-bw-inc-exits': inc, 'guard-bw-exc-exits': exc,
+            'guard-wfu': 0.98, 'guard-tk': 691200, 'ignoring-advertised-bws': ignoring,
+        }
+        votes[auth] = {'flags': flags.split(), 'bandwidth': bandwidth, 'measured': measured,
+                       'wfu': 0.998, 'tk': 2100000, 'mtbf': 1700000}
+    fetcher.relay_index = {FOREST44_FINGERPRINT: {'votes': votes}}
+    yield fetcher
     registry.clear_voting_authorities()
 
 

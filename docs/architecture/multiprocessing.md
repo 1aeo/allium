@@ -31,8 +31,8 @@ The multiprocessing implementation uses a two-phase approach for contact pages:
 │                     DATA PROCESSING PHASE                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Parallel Contact Precomputation                             │
-│     ├── Worker Pool (fork context)                              │
-│     ├── imap_unordered for streaming results                    │
+│     ├── ProcessPoolExecutor (fork context)                      │
+│     ├── Results streamed from chunked executor.map              │
 │     └── Store directly on contact_data (flat storage)           │
 │                                                                 │
 │  Precomputed data:                                              │
@@ -48,12 +48,13 @@ The multiprocessing implementation uses a two-phase approach for contact pages:
 │                     PAGE GENERATION PHASE                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  2. Parallel Page Rendering                                     │
-│     ├── Worker Pool (fork context)                              │
+│     ├── ProcessPoolExecutor (fork context)                      │
 │     ├── Shared template and relay data via fork()               │
 │     └── Each worker renders and writes pages independently      │
 │                                                                 │
-│  Applies to: family, contact, as, first_seen pages              │
-│  (threshold: 100+ pages to trigger parallel processing)         │
+│  Applies to: family, contact, as, country, flag, first_seen     │
+│  and relay info pages                                           │
+│  (threshold: 100+ output files to trigger parallel processing)  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +64,7 @@ Contact pages require expensive calculations (rankings, reliability stats) that 
 
 1. **Avoid redundant computation** - Each worker doesn't recalculate rankings
 2. **Enable parallel rendering** - Workers just read precomputed data
-3. **Reduce peak memory** - imap_unordered streams results instead of buffering
+3. **Reduce peak memory** - results are applied as they stream back instead of buffering
 
 ---
 
@@ -113,28 +114,27 @@ def _precompute_contact_worker(args):
     })
 ```
 
-### Streaming with imap_unordered
+### Streaming Results
 
-Uses `imap_unordered` for lower peak memory and progress reporting:
+Iterates `fork_map()` as results arrive, for lower peak memory and progress
+reporting:
 
 ```python
 def _precompute_contacts_parallel(self, contact_hashes, ...):
-    ctx = mp.get_context('fork')
     chunk_size = max(50, total_contacts // (self.mp_workers * 4))
     
-    with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
-        for contact_hash, precomputed_data in pool.imap_unordered(
-            _precompute_contact_worker, worker_args, chunksize=chunk_size
-        ):
-            # Apply results as they complete (streaming)
-            if precomputed_data:
-                for key, value in precomputed_data.items():
-                    contact_data[key] = value
-            
-            # Progress reporting every 500 contacts
-            processed += 1
-            if processed % 500 == 0:
-                self._log_progress(f"Pre-computed {processed}/{total} contacts...")
+    for contact_hash, precomputed_data in fork_map(
+        self.mp_workers, _precompute_contact_worker, worker_args, chunk_size, _init_precompute_worker, (self,)
+    ):
+        # Apply results as each chunk arrives (streaming)
+        if precomputed_data:
+            for key, value in _load_precomputed(precomputed_data, self.json["relays"]).items():
+                contact_data[key] = value
+        
+        # Progress reporting every 500 contacts
+        processed += 1
+        if processed % 500 == 0:
+            self._log_progress(f"Pre-computed {processed}/{total} contacts...")
 ```
 
 ### Flat Storage Pattern
@@ -153,6 +153,24 @@ if k == "contact":
     operator_reliability = i.get("operator_reliability")
     is_validated_aroi = i.get("is_validated_aroi", False)
 ```
+
+### Sharing Relay Data With Workers
+
+- **Precompute results reference relays by index.** Contact and family
+  results embed the group's relay dicts (validation status entries point at
+  them). Workers pickle each shared relay dict as its index in
+  `relay_set.json["relays"]` and the parent re-links its own dict
+  (`_dump_precomputed` / `_load_precomputed`), as the sequential path stores
+  them. Sending copies cost ~29GB of pickles per run, because family groups
+  list every member once per member.
+- **The heap is frozen before rendering.** `allium.py` pauses the cyclic GC
+  while data is fetched and processed (the data holds almost no cycles), then
+  calls `gc.freeze()` before page generation so collections in the parent and
+  in forked workers skip the multi-GB data set instead of re-traversing it.
+- **Relay rows are memoized per process.** `contact-relay-list.html` renders
+  each row as a cached `relay_row_head` (`_cached_relay_row_head`, keyed on everything
+  the macro reads) plus an uncached `relay_row_tail` holding the cells that
+  depend on the current time.
 
 ---
 
@@ -176,8 +194,8 @@ python3 allium.py --out ./www --workers 0
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `--workers` | 4 | Number of parallel workers |
-| Page threshold | 100 | Minimum pages to trigger parallel processing |
-| Chunk size | 50+ | Minimum chunk size for imap_unordered |
+| Page threshold | 100 | Minimum output files to trigger parallel processing |
+| Chunk size | 50+ | Minimum chunk size for contact/family precomputation |
 
 ---
 
@@ -185,29 +203,56 @@ python3 allium.py --out ./www --workers 0
 
 ### Fork Context (Linux/macOS)
 
-The implementation uses `fork()` context for efficient copy-on-write memory sharing:
+The implementation uses `fork()` context for efficient copy-on-write memory sharing.
+`fork_map()` (in `worker_pool.py`) runs every pool. The function, items and
+`initargs` reach the workers through fork and are never pickled; only item
+indexes cross the call queue:
 
 ```python
-ctx = mp.get_context('fork')
-with ctx.Pool(workers, initializer, initargs) as pool:
-    pool.map(worker_func, args)
+for result in fork_map(workers, worker_func, items, chunksize, initializer, initargs):
+    ...
 ```
+
+Two `ProcessPoolExecutor` pitfalls are handled there:
+
+- Chunks of the items themselves could fill the call queue's 64 KiB pipe. A
+  worker death then hangs Python 3.9/3.10 (CPython gh-94777) instead of
+  raising `BrokenProcessPool`. Chunk sizes are capped so that chunks of
+  indexes stay below it too.
+- Executor workers wait forever when their parent dies, each holding its
+  copy of the relay set. A watchdog thread in every worker exits it once the
+  parent is gone, as `multiprocessing.Pool` workers did.
+
+One case still hangs on every Python version: a worker killed while its result
+is only partly written to the result pipe (precompute chunk results are up to a
+few MB) leaves the executor waiting for the rest of that message instead of
+raising `BrokenProcessPool`. Killing the hung build still stops its workers.
 
 ### Fallback Behavior
 
 If multiprocessing fails or isn't available (Windows), the code falls back to sequential processing:
 
 ```python
-use_mp = (self.mp_workers > 0 and len(sorted_values) >= 100 and 
-          hasattr(mp, 'get_context'))
+use_mp = relay_set.mp_workers > 0 and output_files >= 100
 
 if use_mp:
-    self._write_pages_parallel(...)
+    write_pages_parallel(...)
 else:
     # Sequential fallback
     for v in sorted_values:
-        self._render_page(...)
+        ...
 ```
+
+Every pool is a `ProcessPoolExecutor` rather than a `multiprocessing.Pool`. A
+`Pool` replaces a worker that dies abruptly (OOM killer, segfault) without
+failing its task, so `map()` / `imap_unordered()` would wait forever. The
+executor raises `BrokenProcessPool` instead, which triggers the same
+sequential fallback: every page of the set is rendered again, or every group
+precomputed again (the SEO HTML pass instead finishes the remaining files in
+process). Tests in `tests/unit/test_relay_page_parallel.py`,
+`tests/unit/test_seo.py`, `tests/unit/test_worker_pool.py` and
+`tests/integration/test_parallel_generation.py` kill a worker in each pool,
+or the parent of a pool.
 
 ---
 
@@ -270,7 +315,7 @@ python3 -m pytest tests/test_integration_contact_template.py -v
 
 ## Future Improvements
 
-- [ ] Parallel relay info page generation (11,000+ pages)
+- [x] Parallel relay info page generation (11,000+ pages)
 - [ ] Adaptive worker count based on system resources
 - [ ] Shared memory for large datasets (reduce fork overhead)
 - [ ] Progress bars for individual page types

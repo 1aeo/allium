@@ -200,7 +200,7 @@ class TestOnionooDetailsWorker:
                 mock_response = MagicMock()
                 # payload once, then EOF - the production chunk loop reads until
                 # an empty read; a constant return_value spun until total timeout
-                mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -228,7 +228,7 @@ class TestOnionooUptimeWorker:
                 mock_response = MagicMock()
                 # payload once, then EOF - the production chunk loop reads until
                 # an empty read; a constant return_value spun until total timeout
-                mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                 mock_urlopen.return_value = mock_response
                 
                 result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -251,7 +251,7 @@ def test_fetch_onionoo_uptime_success():
             mock_response = MagicMock()
             # payload once, then EOF - the production chunk loop reads until
             # an empty read; a constant return_value spun until total timeout
-            mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -267,6 +267,7 @@ def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
     
     mock_cached_data = {
         "relays": [{"fingerprint": "CACHED123", "uptime": {"1_month": 92.0}}],
+        "relays_published": "2024-01-01 12:00:00",
         "version": "cached_data"
     }
     
@@ -317,7 +318,7 @@ def test_fetch_onionoo_uptime_progress_steps():
             mock_response = MagicMock()
             # payload once, then EOF - the production chunk loop reads until
             # an empty read; a constant return_value spun until total timeout
-            mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+            mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
             mock_urlopen.return_value = mock_response
             
             result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -336,6 +337,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -365,6 +367,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "DEF456", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_uptime"
         }
         
@@ -403,7 +406,7 @@ class TestOnionooUptimeCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
@@ -435,7 +438,13 @@ class TestOnionooUptimeCaching:
                     assert result is None
     
     def test_corrupted_cache_uses_long_timeout(self):
-        """Test that with corrupted cache file, function uses long timeout"""
+        """Test that a corrupted cache still gets the long timeout.
+
+        The cache is only read when needed, so the first attempt treats it as
+        fresh (30s); once that attempt fails and the cache turns out unreadable,
+        the fetch is repeated as if no cache existed (20 min).
+        """
+        import socket
         mock_data = {
             "relays": [{"fingerprint": "GHI789", "uptime": {"1_month": 98.0}}],
             "version": "fresh_uptime"
@@ -451,27 +460,25 @@ class TestOnionooUptimeCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
-                    mock_urlopen.return_value = mock_response
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_urlopen.side_effect = [socket.timeout("timed out"), mock_response]
                     
                     result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
                     
                     # Should return fresh data
                     assert result is not None
-                    # Should have called urlopen with 1200 second (20 min) timeout
-                    # because corrupted cache is treated as no cache
-                    # retry logic may attempt multiple times; every attempt must
-                    # use the expected timeout
-                    assert mock_urlopen.called
-                    assert all(c[1]['timeout'] == 1200
-                               for c in mock_urlopen.call_args_list)
+                    assert result["version"] == "fresh_uptime"
+                    # The short attempt failed; the retry treats the corrupted
+                    # cache as no cache and uses the 1200 second (20 min) timeout
+                    assert [c[1]['timeout'] for c in mock_urlopen.call_args_list] == [30, 1200]
     
-    def test_preloaded_cache_used_on_timeout(self):
-        """Test that pre-loaded cache is reused on timeout (not loaded twice)"""
+    def test_cache_loaded_once_on_timeout(self):
+        """Test that the cache is loaded once, for the timeout fallback"""
         import socket
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_uptime"
         }
         
@@ -487,8 +494,7 @@ class TestOnionooUptimeCaching:
                     
                     # Should return cached data on timeout
                     assert result == mock_cached_data
-                    # Cache should be loaded once for validation (pre-loading)
-                    # The pre-loaded data is reused on timeout fallback
+                    # Loaded lazily, only for the fallback
                     mock_load_cache.assert_called_once()
     
     def test_boundary_cache_age_uses_long_timeout(self):
@@ -498,6 +504,7 @@ class TestOnionooUptimeCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "BOUNDARY", "uptime": {"1_month": 90.0}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "boundary_cached_uptime"
         }
         
@@ -534,6 +541,7 @@ class TestOnionooDetailsCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "nickname": "TestRelay"}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_details"
         }
         
@@ -575,7 +583,7 @@ class TestOnionooDetailsCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     result = fetch_onionoo_details("http://test.url", progress_logger=None)
@@ -597,6 +605,7 @@ class TestOnionooBandwidthCaching:
         """Test that fresh cache is returned without making a request"""
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached_bandwidth"
         }
         
@@ -622,6 +631,7 @@ class TestOnionooBandwidthCaching:
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "stale_cached_bandwidth"
         }
         
@@ -723,7 +733,7 @@ class TestAROIValidationCaching:
                     mock_response = MagicMock()
                     # payload once, then EOF - the production chunk loop reads until
                     # an empty read; a constant return_value spun until total timeout
-                    mock_response.read.side_effect = [json.dumps(mock_invalid_data).encode('utf-8'), b'']
+                    mock_response.read1.side_effect = [json.dumps(mock_invalid_data).encode('utf-8'), b'']
                     mock_urlopen.return_value = mock_response
                     
                     from allium.lib.workers import fetch_aroi_validation
