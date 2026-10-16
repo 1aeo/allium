@@ -337,6 +337,13 @@ class Coordinator:
         return relay_set
 
 
+def relay_count(relay_set) -> int:
+    """Number of relays in a built relay set (0 when there is no set or no data)."""
+    if relay_set is None or relay_set.json is None:
+        return 0
+    return len(relay_set.json.get("relays") or [])
+
+
 def create_relay_set_with_coordinator(args, progress_logger=None):
     """
     Create a relay set using the coordinator system.

@@ -90,8 +90,8 @@ def test_304_with_invalid_cache_refetches_without_timestamp(config, stale_cache)
 
     initial_timeout = config.timeout_stale_cache if stale_cache else config.timeout_fresh_cache
     assert fetch.call_args_list == [
-        call(URL, initial_timeout, {"If-Modified-Since": timestamp}),
-        call(URL, config.timeout_stale_cache, None),
+        call(URL, initial_timeout, {"If-Modified-Since": timestamp}, response_headers={}),
+        call(URL, config.timeout_stale_cache, None, response_headers={}),
     ]
     assert result == VALID
     assert workers._load_cache(config.api_name) == VALID
@@ -109,7 +109,9 @@ def test_304_with_valid_cache_returns_document_without_refetching(config):
         result = workers._fetch_with_cache_fallback(URL, config)
 
     assert result == VALID
-    fetch.assert_called_once_with(URL, config.timeout_fresh_cache, {"If-Modified-Since": timestamp})
+    fetch.assert_called_once_with(
+        URL, config.timeout_fresh_cache, {"If-Modified-Since": timestamp},
+        response_headers={})
     assert workers.get_worker_status(config.api_name)["status"] == "ready"
 
 

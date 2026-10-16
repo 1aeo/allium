@@ -17,6 +17,7 @@ from allium.lib.exit_dns_health import (
     build_exit_dns_health_map,
     calculate_exit_dns_health_metrics,
     parse_resolver_summary,
+    resolver_share_tenths,
 )
 from allium.lib.network_health import preformat_network_health_template_strings
 
@@ -264,6 +265,7 @@ def test_metrics_resolvers_present():
     assert m["exit_dns_health_resolver_ffmuc_percentage"] == 1.12
     assert m["exit_dns_health_resolver_public_percentage"] == 21.61
     assert m["exit_dns_health_resolver_local_percentage"] == 66.69
+    assert m["exit_dns_health_resolver_local_24_percentage"] is None  # version 1 has no tiers
     assert m["exit_dns_health_resolver_other_percentage"] == 11.7
     assert m["exit_dns_health_resolver_unknown_percentage"] == 0.0
     assert m["exit_dns_health_resolver_exits_covered"] == 2670
@@ -291,6 +293,51 @@ def test_metrics_existing_keys_unchanged_by_resolvers():
         {k: v for k, v in without.items() if k not in new_keys}
 
 
+def test_metrics_version2_local_is_the_sum_of_tiers():
+    """Version 2's local percentage is local_24 + local_22 + local_as + local_operator."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {
+        "google": 10.83, "cloudflare": 8.04, "quad9": 1.88, "opendns": 0.0, "ffmuc": 1.02,
+        "local_24": 55.58, "local_22": 1.54, "local_as": 10.92, "local_operator": 7.59,
+        "other": 2.82, "unknown": 0.0,
+    }
+    summary = parse_resolver_summary({"resolvers": resolvers})
+    assert summary["share_pct"]["local"] is None
+    assert summary["share_pct"]["local_24"] == 55.58
+    assert summary["share_pct"]["local_operator"] == 7.59
+    m = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    assert m["exit_dns_health_resolver_local_percentage"] == 75.63
+    assert m["exit_dns_health_resolver_local_24_percentage"] == 55.58
+    assert m["exit_dns_health_resolver_local_22_percentage"] == 1.54
+    assert m["exit_dns_health_resolver_local_as_percentage"] == 10.92
+    assert m["exit_dns_health_resolver_local_operator_percentage"] == 7.59
+    preformat_network_health_template_strings(m)
+    assert m["exit_dns_health_resolver_local_percentage_formatted"] == "75.6%"
+    assert m["exit_dns_health_resolver_local_operator_percentage_formatted"] == "7.6%"
+
+
+def test_partial_version2_tiers_are_not_summed():
+    """A version-2 report that omits a tier does not publish the rest as the Local total."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {"google": 10.0, "local_24": 55.0, "other": 35.0, "unknown": 0.0}
+    metrics = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    assert metrics["exit_dns_health_resolver_local_24_percentage"] == 55.0
+    assert metrics["exit_dns_health_resolver_local_operator_percentage"] is None
+    assert metrics["exit_dns_health_resolver_local_percentage"] is None
+
+
+def test_version2_tier_primary_is_not_public():
+    """A local_24 or local_operator primary stays that category and is not public."""
+    tier = _resolver_of({"primary": "local_24", "public": False,
+                         "queries": {"local_24": 40, "local_operator": 8}})
+    assert tier == {"primary": "local_24", "public": False, "queries": {"local_24": 40.0, "local_operator": 8.0}}
+    operator = _resolver_of({"primary": "local_operator", "public": False, "queries": {"local_operator": 12}})
+    assert operator["primary"] == "local_operator"
+    assert operator["public"] is False
+
+
 def test_formatted_strings():
     """Shares format as percentages and counts with thousands separators."""
     m = calculate_exit_dns_health_metrics(_report([]))
@@ -311,3 +358,77 @@ def test_formatted_strings_not_available():
     assert m["exit_dns_health_resolver_google_percentage_formatted"] == "n/a"
     assert m["exit_dns_health_resolver_exits_covered_formatted"] == "n/a"
     assert m["exit_dns_health_tested_formatted"] == "0"  # existing keys still format as before
+
+
+# Version-2 shares from a live report: rounded one by one, All Public + Local + Other + Unknown
+# shows 22.2 + 74.1 + 3.6 + 0.0 = 99.9%.
+LIVE_V2_SHARE = {
+    "google": 11.0, "cloudflare": 8.09, "quad9": 1.94, "opendns": 0.0, "ffmuc": 1.19,
+    "local_24": 61.07, "local_22": 6.88, "local_as": 1.85, "local_operator": 4.34, "other": 3.64, "unknown": 0.0,
+}
+
+
+def _v2_resolvers(share):
+    """A version-2 metadata.resolvers block with the given share_pct."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = dict(share)
+    providers = {p: share[p] for p in ("google", "cloudflare", "quad9", "opendns", "ffmuc")}
+    resolvers["public_share_pct"] = dict(providers, all=round(sum(providers.values()), 2))
+    return resolvers
+
+
+def _formatted_shares(resolvers):
+    """{category: formatted dashboard share} for a resolvers block."""
+    m = calculate_exit_dns_health_metrics(_report([], resolvers=resolvers))
+    preformat_network_health_template_strings(m)
+    names = ("google", "cloudflare", "quad9", "opendns", "ffmuc", "public", "local", "local_24", "local_22",
+             "local_as", "local_operator", "other", "unknown")
+    return m, {n: m[f"exit_dns_health_resolver_{n}_percentage_formatted"] for n in names}
+
+
+def _pct(text):
+    """Tenths of a percent from a formatted share such as '22.2%'."""
+    return round(float(text.rstrip("%")) * 10)
+
+
+def test_formatted_shares_add_up_to_100():
+    """The four categories show exactly 100.0%, and providers and tiers add up to their totals."""
+    m, shown = _formatted_shares(_v2_resolvers(LIVE_V2_SHARE))
+    assert (shown["public"], shown["local"], shown["other"], shown["unknown"]) == ("22.2%", "74.2%", "3.6%", "0.0%")
+    assert sum(_pct(shown[c]) for c in ("public", "local", "other", "unknown")) == 1000
+    assert sum(_pct(shown[p]) for p in ("google", "cloudflare", "quad9", "opendns", "ffmuc")) == _pct(shown["public"])
+    assert sum(_pct(shown[t]) for t in ("local_24", "local_22", "local_as", "local_operator")) == _pct(shown["local"])
+    # Only the display is rounded together: raw values (Prometheus, templates' raw keys) are unchanged
+    assert m["exit_dns_health_resolver_local_percentage"] == 74.14
+    assert m["exit_dns_health_resolver_public_percentage"] == 22.22
+
+
+def test_share_tenths_match_the_exitdnshealth_dashboard():
+    """Same rounding as exitdnshealth.1aeo.com, so both sites show the same numbers."""
+    key = "exit_dns_health_resolver_{}_percentage".format
+    m = calculate_exit_dns_health_metrics(_report([], resolvers=_v2_resolvers(LIVE_V2_SHARE)))
+    tenths = resolver_share_tenths(m)
+    # Expected values computed by the exitdnshealth dashboard (public/app.js roundSharesToTotal)
+    assert {k: tenths[key(k)] for k in LIVE_V2_SHARE} == {
+        "google": 110, "cloudflare": 81, "quad9": 19, "opendns": 0, "ffmuc": 12, "local_24": 611, "local_22": 69,
+        "local_as": 19, "local_operator": 43, "other": 36, "unknown": 0}
+    assert (tenths[key("public")], tenths[key("local")]) == (222, 742)
+    v1 = resolver_share_tenths(calculate_exit_dns_health_metrics(_report([])))
+    assert {k: v1[key(k)] for k in RESOLVERS["share_pct"]} == {
+        "google": 105, "cloudflare": 80, "quad9": 20, "opendns": 0, "ffmuc": 11, "local": 667, "other": 117,
+        "unknown": 0}
+
+
+@pytest.mark.parametrize("drop, change, other", [
+    ("local_operator", {}, "3.6%"),    # a version-2 tier is missing: no Local total
+    ("other", {}, "n/a"),              # a category is missing
+    (None, {"other": 50.0}, "50.0%"),  # shares far from 100% (malformed report)
+])
+def test_share_tenths_fall_back_to_rounding_each_share(drop, change, other):
+    """Without a complete set of shares that totals about 100%, each share is rounded on its own."""
+    share = {k: v for k, v in dict(LIVE_V2_SHARE, **change).items() if k != drop}
+    m, shown = _formatted_shares(_v2_resolvers(share))
+    assert resolver_share_tenths(m) is None
+    assert shown["local_24"] == "61.1%"
+    assert shown["other"] == other

@@ -51,15 +51,16 @@ def _relay(fingerprint, nickname, flags):
     }
 
 
-def _report(resolvers):
+def _report(resolvers, per_exit=None):
     """An exitdnshealth report; resolvers=None is a report without any resolver data."""
-    per_exit = {
-        PUBLIC: {"primary": "google", "public": True, "queries": {"google": 61.3, "local": 4.2}},
-        LOCAL: {"primary": "local", "public": False, "queries": {"local": 199.0, "other": 1.0}},
-        COLD: {"primary": None, "public": None, "queries": {"other": 3.5}},
-        HOSTILE: {"primary": "<script>alert(1)</script>", "public": "<b>yes</b>",
-                  "queries": {"<img src=x onerror=alert(1)>": 30, "google": "<i>9</i>"}},
-    }
+    if per_exit is None:
+        per_exit = {
+            PUBLIC: {"primary": "google", "public": True, "queries": {"google": 61.3, "local": 4.2}},
+            LOCAL: {"primary": "local", "public": False, "queries": {"local": 199.0, "other": 1.0}},
+            COLD: {"primary": None, "public": None, "queries": {"other": 3.5}},
+            HOSTILE: {"primary": "<script>alert(1)</script>", "public": "<b>yes</b>",
+                      "queries": {"<img src=x onerror=alert(1)>": 30, "google": "<i>9</i>"}},
+        }
     results = []
     for fp in EXITS:
         result = {"exit_fingerprint": fp, "status": "success", "timing": {"total_ms": 900}}
@@ -73,7 +74,7 @@ def _report(resolvers):
     return {"metadata": metadata, "results": results}
 
 
-def _relay_set(tmp_path, resolvers):
+def _relay_set(tmp_path, resolvers, per_exit=None):
     """Relays enriched with a report carrying the given metadata.resolvers."""
     details = {
         "version": "8.0",
@@ -83,7 +84,7 @@ def _relay_set(tmp_path, resolvers):
     }
     relay_set = Relays(output_dir=str(tmp_path), onionoo_url="https://onionoo.example.invalid/details",
                        relay_data=details, filter_downtime_days=7, mp_workers=0)
-    relay_set.enrich_with_api_data(exit_dns_health_data=_report(resolvers))
+    relay_set.enrich_with_api_data(exit_dns_health_data=_report(resolvers, per_exit))
     return relay_set
 
 
@@ -93,9 +94,9 @@ def _relay_pages(relay_set):
     return {fp: open(f"{relay_set.output_dir}/relay/{fp}/index.html").read() for fp in EXITS + (GUARD,)}
 
 
-def _render(tmp_path, resolvers):
+def _render(tmp_path, resolvers, per_exit=None):
     """Relay pages and the network health dashboard for a report with the given resolvers."""
-    relay_set = _relay_set(tmp_path, resolvers)
+    relay_set = _relay_set(tmp_path, resolvers, per_exit)
     pages = _relay_pages(relay_set)
     page_def = next(p for p in STANDALONE_PAGES if p["template"] == "network-health-dashboard.html")
     dashboard = tmp_path / "network-health.html"
@@ -207,6 +208,22 @@ def test_dashboard_resolver_row(rendered):
     assert "Upstream resolvers: not available." not in html
 
 
+def test_dashboard_rows_all_then_public_then_local(tmp_path):
+    """The all-resolvers row (Exits Covered, All Public, Local, Other, Unknown) comes first, then the
+    public providers, then the local tiers: the same order as exitdnshealth.1aeo.com."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {
+        "google": 10.5, "cloudflare": 7.99, "quad9": 2.0, "opendns": 0.0, "ffmuc": 1.12,
+        "local_24": 55.58, "local_22": 1.54, "local_as": 10.92, "local_operator": 7.59, "other": 2.76, "unknown": 0.0,
+    }
+    _, html = _render(tmp_path, resolvers)
+    labels = list(_dashboard_tiles(html))
+    order = ["Exits Covered", "All Public", "Local", "Other", "Unknown", "Google", "Cloudflare", "Quad9", "OpenDNS",
+             "Freifunk München", "Local /24", "Local /22", "Local AS", "Local operator"]
+    assert labels[labels.index("Exits Covered"):labels.index("Exits Covered") + len(order)] == order
+
+
 def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
     """Upstream's placeholder zeros render as n/a, with the coverage counts."""
     _, html = _render(tmp_path, COLD_START)
@@ -216,6 +233,34 @@ def test_dashboard_cold_start_shows_no_zero_shares(tmp_path):
         assert tiles[label] == "n/a", label
     assert tiles["Exits Covered"] == "0 / 2,674"
     assert "Upstream resolvers: estimated share of exit DNS lookups, unweighted." in html
+
+
+def test_dashboard_and_rows_for_version2_tiers(tmp_path):
+    """Version 2 shows the four local tiers, and each tier's note on the relay page."""
+    resolvers = copy.deepcopy(RESOLVERS)
+    resolvers["version"] = 2
+    resolvers["share_pct"] = {
+        "google": 10.83, "cloudflare": 8.04, "quad9": 1.88, "opendns": 0.0, "ffmuc": 1.02,
+        "local_24": 55.58, "local_22": 1.54, "local_as": 10.92, "local_operator": 7.59,
+        "other": 2.82, "unknown": 0.0,
+    }
+    pages, html = _render(tmp_path, resolvers, per_exit={
+        PUBLIC: {"primary": "local_24", "public": False, "queries": {"local_24": 80, "google": 20}},
+        LOCAL: {"primary": "local_operator", "public": False, "queries": {"local_operator": 50, "other": 5}},
+        COLD: {"primary": "local_as", "public": False, "queries": {"local_as": 30}},
+    })
+    assert _resolver_row(pages[PUBLIC]) == \
+        "Local /24 (exit's own network) Local /24 80%, Google 20% (~100 estimated queries)"
+    assert _resolver_row(pages[LOCAL]) == \
+        "Local operator (same operator, other network) Local operator 91%, Other 9% (~55 estimated queries)"
+    assert _resolver_row(pages[COLD]) == "Local AS (exit's own network) Local AS 100% (~30 estimated queries)"
+    tiles = _dashboard_tiles(html)
+    assert tiles["Local"] == "75.6%"
+    assert tiles["Local /24"] == "55.6%"
+    assert tiles["Local /22"] == "1.5%"
+    assert tiles["Local AS"] == "10.9%"
+    assert tiles["Local operator"] == "7.6%"
+    assert tiles["Other"] == "2.8%"
 
 
 def test_dashboard_without_resolver_data(rendered_without):

@@ -657,6 +657,8 @@ Platform: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
+{# The charts are beside this page, or under charts/relay/<fingerprint>/ with --chart-layout charts #}
+{% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'relay/' ~ relay['fingerprint'] ~ '/' if chart_root else '' %}
 {% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
@@ -796,7 +798,7 @@ Platform: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', ext=chart_ext) }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1039,7 +1041,7 @@ Platform: unknown
 </div>
 {% endif %}
 
-{{ chart_history('uptime', uptime_periods, 'Uptime', ext=chart_ext) }}
+{{ chart_history('uptime', uptime_periods, 'Uptime', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
@@ -1332,13 +1334,13 @@ Platform: unknown
             {% endif %}
             {# Upstream resolver. None: the report has no resolver data; {}: no queries seen from this exit yet #}
             {% if relay.get('exit_dns_health_resolver_queries') is not none %}
-            {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'other': 'Other', 'unknown': 'Unknown'} %}
+            {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'local_24': 'Local /24', 'local_22': 'Local /22', 'local_as': 'Local AS', 'local_operator': 'Local operator', 'other': 'Other', 'unknown': 'Unknown'} %}
             {% set resolver_total = relay.exit_dns_health_resolver_queries.values()|sum %}
-            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local: the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
+            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local /24: same IPv4 /24 or IPv6 /64 as the exit, including its own address. Local /22: same IPv4 /22 or IPv6 /48. Local AS: same origin AS, outside those prefixes. Local operator: run by the same operator in another network. Local (older reports): the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
             <dd>
                 {% if relay.exit_dns_health_resolver_primary %}
                     {{ resolver_names.get(relay.exit_dns_health_resolver_primary, relay.exit_dns_health_resolver_primary) }}
-                    {% if relay.exit_dns_health_resolver_public %}<span class="al-text-small-muted">(public resolver)</span>{% elif relay.exit_dns_health_resolver_primary == 'local' %}<span class="al-text-small-muted">(exit's own network)</span>{% endif %}
+                    {% if relay.exit_dns_health_resolver_public %}<span class="al-text-small-muted">(public resolver)</span>{% elif relay.exit_dns_health_resolver_primary in ('local', 'local_24', 'local_22', 'local_as') %}<span class="al-text-small-muted">(exit's own network)</span>{% elif relay.exit_dns_health_resolver_primary == 'local_operator' %}<span class="al-text-small-muted">(same operator, other network)</span>{% endif %}
                 {% else %}
                     <span class="al-status-muted" title="Too few sampled queries from this exit so far to name a primary resolver.">Not enough data</span>
                 {% endif %}

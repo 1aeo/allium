@@ -9,7 +9,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
-from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
+from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator, relay_count
 
 # Test URL constants for Coordinator tests
 TEST_DETAILS_URL = "https://test.onionoo.torproject.org/details"
@@ -51,6 +51,17 @@ def make_test_args(**overrides):
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+class TestRelayCount:
+    """relay_count on types.SimpleNamespace stand-ins (no Relays instance)."""
+
+    def test_relay_count(self):
+        """None -> 0; json=None -> 0; empty relays -> 0; two relays -> 2."""
+        assert relay_count(None) == 0
+        assert relay_count(SimpleNamespace(json=None)) == 0
+        assert relay_count(SimpleNamespace(json={"relays": []})) == 0
+        assert relay_count(SimpleNamespace(json={"relays": [{}, {}]})) == 2
 
 
 class TestCoordinator:

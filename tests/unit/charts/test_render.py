@@ -9,7 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 from allium.lib.charts.bands import CATALOG, bands_for_role, census_footnote
-from allium.lib.charts.render import CREDIT, LEFT, PLOT_WIDTH, WIDTH, bandwidth_chart, uptime_chart
+from allium.lib.charts.render import (
+    CHARTS_DIR, CREDIT, LEFT, PLOT_WIDTH, WIDTH, bandwidth_chart, clear_chart_tree, uptime_chart,
+)
 from allium.lib.charts.svg import BLUE, CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
@@ -526,3 +528,71 @@ def test_axis_ticks():
         "Sep '25", "Nov '25", "Jan '26"]
     assert nice_ticks(126) == [0, 25, 50, 75, 100, 125]
     assert ["%g" % tick for tick in nice_ticks(1.3)] == ["0", "0.25", "0.5", "0.75", "1", "1.25"]
+
+
+@pytest.mark.parametrize("image_format", ["svg", pytest.param("png", marks=needs_png)])
+def test_chart_layout_charts_writes_them_apart_from_the_pages(tmp_path, image_format):
+    """--chart-layout charts: a relay's charts go to <out>/charts/relay/<fp>/ and an operator's to
+    <out>/charts/contact/<hash>/, the same files (PNGs still linked from the cache, SVG when that is the format),
+    with a folder only for those that get a chart."""
+    out = tmp_path / "out"
+    charts = writer([relay("A"), relay("B")], {"A": history([100] * 30)}, {"A": [999] * 180}, image_format,
+                    str(tmp_path / "cache"), root=str(out / CHARTS_DIR))
+    page, folder = out / "relay" / "A", out / "charts" / "relay" / "A"
+    page.mkdir(parents=True)
+    assert charts.folder("relay", "A", str(page)) == str(folder)
+    assert [list(drawn) for drawn in charts.relay(relay("A"), charts.folder("relay", "A", str(page)))] == [["1m"], ["1m"]]
+    assert os.listdir(page) == []
+    assert sorted(os.listdir(folder)) == ["bandwidth-1m." + image_format, "uptime-1m." + image_format]
+    if image_format == "png":  # a link to the cached drawing, as beside the pages
+        assert os.stat(folder / "bandwidth-1m.png").st_nlink == 2
+    assert charts.relay(relay("B"), charts.folder("relay", "B", None)) == ({}, {})
+    assert not (out / "charts" / "relay" / "B").exists()
+    charts.contact([0, 1], charts.folder("contact", "h" * 32, None))
+    assert os.listdir(out / "charts" / "contact" / ("h" * 32)) == ["bandwidth-1m." + image_format]
+    # Beside the pages (the default) a chart's folder is its page's own.
+    assert writer([], {}).folder("relay", "A", str(page)) == str(page)
+
+
+def test_every_build_starts_the_chart_tree_afresh(tmp_path):
+    """clear_chart_tree() drops the charts an earlier --chart-layout charts build wrote, and charts/ with them
+    unless it holds something allium did not write."""
+    for kind, name in (("relay", "A" * 40), ("contact", "h" * 32)):
+        (tmp_path / "charts" / kind / name).mkdir(parents=True)
+        (tmp_path / "charts" / kind / name / "bandwidth-1m.png").write_bytes(b"old")
+    (tmp_path / "charts" / "README.txt").write_text("kept")
+    clear_chart_tree(str(tmp_path))
+    assert os.listdir(tmp_path / "charts") == ["README.txt"]
+    (tmp_path / "charts" / "README.txt").unlink()
+    clear_chart_tree(str(tmp_path))
+    assert os.listdir(tmp_path) == []
+    clear_chart_tree(str(tmp_path))  # nothing to clear
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0, reason="root removes a read-only folder's files")
+def test_a_chart_tree_that_cannot_be_removed_stops_the_build(tmp_path):
+    """clear_chart_tree() raises, as the page writer does for relay/ and contact/, instead of leaving an earlier
+    build's charts in the output."""
+    folder = tmp_path / "charts" / "relay" / ("A" * 40)
+    folder.mkdir(parents=True)
+    (folder / "bandwidth-1m.png").write_bytes(b"old")
+    folder.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError):
+            clear_chart_tree(str(tmp_path))
+    finally:
+        folder.chmod(0o755)
+
+
+def test_a_symlinked_chart_tree_stops_the_build_and_is_not_followed(tmp_path):
+    """clear_chart_tree() refuses a charts/ that is a symbolic link instead of deleting the linked directory's
+    relay/ and contact/, which lie outside the output directory."""
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "relay" / ("A" * 40)).mkdir(parents=True)
+    (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").write_bytes(b"keep")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "charts").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(OSError, match="symbolic link"):
+        clear_chart_tree(str(out))
+    assert (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").read_bytes() == b"keep"
