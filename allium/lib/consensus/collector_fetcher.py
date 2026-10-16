@@ -1258,24 +1258,12 @@ class CollectorFetcher:
                 'sybil': is_sybil,
             })
             
-            # HSDir flag eligibility
-            # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
-            #   HSDir requires: supports_tunnelled_dir_requests (V2Dir),
-            #   Stable, Fast flags, plus 96 hours of uptime as this authority
-            #   sees it. Votes don't carry that uptime, so the HSDir vote stands in.
+            # 96h uptime is not in the vote. The HSDir vote stands in once Fast, Stable and V2Dir passed.
             has_hsdir_flag = 'HSDir' in auth_flags
             if has_hsdir_flag:
                 eligibility['hsdir']['eligible_count'] += 1
                 eligibility['hsdir']['assigned_count'] += 1
-            
-            eligibility['hsdir']['details'].append({
-                'authority': auth_name,
-                'eligible': has_hsdir_flag,
-                'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
-                'has_stable': has_stable,
-                'has_fast': has_fast,
-                'has_v2dir': has_v2dir,
-            })
+            eligibility['hsdir']['details'].append({'assigned': has_hsdir_flag, 'prereqs': guard_prereqs_met})
             
             # Simple flag tracking: Exit, MiddleOnly, BadExit
             # These flags have no numeric thresholds — purely presence-based.

@@ -1762,3 +1762,30 @@ class TestHSDirUptimeRow:
         _, rows = self._hsdir_rows(fetcher, 2 * SECONDS_PER_DAY)
         assert rows['Uptime']['status_text'] == 'Below (4/9 DA)'
         assert '2.0d' in rows['Uptime']['value']
+
+    def test_older_collector_details_still_count_relay_uptime(self):
+        """A cache written before uptime_fallback still counts authorities missing a prerequisite."""
+        evaluation = {
+            'fingerprint': self.FINGERPRINT,
+            'in_consensus': True,
+            'vote_count': 2,
+            'total_authorities': 2,
+            'majority_required': 1,
+            'authority_votes': [],
+            'flag_eligibility': {
+                'guard': {'details': [
+                    {'has_fast': False, 'has_stable': True, 'has_v2dir': True},
+                    {'has_fast': True, 'has_stable': True, 'has_v2dir': True},
+                ]},
+                'hsdir': {'assigned_count': 0, 'details': [
+                    {'assigned': False, 'has_fast': False, 'has_stable': True, 'has_v2dir': True},
+                    {'assigned': False, 'has_fast': True, 'has_stable': True, 'has_v2dir': True},
+                ]},
+            },
+            'reachability': {},
+        }
+        formatted = format_relay_consensus_evaluation(
+            evaluation, current_flags=['Fast', 'Stable', 'V2Dir'], relay_uptime=12 * SECONDS_PER_DAY)
+        uptime = next(row for row in formatted['flag_requirements_table']
+                      if row['flag'] == 'HSDir' and row['metric'] == 'Uptime')
+        assert uptime['status_text'] == 'Partial (1/2 DA)'
