@@ -635,7 +635,7 @@ def _collect_operator_metrics(relays_instance):
             relay_platform = relay.get('platform', '')
             if relay_platform:
                 platforms.add(relay_platform)
-                if not relay_platform.startswith('Linux'):
+                if not relay_platform.lower().startswith('linux'):
                     non_linux_count += 1
                     non_linux_bandwidth += relay_bandwidth
             

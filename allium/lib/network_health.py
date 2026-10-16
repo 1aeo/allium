@@ -167,7 +167,9 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
         'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
         'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
-        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
         'exit_dns_health_resolver_unknown_percentage',
     ]
 
@@ -182,6 +184,11 @@ def preformat_network_health_template_strings(health_metrics):
         if key in health_metrics:
             value = health_metrics[key]
             health_metrics[f'{key}_formatted'] = f"{value:.1f}%" if value is not None else "n/a"
+
+    # Resolver shares are rounded together, so All Public + Local + Other + Unknown show 100.0%
+    from .exit_dns_health import resolver_share_tenths
+    for key, tenths in (resolver_share_tenths(health_metrics) or {}).items():
+        health_metrics[f'{key}_formatted'] = f"{tenths / 10:.1f}%"
     
     # Format uptime time series data (4+ format operations eliminated)
     # Using consistent naming pattern: {role}_uptime_{period}_mean

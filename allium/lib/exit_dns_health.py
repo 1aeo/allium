@@ -13,11 +13,16 @@ import math
 from bisect import bisect_left
 from typing import Dict, Optional, List
 
-# Upstream resolver categories in results[i].resolver.queries and metadata.resolvers (version 1,
-# exitmap-dns-health-deploy scripts/resolver_stats.py): five public resolver services, then the
-# exit's own address or origin AS ("local"), any other resolver, and failed origin AS lookups.
+# Upstream resolver categories in results[i].resolver.queries and metadata.resolvers
+# (exitmap-dns-health-deploy scripts/resolver_stats.py).
+# Version 1 used one "local" bucket (the exit's own address or origin AS). Version 2 splits
+# that into local_24 (same IPv4 /24 or IPv6 /64, including the exit's own address), local_22
+# (same IPv4 /22 or IPv6 /48), local_as (same origin AS outside those prefixes) and
+# local_operator (same operator, other network). "local" stays accepted so version-1 reports
+# still parse. Anything this version does not know still folds into "other".
 RESOLVER_PROVIDERS = ('google', 'cloudflare', 'quad9', 'opendns', 'ffmuc')
-RESOLVER_CATEGORIES = RESOLVER_PROVIDERS + ('local', 'other', 'unknown')
+RESOLVER_TIERS = ('local_24', 'local_22', 'local_as', 'local_operator')
+RESOLVER_CATEGORIES = RESOLVER_PROVIDERS + ('local',) + RESOLVER_TIERS + ('other', 'unknown')
 _RESOLVER_COUNT_FIELDS = ('exits_total', 'exits_covered', 'exits_labelled', 'exits_using_public')
 
 # Field names set on each exit relay dict during enrichment.
@@ -333,9 +338,28 @@ def calculate_exit_dns_health_metrics(exit_dns_health_data: Optional[Dict] = Non
     return metrics
 
 
+def _local_percentage(share: Dict) -> Optional[float]:
+    """Version-2 local total, or version-1's local share when no tier is present.
+
+    A version-2 report that includes some tiers and omits others has no total: summing
+    the present ones would publish an under-count as if it were complete. Zero is a
+    real share; None is a missing one.
+    """
+    tiers = [share.get(tier) for tier in RESOLVER_TIERS]
+    if any(value is not None for value in tiers):
+        if any(value is None for value in tiers):
+            return None
+        return round(sum(tiers), 2)
+    return share.get('local')
+
+
 def _resolver_metrics(summary: Optional[Dict]) -> Dict:
     """Flatten parse_resolver_summary() into dashboard keys. Without a summary every value
-    is None and exit_dns_health_resolvers_available is False, so it renders as not available."""
+    is None and exit_dns_health_resolvers_available is False, so it renders as not available.
+
+    exit_dns_health_resolver_local_percentage stays the single local number: version 1's
+    "local", or the sum of the four tiers when a version-2 report includes every tier.
+    """
     summary = summary or {}
     public_share = summary.get('public_share_pct', {})
     share = summary.get('share_pct', {})
@@ -345,9 +369,48 @@ def _resolver_metrics(summary: Optional[Dict]) -> Dict:
         'exit_dns_health_resolver_weighted': summary.get('weighted'),
     }
     metrics.update({f'exit_dns_health_resolver_{p}_percentage': public_share.get(p) for p in RESOLVER_PROVIDERS})
-    metrics.update({f'exit_dns_health_resolver_{c}_percentage': share.get(c) for c in ('local', 'other', 'unknown')})
+    metrics['exit_dns_health_resolver_local_percentage'] = _local_percentage(share)
+    metrics.update({f'exit_dns_health_resolver_{tier}_percentage': share.get(tier) for tier in RESOLVER_TIERS})
+    metrics.update({f'exit_dns_health_resolver_{c}_percentage': share.get(c) for c in ('other', 'unknown')})
     metrics.update({f'exit_dns_health_resolver_{k}': summary.get(k) for k in _RESOLVER_COUNT_FIELDS})
     return metrics
+
+
+def resolver_share_tenths(metrics: Dict) -> Optional[Dict[str, int]]:
+    """Dashboard resolver shares in whole tenths of a percent that add up like the categories do.
+
+    Every lookup is in exactly one leaf category: a public provider, a local tier (version 1: its
+    single local share), other or unknown. Rounding each share on its own can show All Public +
+    Local + Other + Unknown as 99.9% or 100.1%, so the leaves are rounded together by largest
+    remainder (ties to the earlier category) to total exactly 100.0%, and All Public and Local are
+    the sums of their rounded parts. This is the same rounding as the exitdnshealth.1aeo.com
+    dashboard. Returns {metric key: tenths}, or None when a leaf is missing or the leaves do not
+    total about 100%; each share is then formatted on its own. Raw metric values are unchanged.
+    """
+    key = 'exit_dns_health_resolver_{}_percentage'.format
+    tiers = [metrics.get(key(tier)) for tier in RESOLVER_TIERS]
+    if all(value is not None for value in tiers):
+        local_leaves = RESOLVER_TIERS
+    elif all(value is None for value in tiers):
+        local_leaves = ('local',)
+    else:
+        return None
+    leaves = RESOLVER_PROVIDERS + local_leaves + ('other', 'unknown')
+    values = [metrics.get(key(leaf)) for leaf in leaves]
+    if any(_as_number(value) is None for value in values):
+        return None
+    total = sum(values)
+    if abs(total - 100) > 0.5:
+        return None
+    exact = [math.floor(value * 1000 / total * 1e6 + 0.5) / 1e6 for value in values]
+    tenths = [math.floor(value) for value in exact]
+    order = sorted(range(len(leaves)), key=lambda i: (-(exact[i] - tenths[i]), i))
+    for i in order[:max(0, 1000 - sum(tenths))]:
+        tenths[i] += 1
+    result = {key(leaf): t for leaf, t in zip(leaves, tenths)}
+    result[key('public')] = sum(result[key(provider)] for provider in RESOLVER_PROVIDERS)
+    result[key('local')] = sum(result[key(leaf)] for leaf in local_leaves)
+    return result
 
 
 def get_operator_exit_dns_health_summary(members: List[Dict], exit_count: int = None) -> Optional[Dict]:
