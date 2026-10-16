@@ -1,7 +1,7 @@
 # RouteFluxMap integration enhancements
 
 **Audience**: Contributors
-**Scope**: Optional JSON exports and map layers on top of the Allium pages and RouteFluxMap links that already ship. The interactive geographic map is the RouteFluxMap site.
+**Scope**: Optional JSON exports and map layers for the existing RouteFluxMap site. Allium does not render a world map. [TOP_10_PRIORITIZED_FEATURES.md](TOP_10_PRIORITIZED_FEATURES.md) still lists an Allium-native world map as open, and says a map in this generator has to fit the static chart pipeline in `allium/lib/charts/`.
 **Status**: Proposed. Nothing in this document is implemented in Allium.
 
 ## How to Verify
@@ -41,7 +41,7 @@ Allium links to RouteFluxMap, and RouteFluxMap links back to Allium metrics page
 
 RouteFluxMap's country choropleth is client counts. `CountryLayer.tsx` calls `getCountryClientData` and sqrt-scales the fill from `#1a1a2e` to `#00ff88`.
 
-Older Allium proposals still sketch a map rendered inside this site: `milestone-1-graphs-charts.md` (`GeographicHeatMap`, `allium/templates/geographic_heatmap.html`), `visualization-dashboard-proposal.md`, and `allium-roadmap-2025.md`. Those templates and modules are absent from the tree. This document is the follow-on for the RouteFluxMap site that is already linked.
+Older Allium proposals still sketch a browser map: `milestone-1-graphs-charts.md` (`GeographicHeatMap`, `allium/templates/geographic_heatmap.html`), `visualization-dashboard-proposal.md`, and `allium-roadmap-2025.md`. Those templates and modules are absent from the tree. [TOP_10_PRIORITIZED_FEATURES.md](TOP_10_PRIORITIZED_FEATURES.md) records that those sketches assume a browser chart library this repository does not depend on, and that charts which did ship are build-time PNG and SVG. This document leaves that Allium map open. It describes data RouteFluxMap could read.
 
 ## 1. Shared country-rarity export
 

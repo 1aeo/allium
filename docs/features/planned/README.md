@@ -24,7 +24,7 @@ These features represent the **roadmap** for future development. They are:
 **Priority**: Critical Foundation
 
 **Features**:
-- Geographic heat map dashboard — the live map is RouteFluxMap; remaining export work is [routefluxmap-enhancements.md](routefluxmap-enhancements.md). The D3 page in [milestone-1-graphs-charts.md](milestone-1-graphs-charts.md) is still a sketch.
+- Geographic heat map dashboard — still open as an Allium page ([TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md)). Country and relay pages already link to RouteFluxMap; optional exports are [routefluxmap-enhancements.md](routefluxmap-enhancements.md). The milestone-1 D3 sketch assumes a browser library this repo does not use.
 - Platform diversity visualization
 - AROI achievement wheel
 - Network authority donut charts
@@ -98,7 +98,7 @@ These features represent the **roadmap** for future development. They are:
 - [consensus-weight-metrics-proposal.md](consensus-weight-metrics-proposal.md) - Enhanced consensus weight tracking
 
 ### Advanced Features
-- [routefluxmap-enhancements.md](routefluxmap-enhancements.md) - Optional RouteFluxMap exports (country rarity, validated operators, AS links). The map itself is already RouteFluxMap.
+- [routefluxmap-enhancements.md](routefluxmap-enhancements.md) - Optional RouteFluxMap data exports (country rarity, validated operators, AS links). Separate from the open Allium world map in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md).
 - [visualization-dashboard-proposal.md](visualization-dashboard-proposal.md) - Interactive visualization system
 - [actionable-improvement-guidance.md](actionable-improvement-guidance.md) - Operator recommendations
 - [multi-api-implementation-plan.md](multi-api-implementation-plan.md) - Additional API integrations
