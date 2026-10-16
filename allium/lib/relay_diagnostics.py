@@ -32,8 +32,6 @@ from .consensus.flag_thresholds import (
     GUARD_WFU_DEFAULT,
     GUARD_BW_GUARANTEE,
     FAST_BW_GUARANTEE,
-    HSDIR_TK_DEFAULT,
-    HSDIR_WFU_DEFAULT,
     BW_SOURCE_MEASURED,
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
@@ -70,7 +68,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     Generate ALL issues for a relay (consensus + overload).
     
     This is the main entry point for issue detection. It combines:
-    - 23 consensus-related issue types
+    - 22 consensus-related issue types
     - 6 overload issue types
     
     Args:
@@ -86,7 +84,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     """
     issues = []
 
-    # Consensus-related issues (23 types)
+    # Consensus-related issues (22 types)
     if consensus_data:
         issues.extend(generate_issues_from_consensus(
             consensus_data,
@@ -122,8 +120,6 @@ def generate_issues_from_consensus(
     - Guard: requires Stable flag: info → warning
     - Guard: requires Fast flag: info → warning
     - Not eligible for Stable flag: info → warning
-    - HSDir: WFU below threshold: info → warning
-    - HSDir: Time Known below threshold: info → warning
     
     Args:
         consensus_data: Raw consensus evaluation data
@@ -374,10 +370,10 @@ def generate_issues_from_consensus(
             })
     
     # =========================================================================
-    # HSDIR FLAG ISSUES (5 issue types) - all warning severity
+    # HSDIR FLAG ISSUES (4 issue types) - all warning severity
     # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
     #   HSDir requires: wants_to_be_hs_dir AND supports_tunnelled_dir_requests
-    #   AND is_stable AND is_fast AND uptime >= threshold AND is_active
+    #   AND is_stable AND is_fast AND uptime >= 96h AND is_active
     # supports_tunnelled_dir_requests maps to the V2Dir flag.
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
@@ -421,27 +417,20 @@ def generate_issues_from_consensus(
                 'section': 'flag-hsdir-prereq-v2dir',
             })
         
-        # WFU check
-        if relay_wfu is not None and relay_wfu < HSDIR_WFU_DEFAULT:
+        # With Fast, Stable and V2Dir, what's left is the 96-hour uptime check
+        if has_fast and has_stable and has_v2dir:
+            hsdir_votes = flag_eligibility.get('hsdir', {}).get('assigned_count', 0)
             issues.append({
-                'severity': 'warning',  # Changed from 'info'
+                'severity': 'warning',
                 'category': 'hsdir',
-                'title': 'HSDir: WFU below threshold',
-                'description': f"WFU {relay_wfu*100:.1f}% below 98% required for HSDir",
-                'suggestion': 'HSDir requires ≥98% WFU, Stable flag, and Time Known ≥25 hours (or ~10 days for moria1). Improve uptime consistency.',
-                'section': 'flag-hsdir-wfu',
-            })
-        
-        # CHANGED: info → warning
-        if relay_tk is not None and relay_tk < HSDIR_TK_DEFAULT:
-            tk_hours = relay_tk / 3600
-            issues.append({
-                'severity': 'warning',  # Changed from 'info'
-                'category': 'hsdir',
-                'title': 'HSDir: Time Known below threshold',
-                'description': f"Time Known {tk_hours:.1f} hours below 25 hours (dir-spec default)",
-                'suggestion': 'Most authorities use 25 hours for HSDir TK. moria1 uses ~10 days. Keep running stably.',
-                'section': 'flag-hsdir-time-known',
+                'title': 'HSDir: uptime below 96 hours',
+                'description': (f"Only {hsdir_votes}/{auth_count} authorities voted HSDir, "
+                                "though this relay has Fast, Stable and V2Dir"),
+                'suggestion': 'HSDir needs 96 hours of uptime as each authority sees it (MinUptimeHidServDirectoryV2): '
+                              'the time since your relay restarted, or since that authority last failed to reach it '
+                              'if that is shorter. Keep the relay running and reachable.',
+                'section': 'flag-hsdir-uptime',
+                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
     
     # =========================================================================

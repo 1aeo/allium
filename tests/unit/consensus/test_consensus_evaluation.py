@@ -7,8 +7,7 @@ in templates. If the template requirements change, update these tests.
 Key thresholds tested:
 - Guard WFU: >= 98% (0.98)
 - Guard TK: >= 8 days (691200 seconds)
-- HSDir WFU: >= 98% (0.98)  
-- HSDir TK: >= 10 days (864000 seconds)
+- HSDir uptime: >= 96 hours as each authority sees it (the HSDir vote stands in)
 """
 
 import pytest
@@ -705,40 +704,39 @@ class TestIdentifyIssuesComprehensive:
         fast_issues = [i for i in issues if 'Fast' in i.get('title', '')]
         assert len(fast_issues) >= 1
     
-    def test_hsdir_low_wfu_issue(self):
-        """Test detection of HSDir WFU below threshold."""
+    def test_hsdir_uptime_issue(self):
+        """With Fast, Stable and V2Dir but no HSDir, the 96-hour uptime check is the issue."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'hsdir': {'eligible_count': 0}},
-            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
+            'flag_eligibility': {'hsdir': {'eligible_count': 4, 'assigned_count': 4}},
+            'authority_votes': [{'wfu': 0.99, 'tk': 29 * SECONDS_PER_DAY}],
         }
         
-        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable', 'V2Dir'],
+                                  observed_bandwidth=3_000_000)
         
         hsdir_issues = [i for i in issues if i['category'] == 'hsdir']
-        # Should identify WFU as issue for HSDir
-        wfu_hsdir = [i for i in hsdir_issues if 'WFU' in i.get('title', '')]
-        assert len(wfu_hsdir) >= 1
+        assert [i['title'] for i in hsdir_issues] == ['HSDir: uptime below 96 hours']
+        assert '4/9' in hsdir_issues[0]['description']
     
-    def test_hsdir_low_tk_issue(self):
-        """Test detection of HSDir Time Known below threshold (25 hours default)."""
+    def test_hsdir_low_wfu_and_tk_are_not_hsdir_issues(self):
+        """WFU and Time Known are not HSDir requirements (only moria1 publishes its own)."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
             'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.99, 'tk': 20 * 3600}],  # 20 hours, below 25 hour default
+            'authority_votes': [{'wfu': 0.90, 'tk': 20 * 3600}],
         }
         
-        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast'], observed_bandwidth=3_000_000)
         
-        hsdir_tk_issues = [i for i in issues if i['category'] == 'hsdir' and 'Time Known' in i.get('title', '')]
-        assert len(hsdir_tk_issues) >= 1
-        assert '25' in hsdir_tk_issues[0]['description']  # Mentions 25 hours
+        hsdir_titles = [i['title'] for i in issues if i['category'] == 'hsdir']
+        assert hsdir_titles == ['HSDir: requires Stable flag', 'HSDir: requires V2Dir (tunnelled-dir-server)']
     
     def test_bandwidth_deviation_warning(self):
         """Test detection of high bandwidth measurement deviation."""
@@ -1200,8 +1198,8 @@ class TestMiddleOnlyFlag:
     def test_normal_relay_row_count(self):
         """Test that normal relay has correct row count (no MiddleOnly).
         
-        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 = 19
+        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 = 18
         """
         result = format_relay_consensus_evaluation(
             self.NORMAL_EVALUATION,
@@ -1216,7 +1214,7 @@ class TestMiddleOnlyFlag:
         assert 'Valid' in flags_present
         assert 'V2Dir' in flags_present
         assert 'MiddleOnly' not in flags_present
-        assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
+        assert len(frt) == 18  # 14 original + Running:2 + Valid:1 + V2Dir:1
     
     def test_middleonly_relay_row_count(self):
         """Test that MiddleOnly relay has correct row count
@@ -1228,9 +1226,9 @@ class TestMiddleOnlyFlag:
         )
 
         frt = result['flag_requirements_table']
-        # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
+        # 18 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
         # even though this fixture's flag_eligibility has no 'badexit' entry)
-        assert len(frt) == 21
+        assert len(frt) == 20
         badexit = next(r for r in frt if r['flag'] == 'BadExit')
         assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
 
@@ -1683,3 +1681,129 @@ class TestForest44VoteBandwidthDisplay:
         assert 'lists this relay as Sybil' in rows['maatuska']['flag_bw_title']
         fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
         assert 'bastet, faravahar: not published' in fast['value']
+
+
+class TestHSDirUptimeRow:
+    """tonyyayo in the 2026-10-12 20:00 votes: HSDir 4/9 with Fast, Stable and V2Dir 9/9.
+
+    The HSDir rows used to read WFU Meets (9/9) and Time Known Meets (8/9), which
+    the authorities don't use for HSDir. What the other five hadn't seen was 96
+    hours of uptime (moria1 requires its own hsdir-wfu and hsdir-tk instead).
+    """
+
+    FINGERPRINT = 'B9F405AA27AC3BC0794958A5E4AC7E160333BEE1'
+    # Per authority: voted HSDir, and the vote's wfu and tk
+    VOTES = {
+        'bastet': (True, 0.993665, 2509686),
+        'dannenberg': (False, 0.993665, 2491717),
+        'dizum': (True, 0.993928, 2504229),
+        'faravahar': (False, 0.993479, 2572300),
+        'gabelmoo': (False, 0.993388, 2511942),
+        'longclaw': (False, 0.994340, 2547323),
+        'maatuska': (True, 0.996204, 2604510),
+        'moria1': (False, 0.982074, 845366),
+        'tor26': (True, 0.994209, 2503799),
+    }
+
+    @pytest.fixture
+    def fetcher(self):
+        """CollectorFetcher indexed with tonyyayo's votes, all 9 voting."""
+        from allium.lib.consensus.collector_fetcher import (
+            CollectorFetcher,
+            get_authority_registry,
+            update_voting_authorities,
+        )
+        registry = get_authority_registry()
+        update_voting_authorities(sorted(self.VOTES))
+        fetcher = CollectorFetcher()
+        votes = {}
+        for auth, (hsdir, wfu, tk) in self.VOTES.items():
+            fetcher.flag_thresholds[auth] = {'stable-mtbf': 900000, 'fast-speed': 102000,
+                                             'guard-wfu': 0.98, 'guard-tk': 691200}
+            flags = ['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid'] + (['HSDir'] if hsdir else [])
+            votes[auth] = {'flags': flags, 'bandwidth': 10000, 'measured': 20000,
+                           'wfu': wfu, 'tk': tk, 'mtbf': 860000}
+        fetcher.flag_thresholds['moria1'].update({'hsdir-wfu': 0.98, 'hsdir-tk': 859399})
+        fetcher.relay_index = {self.FINGERPRINT: {'votes': votes}}
+        yield fetcher
+        registry.clear_voting_authorities()
+
+    def _hsdir_rows(self, fetcher, relay_uptime):
+        formatted = format_relay_consensus_evaluation(
+            fetcher.get_relay_consensus_evaluation(self.FINGERPRINT, 9), fetcher.flag_thresholds,
+            current_flags=['Fast', 'Guard', 'Running', 'Stable', 'V2Dir', 'Valid'], relay_uptime=relay_uptime)
+        rows = {row['metric']: row for row in formatted['flag_requirements_table'] if row['flag'] == 'HSDir'}
+        return formatted, rows
+
+    def test_uptime_row_agrees_with_the_hsdir_count(self, fetcher):
+        """Eligible Flags says HSDir 4/9, and so does the Uptime row; no WFU or Time Known rows."""
+        formatted, rows = self._hsdir_rows(fetcher, 12.4 * SECONDS_PER_DAY)
+        hsdir = next(f for f in formatted['eligible_flags_display']['flags'] if f['name'] == 'HSDir')
+        assert (hsdir['count'], hsdir['total']) == (4, 9)
+        assert list(rows) == ['Prereq: Fast', 'Prereq: Stable', 'Prereq: V2Dir', 'Uptime']
+        assert rows['Prereq: Fast']['rowspan'] == 4
+        uptime = rows['Uptime']
+        assert (uptime['anchor'], uptime['status'], uptime['status_text']) == ('flag-hsdir-uptime', 'below', 'Below (4/9 DA)')
+        assert '12.4d' in uptime['value']
+        assert uptime['threshold'].startswith('≥96h as each authority sees it (MinUptimeHidServDirectoryV2) (≥5/9 DA)')
+        assert '[Stricter] moria1: ≥98% WFU and ≥9.9d Time Known' in uptime['threshold']
+
+    def test_per_authority_table_has_no_hsdir_wfu_or_tk(self, fetcher):
+        """The 98% / 25-hour per-authority HSDir columns are gone."""
+        formatted, _ = self._hsdir_rows(fetcher, 12.4 * SECONDS_PER_DAY)
+        for row in formatted['authority_table']:
+            assert not [key for key in row if key.startswith('hsdir')], row['authority']
+
+    def test_authority_without_a_prereq_falls_back_to_relay_uptime(self, fetcher):
+        """Without Fast, an authority's HSDir vote says nothing about uptime: the relay's own uptime decides."""
+        fetcher.relay_index[self.FINGERPRINT]['votes']['dannenberg']['flags'].remove('Fast')
+        _, rows = self._hsdir_rows(fetcher, 12.4 * SECONDS_PER_DAY)
+        assert rows['Uptime']['status_text'] == 'Partial (5/9 DA)'
+        _, rows = self._hsdir_rows(fetcher, 2 * SECONDS_PER_DAY)
+        assert rows['Uptime']['status_text'] == 'Below (4/9 DA)'
+        assert '2.0d' in rows['Uptime']['value']
+
+    def test_inactive_vote_is_not_an_uptime_pass(self, fetcher):
+        """Eight HSDir votes plus one vote with no Running or Valid stay 8/9.
+
+        That authority also lacks Fast, Stable and V2Dir, so the relay-reported
+        uptime would otherwise be counted as a ninth pass.
+        """
+        votes = fetcher.relay_index[self.FINGERPRINT]['votes']
+        for auth, (hsdir, _wfu, _tk) in self.VOTES.items():
+            if auth == 'dannenberg' or hsdir:
+                continue
+            votes[auth]['flags'].append('HSDir')
+        flags = votes['dannenberg']['flags']
+        for flag in ('Fast', 'Stable', 'V2Dir', 'Running', 'Valid', 'Guard'):
+            if flag in flags:
+                flags.remove(flag)
+        _, rows = self._hsdir_rows(fetcher, 12.4 * SECONDS_PER_DAY)
+        assert rows['Uptime']['status_text'] == 'Partial (8/9 DA)'
+
+    def test_older_collector_details_still_count_relay_uptime(self):
+        """A cache written before uptime_fallback still counts authorities missing a prerequisite."""
+        evaluation = {
+            'fingerprint': self.FINGERPRINT,
+            'in_consensus': True,
+            'vote_count': 2,
+            'total_authorities': 2,
+            'majority_required': 1,
+            'authority_votes': [],
+            'flag_eligibility': {
+                'guard': {'details': [
+                    {'has_fast': False, 'has_stable': True, 'has_v2dir': True},
+                    {'has_fast': True, 'has_stable': True, 'has_v2dir': True},
+                ]},
+                'hsdir': {'assigned_count': 0, 'details': [
+                    {'assigned': False, 'has_fast': False, 'has_stable': True, 'has_v2dir': True},
+                    {'assigned': False, 'has_fast': True, 'has_stable': True, 'has_v2dir': True},
+                ]},
+            },
+            'reachability': {},
+        }
+        formatted = format_relay_consensus_evaluation(
+            evaluation, current_flags=['Fast', 'Stable', 'V2Dir'], relay_uptime=12 * SECONDS_PER_DAY)
+        uptime = next(row for row in formatted['flag_requirements_table']
+                      if row['flag'] == 'HSDir' and row['metric'] == 'Uptime')
+        assert uptime['status_text'] == 'Partial (1/2 DA)'

@@ -37,13 +37,13 @@ Fast:
     * Default: "100 KB" = 102,400 bytes; tor caps the Fast threshold at
       102 KB/s, which votes publish as fast-speed=102000
 
-HSDir:
-  - Has "Stable" flag
-  - Has "Running" flag  
-  - WFU >= hsdir-wfu threshold (dir-spec default: same as guard-wfu, 0.98)
-  - TK >= hsdir-tk threshold
-    * dir-spec default: 25 hours (90,000 seconds)
-    * NOTE: In practice, moria1 uses ~10 days; most authorities don't set explicitly
+HSDir (voteflags.c dirserv_thinks_router_is_hs_dir):
+  - Has "Fast", "Stable" and "V2Dir" flags, and is Running and Valid
+  - Uptime >= MinUptimeHidServDirectoryV2 (96 hours), as the authority sees it:
+    the shorter of the relay's reported uptime and how long the authority has
+    reached it without a break. Votes don't publish that figure.
+  - moria1 also publishes hsdir-wfu and hsdir-tk (~10 days) and requires them;
+    the other authorities don't use WFU or TK for HSDir
 
 Running:
   - Authority could establish OR connection to relay within last 45 minutes
@@ -106,10 +106,11 @@ GUARD_WFU_DEFAULT = 0.98
 # Per dir-spec Section 3.4.2
 # ============================================================================
 
-# Default HSDir time-known (TK) threshold per dir-spec: 25 hours
-# NOTE: In practice, moria1 authority uses ~10 days (848498 seconds).
-# Other authorities don't set hsdir-tk explicitly, relying on the dir-spec default.
-# We use 25 hours as per the dir-spec specification.
+# MinUptimeHidServDirectoryV2 (dirauth_options.inc): uptime HSDir requires
+HSDIR_UPTIME_DEFAULT = 96 * SECONDS_PER_HOUR  # 345600 seconds
+
+# hsdir-tk / hsdir-wfu defaults. Only authorities that publish these (moria1,
+# ~10 days) apply them; the others don't use TK or WFU for HSDir.
 HSDIR_TK_DEFAULT = 25 * SECONDS_PER_HOUR  # 90000 seconds (25 hours)
 
 # Default HSDir weighted fractional uptime (WFU) threshold: 98%
