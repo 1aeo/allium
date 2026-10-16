@@ -23,6 +23,7 @@
 ## Future Work
 
 - [Planned Features](features/planned/README.md) - Roadmap and proposals
+- [Feature shortlist status](features/planned/TOP_10_PRIORITIZED_FEATURES.md) - Which proposed items are in the generator
 
 ## Standards
 
