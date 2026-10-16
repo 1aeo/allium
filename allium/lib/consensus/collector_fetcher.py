@@ -644,6 +644,8 @@ class CollectorFetcher:
             'has_bandwidth_file_headers': False,
             'consensus_methods': [],  # Methods this authority supports (from header)
             'params': {},  # Voted consensus params (from header)
+            'published': None,  # Vote header published time (UTC)
+            'valid_after': None,  # Consensus period this vote is for (UTC)
         }
         
         lines = content.split('\n')
@@ -659,6 +661,12 @@ class CollectorFetcher:
             # Check for bandwidth-file-headers (indicates bandwidth authority)
             elif line.startswith('bandwidth-file-headers'):
                 vote['has_bandwidth_file_headers'] = True
+
+            # Header times only. Relay r-lines carry a descriptor date, not the vote time.
+            elif line.startswith('published ') and not current_relay:
+                vote['published'] = line[len('published '):].strip()
+            elif line.startswith('valid-after ') and not current_relay:
+                vote['valid_after'] = line[len('valid-after '):].strip()
             
             # Parse consensus-methods header (methods this authority supports)
             elif line.startswith('consensus-methods '):
@@ -704,7 +712,10 @@ class CollectorFetcher:
         # Don't forget the last relay
         if current_relay and current_relay.get('fingerprint'):
             vote['relays'][current_relay['fingerprint']] = current_relay
-        
+
+        # valid-after is the consensus period. published is the fallback when
+        # that line is missing. Neither is the wall clock or an r-line date.
+        vote['vote_time'] = vote['valid_after'] or vote['published']
         return vote
     
     def _parse_relay_r_line(self, line: str) -> Optional[dict]:
@@ -930,6 +941,7 @@ class CollectorFetcher:
         per_authority = {}  # auth_name -> sorted list of supported methods
         method_counts = Counter()
         family_params = {}  # param_name -> {auth_name: value}
+        vote_times = {}  # auth_name -> that vote document's time
         
         for auth_name, vote_data in self.votes.items():
             if not vote_data:
@@ -946,12 +958,20 @@ class CollectorFetcher:
                     if key not in family_params:
                         family_params[key] = {}
                     family_params[key][auth_name] = params[key]
+
+            if isinstance(vote_data, dict):
+                vote_time = (vote_data.get('vote_time')
+                             or vote_data.get('valid_after')
+                             or vote_data.get('published'))
+                if vote_time:
+                    vote_times[auth_name] = vote_time
         
         total_voters = len(per_authority)
+        ordered_vote_times = sorted(vote_times.values())
         
-        # Get the ACTUAL current consensus method from the consensus document
-        # This is the authoritative source — we never compute it ourselves
-        current_method = self._fetch_current_consensus_method()
+        # Method and valid-after come from the same consensus document.
+        # This is the authoritative source — we never compute the method ourselves.
+        current_method, consensus_valid_after = self._fetch_current_consensus_method()
         
         # Max method any authority supports (shows what's coming next)
         all_methods = [m for methods in per_authority.values() for m in methods]
@@ -962,32 +982,39 @@ class CollectorFetcher:
         # Uses the same supermajority algorithm as Tor's dirvote.c:
         #   threshold = floor(n * 2 / 3) + 1  (strictly more than 2/3)
         # The active consensus method is the highest method supported by >= threshold voters.
-        if current_method is None and method_counts and total_voters > 0:
-            threshold = (total_voters * 2) // 3 + 1
-            for method in sorted(method_counts.keys(), reverse=True):
-                if method_counts[method] >= threshold:
-                    current_method = method
-                    break
+        method_inferred = False
+        if current_method is None:
+            # No consensus document, so an inferred method has no document time.
+            consensus_valid_after = None
+            if method_counts and total_voters > 0:
+                threshold = (total_voters * 2) // 3 + 1
+                for method in sorted(method_counts.keys(), reverse=True):
+                    if method_counts[method] >= threshold:
+                        current_method = method
+                        method_inferred = True
+                        break
         
         return {
             'current_method': current_method,
+            'method_inferred': method_inferred,
             'max_method': max_method,
             'max_method_support': max_method_support,
             'total_voters': total_voters,
             'per_authority': per_authority,
             'method_support_counts': dict(method_counts),
             'family_params_votes': family_params,
+            'consensus_valid_after': consensus_valid_after,
+            'vote_times': vote_times,
+            'oldest_vote_time': ordered_vote_times[0] if ordered_vote_times else None,
+            'latest_vote_time': ordered_vote_times[-1] if ordered_vote_times else None,
         }
     
-    def _fetch_current_consensus_method(self) -> Optional[int]:
+    def _fetch_current_consensus_method(self):
         """
-        Fetch the actual consensus-method from the latest CollecTor consensus document.
-        
-        Only reads the first few lines of the consensus header to extract
-        the 'consensus-method' line. This is the authoritative value from Tor.
-        
-        Returns:
-            int: The current consensus method number, or None on failure.
+        Read consensus-method and valid-after from the latest CollecTor consensus.
+
+        Both values come from that document's header. valid-after is the
+        document time, not the fetch time. Returns (None, None) on failure.
         """
         try:
             # Get listing of consensus files
@@ -998,7 +1025,7 @@ class CollectorFetcher:
             matches = consensus_pattern.findall(html)
             if not matches:
                 logger.warning("No consensus files found on CollecTor")
-                return None
+                return None, None
             
             latest_file = max(matches)
             url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
@@ -1018,17 +1045,26 @@ class CollectorFetcher:
                 retry_delay_base=self.retry_delay_base,
                 operation_name="consensus method header",
             )
-            
+
+            method = None
+            valid_after = None
             for line in header_text.split('\n'):
-                if line.startswith('consensus-method '):
-                    return int(line.split()[1])
-            
-            logger.warning("consensus-method line not found in consensus header")
-            return None
+                if line.startswith('consensus-method ') and method is None:
+                    try:
+                        method = int(line.split()[1])
+                    except (ValueError, IndexError):
+                        pass
+                elif line.startswith('valid-after ') and valid_after is None:
+                    valid_after = line[len('valid-after '):].strip()
+                if method is not None and valid_after is not None:
+                    break
+            if method is None:
+                logger.warning("consensus-method line not found in consensus header")
+            return method, valid_after
             
         except Exception as e:
             logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
-            return None
+            return None, None
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
