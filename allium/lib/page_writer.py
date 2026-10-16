@@ -1,0 +1,1914 @@
+"""
+File: page_writer.py
+
+HTML page rendering and file I/O for allium static site generation.
+Contains Jinja2 environment setup, multiprocessing workers, and all
+page writing functions.
+Extracted from relays.py for better modularity.
+"""
+
+import io
+import logging
+import os
+import pickle
+import re
+import time
+from html.parser import HTMLParser
+from shutil import rmtree
+from urllib.parse import unquote, urlsplit
+
+from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
+
+from .contact_sorting import (
+    AROI_SECTION_LISTS,
+    CONTACT_SORT_FILE_MAP,
+    CONTACT_SORT_MODES,
+    CONTACT_DEFAULT_SORT_MODE,
+    CONTACT_SECTION_KEYS,
+    adjust_vanity_paths as _adjust_vanity_paths,
+    contact_sort_links as _contact_sort_links,
+    build_contact_variant_args as _build_contact_variant_args,
+    contact_has_ipv6 as _contact_has_ipv6,
+    contact_relay_count as _contact_relay_count,
+    sort_contact_relays as _sort_contact_relays,
+)
+from .bandwidth_formatter import (
+    format_bandwidth_with_unit,
+    determine_unit_filter,
+    format_bandwidth_filter,
+    format_data_volume_with_unit,
+)
+from .aroi_validation import get_contact_validation_status
+from .charts.series import PERIOD_SPAN
+from .intelligence_engine import IntelligenceEngine
+from .ip_utils import safe_parse_ip_address
+from .operator_analysis import (
+    calculate_operator_reliability,
+    compute_contact_display_data,
+    generate_contact_rankings,
+)
+from .stability_utils import compute_group_overload_summary
+from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .search_discovery import MAX_HEAD_CHARS
+from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
+from .worker_pool import fork_map
+from .file_io_utils import sanitize_path_component as _sanitize_path_component
+
+ABS_PATH = os.path.dirname(os.path.abspath(__file__))
+
+logger = logging.getLogger(__name__)
+
+# Keeps even the densest relay tables comfortably below crawler fetch limits.
+RELAY_PAGE_SIZE = 200
+
+
+def paginated_filename(base_filename, page_number):
+    """Return the generated filename for a 1-based pagination page."""
+    if page_number <= 1:
+        return base_filename
+    stem, extension = os.path.splitext(base_filename)
+    if base_filename == "index.html":
+        return f"page-{page_number}.html"
+    return f"{stem}-page-{page_number}{extension}"
+
+
+def pagination_context(base_filename, page_number, total_pages):
+    """Build compact, clean-route pagination links for a template."""
+    if total_pages <= 1:
+        return None
+
+    def href(number):
+        return clean_href(paginated_filename(base_filename, number))
+
+    return {
+        "current": page_number,
+        "total": total_pages,
+        "previous": href(page_number - 1) if page_number > 1 else None,
+        "next": href(page_number + 1) if page_number < total_pages else None,
+        "first": href(1),
+        "last": href(total_pages),
+    }
+
+
+def _write_html(path, rendered):
+    """Write a rendered page with internal .html links in clean-route form.
+
+    Rewriting in memory replaces a post-generation pass that re-read and
+    re-wrote every generated page. A page whose links change is written as
+    that pass left it: as read back with universal newlines after a
+    text-mode write (CR/CRLF become LF).
+    """
+    text = rendered
+    if os.linesep != "\n":
+        text = text.replace("\n", os.linesep)
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    html, changed_links = rewrite_internal_links(text)
+    with open(path, "w", encoding="utf8") as f:
+        f.write(html if changed_links else rendered)
+
+
+def _paginated_validation_status(status, visible_relays):
+    """Return a page-filtered validation status while preserving full summary."""
+    if not isinstance(status, dict):
+        return status
+    visible_fingerprints = {
+        relay.get('fingerprint') for relay in visible_relays
+    }
+    page_status = dict(status)
+    for section_key in (
+        *CONTACT_SECTION_KEYS,
+        'pending_onionoo_relays',
+        'security_incident_relays',
+    ):
+        entries = status.get(section_key)
+        if isinstance(entries, list):
+            page_status[section_key] = [
+                entry for entry in entries
+                if isinstance(entry, dict)
+                and entry.get('relay', {}).get('fingerprint')
+                in visible_fingerprints
+            ]
+    return page_status
+
+
+def _aroi_section_hrefs(status, ordered_relays, base_filename, page_number=None, page_dir=""):
+    """Where each AROI section of a contact or family relay listing renders.
+
+    contact-relay-list.html shows the sections only in its sectioned layout,
+    and on each page only for that page's relays (_paginated_validation_status),
+    so a section can be on another page of the listing. Returns {section: href}:
+    "#<section>-relays" on page_number, else the first page of ordered_relays
+    that shows it (page_dir plus its clean route). Sections no page shows are
+    left out.
+    """
+    if not (isinstance(status, dict) and status.get('has_aroi')
+            and status.get('validation_status') != 'not_configured'):
+        return {}
+    positions = {relay.get('fingerprint'): index for index, relay in enumerate(ordered_relays)}
+    hrefs = {}
+    for section, keys in AROI_SECTION_LISTS.items():
+        indexes = [
+            positions[entry['relay'].get('fingerprint')]
+            for key in keys for entry in status.get(key) or ()
+            if isinstance(entry, dict)
+            and entry.get('relay', {}).get('fingerprint') in positions
+        ]
+        if not indexes:
+            continue
+        page = min(indexes) // RELAY_PAGE_SIZE + 1
+        if page == page_number:
+            target = ""
+        else:
+            route = clean_href(paginated_filename(base_filename, page))
+            target = page_dir if page_dir and route == "./" else page_dir + route
+        hrefs[section] = f"{target}#{section}-relays"
+    return hrefs
+
+
+# Template bytecode cache directory for improved rendering performance
+TEMPLATE_CACHE_DIR = os.path.join(os.path.dirname(ABS_PATH), ".jinja2_cache")
+os.makedirs(TEMPLATE_CACHE_DIR, exist_ok=True)
+
+ENV = Environment(
+    loader=FileSystemLoader(os.path.join(ABS_PATH, "../templates")),
+    trim_blocks=True,
+    lstrip_blocks=True,
+    autoescape=True,  # Enable autoescape to prevent XSS vulnerabilities
+    bytecode_cache=FileSystemBytecodeCache(TEMPLATE_CACHE_DIR),  # Cache compiled templates
+    auto_reload=False,  # Disable for production performance
+)
+
+# Jinja2 filter functions now imported from bandwidth_formatter.py
+
+# Add custom filters to the Jinja2 environment
+ENV.filters['determine_unit'] = determine_unit_filter
+ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+ENV.filters['format_bandwidth'] = format_bandwidth_filter
+ENV.filters['format_data_volume'] = format_data_volume_with_unit
+ENV.filters['format_time_ago'] = format_time_ago
+ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
+
+# Overload section filters for millisecond timestamps (Onionoo overload fields)
+ENV.filters['format_timestamp'] = format_timestamp
+ENV.filters['format_timestamp_ago'] = format_timestamp_ago
+
+from datetime import datetime as _dt, timezone as _tz
+
+def _format_unix_timestamp(ts):
+    if ts is None or ts == '':
+        return ''
+    try:
+        return _dt.fromtimestamp(float(ts), tz=_tz.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    except (ValueError, TypeError, OSError):
+        return str(ts)
+
+def _ordinal(n):
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n) if n is not None else ''
+    return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
+ENV.filters['ordinal'] = _ordinal
+
+
+# relay_row_head rows memoized per process (cleared before each page set)
+_relay_row_heads = {}
+
+
+def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_type,
+                           path_prefix, key, use_bits, validated_fps, unauthorized_fps,
+                           misconfigured_fps, security_fps, pending_fps):
+    """Memoize contact-relay-list.html's relay_row_head macro.
+
+    Family pages list every member relay once per member (a family of N
+    relays renders ~N^2 rows) and contact pages repeat their rows for every
+    sort variant, so most rows re-render identical HTML. The key covers all
+    the macro reads: the relay dict (shared and not modified while pages
+    render), the call arguments, the page values, and for rows that show
+    aroi_validation_icon the relay's membership in the page's fingerprint sets.
+    It also asks relays.has_page(), whose answers are fixed for the build.
+    """
+    icon_state = None
+    if show_validation_icon and validation_icon_type not in {
+            'validated', 'unauthorized', 'misconfigured', 'not_configured'}:
+        fingerprint = relay['fingerprint']
+        icon_state = (
+            bool(security_fps) and fingerprint in security_fps,
+            bool(pending_fps) and fingerprint in pending_fps,
+            fingerprint in validated_fps,
+            fingerprint in unauthorized_fps,
+            fingerprint in misconfigured_fps,
+        )
+    cache_key = (id(relay), show_validation_icon, validation_icon_type,
+                 path_prefix, key, use_bits, icon_state)
+    entry = _relay_row_heads.get(cache_key)
+    if entry is None:
+        # Holding the relay keeps its id from being reused while cached
+        entry = _relay_row_heads[cache_key] = (
+            relay, macro(relay, show_validation_icon, validation_icon_type))
+    return entry[1]
+
+
+ENV.globals['relay_row_cache'] = _cached_relay_row_head
+ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_root'] = ''  # 'charts/' with --chart-layout charts (allium.py)
+ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
+
+# ============================================================================
+# HELPER: Partition effective_family by family-cert status
+# ============================================================================
+
+def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps):
+    """Partition effective_family by family-cert status for relay-info template.
+
+    Happy Families (family-cert) relationships are always mutual — no alleged/indirect
+    possible. Only effective_family is partitioned; alleged/indirect stay as-is (MyFamily only).
+
+    Uses the same verified-key data as _set_family_support_types() for consistency:
+      - family_cert_fps = set of fingerprints with verified extracted Ed25519 key
+      - fp_to_family_key = map from fingerprint to family signing key
+      - family_key_to_fps = map from family key to list of member fingerprints
+
+    Sets 2 underscore-prefixed keys on relay dict (follows _flags_html convention):
+      _hf_effective  — all relays sharing same family-cert key
+      _mf_effective  — effective family members WITHOUT verified family-cert
+    """
+    fp = relay.get('fingerprint', '').upper()
+    effective = relay.get('effective_family') or []
+
+    family_key = fp_to_family_key.get(fp)
+    if family_key:
+        relay['_hf_effective'] = family_key_to_fps.get(family_key, [])
+    else:
+        relay['_hf_effective'] = []
+
+    relay['_mf_effective'] = [f for f in effective if f.upper() not in family_cert_fps]
+
+
+def _get_family_support_counts(k, contact_display_data, i):
+    """Extract family_support_counts from precomputed data for contact/family pages.
+
+    DRY helper used by both sequential (write_pages_by_key) and parallel (build_template_args) paths.
+    """
+    if k == "contact" and contact_display_data:
+        return contact_display_data.get("operator_intelligence", {}).get("family_support_counts", {})
+    elif k == "family":
+        return i.get("family_support_counts", {})
+    return {}
+
+
+def _get_exit_dns_health_summary(k, i, members):
+    """Get exit DNS health summary — precomputed for contacts/families, on-the-fly for others.
+
+    DRY helper used by both sequential (write_pages_by_key) and parallel (build_template_args) paths.
+    OPTIMIZATION: Uses i["exit_count"] fast bail-out to skip groups with no exit relays.
+    """
+    from .exit_dns_health import get_operator_exit_dns_health_summary
+
+    # For contact and family pages, use precomputed data
+    if k in ("contact", "family"):
+        return i.get("exit_dns_health_summary")
+
+    # For all other page types, compute on-the-fly with exit_count bail-out
+    return get_operator_exit_dns_health_summary(members, exit_count=i.get("exit_count", 0))
+
+
+# Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
+_mp_relay_set = None
+_mp_template = None
+_mp_page_type = None
+_mp_the_prefixed = None
+_mp_validated_aroi_domains = None
+_mp_output_root = None
+
+
+def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, validated_aroi_domains=None, output_root=None):
+    """Initialize worker with shared data via fork"""
+    global _mp_relay_set, _mp_template, _mp_page_type, _mp_the_prefixed, _mp_validated_aroi_domains, _mp_output_root
+    _mp_relay_set = relay_set
+    _mp_template = template
+    _mp_page_type = page_type
+    _mp_the_prefixed = the_prefixed if the_prefixed is not None else []
+    _mp_validated_aroi_domains = validated_aroi_domains if validated_aroi_domains is not None else set()
+    _mp_output_root = output_root
+
+
+def _pool_map_chunksize(item_count, workers):
+    """multiprocessing.Pool.map's default chunksize: ceil(items / (4 * workers))."""
+    return max(1, -(-item_count // (workers * 4)))
+
+
+def _render_page_mp(args):
+    """Render single page in worker process.
+    
+    OPTIMIZED: Now receives only (html_path, value) and builds template args
+    using forked memory. This avoids serializing large relay_subset data
+    through IPC, reducing overhead from ~300KB/page to ~100 bytes/page.
+    """
+    if len(args) == 2:
+        html_path, value = args
+        page_number = total_pages = 1
+        output_filename = "index.html"
+    else:
+        html_path, value, page_number, total_pages, output_filename = args
+    
+    # Get page data from forked memory (no IPC serialization needed)
+    page_data = _mp_relay_set.json["sorted"][_mp_page_type][value]
+    
+    # Build template args in worker (uses forked memory)
+    template_args = build_template_args(
+        _mp_relay_set,
+        _mp_page_type,
+        value,
+        page_data,
+        _mp_the_prefixed,
+        _mp_validated_aroi_domains,
+        page_number=page_number,
+        total_pages=total_pages,
+        output_filename=output_filename,
+    )
+    
+    # Render and write
+    rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
+    _write_html(html_path, rendered)
+    return True
+
+
+
+# Contact sorting constants and helpers are in contact_sorting.py.
+# Rendering orchestration functions below use them via imports at the top.
+
+
+# =============================================================================
+# HELPER FUNCTIONS (DRY - used by multiple precomputation/rendering paths)
+# =============================================================================
+
+def _compute_network_position_safe(guard_count, middle_count, exit_count, total_relays):
+    """Compute network position with fallback handling.
+    
+    DRY helper that wraps IntelligenceEngine._calculate_network_position() with
+    consistent error handling. Used by precomputation workers, template builders,
+    and misc page generation.
+    
+    Args:
+        guard_count: Number of guard relays
+        middle_count: Number of middle relays  
+        exit_count: Number of exit relays
+        total_relays: Total relay count
+        
+    Returns:
+        dict: Network position with 'label' and 'formatted_string' keys
+    """
+    try:
+        return IntelligenceEngine({})._calculate_network_position(
+            guard_count, middle_count, exit_count, total_relays)
+    except Exception:
+        return {'label': 'Mixed', 'formatted_string': f'{total_relays} relays'}
+
+
+def _contact_validation_status(relay_set, members):
+    """AROI validation status for a group's relays (Phase 2).
+
+    DRY helper: passes the relay_set's raw validation data plus its
+    pre-built validation_map so the map is not rebuilt for each of the
+    3,000+ contact/family groups.
+    """
+    return get_contact_validation_status(
+        members,
+        getattr(relay_set, 'aroi_validation_data', None),
+        getattr(relay_set, 'validation_map', None))
+
+
+# Precomputation worker globals (for contact page data parallelization)
+_precompute_relay_set = None
+_precompute_relay_indexes = None
+
+
+def _init_precompute_worker(relay_set):
+    """Initialize precompute worker with shared relay_set via fork"""
+    global _precompute_relay_set, _precompute_relay_indexes
+    _precompute_relay_set = relay_set
+    _precompute_relay_indexes = {
+        id(relay): index for index, relay in enumerate(relay_set.json["relays"])
+    }
+
+
+def _dump_precomputed(result):
+    """Serialize a worker's precomputed group data for the parent.
+
+    Group data embeds the group's relay dicts (validation status entries
+    reference them). Sending each as its index keeps the parent pointing at
+    its own relay dicts, as the sequential path stores them, instead of
+    receiving a copy of every member relay: ~29GB of pickles per run, as
+    families list each member once per member.
+    """
+    buffer = io.BytesIO()
+    pickler = pickle.Pickler(buffer, pickle.HIGHEST_PROTOCOL)
+    pickler.persistent_id = lambda obj: _precompute_relay_indexes.get(id(obj)) if type(obj) is dict else None
+    pickler.dump(result)
+    return buffer.getvalue()
+
+
+def _load_precomputed(data, relays):
+    """Inverse of _dump_precomputed, re-linking to ``relays`` (the parent's list)."""
+    unpickler = pickle.Unpickler(io.BytesIO(data))
+    unpickler.persistent_load = relays.__getitem__
+    return unpickler.load()
+
+
+def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains):
+    """Core contact precomputation logic shared by sequential and parallel paths.
+    
+    DRY: Extracted from both _precompute_single_contact (relays.py) and
+    _precompute_contact_worker (page_writer.py) which contained identical logic.
+    
+    Args:
+        relay_set: The Relays object (self or forked global)
+        contact_hash: The contact hash to precompute for
+        aroi_validation_timestamp: Cached validation timestamp
+        validated_aroi_domains: Set of validated AROI domains
+        
+    Returns:
+        dict of precomputed values or None if no members
+    """
+    contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+    
+    members = [relay_set.json["relays"][idx] for idx in contact_data.get("relays", [])]
+    if not members:
+        return None
+    
+    bandwidth_unit = relay_set.bandwidth_formatter.determine_unit(contact_data.get("bandwidth", 0))
+    
+    contact_rankings = generate_contact_rankings(contact_hash, relay_set)
+    operator_reliability = calculate_operator_reliability(contact_hash, members, relay_set)
+    contact_display_data = compute_contact_display_data(
+        contact_data, bandwidth_unit, operator_reliability, contact_hash, members, relay_set)
+
+    if "aroi_validation_full" in contact_data:
+        contact_validation_status = contact_data["aroi_validation_full"]
+    else:
+        contact_validation_status = _contact_validation_status(relay_set, members)
+    
+    aroi_domain = members[0].get("aroi_domain") if members else None
+    is_validated_aroi = (aroi_domain and aroi_domain != "none" and
+                        aroi_domain in validated_aroi_domains)
+
+    # Exit DNS health summary — uses exit_count bail-out, reads pre-attached relay fields
+    from .exit_dns_health import get_operator_exit_dns_health_summary
+    exit_dns_health_summary = get_operator_exit_dns_health_summary(
+        members, exit_count=contact_data.get("exit_count", 0))
+
+    return {
+        "contact_rankings": contact_rankings,
+        "operator_reliability": operator_reliability,
+        "contact_display_data": contact_display_data,
+        "contact_validation_status": contact_validation_status,
+        "aroi_validation_timestamp": aroi_validation_timestamp,
+        "is_validated_aroi": is_validated_aroi,
+        "precomputed_bandwidth_unit": bandwidth_unit,
+        "aroi_domain": aroi_domain,
+        "exit_dns_health_summary": exit_dns_health_summary,
+    }
+
+
+def _precompute_contact_worker(args):
+    """Precompute data for a single contact in worker process.
+    
+    Thin wrapper around _compute_contact_predata using forked global relay_set.
+    """
+    contact_hash, aroi_validation_timestamp, validated_aroi_domains = args
+    
+    try:
+        result = _compute_contact_predata(
+            _precompute_relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains)
+    except Exception:
+        return (contact_hash, None)
+    return (contact_hash, _dump_precomputed(result) if result else None)
+
+
+def _compute_family_predata(relay_set, family_hash):
+    """Core family precomputation logic shared by sequential and parallel paths.
+    
+    DRY: Extracted from both _precompute_single_family (relays.py) and
+    _precompute_family_worker (page_writer.py) which contained identical logic.
+    
+    Args:
+        relay_set: The Relays object (self or forked global)
+        family_hash: The family hash to precompute for
+        
+    Returns:
+        dict of precomputed values or None if no members
+    """
+    family_data = relay_set.json["sorted"]["family"][family_hash]
+    
+    members = [relay_set.json["relays"][idx] for idx in family_data.get("relays", [])]
+    if not members:
+        return None
+    
+    contact_validation_status = (family_data.get("aroi_validation_full") or
+                                 _contact_validation_status(relay_set, members))
+    
+    network_position = _compute_network_position_safe(
+        family_data["guard_count"], family_data["middle_count"],
+        family_data["exit_count"], len(members))
+    
+    # Family support type counts + Exit DNS health counts
+    # Piggyback DNS health counting on same loop (avoid second iteration)
+    family_support_counts = {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0}
+    exit_dns_healthy = 0
+    exit_dns_failing = 0
+    exit_dns_untested = 0
+    exit_dns_total = 0
+    for relay in members:
+        fst = relay.get('family_support_type', 'none')
+        family_support_counts[fst] = family_support_counts.get(fst, 0) + 1
+        edh = relay.get('exit_dns_health_status')
+        if edh is not None:
+            exit_dns_total += 1
+            if edh == 'success':
+                exit_dns_healthy += 1
+            elif edh == 'fail':
+                exit_dns_failing += 1
+            else:
+                exit_dns_untested += 1
+
+    from .exit_dns_health import _build_dns_summary_dict
+    exit_dns_health_summary = (
+        _build_dns_summary_dict(exit_dns_total, exit_dns_healthy, exit_dns_failing, exit_dns_untested)
+        if exit_dns_total > 0 else None
+    )
+
+    return {
+        "contact_validation_status": contact_validation_status,
+        "network_position": network_position,
+        "family_support_counts": family_support_counts,
+        "exit_dns_health_summary": exit_dns_health_summary,
+    }
+
+
+def _precompute_family_worker(args):
+    """Precompute data for a single family in worker process.
+    
+    Thin wrapper around _compute_family_predata using forked global relay_set.
+    """
+    family_hash, = args
+    
+    try:
+        result = _compute_family_predata(_precompute_relay_set, family_hash)
+    except Exception:
+        return (family_hash, None)
+    return (family_hash, _dump_precomputed(result) if result else None)
+
+
+
+
+def write_misc(
+    relay_set,
+    template,
+    path,
+    page_ctx=None,
+    sorted_by=None,
+    reverse=True,
+    is_index=False,
+    relay_subset=None,
+    listing_items=None,
+    pagination=None,
+    page_number=1,
+):
+    """
+    Render and write unsorted HTML listings to disk
+    
+    Optimizes misc-families pages by pre-computing complex family statistics in Python
+    instead of expensive Jinja2 template loops with deduplication logic.
+
+    Args:
+        template:    jinja template name
+        path:        path to generate HTML document
+        path_prefix: path to prefix other docs/includes
+        sorted_by:   key to sort by, used in family and networks pages
+        reverse:     passed to sort() function in family and networks pages
+        is_index:    whether document is main index listing, limits list to 500
+    """
+    template = ENV.get_template(template)
+    # relay_subset passed directly to template for thread safety
+    if relay_subset is None:
+        relay_subset = relay_set.json["relays"]
+    
+    # Handle page context and path prefix
+    if page_ctx is None:
+        page_ctx = {'path_prefix': '../'}  # default fallback
+    
+    # Add AROI validation status to contact data for misc-contacts templates
+    # This runs before write_pages_by_key, so we calculate once and store for reuse
+    if template.name == "misc-contacts.html":
+        for contact_hash, contact_data in relay_set.json["sorted"].get("contact", {}).items():
+            # Only calculate if not already stored
+            if "aroi_validation_status" not in contact_data:
+                relay_indices = contact_data.get("relays", [])
+                members = [relay_set.json["relays"][idx] for idx in relay_indices]
+                validation_status = _contact_validation_status(relay_set, members)
+                contact_data["aroi_validation_status"] = validation_status["validation_status"]
+                # Store full validation status for operator pages to reuse
+                contact_data["aroi_validation_full"] = validation_status
+                # B1.6: surface peer-issue counts + v3 tier on the listing
+                # row so misc-contacts.html can render \U0001f6a8 / \u23f3 / \U0001f3c6
+                # markers without re-loading the full validation_status.
+                _summary = validation_status.get('validation_summary', {}) or {}
+                contact_data['aroi_security_count'] = _summary.get('security_incident_count', 0)
+                contact_data['aroi_pending_count'] = _summary.get('pending_onionoo_count', 0)
+                contact_data['aroi_v3_tier'] = _summary.get('v3_tier', 'none')
+                contact_data['aroi_is_v3_adopter'] = _summary.get('is_v3_adopter', False)
+                contact_data['aroi_v3_pct'] = _summary.get('v3_pct_of_total', 0.0)
+    
+    # Pre-compute family statistics for misc-families templates
+    template_vars = {
+        "relays": relay_set,
+        "relay_subset": relay_subset,  # Pass directly for thread safety
+        "listing_items": listing_items,
+        "sorted_by": sorted_by,
+        "reverse": reverse,
+        "is_index": is_index,
+        "page_ctx": page_ctx,
+        "validated_aroi_domains": relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
+        "base_url": relay_set.base_url,
+        "canonical_url": canonical_url_for_output(relay_set.base_url, path),
+        "pagination": pagination,
+        "page_number": page_number,
+    }
+    
+    if template.name == "misc-families.html":
+        family_stats = relay_set.json.get('family_statistics', {
+            'centralization_percentage': '0.0',
+            'largest_family_size': 0,
+            'large_family_count': 0
+        })
+        template_vars.update(family_stats)
+
+        # B5.2: precompute v3 tier per family so misc-families.html can
+        # render a tier badge inline. Compute once here (vs. doing it
+        # in the template loop) — ~6,300 families × 1 tier classifier
+        # call beats inline Jinja arithmetic, and matches the
+        # precompute pattern already used for misc-contacts.
+        from .aroi_validation import classify_v3_tier
+        all_relays_list = relay_set.json.get('relays', [])
+        for fam_hash, fam_data in (relay_set.json.get('sorted', {})
+                                                  .get('family', {}).items()):
+            if 'aroi_v3_tier' in fam_data:
+                continue  # already computed
+            relay_idxs = fam_data.get('relays', [])
+            total = len(relay_idxs)
+            if total == 0:
+                fam_data['aroi_v3_tier'] = 'none'
+                fam_data['aroi_v3_pct'] = 0.0
+                continue
+            v3 = sum(1 for ix in relay_idxs
+                     if ix < len(all_relays_list)
+                     and all_relays_list[ix].get('aroi_version') == '3')
+            fam_data['aroi_v3_tier'] = classify_v3_tier(v3, total)
+            fam_data['aroi_v3_pct'] = (v3 / total * 100) if total else 0.0
+    elif template.name == "misc-authorities.html":
+        # Reuse existing authority uptime data from consolidated processing
+        authorities_data = get_directory_authorities_data(relay_set)
+        # Set attributes as expected by template (template uses relays.X)
+        relay_set.authorities_data = authorities_data['authorities_data']
+        relay_set.authorities_summary = authorities_data['authorities_summary']
+        relay_set.consensus_status = authorities_data.get('consensus_status')
+        relay_set.latency_summary = authorities_data.get('latency_summary')
+        relay_set.authority_alerts = authorities_data.get('authority_alerts')
+        relay_set.collector_flag_thresholds = authorities_data.get('collector_flag_thresholds')
+        relay_set.collector_fetched_at = authorities_data.get('collector_fetched_at')
+        relay_set.consensus_method_info = authorities_data.get('consensus_method_info')
+        template_vars.update(authorities_data)
+    
+    template_render = template.render(**template_vars)
+    output = os.path.join(relay_set.output_dir, path)
+    os.makedirs(os.path.dirname(output), exist_ok=True)
+    _write_html(output, template_render)
+
+def probe_authority_latency(relay_set):
+    """TCP-probe voting directory authorities; returns the latency status map.
+
+    Runs from the coordinator before page generation so rendering stays
+    pure; get_directory_authorities_data consumes the attached result and
+    only probes inline as a fallback (tests / direct calls).
+    """
+    from .consensus import AuthorityMonitor
+
+    authorities = [r for r in relay_set.json.get("relays", [])
+                   if 'Authority' in r.get('flags', [])]
+    collector_data = getattr(relay_set, 'collector_consensus_data', None) or {}
+    votes = collector_data.get('votes', {}) if isinstance(collector_data, dict) else {}
+    vote_nicknames = {k.lower() for k in votes}
+    vote_fingerprints = {k.upper() for k in votes if len(k) == 40}
+    vote_prefixes = ({k.upper()[:8] for k in votes if len(k) == 40}
+                     | {k.upper() for k in votes if len(k) == 8})
+
+    # Build authority endpoint data from VOTING authorities only (those that
+    # voted in collector) so latency counts match voting authority counts
+    authority_endpoints = []
+    for auth in authorities:
+        auth_nickname = auth.get('nickname', '')
+        auth_fp = auth.get('fingerprint', '').upper()
+        voted = (auth_fp in vote_fingerprints
+                 or (auth_fp and auth_fp[:8] in vote_prefixes)
+                 or auth_nickname.lower() in vote_nicknames)
+        if not voted:
+            continue
+
+        # Extract address from or_addresses (Onionoo format). Entries
+        # can be bracketed IPv6 ('[2001:db8::1]:9001'); naive ':' splits
+        # would yield garbage if an authority ever published IPv6 first.
+        # Prefer the first IPv4 entry - the monitor probes over IPv4 -
+        # falling back to a bracket-aware parse of the first entry.
+        or_addresses = auth.get('or_addresses', [])
+        address = ''
+        for or_addr in or_addresses:
+            parsed_ip, ip_version = safe_parse_ip_address(or_addr)
+            if parsed_ip and ip_version == 4:
+                address = parsed_ip
+                break
+        if not address and or_addresses:
+            parsed_ip, _ipv = safe_parse_ip_address(or_addresses[0])
+            address = parsed_ip or ''
+
+        # Extract dir_port from dir_address if available, otherwise
+        # default to 80 (rsplit stays correct for bracketed IPv6)
+        dir_address = auth.get('dir_address', '')
+        dir_port = dir_address.rsplit(':', 1)[-1] if ':' in dir_address else '80'
+
+        if auth_nickname and address:
+            authority_endpoints.append({
+                'nickname': auth_nickname,
+                'address': address,
+                'dir_port': dir_port,
+            })
+
+    # Pass discovered authorities to monitor (falls back to hardcoded if empty)
+    monitor = AuthorityMonitor(timeout=2, authorities=authority_endpoints)
+    return monitor.check_all_authorities()
+
+
+def get_directory_authorities_data(relay_set):
+    """
+    Prepare directory authorities data for template rendering.
+    Reuses existing authority uptime calculations and z-score infrastructure.
+    """
+    
+    # Filter authorities from existing relay data (no new processing)
+    authorities = [relay for relay in relay_set.json["relays"] if 'Authority' in relay.get('flags', [])]
+    
+    # Sort authorities alphabetically by nickname (A at top, Z at bottom)
+    authorities = sorted(authorities, key=lambda x: x.get('nickname', '').lower())
+    
+    # Get collector data for votes/bw authorities
+    collector_data = getattr(relay_set, 'collector_consensus_data', None)
+    collector_fetched_at = None
+    if collector_data:
+        collector_fetched_at = collector_data.get('fetched_at', '')
+        votes = collector_data.get('votes', {})
+        bw_authorities = set(collector_data.get('bw_authorities', []))
+        
+        # OPTIMIZATION: Build lookup maps ONCE instead of nested loops for each authority
+        # This reduces O(A*V) to O(A+V) where A=authorities, V=votes
+        votes_by_nickname = {}  # nickname.lower() -> (vote_data, relay_count)
+        votes_by_fingerprint = {}  # fingerprint.upper() -> (vote_data, relay_count)
+        votes_by_prefix = {}  # fingerprint[:8].upper() -> (vote_data, relay_count)
+        
+        for vote_key, vote_data in votes.items():
+            relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
+            vote_tuple = (vote_data, relay_count)
+            
+            vote_key_upper = vote_key.upper()
+            vote_key_lower = vote_key.lower()
+            
+            # Store by all possible lookup keys
+            votes_by_nickname[vote_key_lower] = vote_tuple
+            if len(vote_key) == 40:  # Full fingerprint
+                votes_by_fingerprint[vote_key_upper] = vote_tuple
+                votes_by_prefix[vote_key_upper[:8]] = vote_tuple
+            elif len(vote_key) == 8:  # Prefix only
+                votes_by_prefix[vote_key_upper] = vote_tuple
+        
+        # Same optimization for bw_authorities
+        bw_auth_nicknames = {a.lower() for a in bw_authorities}
+        bw_auth_fingerprints = {a.upper() for a in bw_authorities if len(a) == 40}
+        bw_auth_prefixes = {a.upper()[:8] for a in bw_authorities if len(a) >= 8}
+        
+        for authority in authorities:
+            auth_nickname = authority.get('nickname', '').lower()
+            auth_fingerprint = authority.get('fingerprint', '').upper()
+            auth_fp_prefix = auth_fingerprint[:8] if auth_fingerprint else ''
+            
+            # Check if this authority voted - O(1) lookups
+            voted = False
+            relay_count = 0
+            vote_tuple = (
+                votes_by_fingerprint.get(auth_fingerprint) or
+                votes_by_prefix.get(auth_fp_prefix) or
+                votes_by_nickname.get(auth_nickname)
+            )
+            if vote_tuple:
+                voted = True
+                relay_count = vote_tuple[1]
+            
+            # Check if this authority is a bandwidth authority - O(1) lookups
+            is_bw = (
+                auth_fingerprint in bw_auth_fingerprints or
+                auth_fp_prefix in bw_auth_prefixes or
+                auth_nickname in bw_auth_nicknames
+            )
+            
+            # Get per-authority consensus methods from consensus_method_info
+            auth_max_method = None
+            if collector_data:
+                cm_per_auth = collector_data.get('consensus_method_info', {}).get('per_authority', {})
+                # Try matching by nickname (vote auth names are lowercase)
+                auth_methods = cm_per_auth.get(auth_nickname)
+                if auth_methods:
+                    auth_max_method = max(auth_methods) if auth_methods else None
+            
+            authority['collector_data'] = {
+                'voted': voted,
+                'is_bw_authority': is_bw,
+                'relay_count': relay_count,
+                'max_consensus_method': auth_max_method,
+            }
+    
+    # Perform latency checks on authorities
+    latency_ok_count = 0
+    latency_slow_count = 0
+    latency_down_count = 0
+    authority_alerts = []
+    
+    try:
+        # Probing runs in the coordinator so page generation stays pure
+        # rendering; probe inline only when nothing was attached
+        # (tests / direct calls without the coordinator).
+        latency_status = getattr(relay_set, 'authority_latency_status', None)
+        if latency_status is None:
+            latency_status = probe_authority_latency(relay_set)
+        
+        # Attach latency data to each authority
+        for authority in authorities:
+            auth_nickname = authority.get('nickname', '').lower()
+            # Find matching latency data
+            for name, status in latency_status.items():
+                if name.lower() == auth_nickname:
+                    authority['latency_ms'] = status.get('latency_ms')
+                    authority['latency_online'] = status.get('online', False)
+                    authority['latency_error'] = status.get('error')
+                    authority['latency_checked_at'] = status.get('checked_at')
+                    
+                    # Count for summary
+                    if status.get('online'):
+                        if status.get('latency_ms') and status['latency_ms'] > 500:
+                            latency_slow_count += 1
+                        else:
+                            latency_ok_count += 1
+                    else:
+                        latency_down_count += 1
+                        authority_alerts.append(f"{authority.get('nickname', 'Unknown')} is not responding (latency check failed)")
+                    break
+    except Exception:
+        # Latency check failed - continue without it
+        pass
+    
+    # Calculate first_seen relative time for each authority
+    for authority in authorities:
+        first_seen = authority.get('first_seen', '')
+        if first_seen:
+            authority['first_seen_timestamp'] = first_seen
+            authority['first_seen_relative'] = format_time_ago(first_seen)
+        else:
+            authority['first_seen_timestamp'] = 'Unknown'
+            authority['first_seen_relative'] = 'Unknown'
+    
+    # Reuse existing consolidated uptime results (already computed)
+    authority_network_stats = {}
+    above_average_uptime = []
+    below_average_uptime = []
+    problem_uptime = []
+    
+    if hasattr(relay_set, '_consolidated_uptime_results'):
+        network_flag_stats = relay_set._consolidated_uptime_results.get('network_flag_statistics', {})
+        authority_network_stats = network_flag_stats.get('Authority', {})
+        
+        for authority in authorities:
+            uptime_1month = authority.get('uptime_percentages', {}).get('1_month', 0.0)
+            period_stats = authority_network_stats.get('1_month', {})
+            
+            if period_stats and period_stats.get('std_dev', 0) > 0 and uptime_1month > 0:
+                mean = period_stats['mean']
+                std_dev = period_stats['std_dev']
+                authority['uptime_zscore'] = (uptime_1month - mean) / std_dev
+                
+                # Categorize authorities by uptime performance (reuse z-score calculation)
+                if authority['uptime_zscore'] > 0.3:
+                    above_average_uptime.append(authority)
+                elif authority['uptime_zscore'] <= -2.0:
+                    problem_uptime.append(authority)
+                    authority_alerts.append(f"{authority.get('nickname', 'Unknown')} has significantly below average uptime (Z-score: {authority['uptime_zscore']:.1f})")
+                else:
+                    below_average_uptime.append(authority)
+                
+                # Add outlier classification using existing thresholds
+                if uptime_1month <= period_stats.get('two_sigma_low', 0):
+                    authority['uptime_outlier_status'] = 'low_outlier'
+                elif uptime_1month >= period_stats.get('two_sigma_high', float('inf')):
+                    authority['uptime_outlier_status'] = 'high_outlier'
+                else:
+                    authority['uptime_outlier_status'] = 'normal'
+            else:
+                authority['uptime_zscore'] = None
+                authority['uptime_outlier_status'] = 'insufficient_data'
+    else:
+        # No uptime data available - ensure all authorities have required attributes
+        for authority in authorities:
+            authority['uptime_zscore'] = None
+            authority['uptime_outlier_status'] = 'insufficient_data'
+    
+    # ------------------------------------------------------------------
+    # Retain recently-removed authorities (as offline) for historical context.
+    # A directory authority removed from the consensus eventually ages out of ALL
+    # live data sources (Onionoo drops it ~1 week after its last consensus; CollecTor
+    # 'recent/' keeps only ~3-4 days), so it would silently vanish from this page. We
+    # merge in a SMALL hardcoded list of known-offline authorities, but ONLY those not
+    # already present dynamically from Onionoo. If such an authority returns to
+    # Onionoo, the live row wins (dedupe) and the page refreshes it automatically.
+    #
+    # Display-only: these entries are never counted as voters and never affect the
+    # reachability/consensus denominators. Totals below use the DYNAMIC (pre-merge)
+    # authority count so the hardcoded rows can't inflate any counts.
+    # ------------------------------------------------------------------
+    dynamic_authority_count = len(authorities)
+    dynamic_fingerprints = {a.get('fingerprint', '').upper() for a in authorities}
+    dynamic_nicknames = {a.get('nickname', '').lower() for a in authorities}
+    try:
+        from .consensus.collector_fetcher import get_known_offline_authorities
+        known_offline = get_known_offline_authorities()
+    except Exception as e:
+        logger.warning(f"Failed to load known offline authorities ({e}), skipping offline-retention rows")
+        known_offline = []
+    for entry in known_offline:
+        entry_fp = (entry.get('fingerprint') or '').upper()
+        entry_nick = (entry.get('nickname') or '').lower()
+        # Skip if already present dynamically (authority returned / never fully left)
+        if (entry_fp and entry_fp in dynamic_fingerprints) or \
+           (entry_nick and entry_nick in dynamic_nicknames):
+            continue
+        # Build a complete authority-shaped dict so the template renders safely.
+        # Intentionally NO 'collector_data'/'latency_*' keys -> those columns render as
+        # a muted "-" rather than an alarming red 0 / X.
+        authorities.append({
+            'nickname': entry.get('nickname', ''),
+            'fingerprint': entry.get('fingerprint', ''),
+            'running': False,
+            'country': entry.get('country'),
+            'country_name': entry.get('country_name'),
+            'as': None,
+            'as_name': None,
+            'uptime_percentages': {},
+            'uptime_zscore': None,
+            'uptime_outlier_status': 'insufficient_data',
+            'version': None,
+            'recommended_version': None,
+            'first_seen': None,
+            'first_seen_relative': None,
+            'first_seen_timestamp': None,
+            'last_restarted': None,
+            'is_known_offline': True,
+            'offline_since': entry.get('offline_since'),
+            'offline_note': entry.get('note', 'Removed from the directory authority list.'),
+        })
+    # Re-sort so any appended offline rows slot into alphabetical position
+    authorities = sorted(authorities, key=lambda x: x.get('nickname', '').lower())
+
+    # Offline summary is DYNAMIC: any authority currently not running - includes live
+    # (stage 1/2) offline authorities AND hardcoded (stage 3) entries. Drives the
+    # header sub-bullet, so it auto-updates for ANY future DA going offline.
+    offline_names = sorted(a.get('nickname', '') for a in authorities if not a.get('running', False))
+    offline_count = len(offline_names)
+
+    # Build consensus status
+    voted_count = sum(1 for a in authorities if a.get('collector_data', {}).get('voted', False))
+    consensus_status = {
+        'freshness': 'fresh' if voted_count >= 5 else ('stale' if voted_count >= 3 else 'unknown'),
+        'voted_count': voted_count,
+        'fetched_at': collector_fetched_at,
+    }
+    
+    # Build latency summary
+    latency_summary = {
+        'ok_count': latency_ok_count,
+        'slow_count': latency_slow_count,
+        'down_count': latency_down_count,
+    }
+    
+    # Get flag thresholds from collector data
+    collector_flag_thresholds = getattr(relay_set, 'collector_flag_thresholds', None)
+    if collector_flag_thresholds is None and collector_data:
+        collector_flag_thresholds = collector_data.get('flag_thresholds', {})
+    
+    # Use voting authority count from collector (actual voters) rather than Onionoo authority flag count
+    # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote.
+    # When flag_thresholds is absent but votes were seen, the voting registry (updated from the vote
+    # keys in enrich_with_api_data) still holds the real voter count, so prefer it over the Onionoo
+    # Authority-flag count. Only with no vote data at all fall back to the DYNAMIC (pre-merge) Onionoo
+    # count, so hardcoded offline rows never inflate the denominator.
+    if collector_flag_thresholds:
+        voting_authority_count = len(collector_flag_thresholds)
+    else:
+        from .consensus.collector_fetcher import get_authority_registry
+        registry = get_authority_registry()
+        voting_authority_count = (registry.get_voting_authority_count()
+                                  if registry.has_dynamic_voting_authorities()
+                                  else dynamic_authority_count)
+    
+    # Extract consensus method info from collector data (for Happy Family migration tracking)
+    consensus_method_info = None
+    if collector_data:
+        consensus_method_info = collector_data.get('consensus_method_info')
+    
+    return {
+        'authorities_data': authorities,
+        'authorities_summary': {
+            'total_authorities': voting_authority_count,
+            'total_with_authority_flag': dynamic_authority_count,  # Live Onionoo count (excludes hardcoded offline rows)
+            'above_average_uptime': above_average_uptime,
+            'below_average_uptime': below_average_uptime,
+            'problem_uptime': problem_uptime,
+            'offline_count': offline_count,  # Dynamic: any authority not running (live + hardcoded)
+            'offline_names': offline_names,
+        },
+        'authority_network_stats': authority_network_stats,
+        'uptime_metadata': (getattr(relay_set, 'uptime_data', {}) or {}).get('relays_published', 'Unknown'),
+        'consensus_status': consensus_status,
+        'latency_summary': latency_summary,
+        'authority_alerts': authority_alerts if authority_alerts else None,
+        'collector_flag_thresholds': collector_flag_thresholds,
+        'collector_fetched_at': collector_fetched_at,
+        'consensus_method_info': consensus_method_info,
+    }
+
+
+
+def get_detail_page_context(relay_set, category, value):
+    """Generate page context with correct breadcrumb data for detail pages"""
+    # Use centralized page context generation
+    from .page_context import get_detail_page_context
+    display_value = None
+    if category == "country":
+        # Breadcrumb should show the country's display name, not the raw
+        # ISO-code sorted key (country.html already derives the full name)
+        group = relay_set.json.get("sorted", {}).get("country", {}).get(value, {})
+        relay_idxs = group.get("relays", [])
+        if relay_idxs:
+            first_relay = relay_set.json["relays"][relay_idxs[0]]
+            display_value = first_relay.get("country_name") or None
+    return get_detail_page_context(category, value, display_value)
+
+
+# Paginated and sorted contact pages: page-N.html, by-<mode>[-page-N].html
+_VANITY_PAGE_NAME = re.compile(r"^(?:page-\d+|by-[a-z0-9-]+(?:-page-\d+)?)\.html$")
+
+# skeleton.html has put this comment in the <head> of every page allium
+# renders since 2020, vanity copies included
+_ALLIUM_SOURCE_COMMENT = "source: metrics.torproject.org"
+
+# A vanity folder is named after a lowercased, sanitized AROI domain, so it
+# has a dot and a final label starting with a letter. Core site folders
+# (relay, contact, family, as, country, misc, static, ...) have no dot and
+# version-like names such as v1.2 end in a digit, so neither can match.
+_VANITY_DIR_NAME = re.compile(r"^[a-z0-9-][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.[a-z][a-z0-9_-]*$")
+
+
+def _is_vanity_page_file(filename):
+    """Return True if filename is a contact page copied into a vanity folder."""
+    return filename in CONTACT_SORT_FILE_MAP.values() or bool(_VANITY_PAGE_NAME.match(filename))
+
+
+class _VanityHeadParser(HTMLParser):
+    """Collect a page head's canonical links and whether allium's source comment is there."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.canonicals = []
+        self.from_allium = False
+
+    def handle_starttag(self, tag, attrs):
+        """Record the href of each <link rel="canonical">."""
+        attrs = dict(attrs)
+        if tag == "link" and "canonical" in (attrs.get("rel") or "").lower().split() and attrs.get("href"):
+            self.canonicals.append(attrs["href"])
+
+    def handle_comment(self, data):
+        """Note allium's source comment."""
+        self.from_allium = self.from_allium or data.strip() == _ALLIUM_SOURCE_COMMENT
+
+
+def _is_generated_vanity_page(path, dir_name):
+    """Return True if the page at path is allium's output for vanity folder dir_name.
+
+    Two things prove it. The head has the source comment skeleton.html puts
+    in every page allium renders, which a hand-made page lacks even when it
+    carries a self-canonical (an https build requires one on every page).
+    And it has one canonical link to the folder: <base>/<domain>/ or
+    <base>/<domain>/page-N whatever the sort, so allium's page copied under
+    another name does not pass. Builds before 2026-08 wrote the raw domain
+    there, which matches the folder once sanitized.
+    """
+    with open(path, encoding="utf-8") as handle:
+        head = handle.read(MAX_HEAD_CHARS)
+    head_end = head.find("</head>")
+    if head_end < 0:
+        return False
+    parser = _VanityHeadParser()
+    try:
+        parser.feed(head[:head_end])
+    except Exception:  # HTMLParser errors on odd markup differ by Python version
+        return False
+    if not parser.from_allium or len(parser.canonicals) != 1:
+        return False
+    match = re.fullmatch(r"(?:/.*)?/([^/]+)/(?:page-[0-9]+)?", urlsplit(parser.canonicals[0]).path)
+    if match is None:
+        return False
+    folder = unquote(match.group(1))
+    return folder == dir_name or _sanitize_path_component(folder.lower()) == dir_name
+
+
+def _vanity_dir_name(relay_set, contact_data):
+    """Return the root-level vanity folder name for a contact, or None.
+
+    Validated AROI operators get a copy of their contact pages at
+    <out>/<domain>/ when a base URL is set. The renderer and the stale
+    folder sweep both use this, so they agree on which folders are current.
+    """
+    aroi_domain = contact_data.get('aroi_domain')
+    if (relay_set.base_url and contact_data.get('is_validated_aroi')
+            and aroi_domain and aroi_domain != 'none'):
+        return _sanitize_path_component(aroi_domain.lower())
+    return None
+
+
+def _cleanup_vanity_sort_files(vanity_dir):
+    """Remove all contact sort variant files from a vanity directory.
+
+    Prevents stale pages when sort modes change (e.g. IPv6 relays removed)
+    or an operator loses AROI validation between generations.
+    """
+    if not os.path.isdir(vanity_dir):
+        return
+    for filename in os.listdir(vanity_dir):
+        if not _is_vanity_page_file(filename):
+            continue
+        filepath = os.path.join(vanity_dir, filename)
+        try:
+            os.remove(filepath)
+        except FileNotFoundError:
+            pass
+    try:
+        os.rmdir(vanity_dir)
+    except OSError:
+        pass
+
+
+def _remove_stale_vanity_dirs(relay_set, sorted_values, output_root):
+    """Remove root-level vanity folders for domains not rendered this run.
+
+    relay/ and contact/ are rebuilt on every run, but the output directory
+    is reused. A vanity folder left by an operator who disappeared (all
+    relays dropped by the downtime filter) or moved to another AROI domain
+    would keep linking relay and contact pages that no longer exist, and
+    stay in the sitemap.
+
+    Only folders allium generated are removed: named like a sanitized domain
+    (never a core site folder), not a symlink, holding contact page files and
+    nothing else, and every page proven to be allium's output for that
+    folder (_is_generated_vanity_page). Hand-made folders are left alone. A
+    folder (or output root) that cannot be read or cleaned is skipped rather
+    than failing the build. Returns the number of folders removed.
+    """
+    # Without a base URL no vanity folders are written, so none are swept
+    if not relay_set.base_url or not output_root:
+        return 0
+
+    contacts = relay_set.json["sorted"]["contact"]
+    current = {_vanity_dir_name(relay_set, contacts[v]) for v in sorted_values}
+
+    try:
+        entries = list(os.scandir(output_root))
+        real_root = os.path.realpath(output_root)
+    except OSError:
+        return 0
+
+    removed = 0
+    for entry in entries:
+        if entry.name in current or not _VANITY_DIR_NAME.match(entry.name):
+            continue
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            # A Windows junction passes is_dir(follow_symlinks=False); never
+            # follow anything that resolves outside the output root
+            if os.path.realpath(entry.path) != os.path.join(real_root, entry.name):
+                continue
+            children = list(os.scandir(entry.path))
+            if not children or not all(
+                    child.is_file(follow_symlinks=False) and _is_vanity_page_file(child.name)
+                    for child in children):
+                continue
+            if not all(_is_generated_vanity_page(child.path, entry.name) for child in children):
+                continue
+            _cleanup_vanity_sort_files(entry.path)
+        except (OSError, ValueError):  # ValueError: a page that is not UTF-8
+            continue
+        if not os.path.exists(entry.path):
+            removed += 1
+    return removed
+
+
+def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
+    """Render all static sort variants for one contact page.
+
+    Respects two gating rules:
+    - Threshold: operators with ≤2 relays get only index.html (no sort links).
+    - IPv6: by-ipv6.html is only emitted when IPv6 is visible in the contact.
+
+    Vanity cleanup: removes stale vanity files when an operator loses
+    validation or when sort modes change between generations. Folders for
+    domains no longer rendered at all are swept by _remove_stale_vanity_dirs.
+    """
+    files_written = 0
+    chart_writer = getattr(relay_set, 'chart_writer', None)
+    chart_periods = chart_writer.contact(
+        contact_data.get('relays', ()), chart_writer.folder('contact', os.path.basename(dir_path), dir_path)
+    ) if chart_writer else {}
+
+    aroi_domain = contact_data.get('aroi_domain')
+    has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
+    vanity_dir = None
+
+    if has_vanity_domain:
+        safe_domain = _sanitize_path_component(aroi_domain.lower())
+        potential_vanity_dir = os.path.join(output_root, safe_domain)
+
+        if _vanity_dir_name(relay_set, contact_data):
+            _cleanup_vanity_sort_files(potential_vanity_dir)
+            vanity_dir = potential_vanity_dir
+            os.makedirs(vanity_dir, exist_ok=True)
+        else:
+            _cleanup_vanity_sort_files(potential_vanity_dir)
+
+    # Determine which sort modes to generate
+    relay_count = _contact_relay_count(base_template_args)
+    has_ipv6 = _contact_has_ipv6(base_template_args)
+    sort_enabled = relay_count >= 3
+
+    if sort_enabled:
+        modes_to_render = [m for m in CONTACT_SORT_MODES if m != 'ipv6' or has_ipv6]
+    else:
+        modes_to_render = [CONTACT_DEFAULT_SORT_MODE]
+
+    for sort_mode in modes_to_render:
+        base_filename = CONTACT_SORT_FILE_MAP[sort_mode]
+        variant_args = _build_contact_variant_args(
+            base_template_args, sort_mode,
+            contact_sort_enabled=sort_enabled,
+            enabled_modes=modes_to_render,
+        )
+        sorted_relays = variant_args.get('relay_subset', [])
+        total_pages = max(
+            1, (len(sorted_relays) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE
+        )
+
+        for page_number in range(1, total_pages + 1):
+            filename = paginated_filename(base_filename, page_number)
+            start = (page_number - 1) * RELAY_PAGE_SIZE
+            visible_relays = sorted_relays[start:start + RELAY_PAGE_SIZE]
+
+            template_args = dict(variant_args)
+            template_args['relay_subset'] = visible_relays
+            template_args['contact_has_ipv6'] = has_ipv6
+            template_args['contact_chart_periods'] = chart_periods
+            template_args['page_number'] = page_number
+            template_args['pagination'] = pagination_context(
+                base_filename, page_number, total_pages
+            )
+
+            # All sort modes canonicalize to the same page of the default
+            # bandwidth ordering. This removes sort duplicates without
+            # collapsing paginated content back onto page one.
+            canonical_filename = paginated_filename("index.html", page_number)
+            canonical_path = (
+                f"{base_template_args['canonical_directory']}/"
+                f"{canonical_filename}"
+            )
+            template_args['canonical_url'] = canonical_url_for_output(
+                relay_set.base_url, canonical_path
+            )
+
+            status = variant_args.get('contact_validation_status')
+            if isinstance(status, dict):
+                template_args['contact_validation_status_full'] = status
+                template_args['contact_validation_status'] = (
+                    _paginated_validation_status(status, visible_relays)
+                )
+            # A section's relays can all be on another page of this listing
+            if total_pages > 1:
+                template_args['aroi_section_hrefs'] = _aroi_section_hrefs(
+                    status, sorted_relays, base_filename, page_number
+                )
+
+            rendered = template.render(relays=relay_set, **template_args)
+
+            _write_html(os.path.join(dir_path, filename), rendered)
+            files_written += 1
+
+            if vanity_dir:
+                _write_html(os.path.join(vanity_dir, filename),
+                            _adjust_vanity_paths(rendered))
+
+    return files_written
+
+
+def _render_contact_batch_mp(args):
+    """Render all contact sort variants for one contact in a worker."""
+    dir_path, value = args
+    page_data = _mp_relay_set.json["sorted"]["contact"][value]
+    base_template_args = build_template_args(
+        _mp_relay_set, "contact", value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+    )
+    return _render_contact_variants(
+        _mp_template, _mp_relay_set, base_template_args, dir_path, page_data, _mp_output_root
+    )
+
+
+def _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time):
+    """Sequential contact generation that writes all contact sort variants."""
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    output_root = os.path.dirname(output_path)
+    page_count = 0
+    rendered_file_count = 0
+    render_time = 0.0
+
+    for v in sorted_values:
+        contact_data = relay_set.json["sorted"]["contact"][v]
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+
+        base_template_args = build_template_args(
+            relay_set, "contact", v, contact_data, the_prefixed, validated_aroi_domains
+        )
+
+        render_start = time.time()
+        rendered_file_count += _render_contact_variants(
+            template, relay_set, base_template_args, dir_path, contact_data, output_root
+        )
+        render_time += time.time() - render_start
+        page_count += 1
+
+        if page_count % 500 == 0:
+            relay_set.progress_logger.log_without_increment(f"Processed {page_count}/{len(sorted_values)} contact pages...")
+
+    total_time = time.time() - start_time
+    relay_set.progress_logger.log(
+        f"contact page generation complete - Generated {page_count} contacts, {rendered_file_count} files in {total_time:.2f}s"
+    )
+    if relay_set.progress and rendered_file_count:
+        print(f"    🎨 Contact variant render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+        print(f"    ⚡ Average per rendered file: {total_time/rendered_file_count*1000:.1f}ms")
+
+
+def _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time):
+    """Parallel contact generation with one worker task per contact."""
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    page_args = []
+    output_root = os.path.dirname(output_path)
+
+    for v in sorted_values:
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+        page_args.append((dir_path, v))
+
+    try:
+        # fork_map stops its workers before an error reaches the fallback
+        # below, so none still writes when it clears the partial output.
+        total_files = sum(fork_map(
+            relay_set.mp_workers, _render_contact_batch_mp, page_args,
+            _pool_map_chunksize(len(page_args), relay_set.mp_workers), _init_mp_worker,
+            (relay_set, template, "contact", the_prefixed, validated_aroi_domains, output_root)))
+
+        total_time = time.time() - start_time
+        relay_set.progress_logger.log(
+            f"contact page generation complete - Generated {len(page_args)} contacts, {total_files} files in {total_time:.2f}s"
+        )
+        if relay_set.progress and total_files:
+            print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/total_files*1000:.1f}ms/rendered file avg")
+    except Exception as e:
+        relay_set.progress_logger.log_without_increment(f"Contact multiprocessing failed ({e}), falling back to sequential...")
+        relay_set.mp_workers = 0
+        for retry in range(3):
+            try:
+                if os.path.exists(output_path):
+                    rmtree(output_path)
+                os.makedirs(output_path)
+                break
+            except OSError:
+                if retry < 2:
+                    time.sleep(0.1)
+
+        _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+
+
+def write_pages_by_key(relay_set, k):
+    """Render and write sorted HTML relay listings to disk"""
+    start_time = time.time()
+    relay_set.progress_logger.log_without_increment(f"Starting {k} page generation...")
+    
+    template = ENV.get_template(k + ".html")
+    output_path = os.path.join(relay_set.output_dir, k)
+    _relay_row_heads.clear()
+
+    the_prefixed = [
+        "Dominican Republic", "Ivory Coast", "Marshall Islands",
+        "Northern Marianas Islands", "Solomon Islands", "United Arab Emirates",
+        "United Kingdom", "United States", "United States of America",
+        "Vatican City", "Czech Republic", "Bahamas", "Gambia", "Netherlands",
+        "Philippines", "Seychelles", "Sudan", "Ukraine",
+    ]
+
+    if os.path.exists(output_path):
+        rmtree(output_path)
+    os.makedirs(output_path)
+
+    sorted_values = sorted(relay_set.json["sorted"][k].keys()) if k == "first_seen" else list(relay_set.json["sorted"][k].keys())
+    
+    # Use multiprocessing for large page sets on systems with fork(). Count
+    # output files, not groups: the 12 flags alone span ~300 pages.
+    output_files = sum(max(1, (len(group.get("relays", [])) + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+                       for group in relay_set.json["sorted"][k].values())
+    use_mp = relay_set.mp_workers > 0 and output_files >= 100
+
+    # Contact pages use dedicated variant-aware renderers (17 by-*.html + index default)
+    if k == "contact":
+        if use_mp:
+            _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        else:
+            _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        removed = _remove_stale_vanity_dirs(relay_set, sorted_values, os.path.dirname(output_path))
+        if removed:
+            relay_set.progress_logger.log_without_increment(
+                f"Removed {removed} stale vanity folder(s) for domains no longer rendered")
+        return
+
+    if use_mp:
+        write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time)
+        return
+    
+    page_count = rendered_file_count = render_time = io_time = 0
+    
+    for v in sorted_values:
+        i = relay_set.json["sorted"][k][v]
+        # Sanitize for filesystem paths only (raw v used for data lookup above)
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+
+        relay_count = len(i.get("relays", []))
+        total_pages = max(1, (relay_count + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+        for page_number in range(1, total_pages + 1):
+            output_filename = paginated_filename("index.html", page_number)
+
+            # Shared arg construction with the parallel path (they cannot drift)
+            render_start = time.time()
+            template_args = build_template_args(
+                relay_set, k, v, i, the_prefixed,
+                relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
+                page_number=page_number,
+                total_pages=total_pages,
+                output_filename=output_filename,
+            )
+            rendered = template.render(relays=relay_set, **template_args)
+            render_time += time.time() - render_start
+
+            # Time the file I/O
+            io_start = time.time()
+            _write_html(os.path.join(dir_path, output_filename), rendered)
+            io_time += time.time() - io_start
+            rendered_file_count += 1
+
+        page_count += 1
+        
+        # Print progress for large page sets
+        if page_count % 1000 == 0:
+            relay_set.progress_logger.log_without_increment(f"Processed {page_count} {k} pages...")
+
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    # Log completion with progress increment for granular tracking
+    relay_set.progress_logger.log(
+        f"{k} page generation complete - Generated {page_count} groups, "
+        f"{rendered_file_count} files in {total_time:.2f}s"
+    )
+    if relay_set.progress:
+        # Additional detailed stats (not in standard format, but supporting info)
+        print(f"    🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+        print(f"    💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
+        if page_count > 0:
+            print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
+        print("---")
+
+def build_template_args(
+    relay_set,
+    k,
+    v,
+    i,
+    the_prefixed,
+    validated_aroi_domains,
+    page_number=1,
+    total_pages=1,
+    output_filename="index.html",
+):
+    """Build template arguments for all page types (used by both sequential and parallel paths)."""
+    members = [relay_set.json["relays"][idx] for idx in i["relays"]]
+    bw = relay_set.bandwidth_formatter
+    bw_unit = bw.determine_unit(i["bandwidth"])
+    
+    # Use precomputed network_position if available, otherwise calculate using DRY helper
+    network_position = i.get("network_position") or _compute_network_position_safe(
+        i["guard_count"], i["middle_count"], i["exit_count"], len(members))
+    
+    # Default values for all page types
+    contact_rankings = []
+    operator_reliability = None
+    contact_display_data = None
+    contact_validation_status = None
+    aroi_validation_timestamp = None
+    is_validated_aroi = False
+    primary_country_data = None
+    
+    # For contact pages, use precomputed data stored directly on contact_data
+    if k == "contact":
+        contact_rankings = i.get("contact_rankings", [])
+        operator_reliability = i.get("operator_reliability")
+        contact_display_data = i.get("contact_display_data")
+        is_validated_aroi = i.get("is_validated_aroi", False)
+        primary_country_data = i.get("primary_country_data")
+    
+    # AROI validation status for contact and family pages (DRY - shared logic)
+    # Uses precomputed data if available (both contact and family pages precompute this)
+    if k in ("contact", "family"):
+        contact_validation_status = (i.get("aroi_validation_full") or 
+                                     i.get("contact_validation_status"))
+        # Only compute on-the-fly if no precomputed data exists (fallback)
+        if contact_validation_status is None:
+            contact_validation_status = _contact_validation_status(relay_set, members)
+        aroi_validation_timestamp = relay_set._aroi_validation_timestamp
+    
+    # Family support counts for summary bullet (DRY helper)
+    family_support_counts = _get_family_support_counts(k, contact_display_data, i)
+    # Exit DNS Health summary (DRY helper - precomputed for contacts/families, on-the-fly for others)
+    exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
+    # Overload summary bullet (contact/family/as pages only; None hides bullet)
+    overload_summary = (compute_group_overload_summary(members)
+                        if k in ("contact", "family", "as") else None)
+
+    display = i.get("display", {})
+    group_has_ipv6 = any(
+        member.get('ipv6_support') in ('both', 'ipv6_only')
+        for member in members
+    )
+
+    visible_members = members
+    if k != "contact" and total_pages > 1:
+        start = (page_number - 1) * RELAY_PAGE_SIZE
+        visible_members = members[start:start + RELAY_PAGE_SIZE]
+
+    full_contact_validation_status = None
+    rendered_contact_validation_status = contact_validation_status
+    aroi_section_hrefs = None
+    if k == "family" and total_pages > 1 and isinstance(
+        contact_validation_status, dict
+    ):
+        full_contact_validation_status = contact_validation_status
+        rendered_contact_validation_status = _paginated_validation_status(
+            contact_validation_status, visible_members
+        )
+        aroi_section_hrefs = _aroi_section_hrefs(
+            contact_validation_status, members, "index.html", page_number
+        )
+
+    safe_value = _sanitize_path_component(v)
+    output_component = safe_value.lower() if k == "flag" else safe_value
+    canonical_directory = f"{k}/{output_component}"
+    if k == "contact" and is_validated_aroi and relay_set.base_url:
+        aroi_domain = i.get("aroi_domain")
+        if not aroi_domain and members:
+            aroi_domain = members[0].get("aroi_domain")
+        if aroi_domain and aroi_domain != "none":
+            canonical_directory = _sanitize_path_component(aroi_domain.lower())
+    canonical_relative_path = f"{canonical_directory}/{output_filename}"
+    
+    return {
+        'relay_subset': visible_members,
+        'group_relay_count': len(members),
+        'group_has_ipv6': group_has_ipv6,
+        'total_data_formatted': display.get("total_data_formatted", "N/A"),
+        'total_data_pct': display.get("total_data_pct", ""),
+        'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
+        'bandwidth_unit': bw_unit,
+        'guard_bandwidth': bw.format_bandwidth_with_unit(i["guard_bandwidth"], bw_unit),
+        'middle_bandwidth': bw.format_bandwidth_with_unit(i["middle_bandwidth"], bw_unit),
+        'exit_bandwidth': bw.format_bandwidth_with_unit(i["exit_bandwidth"], bw_unit),
+        'consensus_weight_fraction': i["consensus_weight_fraction"],
+        'guard_consensus_weight_fraction': i["guard_consensus_weight_fraction"],
+        'middle_consensus_weight_fraction': i["middle_consensus_weight_fraction"],
+        'exit_consensus_weight_fraction': i["exit_consensus_weight_fraction"],
+        'exit_count': i["exit_count"], 'guard_count': i["guard_count"], 'middle_count': i["middle_count"],
+        'network_position': network_position,
+        'is_index': False,
+        'page_ctx': get_detail_page_context(relay_set, k, v),
+        'key': k, 'value': v,
+        'flag': v if k == "flag" else None,
+        'sp_countries': the_prefixed,
+        'contact_rankings': contact_rankings,
+        'operator_reliability': operator_reliability,
+        'contact_display_data': contact_display_data,
+        'primary_country_data': primary_country_data,
+        'contact_validation_status': rendered_contact_validation_status,
+        'contact_validation_status_full': full_contact_validation_status,
+        # Contact pages set theirs per sort variant (_render_contact_variants)
+        'aroi_section_hrefs': aroi_section_hrefs,
+        'aroi_validation_timestamp': aroi_validation_timestamp,
+        # Family-specific data (extracted once, not per-field)
+        **({'family_aroi_domain': i.get("aroi_domain", ""),
+            'family_contact': i.get("contact", ""),
+            'family_contact_md5': i.get("contact_md5", "")} if k == "family" else 
+           {'family_aroi_domain': None, 'family_contact': None, 'family_contact_md5': None}),
+        'consensus_weight_percentage': f"{i['consensus_weight_fraction'] * 100:.2f}%",
+        'guard_consensus_weight_percentage': f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
+        'middle_consensus_weight_percentage': f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
+        'exit_consensus_weight_percentage': f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
+        'guard_relay_text': "guard relay" if i["guard_count"] == 1 else "guard relays",
+        'middle_relay_text': "middle relay" if i["middle_count"] == 1 else "middle relays",
+        'exit_relay_text': "exit relay" if i["exit_count"] == 1 else "exit relays",
+        'has_guard': i["guard_count"] > 0, 'has_middle': i["middle_count"] > 0, 'has_exit': i["exit_count"] > 0,
+        'has_typed_relays': i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0,
+        'unique_aroi_list': i.get("unique_aroi_list", []),
+        'unique_contact_list': i.get("unique_contact_list", []),
+        'unique_aroi_count': i.get("unique_aroi_count", 0),
+        'unique_contact_count': i.get("unique_contact_count", 0),
+        'unique_aroi_contact_html': i.get("unique_aroi_contact_html", ""),
+        'aroi_to_contact_map': i.get("aroi_to_contact_map", {}),
+        'is_validated_aroi': is_validated_aroi,
+        'validated_aroi_domains': validated_aroi_domains,
+        'base_url': relay_set.base_url,
+        'canonical_url': canonical_url_for_output(
+            relay_set.base_url, canonical_relative_path
+        ),
+        'canonical_directory': canonical_directory,
+        'pagination': pagination_context(
+            "index.html", page_number, total_pages
+        ),
+        'page_number': page_number,
+        'family_support_counts': family_support_counts,
+        'exit_dns_health_summary': exit_dns_health_summary,
+        'overload_summary': overload_summary,
+        'sortable_scope': 'contact' if k == 'contact' else 'none',
+        'contact_sort_mode': CONTACT_DEFAULT_SORT_MODE if k == 'contact' else None,
+        'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
+        'contact_sort_enabled': (k == 'contact' and len(members) > 2),
+        'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
+    }
+
+def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):
+    """Parallel page generation using fork() for significant speedup on large page sets.
+    
+    OPTIMIZED: Now passes only (html_path, value) to workers instead of full template args.
+    Workers build template args from forked memory, avoiding ~300KB/page IPC serialization.
+    This dramatically improves performance for large page sets like families (105+ members avg).
+    """
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    page_args = []
+
+    # Contact pages never reach this function (routed to dedicated renderers
+    # in write_pages_by_key), so no vanity-URL handling is needed here.
+    for v in sorted_values:
+        # Sanitize for filesystem paths only (raw v used for data lookup by workers)
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+        relay_count = len(relay_set.json["sorted"][k][v].get("relays", []))
+        total_pages = max(1, (relay_count + RELAY_PAGE_SIZE - 1) // RELAY_PAGE_SIZE)
+        for page_number in range(1, total_pages + 1):
+            output_filename = paginated_filename("index.html", page_number)
+            html_path = os.path.join(dir_path, output_filename)
+            # Raw v is passed so workers can look up shared group data.
+            page_args.append(
+                (html_path, v, page_number, total_pages, output_filename)
+            )
+    
+    try:
+        # Initialize workers with page_type and shared data for building template args.
+        # fork_map stops its workers before an error reaches the fallback
+        # below, so none still writes when it clears the partial output.
+        for _ in fork_map(relay_set.mp_workers, _render_page_mp, page_args,
+                          _pool_map_chunksize(len(page_args), relay_set.mp_workers), _init_mp_worker,
+                          (relay_set, template, k, the_prefixed, validated_aroi_domains)):
+            pass
+
+        total_time = time.time() - start_time
+        relay_set.progress_logger.log(
+            f"{k} page generation complete - Generated {len(sorted_values)} groups, "
+            f"{len(page_args)} files in {total_time:.2f}s"
+        )
+        if relay_set.progress:
+            print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
+    except Exception as e:
+        relay_set.progress_logger.log_without_increment(f"Multiprocessing failed ({e}), falling back to sequential...")
+        relay_set.mp_workers = 0
+        
+        # Clean up partial output before sequential fallback (with retry for lingering file handles)
+        for retry in range(3):
+            try:
+                if os.path.exists(output_path):
+                    rmtree(output_path)
+                os.makedirs(output_path)
+                break
+            except OSError:
+                if retry < 2:
+                    time.sleep(0.1)  # Brief pause before retry
+        
+        write_pages_by_key(relay_set, k)
+
+class _RelayPageRenderer:
+    """Renders relay-info pages; built once, then shared with forked workers."""
+
+    def __init__(self, relay_set, output_path, relays):
+        from .page_context import StandardTemplateContexts
+        self.relay_set = relay_set
+        self.output_path = output_path
+        # Only these relays get a page. Onionoo's family lists also name
+        # relays it doesn't list or the downtime filter dropped, and vote
+        # files name authorities by V3 key, so links are checked against these.
+        self.relay_page_fps = frozenset(relay["fingerprint"] for relay in relays)
+        # Vote file authority name (lowercase nickname) -> relay fingerprint.
+        # After an identity key change Onionoo lists the old identity too:
+        # the running, most recently seen relay is set last and wins.
+        authorities = sorted(
+            (relay for relay in relays if "Authority" in (relay.get("flags") or [])),
+            key=lambda relay: (bool(relay.get("running")), relay.get("last_seen") or ""))
+        self.authority_page_fps = {
+            relay.get("nickname", "").lower(): relay["fingerprint"] for relay in authorities
+        }
+        self.template = ENV.get_template("relay-info.html")
+        self.standard_contexts = StandardTemplateContexts(relay_set)
+        self.contact_map = relay_set.json.get("sorted", {}).get("contact", {})
+        self.validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+        self.aroi_validation_timestamp = relay_set._aroi_validation_timestamp
+        self.base_url = relay_set.base_url
+        # Family cert data for partitioned family display (O(1) per member)
+        self.family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
+        self.fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
+        self.family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
+        self.chart_writer = getattr(relay_set, 'chart_writer', None)
+        self.operator_section_hrefs = {}  # contact hash -> _aroi_section_hrefs
+
+    def _operator_section_hrefs(self, contact_hash, contact_data, status, path_prefix):
+        """Where the operator badge's AROI sections are on the contact page."""
+        if not (isinstance(status, dict) and status.get('has_aroi')
+                and status.get('validation_status') != 'not_configured'):
+            return {}
+        hrefs = self.operator_section_hrefs.get(contact_hash)
+        if hrefs is None:
+            members = [self.relay_set.json["relays"][index] for index in contact_data.get("relays", ())]
+            hrefs = self.operator_section_hrefs[contact_hash] = _aroi_section_hrefs(
+                status, _sort_contact_relays(members, CONTACT_DEFAULT_SORT_MODE), "index.html",
+                page_dir=f"{path_prefix}contact/{contact_hash}/")
+        return hrefs
+
+    def write(self, relay):
+        """Render one relay page to relay/FINGERPRINT/index.html."""
+        contact_hash = relay.get('contact_md5')
+        contact_display_data = {}
+        contact_validation_status = None
+        aroi_section_hrefs = {}
+
+        if contact_hash and contact_hash in self.contact_map:
+            contact_data = self.contact_map[contact_hash]
+            contact_display_data = contact_data.get('contact_display_data', {})
+            contact_validation_status = contact_data.get('contact_validation_status')
+
+        page_ctx = self.standard_contexts.get_relay_page_context(relay, contact_display_data)
+        if contact_validation_status:
+            aroi_section_hrefs = self._operator_section_hrefs(
+                contact_hash, contact_data, contact_validation_status, page_ctx['path_prefix'])
+
+        # Partition family lists by family-cert status for template display
+        _partition_family_lists(relay, self.family_cert_fps, self.fp_to_family_key,
+                                self.family_key_to_fps)
+
+        # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
+        # with the relay's history charts beside it or under charts/relay/FINGERPRINT/
+        relay_dir = os.path.join(self.output_path, relay["fingerprint"])
+        os.makedirs(relay_dir, exist_ok=True)
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(
+            relay, self.chart_writer.folder('relay', relay["fingerprint"], relay_dir)
+        ) if self.chart_writer else ({}, {})
+
+        rendered = self.template.render(
+            relay=relay, page_ctx=page_ctx, relays=self.relay_set,
+            contact_display_data=contact_display_data,
+            contact_validation_status=contact_validation_status,
+            aroi_section_hrefs=aroi_section_hrefs,
+            aroi_validation_timestamp=self.aroi_validation_timestamp,
+            validated_aroi_domains=self.validated_aroi_domains,
+            base_url=self.base_url,
+            relay_page_fps=self.relay_page_fps,
+            authority_page_fps=self.authority_page_fps,
+            canonical_url=canonical_url_for_output(
+                self.base_url, f"relay/{relay['fingerprint']}/index.html"
+            ),
+            page_number=1,
+            bandwidth_periods=bandwidth_periods,
+            uptime_periods=uptime_periods,
+        )
+        _write_html(os.path.join(relay_dir, "index.html"), rendered)
+
+
+def write_relay_info(relay_set):
+    """
+    Render and write per-relay HTML info documents to disk
+    """
+    output_path = os.path.join(relay_set.output_dir, "relay")
+
+    if os.path.exists(output_path):
+        rmtree(output_path)
+    os.makedirs(output_path)
+
+    relays = [relay for relay in relay_set.json["relays"] if relay["fingerprint"].isalnum()]
+    renderer = _RelayPageRenderer(relay_set, output_path, relays)
+
+    # Relay pages are the largest page set (~10k); render them in parallel
+    # like the other page types.
+    if relay_set.mp_workers > 0 and len(relays) >= 100:
+        try:
+            chunksize = max(1, len(relays) // (relay_set.mp_workers * 16))
+            for _ in fork_map(relay_set.mp_workers, renderer.write, relays, chunksize):
+                pass
+            return
+        except Exception as e:
+            relay_set.progress_logger.log_without_increment(
+                f"Relay page multiprocessing failed ({e}), falling back to sequential...")
+            # The pool has shut down; the loop below rewrites every page a
+            # dead worker may have left partial.
+            relay_set.mp_workers = 0
+
+    for relay in relays:
+        renderer.write(relay)

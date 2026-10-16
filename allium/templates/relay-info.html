@@ -1,441 +1,1568 @@
 {% extends "skeleton.html" -%}
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, aroi_validation_badge, chart_history, chart_period_anchors -%}
+{# DRY macro: format bandwidth value with auto-detected unit #}
+{%- macro bw(value) -%}
+{% set unit = value|determine_unit(relays.use_bits) -%}
+{{ value|format_bandwidth_with_unit(unit) }} {{ unit }}
+{%- endmacro -%}
+{# DRY macro: pluralize — appends 's' when n != 1 #}
+{%- macro plural(n, word='relay') -%}
+{{ word }}{% if n != 1 %}s{% endif %}
+{%- endmacro -%}
+{# DRY macro: percentile badge #}
+{%- macro pctile(value, label) -%}
+{% if value is not none %}<span class="{% if value >= 90 %}al-status-success{% elif value >= 50 %}{% else %}al-status-warning{% endif %}" title="This relay's {{ label }} is higher than {{ value }}% of all relays on the network.">({{ value|round(0)|int }}th pctl)</span>{% endif %}
+{%- endmacro -%}
+{# DRY macro: render a family member fingerprint list (replaces 3 near-identical inline <pre> blocks).
+   Only members with a relay page (relay_page_fps) are links: Onionoo also lists
+   fingerprints it doesn't know as relays, and relays the downtime filter dropped. #}
+{%- macro family_member_list(members, relay_fp, show_self=false) -%}
+{% if members -%}
+<pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; margin-top: 5px;">
+{%- for fp in members -%}
+{%- if show_self and fp == relay_fp -%}
+{{ fp|escape }} (this relay){{ '\n' if not loop.last }}
+{%- elif fp in relay_page_fps -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>{{ '\n' if not loop.last }}
+{%- else -%}
+{{ fp|escape }} <span class="al-status-muted" title="No relay page: unknown to Onionoo, or offline too long">(not in the network)</span>{{ '\n' if not loop.last }}
+{%- endif -%}
+{%- endfor -%}
+</pre>
+{%- else -%}
+<span class="al-status-muted">none</span>
+{%- endif -%}
+{%- endmacro -%}
 {% block title -%}
-	Tor Relays :: {{ relay['nickname']|escape }}
+	{{ relay['nickname']|escape }} — Tor Relay{% if relay['country_name'] %} in {{ relay['country_name']|escape }}{% endif %}{% if relay['as'] %} ({{ relay['as']|escape }}){% endif %}
 {% endblock -%}
+{% block meta_description %}Live Tor relay details for {{ relay['nickname']|escape }}: fingerprint, bandwidth, uptime, flags, operator, {% if relay['country_name'] %}{{ relay['country_name']|escape }}, {% endif %}and network data.{% endblock %}
+{% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/relay-info.css">{% endblock -%}
 {% block body -%}
-<style>
-.section-header {
-    position: relative;
-    display: inline-block;
-}
-
-.anchor-link {
-    text-decoration: none;
-    color: inherit;
-}
-
-
-
-
-
-
-
-/* Highlight section when targeted */
-:target {
-    background-color: rgba(255, 193, 7, 0.2);
-    padding: 8px;
-    border-radius: 4px;
-    margin: -8px;
-    transition: background-color 0.3s;
-}
-
-
-</style>
 <div id="content">
-<h2>View Relay "{{ relay['nickname'] }}"</h2>
-{% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
-{{ navigation('all', page_ctx) }}
-<h4>
-{% if relay['effective_family']|length > 1 -%}
-<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">Family: {{ relay['effective_family']|length }} relays</a>
+<h1 id="nickname" class="page-title">View Relay "{{ relay['nickname'] }}"</h1>
+{{ navigation('', page_ctx) }}
+{# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
+{% set has_aroi = relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+{% if has_aroi and base_url and relay['aroi_domain'] in validated_aroi_domains -%}
+    {% set operator_url = base_url ~ '/' ~ relay['aroi_domain']|lower|escape ~ '/' -%}
+{% elif has_aroi -%}
+    {% set operator_url = page_ctx.path_prefix ~ 'contact/' ~ relay['contact_md5'] ~ '/' -%}
 {% else -%}
-Family: {{ relay['effective_family']|length }} relay
+    {% set operator_url = page_ctx.path_prefix ~ 'contact/' ~ relay['contact_md5'] ~ '/' -%}
+{% endif -%}
+<h4>
+<span id="fingerprint">Fingerprint: <code style="font-size: 12px; user-select: all;" title="Relay fingerprint (click to select)">{{ relay['fingerprint']|escape }}</code></span> | 
+{# AROI section with verification badge and relay count #}
+{% if has_aroi -%}
+    <a href="{{ operator_url }}" title="View all relays by this operator">Operator: {{ relay['aroi_domain']|escape }}</a>
+    {%- if relay.get('aroi_version') %}
+        <span style="font-size: 9px; padding: 0 4px; border-radius: 2px; background-color: {{ '#007bff' if relay.get('aroi_version') == '3' else '#6c757d' }}; color: white;" title="ciissversion:{{ relay.get('aroi_version') }}{%- if relay.get('aroi_proof_type') %} / proof:{{ relay.get('aroi_proof_type') }}{% endif %}">v{{ relay.get('aroi_version') }}</span>
+    {% endif -%}
+    {% if contact_validation_status and contact_validation_status.validation_summary -%}
+        ({{ contact_validation_status.validation_summary.total_relays }} {{ plural(contact_validation_status.validation_summary.total_relays) }})
+    {% endif -%}
+    {{- aroi_validation_badge(contact_validation_status, section_hrefs=aroi_section_hrefs) -}}
+    {# B3.1: per-relay status flag for THIS relay specifically (distinct
+       from the operator-level cascade badge above). Prefixed with
+       "this relay:" to disambiguate when operator and relay statuses
+       differ (e.g. operator validated overall but THIS relay is pending).
+
+       The cascade-status overlap suppression logic below avoids
+       redundant badges when the per-relay status matches what the
+       operator-level cascade already shows. Cascade ↔ relay-status
+       overlap rules:
+         - operator status 'unauthorized' suppresses _unauth relay flag
+         - operator status 'misconfigured' suppresses _miscfg relay flag
+       Peer issues (security/pending) ALWAYS show because they're
+       relay-level signals not directly captured by the cascade. #}
+    {# B3.1: per-relay status flag for THIS relay specifically. Only
+       rendered when DIFFERENT from what the operator-level cascade /
+       peer badges already convey, to avoid redundant duplicates like
+       "⏳ Pending ⏳ Pending" or "🚫 Unauthorized 🚫 Unauthorized".
+       Suppression rules:
+         - operator cascade matches this relay's status → suppress
+         - operator-level peer badge (security/pending) covers this
+           relay → suppress
+       Renders ONLY when this relay's status genuinely diverges from
+       operator-level (e.g. operator validated overall but THIS relay
+       is uniquely pending). #}
+    {# Per-relay status flag determined by classifying the relay into
+       its TRUE bucket FIRST, then deciding whether to render based on
+       suppression rules. Bucket priority:
+         security_incident > pending_onionoo > validated >
+         unauthorized > misconfigured
+       Pending-and-misconfigured dual-bucketing (for cascade purposes)
+       is resolved here: if a relay is in the pending bucket, its
+       TRUE category is "pending", not "misconfigured", regardless of
+       what other sets it appears in. #}
+    {%- if contact_validation_status -%}
+        {%- set _fp = relay['fingerprint'] -%}
+        {%- set _summary = contact_validation_status.validation_summary or {} -%}
+        {%- set _op_status = contact_validation_status.validation_status -%}
+        {%- set _op_has_security = _summary.get('security_incident_count', 0) > 0 -%}
+        {%- set _op_has_pending = _summary.get('pending_onionoo_count', 0) > 0 -%}
+        {%- set _sec_fps = contact_validation_status.security_incident_fingerprints or [] -%}
+        {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
+        {%- set _unauth_fps = contact_validation_status.unauthorized_fingerprints or [] -%}
+        {%- set _miscfg_fps = contact_validation_status.misconfigured_fingerprints or [] -%}
+        {%- set _val_fps = contact_validation_status.validated_fingerprints or [] -%}
+        {# Resolve the relay's TRUE category respecting bucket priority. #}
+        {%- if _fp in _sec_fps -%}
+            {%- set _true_cat = 'security' -%}
+        {%- elif _fp in _pend_fps -%}
+            {%- set _true_cat = 'pending' -%}
+        {%- elif _fp in _val_fps -%}
+            {%- set _true_cat = 'validated' -%}
+        {%- elif _fp in _unauth_fps -%}
+            {%- set _true_cat = 'unauthorized' -%}
+        {%- elif _fp in _miscfg_fps -%}
+            {%- set _true_cat = 'misconfigured' -%}
+        {%- else -%}
+            {%- set _true_cat = none -%}
+        {%- endif -%}
+        {# Now decide whether to render: only when relay's true category
+           DIFFERS from what operator-level badges already convey. #}
+        {%- if _true_cat == 'security' and not _op_has_security -%}
+            <span class="al-status-danger" style="margin-left: 5px; padding: 1px 5px; background-color: #f8d7da; border-radius: 3px;" title="🚨 SECURITY: this relay's contact appears to have leaked .secret_family_key. Rotate the family key immediately.">🚨 this relay: SECURITY</span>
+        {%- elif _true_cat == 'pending' and not _op_has_pending -%}
+            <span class="al-status-info" style="margin-left: 5px; padding: 1px 5px; background-color: #d1ecf1; border-radius: 3px;" title="⏳ Pending Onionoo refresh — this relay declared ciissversion:3 but family_ids haven't propagated yet.">⏳ this relay: Pending</span>
+        {%- elif _true_cat == 'validated' and _op_status != 'validated' -%}
+            <span class="al-status-success" style="margin-left: 5px; padding: 1px 5px; background-color: #d4edda; border-radius: 3px;" title="✓ This specific relay's AROI proof validated — sibling relays may not have.">✓ this relay: Validated</span>
+        {%- elif _true_cat == 'unauthorized' and _op_status != 'unauthorized' -%}
+            <span class="al-status-danger" style="margin-left: 5px; padding: 1px 5px; background-color: #f8d7da; border-radius: 3px;" title="🚫 Unauthorized — this relay's fingerprint is not in the operator's published proof file.">🚫 this relay: Unauthorized</span>
+        {%- elif _true_cat == 'misconfigured' and _op_status != 'misconfigured' -%}
+            <span class="al-status-warning" style="margin-left: 5px; padding: 1px 5px; background-color: #fff3cd; border-radius: 3px;" title="⚠ Misconfigured — see operator page for details.">⚠ this relay: Misconfigured</span>
+        {%- endif -%}
+    {%- endif -%}
+    | 
+{% endif -%}
+{# Pending-Onionoo callout previously lived here, INSIDE the <h4>
+   (open at line 49, close at line 170). Browsers auto-close the
+   <h4> before a block-level <div>, which silently re-parents the
+   div and breaks the planned layout. Moved to right after the
+   </h4> below — same condition, same content, just at a valid
+   point in the document tree. #}
+{% if relay['effective_family']|length > 1 -%}
+    <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/" title="View family members">Family: {{ relay['effective_family']|length }} relays</a>
+{% else -%}
+    Family: {{ relay['effective_family']|length }} relay
 {% endif -%} | 
+{% if relay['contact'] -%}
+    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="Contact information">{{ relay['contact']|truncate(40)|escape }}</a> | 
+{% endif -%}
 {% if relay['as'] -%}
 <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{ relay['as']|escape }}</a>
 {% else -%}
 AS: unknown
 {% endif -%} | 
-{% if relay['country'] -%}
+{% if relays.has_page('country', relay['country']) -%}
 <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">{{ relay['country_name']|escape }}</a>
 {% else -%}
 Country: unknown
 {% endif -%} | 
+{% if relays.has_page('platform', relay['platform']) -%}
 <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{ relay['platform']|escape }}</a>
+{% else -%}
+Platform: unknown
+{% endif -%}
 </h4>
-<p>Last fetch was at {{ relays.timestamp }}.</p>
-<div class="row">
-<div class="col-md-6">
-<dl>
-<dt>
-Nickname
-</dt>
-<dd>
-{{ relay['nickname']|escape }}
-</dd>
 
-<dt>
-Fingerprint
-</dt>
-<dd>
-<code>{{ relay['fingerprint']|escape }}</code>
-</dd>
+{# B3.1 (re-opened): explicit one-line pending-Onionoo note when this
+   relay's contact declared ciissversion:3 but family_ids hasn't
+   propagated yet. Plan called for a "same explicit ⏳ note as on
+   the contact page" — operators landing on a v3 relay page with
+   no validation should immediately understand it's transient.
+   Reviewer-flagged: previously rendered INSIDE the <h4>, which is
+   invalid HTML (block-level <div> in heading) and got auto-reparented
+   by browsers. Now placed after </h4>. #}
+{%- if has_aroi and contact_validation_status -%}
+    {%- set _fp = relay['fingerprint'] -%}
+    {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
+    {%- if _fp in _pend_fps %}
+<div style="margin: 4px 0 8px 0; padding: 6px 10px; background-color: #d1ecf1; border-left: 3px dotted #17a2b8; font-size: 11px; color: #0c5460;">
+    ⏳ <strong>Pending Onionoo refresh:</strong> this relay declared <code>ciissversion:3</code> but
+    Onionoo hasn't picked up <code>family_ids</code> yet. Typically resolves within 24h after
+    restarting Tor with the happy-family directive. No action needed unless still pending after 24h.
+</div>
+    {%- endif %}
+{%- endif %}
 
-<dt>
-AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
-</dt>
-{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-<dd>
-{% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
-<a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/">{{ relay['aroi_domain']|escape }}</a>
+{# ============== HEALTH STATUS SUMMARY (Enhanced) ============== #}
+{# Displays 14 metrics in 8 cells using responsive 2-column layout #}
+{% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
+{# Health Status links #flags only when the Flags and Eligibility section renders #}
+{% set has_flags_section = diag and diag.relay_values %}
+{# DRY: Pre-compute sorted flag list once (reused in Health Status and Flags sections) #}
+{% set _flags_unsorted = relay['flags']|reject('equalto', 'StaleDesc')|list -%}
+{% if diag and diag.eligible_flags_display -%}
+    {% set sorted_flags = [] -%}
+    {% for f in diag.eligible_flags_display.flag_order %}{% if f in _flags_unsorted %}{% set _ = sorted_flags.append(f) %}{% endif %}{% endfor -%}
+    {% for f in _flags_unsorted %}{% if f not in diag.eligible_flags_display.flag_order %}{% set _ = sorted_flags.append(f) %}{% endif %}{% endfor -%}
 {% else -%}
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['aroi_domain']|escape }}</a>
+    {% set sorted_flags = _flags_unsorted -%}
 {% endif -%}
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt>
-Contact
-</dt>
-{% if relay['contact'] -%}
-<dd style="word-wrap: break-word; word-break: break-all; max-width: 100%; overflow-wrap: break-word;">
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" style="word-wrap: break-word; word-break: break-all; overflow-wrap: break-word;">{{
-relay['contact']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}">none</a>
-</dd>
-{% endif -%}
-<dt id="ipv4-exit-policy-summary">
-<div class="section-header">
-<a href="#ipv4-exit-policy-summary" class="anchor-link">IPv4 Exit Policy Summary</a>
-</div>
-</dt>
-<dd>
-{% if relay['exit_policy_summary'] -%}
-{%- set v4_summary = relay['exit_policy_summary'].items() -%}
-<pre class="pre-scrollable">{% for k, v in v4_summary -%}
-{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
-{% endfor -%}
-</pre>
-{% else -%}
-<pre>none</pre>
-{% endif -%}
-</dd>
-<dt id="ipv6-exit-policy-summary">
-<div class="section-header">
-<a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a>
-</div>
-</dt>
-<dd>
-{% if relay['exit_policy_v6_summary'] -%}
-{%- set v6_summary = relay['exit_policy_v6_summary'].items() -%}
-<pre class="pre-scrollable">{% for k, v in v6_summary -%}
-{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
-{% endfor -%}
-</pre>
-{% else -%}
-<pre>none</pre>
-{% endif -%}
-</dd>
-<dt id="exit-policy">
-<div class="section-header">
-<a href="#exit-policy" class="anchor-link">Exit Policy</a>
-</div>
-</dt>
-<dd>
-<pre class="pre-scrollable">{% for policy in relay['exit_policy'] -%}
-{{ policy|escape }}
-{% endfor -%}
-</pre>
-</dd>
-{% if relay['effective_family']|length > 1 -%}
-<dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#effective-family" class="anchor-link">Effective Family Members: {{ relay['effective_family']|length }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View</a>)
-</div>
-</dt>
-{% else -%}
-<dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#effective-family" class="anchor-link">Effective Family Member: {{ relay['effective_family']|length }}</a>
-</div>
-</dt>
-{% endif -%}
-<dd>
-<pre class="pre-scrollable">{% for e_relay in relay['effective_family'] -%}
-{% if relay['effective_family']|length > 1 -%}
-<a href="../{{ e_relay|escape }}/">{{ e_relay|escape }}</a>
-{% else -%}
-{{ e_relay|escape }}
-{% endif -%}
-{% endfor -%}
-</pre>
-</dd>
-<dt id="alleged-family" title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#alleged-family" class="anchor-link">Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['alleged_family'] -%}{{ relay['alleged_family']|length }}{% else -%}0{% endif -%}</a>
-</div>
-</dt>
-<dd>
-{% if relay['alleged_family'] -%}
-<pre class="pre-scrollable">{% for a_relay in relay['alleged_family'] -%}
-{% if relay['alleged_family']|length > 1 -%}
-<a href="../{{ a_relay|escape }}/">{{ a_relay|escape }}</a>
-{% else -%}
-{{ a_relay|escape }}
-{% endif -%}
-{% endfor -%}
-{% else -%}
-<pre class="pre-scrollable">none
-{% endif -%}
-</pre>
-</dd>
-<dt id="indirect-family" title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#indirect-family" class="anchor-link">Indirect Family {% if relay['indirect_family'] and relay['indirect_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['indirect_family'] -%}{{ relay['indirect_family']|length }}{% else -%}0{% endif -%}</a>
-</div>
-</dt>
-<dd>
-{% if relay['indirect_family'] -%}
-<pre class="pre-scrollable">{% for i_relay in relay['indirect_family'] -%}
-{% if relay['indirect_family']|length > 1 -%}
-<a href="../{{ i_relay|escape }}/">{{ i_relay|escape }}</a>
-{% else -%}
-{{ i_relay|escape }}
-{% endif -%}
-{% endfor -%}
-{% else -%}
-<pre class="pre-scrollable">none
-{% endif -%}
-</pre>
-</dd>
-</dl>
-</div>
-<div class="col-md-6">
-<dl>
-<dt title="Bandwidth capacity details: Observed capacity | Advertised capability | Rate limit | Burst limit">
-Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)
-</dt>
-    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-<dd>
-<span title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</span> | 
-{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) -%}{% set adv_bandwidth = relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) -%}<span title="Advertised: {{ adv_bandwidth }} {{ adv_unit }}">{{ adv_bandwidth }} {{ adv_unit }}</span>{% else -%}<span title="Advertised: unknown">unknown</span>{% endif -%} | 
-{% if relay['bandwidth_rate'] -%}{% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) -%}{% set rate_bandwidth = relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) -%}<span title="Rate: {{ rate_bandwidth }} {{ rate_unit }}">{{ rate_bandwidth }} {{ rate_unit }}</span>{% else -%}<span title="Rate: unknown">unknown</span>{% endif -%} | 
-{% if relay['bandwidth_burst'] -%}{% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) -%}{% set burst_bandwidth = relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) -%}<span title="Burst: {{ burst_bandwidth }} {{ burst_unit }}">{{ burst_bandwidth }} {{ burst_unit }}</span>{% else -%}<span title="Burst: unknown">unknown</span>{% endif -%}
-{% if relay['measured'] is not none -%}
-    {% if relay['measured'] -%}
-        &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured by ≥3 bandwidth authorities">✓</span>
-    {% else -%}
-        &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured by ≥3 bandwidth authorities">✗</span>
-    {% endif -%}
-{% else -%}
-    &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth capacity measurement status unknown">?</span>
-{% endif -%}
-</dd>
 
-<dt>
-Network Participation (Consensus Weight | Guard | Middle | Exit)
-</dt>
-<dd>
-<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
-{% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
-<br><small class="text-warning">⚠️ Underutilized: High bandwidth capacity but low consensus weight</small>
+<div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid {% if diag and diag.in_consensus %}#28a745{% elif 'Running' in relay['flags'] %}#28a745{% else %}#dc3545{% endif %};">
+
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#status" class="anchor-link">Health Status</a>
+    </div>
+</h4>
+
+<div class="health-status-grid">
+    {# LEFT COLUMN (60%) #}
+    <dl>
+        {# Row 1 Left: Consensus Status (merges: in_consensus + vote_count) #}
+        <div class="health-row">
+            <dt title="Inclusion in network consensus. Majority of Directory Auths must vote yes.">{% if has_flags_section %}<a href="#flags" class="anchor-link">Consensus</a>{% else %}Consensus{% endif %}</dt>
+            <dd>
+                {% if diag -%}
+                    {% if diag.in_consensus -%}
+                        <span class="al-status-success" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                        <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths)</span>
+                    {% else -%}
+                        <span class="al-status-danger" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
+                        <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths, need {{ diag.majority_required }})</span>
+                    {% endif -%}
+                {% elif 'Running' in relay['flags'] -%}
+                    <span class="al-status-success" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                    <span title="Inferred from Running flag in Onionoo data.">(has Running flag)</span>
+                {% else -%}
+                    <span class="al-status-danger" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 2 Left: Flags #}
+        <div class="health-row">
+            <dt title="Capabilities assigned by Dir. Auth. based on performance.">{% if has_flags_section %}<a href="#flags" class="anchor-link">Flags</a>{% else %}Flags{% endif %}</dt>
+            <dd>
+                <span title="Guard=entry point, Exit=exit node, Stable=long-lived connections, Fast=high bandwidth, Valid=properly configured, Running=currently reachable.">{% for flag in sorted_flags -%}
+                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor %}</span> <span title="Total number of flags assigned to this relay.">({{ sorted_flags|length }})</span>
+                {% if 'StaleDesc' in relay['flags'] -%}
+                    <br><span style="color: #dc3545; font-size: 12px;" title="Relay's descriptor is outdated. May indicate connectivity issues.">[Warning] StaleDesc</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# DNS Health (Exit relays only) #}
+        {% if relay.get('exit_dns_health_status') is not none %}
+        <div class="health-row">
+            <dt title="DNS resolution health tested by exitdnshealth.1aeo.com."><a href="#exit-dns-health" class="anchor-link">DNS Health</a></dt>
+            <dd>
+                {% if relay.exit_dns_health_status == 'success' %}
+                    <span class="al-status-success" title="This exit relay successfully resolved DNS queries.">Healthy</span>
+                    {% if relay.exit_dns_health_timing_ms %}<span class="al-text-small-muted">({{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile)</span>{% else %})</span>{% endif %}{% endif %}
+                {% elif relay.exit_dns_health_status == 'fail' %}
+                    {% if relay.exit_dns_health_detail == 'dns_fail' %}
+                        <span class="al-status-danger" title="The relay's DNS resolver returned NXDOMAIN (domain not found). Likely a broken, misconfigured, or censoring resolver.{% if relay.exit_dns_health_error %} Detail: {{ relay.exit_dns_health_error|escape }}{% endif %}">DNS Lookup Failed</span>
+                    {% elif relay.exit_dns_health_detail == 'timeout' %}
+                        <span class="al-status-warning" title="DNS query did not receive a response within the timeout period.">DNS Query Timeout</span>
+                    {% elif relay.exit_dns_health_detail == 'relay_unreachable' %}
+                        <span class="al-status-warning" title="Could not establish a circuit through this relay to test DNS resolution.">Relay Unreachable</span>
+                    {% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}
+                        <span class="al-status-danger" title="DNS query returned an incorrect IP address. May indicate DNS manipulation or hijacking.">DNS Returned Wrong IP</span>
+                    {% else %}
+                        <span class="al-status-danger" title="DNS test failed: {{ relay.exit_dns_health_detail|escape }}">DNS {{ relay.exit_dns_health_detail|escape }}</span>
+                    {% endif %}
+                    {% if relay.exit_dns_health_consecutive_failures > 1 %}<span class="al-text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scans)</span>{% endif %}
+                {% elif relay.exit_dns_health_status == 'untested' %}
+                    <span class="al-status-warning" title="This relay was not included in the latest DNS health scan.{% if not relay['running'] %} Relay is currently offline and will not be scanned.{% else %} May be too new to have been scanned yet.{% endif %}">Not Tested</span>
+                {% endif %}
+                <span class="al-text-small-muted">(via <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>)</span>
+            </dd>
+        </div>
+        {% endif %}
+
+        {# Row 3 Left: BW Verified (authority measurement count + median) #}
+        <div class="health-row">
+            <dt title="Bandwidth verification by directory authorities running sbws scanners."><a href="#bandwidth" class="anchor-link">BW Verified</a></dt>
+            <dd>
+                {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.bw_auth_total -%}
+<span style="color: {{ diag.bandwidth_summary.bw_auth_color }};" title="Number of bandwidth authorities (sbws scanners) that measured this relay. Currently {{ diag.bandwidth_summary.bw_auth_total }} authorities run bandwidth scanners.">{{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}</span> BW Auths Measured
+                    {% if diag.bandwidth_summary.median_int -%}
+<span title="{% if diag.bandwidth_summary.unmeasured %}Consensus weight: fewer than 3 bandwidth authorities measured this relay, so it is the median of the relay-reported bandwidths in the votes, capped (maxunmeasuredbw).{% else %}Consensus weight: the median of the bandwidth authorities' measurements (Measured= in their votes).{% endif %}">{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }} Median</span>
+                    {% endif -%}
+                {% elif relay['measured'] -%}
+<span class="al-status-success" title="Relay has been measured by bandwidth authorities.">Measured</span>
+                {% elif relay['measured'] is none -%}
+<span class="al-status-muted">Unknown</span>
+                {% else -%}
+<span class="al-status-warning" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 4 Left: Stability (renamed from Uptime, with overload indicator) #}
+        <div class="health-row">
+            <dt title="Relay stability: overload status and uptime."><a href="#uptime" class="anchor-link">Stability</a></dt>
+            <dd>
+                <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" class="al-link-plain">
+                    <span style="color: {{ relay['stability_color'] }};">{{ relay['stability_text'] }}</span>
+                </a>
+                <span class="al-status-muted"> | </span>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span class="al-status-danger" title="Relay is currently offline.">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span class="al-status-success" title="Time since last restart. Source: relay descriptor.">{{ relay['uptime_display']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif -%}
+                {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) -%}
+                {% if uptime_1m > 0 -%}
+                    | <span class="{% if uptime_1m >= 100 %}al-status-success{% elif uptime_1m >= 90 %}al-status-warning{% else %}al-status-danger{% endif %}" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">UP {{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
+                {% endif -%}
+            </dd>
+        </div>
+    </dl>
+
+    {# RIGHT COLUMN (40%) #}
+    <dl>
+        {# Row 1 Right: Reachability (merges: IPv4 + IPv6) #}
+        <div class="health-row">
+            <dt title="Directory Auths connectivity to relay's OR port."><a href="#connectivity" class="anchor-link">Reachability</a></dt>
+            <dd>
+                {% if diag and diag.reachability_summary -%}
+                    <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span class="{% if diag.reachability_summary.ipv4.status_class == 'success' %}al-status-success{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
+                    {% if diag.reachability_summary.ipv6.total > 0 -%}
+                        | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span class="{% if diag.reachability_summary.ipv6.status_class == 'success' %}al-status-success{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}al-status-muted{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
+                    {% endif -%}
+                    <span title="Reachability tested by Directory Authorities.">(Directory Auths)</span>
+                {% else -%}
+                    <span class="al-status-muted">N/A</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 2 Right: First Seen (swapped with Uptime) #}
+        <div class="health-row">
+            <dt title="First appearance in network consensus."><a href="#uptime" class="anchor-link">First Seen</a></dt>
+            <dd>
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">{{ relay['first_seen_ago'] }}</a>
+                {% else -%}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 3 Right: BW Weight (network percentage + observed bandwidth) #}
+        <div class="health-row">
+            <dt title="Traffic share and self-reported bandwidth capacity."><a href="#bandwidth" class="anchor-link">BW Weight</a></dt>
+            <dd>
+                {# Compute observed bandwidth once, used in both branches #}
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                {% if relay['consensus_weight_fraction'] -%}
+<span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ relay['consensus_weight_percentage'] }} of Network</span>
+                    | <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
+                {% else -%}
+<span title="Bandwidth capacity reported by the relay itself.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 4 Right: Version (merges: version + recommended status) #}
+        <div class="health-row">
+            <dt title="Tor software version. Outdated versions may be rejected by Tor network and have security vulnerabilities."><a href="#software" class="anchor-link">Version</a></dt>
+            <dd>
+                {% if relay['version'] -%}
+                    {% if relay['recommended_version'] is not none -%}
+                        {% if relay['recommended_version'] -%}
+                            <span class="al-status-success" title="This Tor version is on the recommended list. Safe to use.">{{ relay['version']|escape }} Recommended</span>
+                        {% else -%}
+                            <span class="al-status-danger" title="This Tor version is outdated. May have security issues or be rejected by the network.">{{ relay['version']|escape }} Not Recommended</span>
+                        {% endif -%}
+                    {% else -%}
+                        <span title="Version recommendation status unknown.">{{ relay['version']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif -%}
+            </dd>
+        </div>
+    </dl>
+</div>
+
+{# Issues and Warnings - Full width below grid #}
+{# Use new diagnostics if available (includes overload issues), fallback to consensus_evaluation #}
+{% set all_issues = relay.diagnostics.issues if relay.diagnostics else (diag.issues if diag else []) %}
+{% if all_issues %}
+{% set real_issues = all_issues | selectattr('severity', 'ne', 'info') | list %}
+{% set info_notes = all_issues | selectattr('severity', 'equalto', 'info') | list %}
+
+{% if real_issues %}
+<div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+    <strong class="al-status-warning">Issues Detected:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+    {% for issue in real_issues %}
+        <li style="margin-bottom: 5px;">
+            <span class="{% if issue.severity == 'error' %}al-status-danger-bold{% else %}al-status-warning-bold{% endif %}">
+                <a href="#{{ issue.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this issue">{{ issue.title }}</a>
+            </span>: {{ issue.description|safe }}
+            {% if issue.suggestion %}
+            <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> {{ issue.suggestion|safe }}</span>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+</div>
 {% endif %}
-</dd>
 
-<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
-OR Address
-</dt>
-<dd>
-{% if relay['verified_host_names'] -%}
-{% for hostname in relay['verified_host_names'] -%}
-<span class="verified-hostname" title="verified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% elif relay['unverified_host_names'] -%}
-{% for hostname in relay['unverified_host_names'] -%}
-<span class="unverified-hostname" title="unverified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% else -%}
-{% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% endif -%}
-</dd>
-<dt>
-Exit Address
-</dt>
-{% if relay['exit_address'] -%}
-<dd>
-{{ relay['exit_address']|escape }}
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt>
-Dir Address
-</dt>
-{% if relay['dir_address'] -%}
-<dd>
-<a href="http://{{ relay['dir_address']|escape }}">{{
-relay['dir_address']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
+{% if info_notes %}
+<div style="margin-top: 10px; padding: 10px; background: #d1ecf1; border-radius: 4px; border-left: 3px solid #17a2b8;">
+    <strong class="al-status-info">Notes:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+    {% for note in info_notes %}
+        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this note">{{ note.title }}</a>: {{ note.description }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% else %}
+{# No issues found - show green box if we have diagnostics data #}
+{% if relay.diagnostics or diag %}
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <span class="al-status-success"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
+</div>
+{% endif %}
+{% endif %}
 
-<dt>
-{% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}
-</dt>
-<dd>
-{% if relay['city_name'] -%}
-<span title="City name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain city information.">{{ relay['city_name']|escape }}</span>
-{% endif -%}
-{% if relay['city_name'] and relay['region_name'] -%} | {% endif -%}
-{% if relay['region_name'] -%}
-<span title="Region name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain region information.">{{ relay['region_name']|escape }}</span>
-{% endif -%}
-{% if (relay['city_name'] or relay['region_name']) and relay['country'] -%} | {% endif -%}
-{% if relay['country'] -%}
-<a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
-title="{{ relay['country_name']|escape }}"
-alt="{{ relay['country_name']|escape }}">
-</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['country_name']|escape }}</span>
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-{% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 -%}
-<dt>
-Latitude, Longitude
-</dt>
-<dd>
-<span title="Latitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['latitude']|escape }}</span>, 
-<span title="Longitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['longitude']|escape }}</span>
-</dd>
-{% endif -%}
-<dt>
-Autonomous System (AS Number | AS Name)
-</dt>
-<dd>
-{% if relay['as'] -%}
-<a href='{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/' title="AS Number">{{ relay['as']|escape }}</a>
-{% else -%}
-<span title="AS Number">unknown</span>
-{% endif -%} | {% if relay['as_name'] -%}
-<span title="AS Name">{{ relay['as_name']|escape }}</span> (<a href='https://bgp.tools/{{ relay['as']|escape }}'>BGP.tools</a>)
-{% else -%}
-<span title="AS Name">unknown</span>
-{% endif -%}
-</dd>
+</div>
 
-<dt>
-Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
-</dt>
-<dd>
-{% for flag in relay['flags'] -%}
-{% if flag != 'StaleDesc' -%}
-<a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
-title="{{ flag|escape }}"
-alt="{{ flag|escape }}">
-</a> {{ flag|escape }}
-{% endif -%}
-{% endfor -%}
-</dd>
+{# ============== SECTION 2: CONNECTIVITY AND LOCATION ============== #}
+{# NOTE: Reuses existing 'diag' variable (defined line 115) - no new variables #}
+<section id="connectivity" class="section-box" style="padding-bottom: 5px;">
+{# Backward-compatible anchors from old dt/dd layout #}
+<span id="or-address" class="compat-anchor"></span><span id="exit-address" class="compat-anchor"></span><span id="dir-address" class="compat-anchor"></span>
+<span id="location" class="compat-anchor"></span><span id="coordinates" class="compat-anchor"></span><span id="interactive-map" class="compat-anchor"></span><span id="autonomous-system" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#connectivity" class="anchor-link">Connectivity and Location</a>
+    </div>
+</h4>
 
-<dt title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">
-Flag Uptime (1M/6M/1Y/5Y)
-</dt>
-<dd>
-{% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
-    {% if relay['flag_uptime_display'] == 'Match' -%}
-        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Match Overall Uptime ({{ relay['uptime_api_display']|safe }})</span>
-    {% else -%}
-        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
-    {% endif -%}
-{% else -%}
-N/A
-{% endif -%}
-</dd>
-<dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
-Uptime (1M/6M/1Y/5Y)
-</dt>
-<dd>
-{% if relay.get('uptime_api_display') -%}
-    {{ relay['uptime_api_display']|safe }}
-{% else -%}
-    N/A
-{% endif -%}
-</dd>
-<dt>
-Uptime / Downtime
-</dt>
-<dd>
-{% if relay.get('uptime_display') -%}
-    {% if relay['uptime_display'].startswith('DOWN') -%}
-        <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
-    {% else -%}
-        {{ relay['uptime_display']|escape }}
-    {% endif -%}
-{% else -%}
-    N/A
-{% endif -%}
-</dd>
-<dt>
-Seen (First | Last)
-</dt>
-<dd>
-<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }} ({{ relay['first_seen']|escape }})</a> | {{ relay['last_seen']|format_time_ago }} ({{ relay['last_seen']|escape }})
-</dd>
-<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
-Last Restarted
-</dt>
-<dd>
-{% if relay['last_restarted'] -%}
-{{ relay['last_restarted']|format_time_ago }} ({{ relay['last_restarted']|escape }})
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
-Last Changed Address or Port
-</dt>
-<dd>
-{% if relay['last_changed_address_or_port'] -%}
-{{ relay['last_changed_address_or_port']|escape }}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
-Hibernating
-</dt>
-<dd>
-{% if relay['hibernating'] is not none -%}
-{% if relay['hibernating'] -%}Yes{% else -%}No{% endif -%}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt>
-Platform (Short | Long)
-</dt>
-<dd>
-<a href='{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/' title="Simplified platform identifier for categorization">{{ relay['platform']|escape }}</a> | <span title="Complete platform information as reported by relay">{% if relay['platform_raw'] -%}{{ relay['platform_raw']|escape }}{% else -%}{{ relay['platform']|escape }}{% endif -%}</span>
-</dd>
-<dt>
-Version (Running | Recommended | Status)
-</dt>
-<dd>
-<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">{% if relay['version'] -%}{{ relay['version']|escape }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">{% if relay['recommended_version'] is not none -%}{% if relay['recommended_version'] -%}Yes{% else -%}No{% endif -%}{% else -%}unknown{% endif -%}</span> | 
-<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">{% if relay['version_status'] -%}{{ relay['version_status']|escape }}{% else -%}unknown{% endif -%}</span>
-</dd>
+<div class="row">
+{# ===== Left Column: Addresses and Reachability ===== #}
+<div class="col-md-6">
+<div class="subsection-card">
+<h5 class="subsection-header">Addresses</h5>
+<dl>
+    <dt>OR Address</dt>
+    <dd>
+        {% if relay['verified_host_names'] -%}
+            {% for hostname in relay['verified_host_names'] -%}
+                <span class="verified-hostname" title="Verified: reverse DNS lookup matched a forward A record (DNSSEC validated). Source: Onionoo API">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+            {% endfor %}<br>
+        {% elif relay['unverified_host_names'] -%}
+            {% for hostname in relay['unverified_host_names'] -%}
+                <span class="unverified-hostname" title="Unverified: reverse DNS found but no matching A record. Source: Onionoo API">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+            {% endfor %}<br>
+        {% endif -%}
+        {% for address in relay['or_addresses'] -%}
+            {{ address }}{% if not loop.last %}<br>{% endif %}
+        {% endfor -%}
+    </dd>
+    
+    {% if relay['exit_addresses'] %}
+    <dt>Exit Address</dt>
+    <dd>{% for addr in relay['exit_addresses'] %}{{ addr|escape }}{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>
+    {% endif %}
+    
+    {% if relay['dir_address'] %}
+    <dt>Dir Address</dt>
+    <dd><a href="http://{{ relay['dir_address']|escape }}">{{ relay['dir_address']|escape }}</a></dd>
+    {% endif %}
+    
+    {% if relay.get('unreachable_or_addresses') %}
+    <dt class="al-status-danger" title="OR addresses declared in relay descriptor but found unreachable by the directory authorities. May indicate firewall issues, misconfigured bindings, or stale descriptor data.">Unreachable Addresses</dt>
+    <dd>
+        <span style="color: #dc3545; font-size: 12px;">[Warning] Declared but unreachable:</span><br>
+        {% for addr in relay['unreachable_or_addresses'] -%}
+            <span class="al-status-danger">{{ addr|escape }}</span>{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+    </dd>
+    {% endif %}
+</dl>
+</div>
+
+<div class="subsection-card">
+<h5 class="subsection-header">Reachability (Directory Authorities)</h5>
+<dl>
+    {% if diag and diag.reachability_summary %}
+    {%- set reach = diag.reachability_summary -%}
+    <dt>IPv4</dt>
+    <dd>
+        <span class="al-status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
+    </dd>
+    {# IPv6: Use ipv6.total > 0 check (same as Health Status line 212) - no new loop needed #}
+    {% if reach.ipv6.total > 0 %}
+    <dt>IPv6</dt>
+    <dd>
+        <span class="al-status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+    </dd>
+    {% endif %}
+    {% else %}
+    <dt>Status</dt>
+    <dd><span class="al-status-note">Reachability data unavailable</span></dd>
+    {% endif %}
 </dl>
 </div>
 </div>
+
+{# ===== Right Column: Location and AS ===== #}
+<div class="col-md-6">
+<div class="subsection-card">
+<h5 class="subsection-header">Location</h5>
+<dl>
+    <dt title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address.">Country</dt>
+    <dd>
+        {% if relays.has_page('country', relay['country']) -%}
+            <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
+                <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
+                     title="{{ relay['country_name']|escape }}" alt="{{ relay['country_name']|escape }}">
+            </a> {{ relay['country_name']|escape }}
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+    
+    {% if relay['region_name'] %}
+    <dt title="Region name of the location of this relay as found by a geolocation database.">Region</dt>
+    <dd>{{ relay['region_name']|escape }}</dd>
+    {% endif %}
+    
+    {% if relay['city_name'] %}
+    <dt title="City name of the location of this relay as found by a geolocation database.">City</dt>
+    <dd>{{ relay['city_name']|escape }}</dd>
+    {% endif %}
+    
+    {% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 %}
+    <dt title="Latitude and longitude of the relay's location as found by a geolocation database based on the relay's IP address.">Coordinates</dt>
+    <dd><span title="Latitude">{{ relay['latitude']|escape }}</span>, <span title="Longitude">{{ relay['longitude']|escape }}</span></dd>
+    {% endif %}
+    
+    <dt>Interactive Map</dt>
+    <dd><a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener">View in RouteFluxMap</a></dd>
+</dl>
+</div>
+
+<div class="subsection-card">
+<h5 class="subsection-header">Autonomous System</h5>
+<dl>
+    <dt>AS Number</dt>
+    <dd>
+        {% if relay['as'] -%}
+            <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{ relay['as']|escape }}</a>
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+    
+    <dt>AS Name</dt>
+    <dd>
+        {% if relay['as_name'] -%}
+            {{ relay['as_name']|escape }}
+            {% if relay['as'] %}(<a href="https://bgp.tools/{{ relay['as']|escape }}">BGP.tools</a>){% endif %}
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+    
+    <dt>AS Rarity</dt>
+    <dd>
+        {% set tier = relay.get('as_rarity_tier', 'common') -%}
+        {% set score = relay.get('as_rarity_score', 0) -%}
+        <span style="color: {% if tier == 'legendary' %}#9b59b6{% elif tier == 'epic' %}#2e7d2e{% elif tier == 'rare' %}#007bff{% elif tier == 'emerging' %}#cc9900{% else %}#6c757d{% endif %}; font-weight: bold;" title="AS rarity measures how rare this hosting choice is for the Tor network. Higher scores indicate better diversity for the network. Score combines consensus weight concentration (0-3) and operator uniqueness (0-2).">{{ tier|capitalize }}</span> (score: {{ score }}/5, {{ relay.get('as_cw_label', 'n/a') }} consensus weight, {{ relay.get('as_operator_count', 0) }} operator{{ 's' if relay.get('as_operator_count', 0) != 1 else '' }})
+    </dd>
+</dl>
+</div>
+</div>
+</div>
+</section>
+
+{# ============== SECTION 3: FLAGS AND ELIGIBILITY ============== #}
+{% if has_flags_section %}
+<section id="flags" class="section-box relay-section">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#flags" class="anchor-link" title="Consensus flags assigned by Directory Authorities based on relay performance and eligibility requirements.">Flags and Eligibility</a>
+    </div>
+</h4>
+
+{# Current Flags Row - White box, uses pre-computed sorted_flags (DRY) #}
+{% set efd = diag.eligible_flags_display %}
+<div style="margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+    <strong title="Flags currently assigned to this relay in the network consensus. Flags determine what roles the relay can serve.">Current Flags ({{ sorted_flags|length }}):</strong>
+    {% for flag in sorted_flags -%}
+        <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" title="{{ diag.tooltips.flags[flag.lower()]|default(flag ~ ' flag') }}">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+    {% endfor -%}
+
+</div>
+
+{# Eligible Flags Row - Using pre-computed display data (DRY optimization) #}
+<div style="margin-bottom: 12px; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+    <strong title="Number of Directory Authorities that consider this relay eligible for each flag. Need majority for flag assignment.">Eligible Flags ({{ efd.eligible_count }}):</strong>
+    {# All flags in order: Running → Valid → V2Dir → Fast → Stable → HSDir → Guard → Exit #}
+    {% for flag in efd.flags %}
+    <span style="color: {{ flag.color }}; font-weight: bold;" title="{{ flag.tooltip }} Eligible from {{ flag.count }}/{{ flag.total }} authorities.">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>{% if not loop.last %} | {% endif %}
+    {% endfor %}
+</div>
+
+{# Eligibility Flag Vote Details Table - White box, reordered columns #}
+<div style="padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+<h5 style="margin-top: 0; margin-bottom: 8px;" title="Detailed breakdown of relay's values vs Directory Authority thresholds for each flag.">Eligibility Flag Vote Details</h5>
+<div class="table-responsive">
+<table class="table table-condensed table-striped" style="font-size: 12px; margin-bottom: 0;">
+<thead>
+<tr>
+    <th style="width: 12%;" title="The consensus flag and its requirements. Flags are assigned when relay meets majority of authority thresholds.">Flag</th>
+    <th style="width: 13%;" title="The specific measurement used to evaluate flag eligibility. Each flag may have multiple requirements.">Metric</th>
+    <th style="width: 15%;" title="Whether relay meets the threshold: Meets (green), Partial (yellow), or Below (red).">Status</th>
+    <th style="width: 25%;" title="Your relay's current value for this metric. (DA)=measured by authorities, (R)=reported by relay.">Relay Value</th>
+    <th style="width: 35%;" title="The minimum value required by Directory Authorities. May vary per authority; range shown when applicable.">Threshold Required</th>
+</tr>
+</thead>
+<tbody>
+    {% for row in diag.flag_requirements_table %}
+    <tr id="{{ row.anchor }}">
+        {% if row.rowspan > 0 %}
+        <td rowspan="{{ row.rowspan }}" style="vertical-align: middle; color: {{ row.flag_color }}; font-weight: bold;" title="{{ row.flag_tooltip }}">{{ row.flag }}</td>
+        {% endif %}
+        <td title="{{ row.metric_tooltip }}">{{ row.metric }}</td>
+        <td><span style="color: {{ row.status_color }}; font-weight: bold;" title="{{ row.status_tooltip }}">{{ row.status_text }}</span></td>
+        <td>{{ row.value|safe }}</td>
+        <td>{{ row.threshold|safe }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+{# Footer with legend and timestamp #}
+<p style="font-size: 11px; color: #6c757d; margin-top: 8px; margin-bottom: 0;">
+    <span title="Directory Authority Measured: Value measured by Dir. Authorities from CollecTor vote files. Authorities independently track relay performance.">(DA)</span> = Dir. Auth. Measured | 
+    <span title="Relay Reported: Value self-reported by the relay in its descriptor. Verified by authorities but originates from relay.">(R)</span> = Relay Reported<br>
+    Data from <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a> (authority votes{% if relays.collector_fetched_at %}, fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}).
+</p>
+</section>
+{% endif %}
+
+{# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
+{# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
+
+{# The charts are beside this page, or under charts/relay/<fingerprint>/ with --chart-layout charts #}
+{% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'relay/' ~ relay['fingerprint'] ~ '/' if chart_root else '' %}
+{% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
+<section id="bandwidth" class="section-box relay-section">
+{# Backward-compatible anchors from old dt/dd layout #}
+<span id="bandwidth-capacity" class="compat-anchor"></span><span id="network-participation" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# Left Column: Relay-Reported Capacity #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Capacity (Relay Reported)</h5>
+        <dl>
+            <dt title="Bandwidth capacity your relay measured and reported in its descriptor">Observed Bandwidth</dt>
+            <dd><span title="Observed: {{ bw(relay['observed_bandwidth']) }}">{{ bw(relay['observed_bandwidth']) }}</span></dd>
+            
+            <dt title="min(Observed, Rate, Burst) - what your relay advertises to the network">Advertised Bandwidth</dt>
+            <dd>
+                {% if relay['advertised_bandwidth'] %}
+                    <span title="Advertised: {{ bw(relay['advertised_bandwidth']) }}">{{ bw(relay['advertised_bandwidth']) }}</span>
+                {% else %}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthRate setting in torrc">Rate Limit</dt>
+            <dd>
+                {% if relay['bandwidth_rate'] %}
+                    <span title="Rate: {{ bw(relay['bandwidth_rate']) }}">{{ bw(relay['bandwidth_rate']) }}</span>
+                {% else %}
+                    <span class="al-status-muted">Not set</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthBurst setting in torrc">Burst Limit</dt>
+            <dd>
+                {% if relay['bandwidth_burst'] %}
+                    <span title="Burst: {{ bw(relay['bandwidth_burst']) }}">{{ bw(relay['bandwidth_burst']) }}</span>
+                {% else %}
+                    <span class="al-status-muted">Not set</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="Total data transferred by this relay (read + write) over available bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</dt>
+            <dd>
+                {% if relay.get('total_data_display') and relay['total_data_display'] != 'N/A' %}
+                    <span title="Total data transferred over {{ relay['total_data_period'] }}">{{ relay['total_data_display'] }}</span>
+                    <span class="al-text-small-muted">({{ relay['total_data_period'] }})</span>
+                    {% set periods = [] %}
+                    {% if relay.get('total_data_1_month_display') and relay['total_data_1_month_display'] != 'N/A' %}{% set _ = periods.append('1mo: ' + relay['total_data_1_month_display']) %}{% endif %}
+                    {% if relay.get('total_data_6_months_display') and relay['total_data_6_months_display'] != 'N/A' %}{% set _ = periods.append('6mo: ' + relay['total_data_6_months_display']) %}{% endif %}
+                    {% if relay.get('total_data_1_year_display') and relay['total_data_1_year_display'] != 'N/A' %}{% set _ = periods.append('1y: ' + relay['total_data_1_year_display']) %}{% endif %}
+                    {% if relay.get('total_data_5_years_display') and relay['total_data_5_years_display'] != 'N/A' %}{% set _ = periods.append('5y: ' + relay['total_data_5_years_display']) %}{% endif %}
+                    {% if periods|length > 1 %}
+                    <br><span class="al-text-small-note">{{ periods|join(' | ') }}</span>
+                    {% endif %}
+                {% else %}
+                    <span class="al-status-muted">N/A</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+    
+    {# Right Column: Authority-Measured #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Measurement (Directory Authority Verified)</h5>
+        {% if relays.collector_fetched_at %}
+        <p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener" style="color: #999;">CollecTor</a> — fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}</p>
+        {% endif %}
+        <dl>
+            <dt id="bw-measured-by" title="How many bandwidth authorities (sbws scanners) measured this relay">Measured By</dt>
+            <dd>
+                {% if diag and diag.bandwidth_summary %}
+                    <span style="color: {{ diag.bandwidth_summary.bw_auth_color }}; font-weight: bold;">
+                        {{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}
+                    </span> Bandwidth Authorities
+                    {% if diag.bandwidth_summary.bw_auth_not_measured_names and diag.bandwidth_summary.bw_auth_measured_count < diag.bandwidth_summary.bw_auth_total %}
+                        <br><span style="font-size: 11px; color: #856404;" title="These bandwidth authorities did not measure this relay">Not measured by: {{ diag.bandwidth_summary.bw_auth_not_measured_names|join(', ') }}</span>
+                    {% endif %}
+                {% elif relay['measured'] is not none %}
+                    {% if relay['measured'] %}
+                        <span class="al-status-success-bold">Yes</span> (≥3 authorities)
+                    {% else %}
+                        <span class="al-status-warning">Not Yet Measured</span>
+                    {% endif %}
+                {% else %}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display %}
+            <dt id="bw-consensus-weight" title="Computed from the votes as the consensus does: the median of the bandwidth authorities' measurements (Measured=) when 3 or more measured the relay; otherwise the median of the relay-reported bandwidths (Bandwidth=), capped at maxunmeasuredbw and marked Unmeasured.">Consensus Weight</dt>
+            <dd>{{ diag.bandwidth_summary.median_display }}{% if diag.bandwidth_summary.unmeasured %} <span class="al-status-warning" title="Fewer than 3 bandwidth authorities measured this relay">(Unmeasured)</span>{% else %} <span class="al-text-small-muted">(median of {{ diag.bandwidth_summary.measurement_count }} measurements)</span>{% endif %}</dd>
+            
+            <dt title="Lowest and highest Measured= value across the bandwidth authorities' votes">Measured Min / Max</dt>
+            <dd>
+                {{ diag.bandwidth_summary.min_display|default('N/A') }} / {{ diag.bandwidth_summary.max_display|default('N/A') }}
+            </dd>
+            
+            {% if diag.bandwidth_summary.deviation_class == 'warning' %}
+            <dt title="Large variation in measurements across authorities">Deviation</dt>
+            <dd>
+                <span class="al-status-warning">{{ diag.bandwidth_summary.deviation_display }}</span>
+                <small class="al-status-warning">[Warning] High variation</small>
+            </dd>
+            {% endif %}
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+{# Network Participation - Full width #}
+<div style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 4px; border: 1px solid #e9ecef;">
+    <strong>Network Participation:</strong>
+    <span title="Fraction of total network consensus weight. The consensus weight is a unitless integer assigned by directory authorities (median of bandwidth measurements) used to determine this relay's probability of being selected by Tor clients for circuit building.">
+        Consensus Weight:
+        {% if relay['consensus_weight_fraction'] %}
+            {{ relay['consensus_weight_percentage_precise'] }} of network
+            {{ pctile(relay.get('cw_percentile'), 'consensus weight') }}
+        {% else %}
+            <span class="al-status-muted">N/A</span>
+        {% endif %}
+    </span>
+    |
+    <span title="Probability of this relay to be selected for the guard position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Guard: 
+        {% if relay['guard_probability'] %}{{ relay['guard_probability_percentage'] }} {{ pctile(relay.get('guard_percentile'), 'guard probability') }}{% else %}N/A{% endif %}</span> |
+    <span title="Probability of this relay to be selected for the middle position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Middle: 
+        {% if relay['middle_probability'] %}{{ relay['middle_probability_percentage'] }} {{ pctile(relay.get('middle_percentile'), 'middle probability') }}{% else %}N/A{% endif %}</span> |
+    <span title="Probability of this relay to be selected for the exit position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Exit: 
+        {% if relay['exit_probability'] %}{{ relay['exit_probability_percentage'] }} {{ pctile(relay.get('exit_percentile'), 'exit probability') }}{% else %}N/A{% endif %}</span>
+    
+    {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
+    <div style="margin-top: 8px; color: #856404;">
+        <strong>[Warning] Underutilized:</strong> High bandwidth capacity but low consensus weight.
+    </div>
+    {% endif %}
+</div>
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
+</section>
+
+{# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
+{% if uptime_periods and not bandwidth_periods %}{{ chart_period_anchors('uptime') }}{% endif %}
+<section id="uptime" class="section-box relay-section">
+<span id="first-last-seen" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#uptime" class="anchor-link">Uptime and Stability</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# Left Column: Uptime Metrics #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Uptime Metrics</h5>
+        <dl>
+            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link al-link-plain" style="color: inherit;">Current Status</a></dt>
+            <dd>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span class="al-status-danger-bold">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span class="al-status-success">{{ relay['uptime_display']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span class="al-status-note">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}"><a href="#uptime-history" class="anchor-link al-link-plain" style="color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dd>
+                {% if relay.get('uptime_api_display') -%}
+                    {{ relay['uptime_api_display']|safe }}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt id="flag-uptime" title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}"><a href="#flag-uptime" class="anchor-link al-link-plain" style="color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dd>
+                {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+                    {% if relay['flag_uptime_display'] == 'Match' -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Matches Overall Uptime ({{ relay['uptime_api_display']|safe }})</span>
+                    {% else -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+                    {% endif -%}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt title="Whether relay indicated it is hibernating in its last known server descriptor. Hibernation typically means the relay reached its accounting limit.">Hibernating</dt>
+            <dd>
+                {% if relay['hibernating'] is not none -%}
+                    {% if relay['hibernating'] -%}
+                        <span class="al-status-warning-bold">Yes</span>
+                        <span class="al-text-small-muted">(relay reached accounting limit)</span>
+                    {% else -%}
+                        No
+                    {% endif -%}
+                {% else -%}
+                    <span class="al-status-muted">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+
+    {# Right Column: Timestamps #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Timestamps</h5>
+        <dl>
+            <dt title="Date relay first appeared in network consensus. Newer relays have restrictions (Guard flag requires ~8 days).">First Seen</dt>
+            <dd>
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen_ago'] }}</a>
+                    <span class="al-text-small-muted">({{ relay['first_seen']|escape }})</span>
+                {% else -%}
+                    <span class="al-status-note">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="Most recent time this relay was seen in the network consensus.">Last Seen</dt>
+            <dd>
+                {% if relay['last_seen'] -%}
+                    {{ relay['last_seen_ago'] }}
+                    <span class="al-text-small-muted">({{ relay['last_seen']|escape }})</span>
+                {% else -%}
+                    <span class="al-status-note">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">Last Restarted</dt>
+            <dd>
+                {% if relay['last_restarted'] -%}
+                    {{ relay['last_restarted_ago'] }}
+                    <span class="al-text-small-muted">({{ relay['last_restarted']|escape }})</span>
+                {% else -%}
+                    <span class="al-status-note">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay last stopped announcing an IPv4/IPv6 address or TCP port. Can indicate relay stability as a fallback directory.">Last Changed Address</dt>
+            <dd>
+                {% if relay['last_changed_address_or_port'] -%}
+                    {{ relay['last_changed_address_or_port']|escape }}
+                {% else -%}
+                    <span class="al-status-note">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+{# ---- Overload Status Subsection (anchor target for Health Status Stability row) ---- #}
+{# Health Status "Stability" row links here via <a href="#overload"> (line 194) #}
+<span id="overload"></span>
+
+{% set is_overloaded = relay.get('stability_is_overloaded', false) %}
+{% set general_ts = relay.get('overload_general_timestamp') %}
+{% set ratelimits = relay.get('overload_ratelimits') %}
+{% set fd_exhausted = relay.get('overload_fd_exhausted') %}
+
+{% set stability_tooltip = relay.get('stability_tooltip', '') %}
+
+{% if not is_overloaded %}
+{# Not overloaded: compact single line #}
+<div id="overload-general" style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <strong class="al-status-success">Overload Status:</strong>
+    <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
+    {% if 'Last general overload' in stability_tooltip %}
+    <span style="color: #155724; font-size: 12px;"> ({{ stability_tooltip }})</span>
+    {% endif %}
+</div>
+
+{% else %}
+{# Overloaded: expanded detail view with all 3 fields + recommendations #}
+<div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+    <div style="margin-bottom: 12px;">
+        <strong style="color: #856404; font-size: 15px;">[Warning] OVERLOADED</strong>
+        <span style="color: #856404; font-size: 13px;"> — {{ stability_tooltip }}</span>
+    </div>
+    
+    <div class="row">
+        {# Left: General Overload + File Descriptors #}
+        <div class="col-md-6">
+            <h5 id="overload-general" style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if general_ts %}
+                        <span class="al-status-danger-bold">Reported</span>
+                    {% else %}
+                        <span class="al-status-success">Not Reported</span>
+                    {% endif %}
+                </dd>
+                {% if general_ts %}
+                <dt>When</dt>
+                <dd>{{ general_ts|format_timestamp }} UTC ({{ general_ts|format_timestamp_ago }})</dd>
+                {% endif %}
+            </dl>
+            <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
+                OOM killer, onionskin queue saturation, or TCP port exhaustion.
+                Flag remains 72h after last event (Tor spec 328).
+            </p>
+            
+            <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if fd_exhausted %}
+                        <span class="al-status-danger-bold">Reported</span>
+                        {% if fd_exhausted.get('timestamp') %}
+                         — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
+                        {% endif %}
+                    {% else %}
+                        <span class="al-status-success">Not Reported</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+        
+        {# Right: Rate Limits + Recommendations #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
+            {% if ratelimits %}
+            <dl>
+                <dt id="overload-rate-config">Rate Limit</dt>
+                <dd>
+                    {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
+                    {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                </dd>
+                <dt>Burst Limit</dt>
+                <dd>
+                    {# BandwidthBurst is a token-bucket size (bytes), not a rate #}
+                    {{ ratelimits.get('burst-limit', 0)|format_data_volume }}
+                </dd>
+                <dt id="overload-write">Write Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('write-count', 0) > 0 %}
+                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
+                    {% else %}
+                        <span class="al-status-success">0 times</span>
+                    {% endif %}
+                </dd>
+                <dt id="overload-read">Read Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('read-count', 0) > 0 %}
+                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
+                    {% else %}
+                        <span class="al-status-success">0 times</span>
+                    {% endif %}
+                </dd>
+                {% if ratelimits.get('timestamp') %}
+                <dt>Last Reported</dt>
+                <dd>{{ ratelimits['timestamp']|format_timestamp_ago }}</dd>
+                {% endif %}
+            </dl>
+            {% else %}
+            <p class="al-status-muted">No rate limit data from /bandwidth endpoint.</p>
+            {% endif %}
+            
+            <h5 style="font-size: 13px; font-weight: bold;">Recommendations</h5>
+            <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
+                {% if general_ts %}
+                <li>Check CPU/memory: <code>htop</code></li>
+                <li>Review <code>MaxMemInQueues</code> in torrc</li>
+                {% endif %}
+                {% if ratelimits and (ratelimits.get('write-count', 0) > 0 or ratelimits.get('read-count', 0) > 0) %}
+                <li>Consider increasing <code>RelayBandwidthRate</code></li>
+                <li>Check if ISP is throttling traffic</li>
+                {% endif %}
+                {% if fd_exhausted %}
+                <li>Increase FD limit: <code>ulimit -n 65535</code></li>
+                <li>systemd: <code>LimitNOFILE=65535</code> in [Service]</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{{ chart_history('uptime', uptime_periods, 'Uptime', src=chart_src, ext=chart_ext) }}
+</section>
+
+{# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
+<section id="operator" class="section-box relay-section">
+<span id="contact" class="compat-anchor"></span><span id="aroi" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#operator" class="anchor-link">Operator and Family</a>
+    </div>
+</h4>
+
+<div class="row">
+{# Left Column: Operator (AROI) #}
+<div class="col-md-6">
+<h5 class="subsection-header">Operator Identity</h5>
+{% if aroi_validation_timestamp %}
+<p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://aroivalidator.1aeo.com/" target="_blank" rel="noopener" style="color: #999;">AROI Validation API</a> — {{ aroi_validation_timestamp }}</p>
+{% endif %}
+<dl>
+    <dt>AROI Domain <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" title="Autonomous Relay Operator Identifier — ContactInfo Information Sharing Specification" style="font-weight: normal; font-size: 11px;">(?)</a></dt>
+    <dd>
+        {% if has_aroi -%}
+            <a href="{{ operator_url }}">{{ relay['aroi_domain']|escape }}</a>
+        {% else -%}
+            Not specified
+        {% endif -%}
+    </dd>
+    
+    {% if contact_validation_status and contact_validation_status.validation_summary -%}
+    <dt>Operator Validation</dt>
+    <dd>
+        {% set vs = contact_validation_status.validation_summary -%}
+        {% set cvs_status = contact_validation_status.validation_status -%}
+        {% set operator_validated_url = operator_url ~ '#validated-relays' -%}
+        {% if cvs_status == 'validated' -%}
+            <span class="al-status-success" title="All {{ vs.validated_count }} relays have valid AROI proof">
+                Validated (<a href="{{ operator_validated_url }}" title="View validated relays on operator page">{{ vs.validated_count }}/{{ vs.total_relays }} relays</a>)</span>
+        {% elif cvs_status == 'partially_validated' -%}
+            <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays have valid proof">
+                Partially Validated (<a href="{{ operator_validated_url }}" title="View validated relays on operator page">{{ vs.validated_count }}/{{ vs.total_relays }} relays</a>)</span>
+        {% else -%}
+            <span class="al-status-danger" title="No relays have AROI validation proof">Unvalidated</span>
+        {% endif -%}
+    </dd>
+    
+    <dt>This Relay</dt>
+    <dd>
+        {% set this_fp = relay['fingerprint'] -%}
+        {% if this_fp in contact_validation_status.validated_fingerprints -%}
+            <span class="al-status-success">Validated</span>
+            {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp -%}
+                {% if vr.proof_type == 'dns-rsa' -%}
+                    <span class="al-text-small-note" title="Proof: DNS TXT record with RSA signature. The operator's domain has a TXT record containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(dns-rsa)</span>
+                {% elif vr.proof_type == 'uri-rsa' -%}
+                    <span class="al-text-small-note" title="Proof: URI with RSA signature. A well-known URI on the operator's domain serves a document containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(uri-rsa)</span>
+                {% elif vr.proof_type -%}
+                    <span class="al-text-small-note" title="Proof type: {{ vr.proof_type|escape }}">({{ vr.proof_type|escape }})</span>
+                {% endif -%}
+            {% endfor -%}
+        {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+            <span class="al-status-danger">Unvalidated</span>
+            {# Check unauthorized_relays: fingerprint not found in proof #}
+            {% for ur in contact_validation_status.unauthorized_relays|default([]) if ur.fingerprint == this_fp -%}
+                <br><span style="font-size: 12px; color: #856404;">Error: {{ ur.error|escape }}</span>
+            {% endfor -%}
+            {# Check misconfigured_relays: DNS/SSL/connection/HTTP errors #}
+            {% for mr in contact_validation_status.misconfigured_relays|default([]) if mr.fingerprint == this_fp -%}
+                <br><span style="font-size: 12px; color: #856404;">Error: {{ mr.error|escape }}</span>
+            {% endfor -%}
+        {% else -%}
+            <span class="al-status-muted">N/A (no AROI configured)</span>
+        {% endif -%}
+    </dd>
+    {% endif -%}
+    
+    <dt>Contact</dt>
+    <dd style="word-wrap: break-word; word-break: break-all; max-width: 100%;">
+        {% if relay['contact'] -%}
+            <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['contact']|escape }}</a>
+        {% else -%}
+            <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">none</a>
+        {% endif -%}
+    </dd>
+</dl>
+</div>
+
+{# Right Column: Family (fingerprint-based) #}
+<div class="col-md-6">
+<h5 class="subsection-header">Family Configuration</h5>
+{# Backward-compatible anchors for old direct links #}
+<span id="effective-family" class="compat-anchor"></span><span id="alleged-family" class="compat-anchor"></span><span id="indirect-family" class="compat-anchor"></span>
+
+{# Pre-compute partitioned lists so counts are available in Family Support summary #}
+{% set hf_eff = relay.get('_hf_effective', []) %}
+{% set mf_eff = relay.get('_mf_effective', []) %}
+{% set total_family = hf_eff|length + mf_eff|length %}
+
+{# Family Support Type — at top #}
+<dl>
+    <dt id="family-support" style="font-size: 14px;" title="Family membership method: Happy Families uses cryptographic family-cert, MyFamily uses legacy declarations.">
+        <a href="#family-support" class="anchor-link">Family Support</a>
+    </dt>
+    <dd>
+        {% if relay.get('family_support_type') == 'both' -%}
+            <span class="al-status-success">Both</span> — Happy Families ({{ hf_eff|length }}{% if total_family > 0 %} / {{ (hf_eff|length / total_family * 100)|round(0)|int }}%{% endif %}) and MyFamily ({{ mf_eff|length }}{% if total_family > 0 %} / {{ (mf_eff|length / total_family * 100)|round(0)|int }}%{% endif %})
+        {% elif relay.get('family_support_type') == 'happy_families' -%}
+            <span class="al-status-success">Happy Families</span> ({{ hf_eff|length }}) — Has family-cert in server descriptor (<a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">guide</a>)
+        {% elif relay.get('family_support_type') == 'my_family' -%}
+            <span class="al-status-danger">MyFamily Only</span> ({{ mf_eff|length }}) — Legacy only. <span class="al-text-small-note">Consider migrating to <a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">Happy Families</a>.</span>
+        {% else -%}
+            <span class="al-status-muted">None</span> — No family membership configured
+        {% endif -%}
+        {% if relay['effective_family']|length > 1 %} | <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View Full Family ({{ relay['effective_family']|length }})</a>{% endif %}
+    </dd>
+</dl>
+
+{# ---- Happy Families (family-cert) ---- #}
+<div style="border-left: 3px solid #28a745; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #28a745;">Happy Families <span style="font-weight: normal; color: #6c757d;">(family-cert)</span></div>
+<dl>
+    <dt id="hf-effective" title="Family members with family-cert in a mutual family relationship with this relay. Family-cert relationships are always mutual by design.">
+        <a href="#hf-effective" class="anchor-link">Effective {{ plural(hf_eff|length, 'Member') }}: {{ hf_eff|length }}</a>
+    </dt>
+    <dd>{{ family_member_list(hf_eff, relay['fingerprint'], show_self=true) }}</dd>
+</dl>
+</div>
+
+{# ---- MyFamily (legacy declarations) ---- #}
+{% set mf_alleged = relay.get('alleged_family') or [] %}
+{% set mf_indirect = relay.get('indirect_family') or [] %}
+{% set mf_has_content = mf_eff|length > 0 or mf_alleged|length > 0 or mf_indirect|length > 0 %}
+{% if mf_has_content %}
+<div style="border-left: 3px solid #dc3545; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #dc3545;">MyFamily <span style="font-weight: normal; color: #6c757d;">(legacy declarations)</span></div>
+<dl>
+    <dt id="mf-effective" title="Family members without family-cert in a mutual family relationship with this relay via legacy MyFamily declarations.">
+        <a href="#mf-effective" class="anchor-link">Effective {{ plural(mf_eff|length, 'Member') }}: {{ mf_eff|length }}</a>
+    </dt>
+    <dd>{{ family_member_list(mf_eff, relay['fingerprint'], show_self=true) }}</dd>
+
+    <dt id="mf-alleged" title="Family members that this relay claims via MyFamily but who don't claim this relay back.">
+        <a href="#mf-alleged" class="anchor-link">Alleged {{ plural(mf_alleged|length, 'Member') }}: {{ mf_alleged|length }}</a>
+    </dt>
+    <dd>
+        {% if mf_alleged -%}
+        <span style="color: #856404; font-size: 11px;">(they don't list you back)</span>
+        {{ family_member_list(mf_alleged, relay['fingerprint']) }}
+        {%- else -%}
+        <span class="al-status-muted">none</span>
+        {%- endif %}
+    </dd>
+
+    <dt id="mf-indirect" title="Family members that claim this relay via MyFamily but this relay doesn't claim back.">
+        <a href="#mf-indirect" class="anchor-link">Indirect {{ plural(mf_indirect|length, 'Member') }}: {{ mf_indirect|length }}</a>
+    </dt>
+    <dd>
+        {% if mf_indirect -%}
+        <span style="color: #856404; font-size: 11px;">(they list you, you don't list them)</span>
+        {{ family_member_list(mf_indirect, relay['fingerprint']) }}
+        {%- else -%}
+        <span class="al-status-muted">none</span>
+        {%- endif %}
+    </dd>
+</dl>
+</div>
+{% else %}
+<div style="border-left: 3px solid #28a745; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold; color: #28a745;">MyFamily <span style="font-weight: normal; color: #6c757d;">(legacy declarations) — none</span></div>
+</div>
+{% endif %}
+
+</div>
+</div>
+</section>
+
+{# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
+<section id="software" class="section-box relay-section">
+{# Anchors #platform and #version are on the <dt> elements below #}
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#software" class="anchor-link">Software and Version</a>
+    </div>
+</h4>
+
+<dl>
+    <dt id="platform" title="Simplified platform identifier for categorization"><a href="#platform" class="anchor-link">Platform</a></dt>
+    <dd>
+        {% if relays.has_page('platform', relay['platform']) %}
+        <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/" title="View all relays on this platform">{{ relay['platform']|escape }}</a>
+        {% else %}
+        Unknown
+        {% endif %}
+        {% if relay['platform_raw'] and relay['platform_raw'] != relay['platform'] -%}
+            <span class="al-text-small-note" title="Complete platform information as reported by relay"> — {{ relay['platform_raw']|escape }}</span>
+        {% endif -%}
+    </dd>
+
+    <dt id="version" title="Tor software version. Outdated versions may have security vulnerabilities and could be rejected by the network."><a href="#version" class="anchor-link">Version</a></dt>
+    <dd>
+        {% if relay['version'] -%}
+            <span>{{ relay['version']|escape }}</span>
+            {% if relay['recommended_version'] is not none -%}
+                {% if relay['recommended_version'] -%}
+                    — <span class="al-status-success-bold" title="This Tor version is on the recommended list.">Recommended</span>
+                {% else -%}
+                    — <span class="al-status-danger-bold" title="This Tor version is NOT recommended. Update to the latest stable version.">Not Recommended</span>
+                {% endif -%}
+            {% endif -%}
+        {% else -%}
+            <span class="al-status-muted">Unknown</span>
+        {% endif -%}
+    </dd>
+
+    {% if relay['version_status'] %}
+    <dt title="Version status as determined by directory authorities: recommended, experimental, obsolete, new in series, unrecommended">Version Status</dt>
+    <dd>
+        {% if relay['version_status'] == 'recommended' -%}
+            <span class="al-status-success">{{ relay['version_status']|capitalize|escape }}</span>
+        {% elif relay['version_status'] == 'obsolete' -%}
+            <span class="al-status-danger-bold">{{ relay['version_status']|capitalize|escape }}</span>
+            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+        {% elif relay['version_status'] == 'experimental' -%}
+            <span class="al-status-warning">{{ relay['version_status']|capitalize|escape }}</span>
+        {% else -%}
+            <span class="al-status-note">{{ relay['version_status']|capitalize|escape }}</span>
+        {% endif -%}
+    </dd>
+    {% endif %}
+</dl>
+</section>
+
+{# ============== SECTION 8: EXIT HEALTH & POLICY (#exit-policy) ============== #}
+<section id="exit-policy" class="section-box relay-section">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#exit-policy" class="anchor-link">Exit Health &amp; Policy</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# LEFT: DNS Health Details #}
+    <div class="col-md-6">
+        <h5 id="exit-dns-health" class="subsection-header"><a href="#exit-dns-health" class="anchor-link">DNS Health</a></h5>
+        {% if relay.get('exit_dns_health_status') is not none %}
+        <dl style="margin-bottom: 10px;">
+            <dt>Status</dt>
+            <dd>
+                {% if relay.exit_dns_health_status == 'success' %}
+                    <span class="al-status-success-bold">Healthy</span>
+                    {% if relay.exit_dns_health_timing_ms %}
+                        <span class="al-text-small-muted">(avg. {{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile{% endif %})</span>
+                    {% endif %}
+                {% elif relay.exit_dns_health_status == 'fail' %}
+                    <span class="al-status-danger-bold">
+                        {% if relay.exit_dns_health_detail == 'dns_fail' %}DNS Lookup Failed{% elif relay.exit_dns_health_detail == 'timeout' %}DNS Query Timeout{% elif relay.exit_dns_health_detail == 'relay_unreachable' %}Relay Unreachable{% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}DNS Returned Wrong IP{% else %}{{ relay.exit_dns_health_detail|escape }}{% endif %}
+                    </span>
+                    {% if relay.exit_dns_health_consecutive_failures > 0 %}
+                        <span class="al-text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
+                    {% endif %}
+                {% else %}
+                    <span class="al-status-warning">Not Tested</span>
+                {% endif %}
+            </dd>
+
+            {% if relay.exit_dns_health_error %}
+            <dt>Error</dt>
+            <dd><code class="al-status-danger">{{ relay.exit_dns_health_error|escape }}</code></dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_query_domain %}
+            <dt title="Each test uses a unique randomized subdomain under a wildcard DNS zone. This prevents DNS caching at any layer and forces the exit relay's resolver to perform a live recursive lookup to the authoritative nameserver.">Query Domain</dt>
+            <dd><code style="font-size: 10px; word-break: break-all;">{{ relay.exit_dns_health_query_domain|escape }}</code></dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_resolved_ip or relay.exit_dns_health_expected_ip %}
+            <dt>DNS Result</dt>
+            <dd>
+                {% if relay.exit_dns_health_resolved_ip %}
+                    {% if relay.exit_dns_health_expected_ip and relay.exit_dns_health_resolved_ip == relay.exit_dns_health_expected_ip %}
+                        <span class="al-status-success">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code></span>
+                    {% elif relay.exit_dns_health_expected_ip %}
+                        <span class="al-status-danger">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code> (expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>
+                    {% else %}
+                        Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code>
+                    {% endif %}
+                {% else %}
+                    <span class="al-status-danger">No Response</span>{% if relay.exit_dns_health_expected_ip %} <span class="al-text-small-muted">(expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>{% endif %}
+                {% endif %}
+            </dd>
+            {% endif %}
+            {# Upstream resolver. None: the report has no resolver data; {}: no queries seen from this exit yet #}
+            {% if relay.get('exit_dns_health_resolver_queries') is not none %}
+            {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'local_24': 'Local /24', 'local_22': 'Local /22', 'local_as': 'Local AS', 'local_operator': 'Local operator', 'other': 'Other', 'unknown': 'Unknown'} %}
+            {% set resolver_total = relay.exit_dns_health_resolver_queries.values()|sum %}
+            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local /24: same IPv4 /24 or IPv6 /64 as the exit, including its own address. Local /22: same IPv4 /22 or IPv6 /48. Local AS: same origin AS, outside those prefixes. Local operator: run by the same operator in another network. Local (older reports): the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
+            <dd>
+                {% if relay.exit_dns_health_resolver_primary %}
+                    {{ resolver_names.get(relay.exit_dns_health_resolver_primary, relay.exit_dns_health_resolver_primary) }}
+                    {% if relay.exit_dns_health_resolver_public %}<span class="al-text-small-muted">(public resolver)</span>{% elif relay.exit_dns_health_resolver_primary in ('local', 'local_24', 'local_22', 'local_as') %}<span class="al-text-small-muted">(exit's own network)</span>{% elif relay.exit_dns_health_resolver_primary == 'local_operator' %}<span class="al-text-small-muted">(same operator, other network)</span>{% endif %}
+                {% else %}
+                    <span class="al-status-muted" title="Too few sampled queries from this exit so far to name a primary resolver.">Not enough data</span>
+                {% endif %}
+                {% if resolver_total > 0 %}
+                <br><span class="al-text-small-muted" title="Share of this exit's estimated queries by resolver.">
+                    {% for category, count in relay.exit_dns_health_resolver_queries.items() %}{% set share = 100 * count / resolver_total %}{{ resolver_names.get(category, category) }} {{ "<1" if share < 1 else (">99" if 99 < share < 100 else "%.0f"|format(share)) }}%{% if not loop.last %}, {% endif %}{% endfor %}
+                    (~{{ "%.0f"|format(resolver_total) }} estimated queries)
+                </span>
+                {% endif %}
+            </dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_cv_total is not none %}
+            <dt title="Each relay is tested through multiple independent Tor circuits built via different guard relays. A relay is only marked as failing if all instances agree. If any instance succeeds, the relay is marked healthy (cross-validation recovery).">Cross-Validation</dt>
+            <dd>
+                {% if relay.exit_dns_health_status == 'success' %}
+                    <span class="al-status-success">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                {% else %}
+                    <span class="al-status-danger">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                {% endif %}
+                {% if relay.exit_dns_health_cv_improved %}<span class="al-status-success">(improved by cross-validation)</span>{% endif %}
+            </dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_first_hop %}
+            <dt>First Hop</dt>
+            <dd>
+                {% if relay.exit_dns_health_first_hop_nickname %}{{ relay.exit_dns_health_first_hop_nickname|escape }}{% endif %}
+                {% if relay.exit_dns_health_first_hop_country %} ({{ relay.exit_dns_health_first_hop_country|upper|escape }}){% endif %}
+                {% if relay.exit_dns_health_first_hop|upper in relay_page_fps %}
+                <a href="../{{ relay.exit_dns_health_first_hop|upper|escape }}/" title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</a>
+                {% else %}
+                <span title="Guard relay used to build test circuit" style="font-size: 11px;">{{ relay.exit_dns_health_first_hop|escape }}</span> <span class="al-status-muted" style="font-size: 11px;">(not in the network)</span>
+                {% endif %}
+            </dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_exit_address %}
+            <dt>Exit Address Used</dt>
+            <dd><code>{{ relay.exit_dns_health_exit_address|escape }}</code></dd>
+            {% endif %}
+
+            {% if relay.exit_dns_health_cv_per_instance %}
+            <dt title="Each DNS health scan tests every exit relay through multiple independent Tor circuits (cross-validation instances) to reduce false positives. Each attempt uses a different circuit path.">Per-Instance Results</dt>
+            <dd>
+                <table style="margin-top: 4px;">
+                {% set cv_counter = [0] %}
+                {% for inst_name, inst_data in relay.exit_dns_health_cv_per_instance.items() %}
+                    {% if cv_counter.append(cv_counter.pop() + 1) %}{% endif %}
+                    <tr>
+                        <td style="padding-right: 8px;" title="Cross-validation instance {{ cv_counter[0] }}, {{ inst_name }} — independent Tor circuit used to verify DNS resolution">Cross Validation Attempt {{ cv_counter[0] }}:</td>
+                        <td style="padding-right: 8px;">
+                            {% if inst_data.status == 'success' %}<span class="al-status-success">Success</span>{% elif inst_data.status == 'dns_fail' %}<span class="al-status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="al-status-warning">Timeout</span>{% else %}<span class="al-status-danger">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
+                        </td>
+                        <td class="al-text-small-muted">({{ inst_name|escape }})</td>
+                    </tr>
+                {% endfor %}
+                </table>
+            </dd>
+            {% endif %}
+        </dl>
+        {% if relay.exit_dns_health_timestamp %}
+        <div class="al-text-small-muted">Tested: {{ relay.exit_dns_health_timestamp|format_unix_timestamp }}</div>
+        {% endif %}
+        <div class="al-text-small-muted">Source: <a href="https://exitdnshealth.1aeo.com" target="_blank" rel="noopener">exitdnshealth.1aeo.com</a></div>
+        {% else %}
+        <span class="al-status-muted">Not an exit relay — DNS health testing does not apply.</span>
+        {% endif %}
+    </div>
+
+    {# RIGHT: Exit Policy #}
+    <div class="col-md-6">
+        <h5 id="ipv4-exit-policy-summary" class="subsection-header"><a href="#ipv4-exit-policy-summary" class="anchor-link">IPv4 Exit Policy Summary</a></h5>
+        {% if relay['exit_policy_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span class="al-status-muted">None</span>
+        {% endif -%}
+
+        <h5 id="ipv6-exit-policy-summary" class="subsection-header" style="margin-top: 12px;"><a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a></h5>
+        {% if relay['exit_policy_v6_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_v6_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span class="al-status-muted">None</span>
+        {% endif -%}
+
+        <h5 class="subsection-header" style="margin-top: 12px;">Full Exit Policy</h5>
+        <pre class="pre-scrollable" style="max-height: 200px; font-size: 12px;">{% for policy in relay['exit_policy'] -%}
+{{ policy|escape }}
+{% endfor -%}</pre>
+    </div>
+</div>
+</section>
+
+<p>Last fetch was at {{ relays.timestamp }}.</p>
+
+{# Consensus Evaluation Section - Per-Authority Details only #}
+{% if diag and diag.available and diag.authority_table %}
+
+{% set has_ipv6 = diag.reachability_summary.ipv6.total > 0 if diag.reachability_summary else false %}
+
+<section class="section-box relay-section">
+<h3 id="consensus-evaluation">
+<div class="section-header">
+<a href="#consensus-evaluation" class="anchor-link">Consensus Evaluation</a>
+</div>
+</h3>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+Data from <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a> (authority votes{% if relays.collector_fetched_at %}, fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}).
+</p>
+
+{# ============== PER-AUTHORITY DETAILS TABLE ============== #}
+<h4 id="authority-votes" style="margin-top: 15px;">
+<div class="section-header">
+<a href="#authority-votes" class="anchor-link">Per-Authority Details</a>
+</div>
+</h4>
+<p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">
+Each cell shows: <strong>your measured value | authority threshold</strong>. 
+<span class="al-status-success">Green</span> = meets, <span class="al-status-danger">red</span> = below.
+Flags: <span class="al-status-success-bold">green</span> = all authorities agree, <span class="al-status-warning-bold">yellow</span> = partial.
+</p>
+<div style="overflow-x: auto; overflow-y: visible; padding-top: 60px; margin-top: -50px;">
+<table class="table table-condensed table-striped" style="font-size: 11px;">
+<thead>
+<tr>
+    <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
+    <th id="col-running" title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
+    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
+    <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
+    {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
+    <th id="col-flags" title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
+    <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
+    <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
+    <th title="Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
+    <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>
+    <th title="Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
+    <th title="Stable Uptime: Relay's uptime | Authority's threshold">Stable Uptime (Relay|T)</th>
+    <th title="HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
+    <th title="HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
+    <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
+    <th id="col-cons-wt" title="Each vote's input to the consensus weight. When 3 or more authorities measured the relay, the consensus weight is the median of their measurements (M); relay-reported values (R) then don't count and are grayed out. Otherwise it is the median of the relay-reported values, capped at maxunmeasuredbw.">Cons Wt (Authority)</th>
+</tr>
+</thead>
+<tbody>
+{% for vote in diag.authority_table %}
+<tr class="{% if not vote.voted %}row-not-voted{% endif %}">
+    <td>
+        {# vote.fingerprint is the authority's V3 signing key, not its relay fingerprint #}
+        {% set authority_fp = authority_page_fps.get(vote.authority|lower) if authority_page_fps else none %}
+        {% if authority_fp %}
+        <a href="{{ page_ctx.path_prefix }}relay/{{ authority_fp }}/" style="text-decoration: underline;">
+            <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
+        </a>
+        {% else %}
+        <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
+        {% endif %}
+    </td>
+    <td headers="col-running">{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-muted">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
+    <td>{% if vote.ipv4_reachable %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
+    {% if has_ipv6 %}
+    <td>{% if vote.ipv6_reachable == true %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_reachable == false %}<span class="al-status-danger">No</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    {% endif %}
+    <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
+        {% if vote.flags_with_consensus %}
+            {% for flag_info in vote.flags_with_consensus %}
+                {%- if flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
+                {%- elif flag_info.partial %}<span class="al-status-warning-bold">{{ flag_info.name }}</span>
+                {%- else %}{{ flag_info.name }}{%- endif %}
+                {%- if not loop.last %}, {% endif %}
+            {% endfor %}
+        {% elif vote.flags %}{{ vote.flags_display }}
+        {% else %}<span class="al-status-muted">—</span>{% endif %}
+    </td>
+    <td headers="col-fast">{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Guard needs this authority's top-25% cutoff ({{ vote.guard_bw_top25_display }}) OR AuthDirGuardBWGuarantee ({{ vote.guard_bw_guarantee_display }}).">{{ vote.guard_bw_value_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span class="{% if vote.stable_uptime_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span class="al-status-muted">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu >= 0.98 %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span class="{% if vote.hsdir_tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-cons-wt">{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p style="font-size: 10px; color: #666; margin-top: 5px;">
+— = not tested/available • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known • Bandwidth source: (M) bandwidth-scanner measurement, (R) relay-reported, (U) unmeasured, counted as 0
+</p>
+
+<div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
+<strong>Bandwidth Values Explained:</strong><br>
+<strong>Measured (M)</strong> = An authority's bandwidth-scanner measurement of your relay (<code>Measured=</code> in its vote). An authority that has one uses it for the Fast and Guard flags, and the consensus weight is the median of these measurements when 3 or more authorities have one.<br>
+<strong>Relay-reported (R)</strong> = The bandwidth your relay advertises: the lower of its observed bandwidth and its rate limit, capped at 10 MB/s (<code>Bandwidth=</code> in every vote). An authority without a measurement uses it for flags, unless it has measurements for enough other relays (<code>ignoring-advertised-bws=1</code>); then your relay counts as 0 (U). It sets the consensus weight only when fewer than 3 authorities measured the relay, capped at 20 KB/s (maxunmeasuredbw) while 3 or more authorities publish measurements.<br>
+<strong>Not published</strong> = The authority has no measurement of your relay in its vote and ignores relay-reported bandwidth, yet it voted Fast or its vote has no measurements at all: it judges your relay by a measurement kept from an earlier bandwidth file (0 if none), which its vote doesn't show.<br>
+<em>Why different?</em> A low measurement means the bandwidth scanners see your relay underperforming compared with other relays that report a similar speed. Votes list both values in kilobytes per second. Rules: <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Assigning flags in a vote</a>, <a href="https://spec.torproject.org/dir-spec/computing-consensus.html" target="_blank" rel="noopener">Computing a consensus</a>.
+</div>
+
+<div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #17a2b8;">
+<strong>Stable Uptime (Two Data Sources):</strong><br>
+<strong>Relay Uptime</strong> = From <em>Onionoo API</em> (last_restarted field). Self-reported uptime from descriptor. Same value for all authorities.<br>
+<strong>Authority Threshold</strong> = From <em>CollecTor vote files</em> (flag-thresholds stable-uptime). Each authority may have different thresholds.<br>
+<em>Why two sources?</em> Vote files contain authority thresholds but not per-relay uptime values. Onionoo aggregates relay descriptors which include uptime.
+</div>
+
+</section>
+{% endif %}
+
 </div>
 {% endblock -%}

@@ -1,5 +1,5 @@
 {% extends "relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary %}
+{% from "macros.html" import navigation, detail_summary, dns_health_bullet %}
 {% set country_orig = relay_subset[0]['country_name']|escape %}
 {% set country_abbr = relay_subset[0]['country']|escape %}
 {% if country_orig in sp_countries %}
@@ -7,10 +7,39 @@
 {% else %}
     {% set country_name = country_orig %}
 {% endif %}
-{% block title %}Tor Relays :: {{ country_name }}{% endblock %}
+{% block title %}Tor Relays in {{ country_name }}{% endblock %}
+{% block meta_description %}Live metrics for {{ group_relay_count }} Tor relays in {{ country_name }}: bandwidth, consensus weight, roles, operators, networks, and DNS health.{% endblock %}
 {% block header %}View {{ country_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('countries', page_ctx) }}
 {% endblock -%}
 {% block description %}{{ country_name }} ({{ country_abbr }}) summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position) }}{% endblock %}
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
+        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
+        (<span title="Bandwidth capacity dedicated to guard relay operations">{{ guard_bandwidth }} {{ bandwidth_unit }} guard capacity</span>
+        {%- if middle_count > 0 %}, <span title="Bandwidth capacity dedicated to middle relay operations">{{ middle_bandwidth }} {{ bandwidth_unit }} middle capacity</span>{% endif -%}
+        {%- if exit_count > 0 %}, <span title="Bandwidth capacity dedicated to exit relay operations">{{ exit_bandwidth }} {{ bandwidth_unit }} exit capacity</span>{% endif -%}
+        )
+        {%- endif %}</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
+        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
+        (<span title="Percentage of guard consensus weight">{{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard</span>
+        {%- if middle_count > 0 %}, <span title="Percentage of middle consensus weight">{{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle</span>{% endif -%}
+        {%- if exit_count > 0 %}, and <span title="Percentage of exit consensus weight">{{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit</span>{% endif -%}
+        )
+        {%- endif %}</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
+    {% if total_data_formatted and total_data_formatted != 'N/A' %}
+    <li><strong><span title="Total data transferred by all relays in this country (read + write). Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}{% if total_data_pct %} ({{ total_data_pct }}){% endif %}</li>
+    {% endif %}
+    {% if exit_dns_health_summary %}
+    <li><strong><span title="DNS resolution health of exit relays in this country. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
+        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>{% if exit_dns_health_summary.failing > 0 %},
+            <span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}{% if exit_dns_health_summary.untested > 0 %},
+            {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
+            of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
+    </li>
+    {% endif %}
+    <li><a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" target="_blank" rel="noopener" title="View {{ country_name }} on RouteFluxMap interactive visualization">🗺️ View on Interactive Map</a></li>
+</ul>{% endblock %}

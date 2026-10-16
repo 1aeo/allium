@@ -1,0 +1,176 @@
+/* =============================================================================
+   Network Health Dashboard CSS (page-specific — only loaded on health dashboard)
+   ============================================================================= */
+
+/* Dashboard Design Tokens (page-scoped; shared tokens in skeleton.html :root) */
+:root {
+    --nh-text-label: #64748b;
+    --nh-text-value: #374151;
+    --nh-text-label-secondary: #6b7280;
+    --nh-text-footer: #9ca3af;
+    --nh-metric-primary-color: #000000;
+    --nh-bg-metric: #f8fafc;
+    --nh-border-footer: #e5e7eb;
+}
+
+.network-health-ribbon {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 7px;
+}
+
+.ribbon-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+    margin-bottom: 7px;
+}
+
+.ribbon-card {
+    background: white;
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--color-border-card);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    min-height: 90px;
+}
+
+.ribbon-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.ribbon-card .card-header {
+    margin-bottom: 7px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--color-border-divider);
+}
+
+.ribbon-card .card-header h4 {
+    margin: 0;
+    font-size: 1.65rem;
+    color: var(--color-text-heading);
+    font-weight: 600;
+}
+
+/* Links within ribbon cards inherit parent color (metric values, headers) */
+.ribbon-card .al-link-plain { color: inherit; }
+
+/* Repeated sub-metric spacing for small text under metric values */
+.metric-subtext { margin-top: 2px; }
+
+.card-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.metric-item.primary {
+    text-align: center;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--nh-bg-metric);
+    margin-bottom: 4px;
+}
+
+.metric-item.primary .metric-value {
+    display: block;
+    font-size: 3.3rem;
+    font-weight: bold;
+    line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-item.primary .metric-value:not([class*="al-status-"]) {
+    color: var(--color-text-heading);
+}
+
+.metric-item.primary .metric-label {
+    display: block;
+    font-size: 1.5rem;
+    color: var(--nh-text-label);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+    font-weight: 500;
+}
+
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+}
+
+.metric-grid .metric-item {
+    text-align: center;
+    padding: 4px;
+    background: var(--nh-bg-metric);
+    border-radius: 3px;
+}
+
+.metric-grid .metric-value {
+    display: block;
+    font-size: 1.65rem;
+    font-weight: 600;
+    line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-grid .metric-value:not([class*="al-status-"]) {
+    color: var(--nh-text-value);
+}
+
+.metric-grid .metric-label {
+    display: block;
+    font-size: 1.275rem;
+    color: var(--nh-text-label-secondary);
+    margin-top: 1px;
+    font-weight: 500;
+}
+
+/* DRY: collapsed 11 identical card-specific rules into 1 */
+/* Default color only when no al-status-* class overrides it */
+.ribbon-card .metric-item.primary .metric-value:not([class*="al-status-"]) {
+    color: var(--nh-metric-primary-color);
+}
+
+/* Tooltips: Uses global [title] tooltip system from skeleton.html.
+   No duplicate tooltip CSS needed here — the global system handles
+   all [title] elements including .metric-item[title]. */
+
+.ribbon-footer {
+    text-align: center;
+    margin-top: 15px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nh-border-footer);
+}
+
+.ribbon-footer .last-updated {
+    font-size: 0.9rem;
+    color: var(--nh-text-footer);
+    margin: 0;
+}
+
+/* Responsive adjustments for ribbon */
+@media (max-width: 1200px) {
+    .ribbon-row { grid-template-columns: repeat(2, 1fr); }
+    .metric-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .ribbon-row { grid-template-columns: 1fr; gap: 6px; }
+    .network-health-ribbon { padding: 6px; }
+    .ribbon-card { padding: 8px; min-height: 80px; }
+    .ribbon-card .card-header h4 { font-size: 1.35rem; }
+    .metric-item.primary .metric-value { font-size: 2.7rem; }
+    .metric-item.primary .metric-label { font-size: 1.2rem; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+    .metric-grid .metric-value { font-size: 1.35rem; }
+    .metric-grid .metric-label { font-size: 1.05rem; }
+}
+
+@media (max-width: 480px) {
+    .ribbon-card .card-header h4 { font-size: 1.2rem; }
+    .metric-item.primary .metric-value { font-size: 2.2rem; }
+    .metric-item.primary .metric-label { font-size: 1.1rem; }
+    .metric-grid .metric-value { font-size: 1.2rem; }
+    .metric-grid .metric-label { font-size: 0.95rem; }
+}
