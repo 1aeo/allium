@@ -43,8 +43,8 @@ www/
 │       └── index.html              # Country-specific relay listing
 │
 ├── as/
-│   └── <number>/
-│       └── index.html              # AS-specific relay listing
+│   └── <as>/
+│       └── index.html              # AS listing; directory is Onionoo `as` (example: AS6939)
 │
 ├── family/
 │   └── <hash>/

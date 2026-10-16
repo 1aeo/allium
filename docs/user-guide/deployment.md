@@ -47,6 +47,11 @@ python3 allium.py --out /var/www/tor-metrics --base-url "/tor-metrics"
 
 This ensures all internal links use the correct path prefix.
 
+Do not pass `--base-url /` for a site served at the host root. Vanity links are
+built as `{base}/{domain}/`, so a bare slash becomes a scheme-relative
+`//domain/` URL. Omit `--base-url` instead. That is the default and leaves
+ordinary root-relative links unchanged.
+
 ## nginx Configuration
 
 ```nginx

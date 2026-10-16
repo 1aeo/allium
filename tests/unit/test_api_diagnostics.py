@@ -12,6 +12,7 @@ import pytest
 
 from allium.lib.api_diagnostics import (
     _classify_freshness,
+    _collector_document_times,
     _format_age,
     _format_time_ago,
     _format_timestamp,
@@ -1654,3 +1655,68 @@ class TestIncompleteAROISiblingMap:
         # inventing or corrupting any.
         expected_sibling_fingerprints = set(sibling_fps)
         assert set(capped_fps).issubset(expected_sibling_fingerprints)
+
+
+class TestCollectorDocumentTimes:
+    """CollecTor cards show document times. Onionoo cards do not."""
+
+    def test_consensus_and_descriptor_times_are_document_times(self):
+        stale = "2024-06-01 00:00:00"
+        consensus = {
+            "consensus_method_info": {
+                "consensus_valid_after": stale,
+                "oldest_vote_time": stale,
+                "latest_vote_time": "2024-06-01 12:00:00",
+            }
+        }
+        descriptors = {"source_latest_file_ts": "2024-06-01T18:00:00+00:00"}
+        onionoo = {"relays_published": "2026-10-16 20:00:00", "relays": []}
+
+        assert _collector_document_times("collector_consensus", consensus)["consensus_valid_after"] == stale
+        assert _collector_document_times("collector_descriptors", descriptors) == {
+            "newest_descriptor_file": "2024-06-01T18:00:00+00:00",
+        }
+        assert _collector_document_times("onionoo_details", onionoo) is None
+        assert _collector_document_times("collector_consensus", {}) is None
+
+    @patch("allium.lib.api_diagnostics.get_all_worker_status")
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_diagnostics_keeps_collector_time_off_onionoo(self, mock_cache_age, mock_status):
+        mock_status.return_value = {}
+        mock_cache_age.return_value = 60
+        relay_set = MagicMock()
+        relay_set.json = {
+            "relays": [{"fingerprint": "AAAA"}],
+            "relays_published": "2026-10-16 20:00:00",
+        }
+        relay_set.timestamp = "Mon, 16 Oct 2026 20:00:00 GMT"
+        relay_set.uptime_data = {"relays": []}
+        relay_set.bandwidth_data = {"relays": []}
+        relay_set.aroi_validation_data = {"results": [], "metadata": {}, "statistics": {}}
+        relay_set.collector_consensus_data = {
+            "relay_index": {},
+            "votes": {},
+            "consensus_method_info": {
+                "consensus_valid_after": "2024-06-01 00:00:00",
+                "oldest_vote_time": "2024-06-01 00:00:00",
+                "latest_vote_time": "2024-06-01 00:00:00",
+            },
+        }
+        relay_set.collector_descriptors_data = {
+            "all_seen_fingerprints": [],
+            "family_cert_fingerprints": [],
+            "source_latest_file_ts": "2024-05-01T00:00:00+00:00",
+        }
+        args = MagicMock()
+        args.enabled_apis = "all"
+        args.onionoo_details_url = "https://onionoo.torproject.org/details"
+        args.onionoo_uptime_url = "https://onionoo.torproject.org/uptime"
+        args.onionoo_bandwidth_url = "https://onionoo.torproject.org/bandwidth"
+        args.aroi_url = "https://aroivalidator.1aeo.com/latest.json"
+
+        result = collect_api_diagnostics(relay_set, args)
+        by_name = {api["name"]: api for api in result["apis"]}
+        assert by_name["onionoo_details"]["document_times"] is None
+        assert by_name["collector_consensus"]["document_times"]["consensus_valid_after"] == "2024-06-01 00:00:00"
+        assert by_name["collector_descriptors"]["document_times"]["newest_descriptor_file"] == "2024-05-01T00:00:00+00:00"
+        assert "2026-10-16" not in str(by_name["collector_consensus"]["document_times"])

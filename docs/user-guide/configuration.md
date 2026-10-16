@@ -15,7 +15,7 @@ python3 allium.py [options]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--out` | `./www` | Output directory |
-| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`); root-relative values are for previews/subdirectory hosting |
+| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`). `""` is site-root output. A subdirectory prefix such as `/tor-metrics` is for previews. A bare `/` is rejected |
 | `--display-bandwidth-units` | `bits` | `bits` (Kbit/s) or `bytes` (KB/s) |
 | `-p, --progress` | false | Show progress with memory usage |
 | `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Details API endpoint |
