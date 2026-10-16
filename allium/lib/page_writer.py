@@ -48,7 +48,13 @@ from .operator_analysis import (
     generate_contact_rankings,
 )
 from .stability_utils import compute_group_overload_summary
-from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .time_utils import (
+    format_collector_span,
+    format_collector_time,
+    format_time_ago,
+    format_timestamp,
+    format_timestamp_ago,
+)
 from .search_discovery import MAX_HEAD_CHARS
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
@@ -187,6 +193,8 @@ ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_data_volume'] = format_data_volume_with_unit
 ENV.filters['format_time_ago'] = format_time_ago
+ENV.filters['collector_time'] = format_collector_time
+ENV.filters['collector_span'] = format_collector_span
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
 # Overload section filters for millisecond timestamps (Onionoo overload fields)
@@ -845,6 +853,7 @@ def get_directory_authorities_data(relay_set):
             # Check if this authority voted - O(1) lookups
             voted = False
             relay_count = 0
+            vote_time = None
             vote_tuple = (
                 votes_by_fingerprint.get(auth_fingerprint) or
                 votes_by_prefix.get(auth_fp_prefix) or
@@ -853,6 +862,10 @@ def get_directory_authorities_data(relay_set):
             if vote_tuple:
                 voted = True
                 relay_count = vote_tuple[1]
+                vote_body = vote_tuple[0] if isinstance(vote_tuple[0], dict) else {}
+                vote_time = (vote_body.get('vote_time')
+                             or vote_body.get('valid_after')
+                             or vote_body.get('published'))
             
             # Check if this authority is a bandwidth authority - O(1) lookups
             is_bw = (
@@ -875,6 +888,7 @@ def get_directory_authorities_data(relay_set):
                 'is_bw_authority': is_bw,
                 'relay_count': relay_count,
                 'max_consensus_method': auth_max_method,
+                'vote_time': vote_time,
             }
     
     # Perform latency checks on authorities
