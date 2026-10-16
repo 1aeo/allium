@@ -533,6 +533,29 @@ def _worst_freshness(freshness_list):
 # MAIN DIAGNOSTICS COLLECTOR
 # ============================================================================
 
+def _collector_document_times(api_name, data):
+    """Times of the CollecTor documents behind one diagnostics card.
+
+    Onionoo and other sources return None. Cache age stays a separate field.
+    """
+    if not isinstance(data, dict):
+        return None
+    if api_name == "collector_consensus":
+        info = data.get("consensus_method_info") or {}
+        if not isinstance(info, dict):
+            return None
+        times = {
+            "consensus_valid_after": info.get("consensus_valid_after"),
+            "oldest_vote_time": info.get("oldest_vote_time"),
+            "latest_vote_time": info.get("latest_vote_time"),
+        }
+        return times if any(times.values()) else None
+    if api_name == "collector_descriptors":
+        newest = data.get("source_latest_file_ts")
+        return {"newest_descriptor_file": newest} if newest else None
+    return None
+
+
 def collect_api_diagnostics(relay_set, args):
     """
     Collect comprehensive diagnostics for all API data sources.
@@ -589,6 +612,10 @@ def collect_api_diagnostics(relay_set, args):
         # Item counts (compute once, reuse)
         item_count = _get_item_count(relay_set, metadata) if enabled else None
         extra_info = _get_extra_info(relay_set, metadata) if enabled else None
+        document_times = None
+        if enabled and api_name.startswith("collector_"):
+            document_times = _collector_document_times(
+                api_name, _get_api_data(relay_set, metadata))
 
         # B6: AROI-specific extended diagnostics — schema version, version
         # distribution, top error_category counts. Helps non-developer
@@ -657,6 +684,7 @@ def collect_api_diagnostics(relay_set, args):
             "affected_sections": metadata["affected_sections"],
             # B6: extended fields populated only for AROI API
             "aroi_extras": aroi_extras,
+            "document_times": document_times,
         })
 
     # Build section dependencies with freshness propagation

@@ -789,12 +789,16 @@ Network Health Dashboard
                 </div>
                 
                 <!-- Row 2: Consensus Method + DAs Support Max Method -->
+                {% set cm = relays.collector_consensus_data.consensus_method_info if relays.collector_consensus_data else none %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Current consensus-method from the consensus document (dir-spec §3.4.1). Must advance to minimum method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} for family-ids to appear in microdescriptors.">
                         <span class="metric-value {% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method_max and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_max %}al-status-success-bold{% elif relays.json.network_health.hf_consensus_method %}al-status-danger-bold{% else %}al-status-muted{% endif %}">
                             {{ relays.json.network_health.hf_consensus_method|default('N/A', true) }}
                         </span>
                         <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} ≥{{ relays.json.network_health.hf_consensus_method_max }}{% endif %}</span>
+                        {% if cm and cm.consensus_valid_after %}
+                        <div class="al-text-small-muted metric-subtext">{{ cm.consensus_valid_after|collector_time }}</div>
+                        {% endif %}
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
                         <span class="metric-value {% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}al-status-success{% elif relays.json.network_health.hf_max_method_support > 0 %}al-status-warning{% else %}al-status-danger{% endif %}">
@@ -803,6 +807,9 @@ Network Health Dashboard
                         <span class="metric-label">DAs Support Method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} (Need {{ relays.json.network_health.hf_method_threshold }} for Majority)</span>
                     </div>
                 </div>
+                {% if cm and cm.latest_vote_time %}
+                <div class="al-text-small-muted metric-subtext" style="text-align: center;">Vote files {{ cm.oldest_vote_time|collector_span(cm.latest_vote_time) }} (method support and consensus params)</div>
+                {% endif %}
                 
                 <!-- Row 3: Consensus Parameters (hidden when data unavailable, auto-populates when authorities vote on them) -->
                 {% if relays.json.network_health.hf_use_family_ids is not none or relays.json.network_health.hf_use_family_lists is not none %}
@@ -835,6 +842,10 @@ Network Health Dashboard
                 {% endif %}
                 
                 <!-- Row 4: Family-cert adoption from server descriptors -->
+                {% set desc_ts = relays.collector_descriptors_data.source_latest_file_ts if relays.collector_descriptors_data else none %}
+                {% if desc_ts %}
+                <div class="al-text-small-muted metric-subtext" style="text-align: center;">Server descriptors through {{ desc_ts|collector_time }} (newest CollecTor file)</div>
+                {% endif %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key (Proposal 321). Source: CollecTor server descriptors, last 18 hourly files. Tracking {{ "{:,}".format(relays.json.network_health.hf_family_cert_seen_total) }} relays.">
                         <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_family_cert_count_formatted }}</span>
