@@ -1,13 +1,13 @@
 """
 Tests for relay_diagnostics module.
 
-Tests all 26 issue types across 11 categories:
+Tests all 25 issue types across 11 categories:
 - consensus (1): Not in consensus
 - reachability (3): IPv4 issues, IPv6 not reachable, Partial IPv4
 - fast (1): Not getting the Fast flag
 - guard (5): BW below, WFU below, TK below, requires Stable, requires Fast
 - stable (1): Not eligible
-- hsdir (5): requires V2Dir, requires Stable, requires Fast, WFU below, TK below
+- hsdir (4): requires V2Dir, requires Stable, requires Fast, uptime below 96 hours
 - bandwidth (1): High deviation
 - descriptor (1): StaleDesc
 - flags (1): BadExit
@@ -32,7 +32,6 @@ SECONDS_PER_DAY = 86400
 GUARD_BW_GUARANTEE = 2_097_000  # AuthDirGuardBWGuarantee "2 MB", compared as 2097 KB/s
 GUARD_WFU_DEFAULT = 0.98
 GUARD_TK_DEFAULT = 691200  # 8 days
-HSDIR_TK_DEFAULT = 90000  # 25 hours
 
 
 class TestGenerateRelayIssues:
@@ -259,43 +258,29 @@ class TestConsensusIssues:
         assert len(stable_issues) >= 1
         assert stable_issues[0]['severity'] == 'warning'  # Changed from 'info'
     
-    def test_hsdir_wfu_below_is_warning(self):
-        """Test HSDir WFU below threshold is WARNING (changed from info)."""
+    def test_hsdir_uptime_below_is_warning(self):
+        """Fast, Stable and V2Dir without HSDir: the 96-hour uptime check is the one WARNING.
+
+        WFU and Time Known below the old 98% / 25-hour rule are not HSDir issues.
+        """
         consensus_data = {
             'in_consensus': True,
-            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],  # WFU below 98%
+            'authority_votes': [{'wfu': 0.90, 'tk': 10 * 3600}],
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
+            'flag_eligibility': {'hsdir': {'assigned_count': 4}},
         }
         
         issues = generate_issues_from_consensus(
             consensus_data,
-            current_flags=['Guard', 'Stable', 'Fast'],  # No HSDir
+            current_flags=['Guard', 'Stable', 'Fast', 'V2Dir'],  # No HSDir
             observed_bandwidth=3_000_000
         )
         
-        hsdir_issues = [i for i in issues if 'HSDir' in i['title'] and 'WFU' in i['title']]
-        assert len(hsdir_issues) >= 1
-        assert hsdir_issues[0]['severity'] == 'warning'  # Changed from 'info'
-    
-    def test_hsdir_tk_below_is_warning(self):
-        """Test HSDir Time Known below threshold is WARNING (changed from info)."""
-        consensus_data = {
-            'in_consensus': True,
-            'authority_votes': [{'wfu': 0.99, 'tk': 10 * 3600}],  # TK below 25 hours (HSDIR_TK_DEFAULT)
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-        }
-        
-        issues = generate_issues_from_consensus(
-            consensus_data,
-            current_flags=['Guard', 'Stable', 'Fast'],  # No HSDir
-            observed_bandwidth=3_000_000
-        )
-        
-        hsdir_tk_issues = [i for i in issues if 'HSDir' in i['title'] and 'Time Known' in i['title']]
-        assert len(hsdir_tk_issues) >= 1
-        assert hsdir_tk_issues[0]['severity'] == 'warning'  # Changed from 'info'
+        hsdir_issues = [i for i in issues if i['category'] == 'hsdir']
+        assert [i['title'] for i in hsdir_issues] == ['HSDir: uptime below 96 hours']
+        assert hsdir_issues[0]['severity'] == 'warning'
+        assert hsdir_issues[0]['section'] == 'flag-hsdir-uptime'
+        assert hsdir_issues[0]['description'].startswith('Only 4/9 authorities voted HSDir')
     
     def test_hsdir_requires_stable_is_warning(self):
         """Test HSDir requires Stable flag is WARNING when Stable missing."""
