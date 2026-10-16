@@ -14,7 +14,9 @@ from unittest.mock import Mock
 from allium.lib.aroi_validation import (
     calculate_aroi_validation_metrics,
     get_contact_validation_status,
+    _deduplicate_fingerprint_not_found_error,
     _format_timestamp,
+    _normalize_error_message,
     _simplify_error_message,
     _simplify_and_categorize_errors,
     _URI_FALLBACK_ERROR_SPLIT_RE,
@@ -328,7 +330,97 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(metrics['invalid_aroi_domains_count'], 1)
         self.assertIn(('Unknown error', 1), metrics['relay_error_top5'])
         self.assertIn(('Unknown error', 1), metrics['operator_error_top5'])
-    
+
+    def test_malformed_validator_errors_stay_displayable(self):
+        """Empty and non-string errors stay out of re.findall and str.lower.
+
+        A missing error key still displays today's 'Unknown error' default.
+        A real error string is returned unchanged. An error_category still
+        chooses the contact bucket when the error text itself is null.
+        """
+        relays = [{
+            'fingerprint': 'ABC123',
+            'nickname': 'test1',
+            'aroi_domain': 'example.com',
+            'country': 'us',
+        }]
+        malformed = (None, '', '   ', 0, 404, [], {}, True, b'404')
+        for error in malformed:
+            with self.subTest(error=error):
+                validation_data = {
+                    'metadata': {'timestamp': '2025-11-30T00:00:00Z'},
+                    'statistics': {'proof_types': {}},
+                    'results': [{
+                        'fingerprint': 'ABC123',
+                        'valid': False,
+                        'error': error,
+                        'proof_type': 'uri-rsa',
+                    }],
+                }
+                contact = get_contact_validation_status(
+                    relays, validation_data)
+                metrics = calculate_aroi_validation_metrics(
+                    relays, validation_data, calculate_operator_metrics=True)
+                self.assertEqual(
+                    contact['validation_status'], 'misconfigured')
+                self.assertEqual(
+                    contact['misconfigured_relays'][0]['error'],
+                    'Unknown error')
+                self.assertEqual(metrics['invalid_aroi_domains_count'], 1)
+                self.assertIn(
+                    ('Unknown error', 1), metrics['relay_error_top5'])
+                self.assertIn(
+                    ('Unknown error', 1), metrics['operator_error_top5'])
+
+        missing_key = {
+            'metadata': {'timestamp': '2025-11-30T00:00:00Z'},
+            'statistics': {'proof_types': {}},
+            'results': [{
+                'fingerprint': 'ABC123',
+                'valid': False,
+                'proof_type': 'uri-rsa',
+            }],
+        }
+        contact = get_contact_validation_status(relays, missing_key)
+        self.assertEqual(
+            contact['misconfigured_relays'][0]['error'], 'Unknown error')
+
+        categorized = {
+            'results': [{
+                'fingerprint': 'ABC123',
+                'valid': False,
+                'error': None,
+                'error_category': 'uri_content_mismatch',
+                'proof_type': 'uri-rsa',
+            }],
+        }
+        contact = get_contact_validation_status(relays, categorized)
+        self.assertEqual(contact['validation_status'], 'unauthorized')
+        self.assertEqual(
+            contact['unauthorized_relays'][0]['error'], 'Unknown error')
+
+        self.assertEqual(
+            _normalize_error_message('HTTP error 404'), 'HTTP error 404')
+        self.assertEqual(
+            _normalize_error_message('  HTTP error 404  '),
+            '  HTTP error 404  ')
+        self.assertEqual(
+            _normalize_error_message(_normalize_error_message(None)),
+            'Unknown error')
+        self.assertEqual(
+            _simplify_error_message(None), ('Unknown error', 'other'))
+        self.assertEqual(
+            _deduplicate_fingerprint_not_found_error(None), 'Unknown error')
+        raw = (
+            "Fingerprint not found in https://prsv.ch/rsa-fingerprint.txt; "
+            "Fingerprint not found in "
+            "https://www.prsv.ch/rsa-fingerprint.txt"
+        )
+        self.assertEqual(
+            _deduplicate_fingerprint_not_found_error(raw),
+            "Fingerprint not found in https://prsv.ch/rsa-fingerprint.txt, "
+            "https://www.prsv.ch/rsa-fingerprint.txt")
+
     def test_relay_error_top5_calculation(self):
         """Test that relay_error_top5 is calculated correctly."""
         relays = [
