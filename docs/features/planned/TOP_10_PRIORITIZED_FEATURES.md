@@ -32,7 +32,7 @@ The original shortlist treated the following as done. The paths below match the 
 
 ### Geographic heat map (open)
 
-`misc-countries.html` and the geographic card on `network-health.html` show country counts, Five Eyes and Fourteen Eyes shares, and regional concentration. `allium/templates/country.html` links to RouteFluxMap. The repository has no D3, Chart.js, or TopoJSON dependency, and no geographic-map module.
+`misc-countries.html` and the geographic card on `network-health.html` show country counts, Five Eyes and Fourteen Eyes shares, and regional concentration. `allium/templates/country.html` links to RouteFluxMap. The repository has no D3, Chart.js, or TopoJSON dependency, and no geographic-map module. Optional data for that linked site (country-rarity JSON, validated-operator JSON, an AS metrics URL) is proposed in [routefluxmap-enhancements.md](routefluxmap-enhancements.md). That proposal does not add a world map to Allium.
 
 Sketches: `milestone-1-graphs-charts.md`, `visualization-dashboard-proposal.md`. Those sketches assume a browser chart library. Charts that did ship are build-time PNG and SVG with no page JavaScript (`docs/features/implemented/history-charts.md`, `allium/lib/charts/`). PNG is the default because Tor Browser's Safest level disables SVG. A map still has to fit that static generator. This file does not specify one.
 

@@ -30,6 +30,7 @@ Generates ~21,700 HTML pages including:
 - `network-health.html` - Network health dashboard
 - `search-index.json` - Search data for Cloudflare Pages function
 - Individual pages for relays, contacts, countries, ASes, families, platforms, flags
+- RouteFluxMap links: nav and footer in `allium/templates/skeleton.html`, `#CC=` plus the uppercase ISO code on country pages, `#relay=` plus the fingerprint on relay pages. Further map exports are proposed in [RouteFluxMap enhancements](../features/planned/routefluxmap-enhancements.md).
 
 ## AROI Leaderboards (21 Categories)
 
