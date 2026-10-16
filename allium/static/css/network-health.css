@@ -60,6 +60,23 @@
 /* Repeated sub-metric spacing for small text under metric values */
 .metric-subtext { margin-top: 2px; }
 
+.obsolete-operators { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--nh-border-footer); }
+.obsolete-operators-label {
+    text-align: center;
+    font-size: 1.2rem;
+    color: var(--nh-text-label);
+    font-weight: 600;
+    margin: 2px 0 5px;
+}
+.obsolete-operators a.metric-item { display: block; text-decoration: none; color: inherit; }
+.obsolete-operators .metric-label { font-size: 1.05rem; line-height: 1.15; text-decoration: underline; }
+.obsolete-operators .metric-subtext {
+    display: block;
+    font-size: 1.05rem;
+    color: var(--nh-text-label-secondary);
+    font-weight: 500;
+}
+
 .card-metrics {
     display: flex;
     flex-direction: column;
