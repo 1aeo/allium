@@ -92,8 +92,10 @@ def validate_url_arguments(args):
     Uses urllib.parse.urlsplit for robust scheme parsing rather than string
     prefix matching, which could be bypassed with schemes like "httpx://".
     
-    --base-url is special: it accepts empty strings (the default), root-relative
-    paths (starting with '/'), and http/https URLs for vanity URL generation.
+    --base-url is special: it accepts empty strings (the default, site-root
+    output), root-relative subdirectory prefixes (for example "/tor-metrics"),
+    and http/https URLs. A bare "/" is rejected. Vanity links are built as
+    "{base}/{domain}/", so "/" becomes a scheme-relative "//domain/" URL.
     
     Args:
         args: argparse namespace with URL arguments
@@ -118,11 +120,15 @@ def validate_url_arguments(args):
         # Reject scheme-relative URLs like "//evil.example/..." which would
         # inherit the page's protocol and redirect to an attacker-controlled host.
         if attr == 'base_url':
-            # "/" looks like "site root", but downstream link building appends
-            # another slash and yields scheme-relative links (//example.com/...).
-            if url == '/':
+            # "/" looks like "site root", but vanity links are "{base}/{domain}/"
+            # and a bare slash becomes scheme-relative "//domain/". Whitespace
+            # around the slash is the same value. Subdirectory prefixes such as
+            # "/tor-metrics" stay valid, including a trailing slash.
+            if url.strip() == '/':
                 print("❌ Error: --base-url cannot be '/'")
-                print("   Use an absolute URL (e.g., https://example.com) or a subpath (e.g., /metrics)")
+                print("   Vanity links are built as {base}/{domain}/, so '/' becomes //domain/.")
+                print("   Omit --base-url for site-root output, or use a subdirectory")
+                print("   (for example /tor-metrics) or an absolute http(s) URL.")
                 sys.exit(1)
             if url.startswith('/') and not url.startswith('//'):
                 continue
@@ -151,7 +157,9 @@ if __name__ == "__main__":
         default="",
         help=(
             'public base URL for vanity, canonical, Open Graph, and sitemap '
-            'URLs (default: "" for root-relative local output)'
+            'URLs. Default "" is site-root output. A subdirectory such as '
+            '/tor-metrics or an absolute http(s) URL is also accepted. '
+            'A bare "/" is rejected'
         ),
         required=False,
     )
