@@ -1,0 +1,228 @@
+"""SEO URL helpers and crawler discovery files for generated sites."""
+
+import functools
+import logging
+import os
+from pathlib import Path, PurePosixPath
+import re
+from urllib.parse import quote, urlsplit, urlunsplit
+
+from .worker_pool import fork_map
+
+logger = logging.getLogger(__name__)
+
+MAX_HTML_BYTES = 1_900_000
+
+_MISC_SORT_RE = re.compile(
+    r"^misc/(families|networks|contacts|countries|platforms)"
+    r"-by-.+?(?P<page>-page-\d+)?\.html$"
+)
+_HREF_RE = re.compile(
+    r"(?P<prefix>\bhref\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']+)(?P=quote)",
+    re.IGNORECASE,
+)
+# ".html", also split by the tab/CR/LF that urlsplit strips from hrefs
+_HTML_SUFFIX_RE = re.compile(r"\.[\t\r\n]*h[\t\r\n]*t[\t\r\n]*m[\t\r\n]*l")
+
+
+def public_base_url(base_url):
+    """Return a normalized absolute HTTP(S) base URL, or ``None``.
+
+    A path prefix is retained so Allium can still be hosted below an origin.
+    Credentials, query strings, and fragments are rejected because they cannot
+    form a stable public site base.
+    """
+    parsed = urlsplit(base_url or "")
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+        return None
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError(
+            "base_url must not contain credentials, a query string, or a fragment"
+        )
+    path = parsed.path.rstrip("/")
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc, path, "", ""))
+
+
+def canonical_output_path(relative_path):
+    """Map duplicate generated files to the one output path we canonicalize."""
+    normalized = PurePosixPath(relative_path).as_posix().lstrip("/")
+    if normalized == "misc/aroi-leaderboards.html":
+        return "index.html"
+    match = _MISC_SORT_RE.match(normalized)
+    if match:
+        page_suffix = match.group("page") or ""
+        return f"misc/{match.group(1)}-by-bandwidth{page_suffix}.html"
+    return normalized
+
+
+def route_for_html(relative_path):
+    """Map a generated HTML path to its clean public route."""
+    relative = PurePosixPath(relative_path)
+    if relative.as_posix().lstrip("/") == "404.html":
+        return None
+    if relative.suffix != ".html":
+        raise ValueError(f"expected an HTML output path, got {relative_path!r}")
+    if relative.name == "index.html":
+        parent = relative.parent.as_posix().lstrip("/")
+        route = "/" if parent in ("", ".") else f"/{parent}/"
+    else:
+        route = f"/{relative.with_suffix('').as_posix().lstrip('/')}"
+    return quote(route, safe="/-._~")
+
+
+def canonical_url_for_output(base_url, relative_path):
+    """Return an absolute canonical when possible, otherwise root-relative."""
+    route = route_for_html(canonical_output_path(relative_path))
+    if route is None:
+        return None
+    base = public_base_url(base_url)
+    return f"{base}{route}" if base else route
+
+
+def clean_href(path):
+    """Convert a relative generated HTML link to its clean-route equivalent."""
+    if not path or not path.endswith(".html"):
+        return path
+    if path.endswith("/index.html"):
+        return path[:-10]
+    if path == "index.html":
+        return "./"
+    return path[:-5]
+
+
+@functools.lru_cache(maxsize=1 << 17)
+def _clean_route_href(value):
+    """Return the clean-route form of an internal ``.html`` href, else ``None``.
+
+    Cached because the same links (navigation, relay/AS/country links) repeat
+    across thousands of generated pages.
+    """
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc or value.startswith(("#", "//")):
+        return None
+    if not parsed.path.endswith(".html"):
+        return None
+    return urlunsplit(
+        ("", "", clean_href(parsed.path), parsed.query, parsed.fragment)
+    )
+
+
+def _href_match_before(html, index):
+    """Return the ``_HREF_RE`` match opening at the last quote before ``index``, else ``None``.
+
+    Walks back from that quote over ``\\s*=\\s*`` (``\\s`` follows
+    ``str.isspace``, as the regex engine does) to where ``href`` must start
+    and lets the regex check the rest.
+    """
+    # Bound the search for the (rare) single quote by the nearest double quote
+    double = html.rfind('"', 0, index)
+    end = max(double, html.rfind("'", max(double, 0), index))
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    if end <= 0 or html[end - 1] != "=":
+        return None
+    end -= 1
+    while end > 0 and html[end - 1].isspace():
+        end -= 1
+    return _HREF_RE.match(html, end - 4) if end >= 4 else None
+
+
+def rewrite_internal_links(html):
+    """Return ``(html, changed_links)`` with internal ``.html`` hrefs in clean-route form.
+
+    Pages carry few ``.html`` links but thousands of other hrefs, so only the
+    ``_HREF_RE`` match around each ``.html`` is rewritten: a match's value
+    holds no quotes, so it opens at the last quote before the ``.html``.
+    """
+    changed_links = 0
+
+    def replacement(match):
+        nonlocal changed_links
+        rewritten = _clean_route_href(match.group("value"))
+        if rewritten is None:
+            return match.group(0)
+        changed_links += 1
+        quote_char = match.group("quote")
+        return f"{match.group('prefix')}{quote_char}{rewritten}{quote_char}"
+
+    parts = []
+    position = 0
+    found = _HTML_SUFFIX_RE.search(html)
+    while found:
+        match = _href_match_before(html, found.start())
+        if match:
+            if _href_match_before(html, match.start()):
+                # A value ending in "href=" makes the regex consume this
+                # attribute's opening quote as its closing one: scan it all.
+                changed_links = 0
+                return _HREF_RE.sub(replacement, html), changed_links
+            parts += (html[position:match.start()], replacement(match))
+            position = match.end()
+        found = _HTML_SUFFIX_RE.search(html, (match or found).end())
+    parts.append(html[position:])
+    return "".join(parts), changed_links
+
+
+# Below this many files a worker pool costs more than it saves
+_PARALLEL_MIN_FILES = 256
+
+
+def map_html_files(function, html_paths, chunksize):
+    """Yield ``function(path)`` for each path in order, in worker processes
+    for large builds. If the pool fails (e.g. BrokenProcessPool when a worker
+    is OOM-killed), the paths still without a result run in this process."""
+    done = 0
+    if len(html_paths) >= _PARALLEL_MIN_FILES:
+        try:
+            for done, result in enumerate(fork_map(min(8, os.cpu_count() or 1), function, html_paths, chunksize), 1):
+                yield result
+        except Exception as exc:
+            logger.warning("HTML file worker pool failed (%s), processing %d of %d files sequentially",
+                           exc, len(html_paths) - done, len(html_paths))
+    yield from map(function, html_paths[done:])
+
+
+def _rewrite_html_file(html_path):
+    """Rewrite one HTML file and return changed-file and changed-link counts."""
+    path = Path(html_path)
+    original = path.read_text(encoding="utf-8")
+    rewritten, changed_links = rewrite_internal_links(original)
+    if rewritten == original:
+        return 0, changed_links
+    path.write_text(rewritten, encoding="utf-8")
+    return 1, changed_links
+
+
+def rewrite_internal_html_links(output_dir, modified_before=None):
+    """Rewrite internal ``.html`` hrefs to their public clean-route forms.
+
+    ``modified_before`` (a POSIX timestamp) limits the pass to files last
+    written before it. Pages rendered by the current run are already
+    rewritten as they are written, so only older leftovers need a pass.
+    """
+    output_path = Path(output_dir)
+    html_paths = [
+        str(path)
+        for path in sorted(output_path.rglob("*.html"))
+        if path.is_file()
+        and (modified_before is None or path.stat().st_mtime < modified_before)
+    ]
+    changed_files = changed_links = 0
+    for file_count, link_count in map_html_files(_rewrite_html_file, html_paths, 24):
+        changed_files += file_count
+        changed_links += link_count
+    return {"changed_files": changed_files, "changed_links": changed_links}
+
+
+def oversized_html_files(output_dir, max_bytes=MAX_HTML_BYTES):
+    """Return generated HTML files that exceed the guarded crawl size."""
+    output_path = Path(output_dir)
+    return sorted(
+        (
+            (path.relative_to(output_path).as_posix(), path.stat().st_size)
+            for path in output_path.rglob("*.html")
+            if path.is_file() and path.stat().st_size > max_bytes
+        ),
+        key=lambda item: item[1],
+        reverse=True,
+    )

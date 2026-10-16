@@ -29,7 +29,8 @@ From tor-relays mailing list analysis, the most common operator concerns include
 - Statistical outlier detection with ≥2σ deviations
 - Multi-period analysis (1M/6M/1Y/5Y) with network comparisons
 
-**Code:** `allium/lib/relays.py` (_compute_contact_display_data) with comprehensive reliability portfolio
+**Code:** `allium/lib/relays.py` (`_compute_contact_display_data()`) with comprehensive reliability portfolio
+> *Note (2026-02-15):* `relays.py` was refactored into 8 modules, but `_compute_contact_display_data()` remains in `relays.py` (~1,100 lines). Related operator analysis was extracted to `operator_analysis.py`.
 
 ---
 
@@ -324,7 +325,7 @@ From tor-relays mailing list analysis, the most common operator concerns include
 ## Implementation Plan
 
 ### Phase 1: Data Infrastructure (Weeks 1-2)
-1. Extend `_compute_contact_display_data()` method in `relays.py`
+1. Extend `_compute_contact_display_data()` method in `relays.py` (or new dedicated module — see `operator_analysis.py` for related code)
 2. Create new comparison calculation methods
 3. Implement peer grouping logic
 4. Add network percentile calculations

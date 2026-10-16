@@ -33,6 +33,8 @@ cd allium && python3 allium.py --progress
 
 ### Production Dependencies (`config/requirements.txt`)
 - **Jinja2 ≥2.11.2** - Template engine
+- **cairocffi ≥1.2.0, numpy ≥1.17** - PNG history charts (plus the cairo library and DejaVu Sans from the system, see README Requirements)
+- **zlib-ng ≥0.4.0** - optional, ~4x faster PNG deflate
 
 ### Development Dependencies (`config/requirements-dev.txt`)
 - **pytest ≥6.0.0** - Unit testing framework
@@ -42,6 +44,13 @@ cd allium && python3 allium.py --progress
 - **safety ≥1.10.0** - Dependency vulnerability checker
 - **djlint ≥1.0.0** - HTML/template linter
 - **memory-profiler ≥0.60.0** - Memory usage profiling
+
+### Adding a dependency
+
+1. Add it to `config/requirements.txt`.
+2. File it in `allium/lib/optional_deps.py`: `REQUIRED` (allium does not start without it), `SPEEDUPS` (used when installed, no notice), or a `FEATURES` entry with every key the `png` entry has: the module that imports it, its Debian/Ubuntu `python3-*` package, any system packages pip cannot install, and the options that build without it. `tests/unit/test_optional_deps.py` fails until steps 1 and 2 agree.
+3. For a `FEATURES` entry, call `optional_deps.check()` where `allium.py` resolves that feature's options, before fetching anything, so a missing package is announced with the commands that install it. A missing `REQUIRED` package stops `allium.py` at import with Python's `No module named` error, so step 4 is where people find its install commands.
+4. Name its install commands in the README's Requirements and in the comments of `config/requirements.txt`.
 
 ## 🧪 Running Tests
 
@@ -72,7 +81,7 @@ safety check
 
 ### For Production Users (Default)
 - Use `curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash`
-- Only installs Jinja2 (minimal dependencies)
+- Installs `config/requirements.txt` (Jinja2 and the PNG chart packages); prints the system packages charts still need
 - Optimized for deployment and running the site generator
 
 ### For Contributors/Developers
@@ -88,9 +97,43 @@ safety check
 4. **Set up development environment**: Use the developer setup above
 5. **Make your changes** and add tests if applicable
 6. **Run tests**: `pytest` and `flake8 .`
-7. **Commit your changes**: `git commit -am "Add your feature"`
-8. **Push to your fork**: `git push origin feature/your-feature`
-9. **Create a Pull Request** on GitHub
+7. **Run output comparison** for major changes (see below)
+8. **Commit your changes**: `git commit -am "Add your feature"`
+9. **Push to your fork**: `git push origin feature/your-feature`
+10. **Create a Pull Request** on GitHub
+
+## 🔍 Output Comparison (Major Changes)
+
+For any change that affects HTML output (templates, data processing, page
+generation), run a before/after comparison to verify nothing unexpected broke:
+
+```bash
+# 1. Generate baseline BEFORE your change
+python3 allium/allium.py --out allium/www_baseline --apis all --progress
+
+# 2. Make your code changes
+
+# 3. Generate output AFTER your change
+python3 allium/allium.py --out allium/www_after --apis all --progress
+
+# 4. Compare (~8 seconds for ~22k files)
+python3 compare_outputs.py
+```
+
+The comparison tool classifies every file as:
+- **Identical** — no change at all
+- **Timestamp only** — only volatile data changed (timestamps, uptimes, time-ago strings)
+- **Content diff** — real structural/content change that needs review
+
+Files flagged as "content diff" are shown with normalized unified diffs
+(timestamps stripped) so you see only meaningful changes. Review each to
+confirm they match your intended code change.
+
+Options: `--quiet` for summary only, `--max-diffs N` to limit output,
+`--diff-lines N` to control diff length per file. Exit code 0 means clean,
+1 means review needed.
+
+The `allium/www_baseline/` and `allium/www_after/` directories are gitignored.
 
 ## 📝 Code Style
 

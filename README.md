@@ -1,118 +1,222 @@
 # Allium
 
 [![CI/CD Pipeline](https://github.com/1aeo/allium/workflows/Allium%20CI/CD%20Pipeline/badge.svg)](https://github.com/1aeo/allium/actions)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: Unlicense](https://img.shields.io/badge/license-Public%20Domain-blue.svg)](https://unlicense.org/)
 
-**Advanced Tor Relay Analytics & Metrics Platform** - A powerful, security-hardened static site generator that creates comprehensive Tor relay metrics, statistics, and operator leaderboards from Onionoo API data.
+**Advanced Tor Relay Analytics & Metrics Platform** — a security-hardened static site generator that produces a browsable Tor relay analytics site from Onionoo API data.
 
-## 🚀 Quick Start
-**One-command setup** (recommended):
+### What You Get
+
+- **Static site output** in `allium/www/` — serve locally or deploy anywhere static files can be hosted
+- **Relay + operator analytics** — bandwidth, consensus weight, diversity views, uptime/reliability, and more
+- **AROI leaderboards** — 21 specialized categories recognizing authenticated relay operators
+
+### Why Allium?
+
+- **Privacy-First** — Generates static HTML requiring no server-side processing or JavaScript dependencies
+- **Security-Hardened** — Input sanitization, XSS protection, and dependency scanning built-in
+- **Deep Intelligence** — Goes beyond basic metrics with operator leaderboards and 6-layer analytics engine
+
+*Originally forked from [allium](https://git.jordan.im/allium), this version adds extensive analytics, operator leaderboards, and intelligence features.*
+
+![AROI Leaderboard Preview](docs/screenshots/aroi-leaderboard-top3-top6.png)
+
+## Quick Start
+
+### One-command setup (recommended)
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```
 
-**Manual installation**:
+### Safer install (inspect script first)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh -o setup.sh
+less setup.sh
+bash setup.sh
+```
+
+### Manual installation
+
 ```bash
 git clone https://github.com/1aeo/allium.git && cd allium
-pip3 install -r config/requirements.txt
+# Debian/Ubuntu: venv support, then the cairo library and chart font for PNG charts (without libcairo2 they are SVG)
+sudo apt install python3-venv libcairo2 fonts-dejavu-core
+
+# Create and activate virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+pip install -r config/requirements.txt
 cd allium && python3 allium.py --progress
 cd www && python3 -m http.server 8000
 # Visit http://localhost:8000
 ```
 
-**⚡ Update data**: `cd allium && python3 allium.py --progress`
+### Common Tasks
 
-## 📋 Table of Contents
+| Task | Command |
+|------|---------|
+| Generate site | `cd allium && python3 allium.py --progress` |
+| Serve output | `cd allium/www && python3 -m http.server 8000` |
+| Custom output dir | `python3 allium.py --out /path/to/site` |
+| Minimal memory mode | `python3 allium.py --apis details --progress` |
 
-- [🚀 Key Features](#-key-features)
-- [🌐 API Data Sources](#-api-data-sources)  
-- [📋 Usage & Configuration](#-usage--configuration)
-- [📊 Generated Content](#-generated-content)
-- [🌍 AROI Leaderboards](#-aroi-leaderboards)
-- [🔒 Security & Performance](#-security--performance)
-- [🛠️ Requirements](#️-requirements)
-- [📚 Documentation](#-documentation)
-- [🤝 Contributing](#-contributing)
-- [📷 Screenshots](#-screenshots)
-- [📄 License](#-license)
+### Resource Notes
 
-## 🚀 Key Features
+- **Memory**: Plan for **~3GB RAM** available (the uptime dataset alone peaks around ~2GB)
+- **Time**: Full generation takes ~2-5 minutes producing ~21,700 HTML pages
+- **Disk**: Output is ~500MB of HTML plus ~3.6GB of PNG charts (hard-linked from `data/cache/charts` on the build host; ~0.7GB as `--chart-format svg`)
 
-### Core Analytics
-- **Complete relay metrics** with advanced sorting and filtering
-- **Geographic distribution analysis** with rare country intelligence
-- **Platform and AS diversity tracking** across the network
-- **Bandwidth and consensus weight analytics** with multiple viewing modes
+📖 **[Full Quick Start Guide](docs/user-guide/quick-start.md)** — detailed setup instructions, troubleshooting, and deployment options.
 
-### Complete Uptime Intelligence System ⏰
-- **Reliability Champions Leaderboard** with "Reliability Masters" (6-month) & "Legacy Titans" (5-year) categories
-- **Comprehensive operator reliability portfolios** with multi-period analysis and network percentile positioning
-- **Flag-specific uptime tracking** with intelligent priority system (Exit > Guard > Fast > Running)
-- **Statistical outlier detection** identifying performance anomalies and optimization opportunities (≥2σ deviations)
-- **Network Health Dashboard** with real-time uptime metrics and concentration risk analysis
-- **Individual relay uptime display** with flag analysis and network context
+## Table of Contents
 
-### Enhanced User Interface 🎨
-- **Optimized contact pages** with streamlined reliability metrics and comprehensive analysis
-- **Enhanced family pages** with AROI and Contact navigation
-- **Country display improvements** with full country names and tooltips
-- **Responsive design** with mobile-friendly layouts
-- **JavaScript-free pagination** for AROI leaderboards with independent category navigation
+- [Key Features](#key-features)
+- [Usage & Configuration](#usage--configuration)
+- [API Data Sources](#api-data-sources)
+- [Security & Performance](#security--performance)
+- [Requirements](#requirements)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Screenshots](#screenshots)
+- [License](#license)
+- [References](#references)
 
-### AROI Leaderboard System 🏆
-- **17 specialized leaderboards** for authenticated relay operators across all performance dimensions
-- **Champion badge system** with elite performer recognition across categories
-- **Paginated rankings** with 1-10, 11-20, 21-25 views per category for optimal navigation
-- **Independent pagination** - each category manages its own page state with CSS-only navigation
-- **Reliability scoring system** with 6-month and 5-year average uptime analysis
-- **Bandwidth served analysis** with historical performance tracking
-- **25+ relay eligibility filter** ensuring statistical significance for reliability categories
-- **Multi-dimensional scoring** across capacity, diversity, reliability, and innovation
-- **Geographic diversity scoring** with frontier country recognition and non-EU leadership
-- **Platform diversity metrics** highlighting technical leadership beyond Linux
-- **Network address diversity** with IPv4/IPv6 unique address distribution tracking
-- **Veteran recognition** with scale-weighted tenure analysis
+## Key Features
 
-### Security & Performance 🔒
-- **XSS-hardened templates** with comprehensive input sanitization
-- **Static generation** for maximum performance and security
-- **Memory-efficient processing** with real-time monitoring
-- **Parallel API fetching** (27s vs 31s sequential)
-- **Template optimization** with logic moved from Jinja2 to Python for better performance
-- **Pre-computed display data** reducing template rendering complexity
+<details>
+<summary><strong>Data Processing</strong></summary>
 
-### Network Health Dashboard 📊
-- **Comprehensive network monitoring** with 10-card dashboard layout
-- **Real-time network metrics** including relay counts, bandwidth stats, uptime analysis
-- **IPv6 adoption tracking** at relay, operator, and network levels
-- **Geographic and provider diversity** with concentration risk analysis
-- **Performance analytics** with CW/BW ratio calculations and percentile rankings
+- Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
+- Multiprocessing page generation (configurable via `--workers`)
+- Downtime filtering: excludes relays not seen for >7 days before the Onionoo snapshot, including relays Onionoo still marks as running (configurable via `--filter-downtime`)
+- Generates relay, contact, country, AS, family, platform, and flag pages
+- History charts (1M/6M/1Y/5Y), bandwidth and uptime on relay pages and the operator's summed bandwidth on contact pages, drawn at build time with no JavaScript: PNG by default so they show at Tor Browser's Safest level (see the `--chart-*` options), reused from `data/cache/charts` while unchanged. Periods switch with CSS and deep-link: `relay/<fingerprint>/#bandwidth-6m` for one chart, `#6m` for every chart on the page
 
-### Directory Authorities Monitoring 🏛️
-- **Authority health tracking** with uptime statistics and Z-score outlier detection
-- **Network consensus monitoring** displaying authority status, geographic distribution, and performance metrics
+</details>
 
-### Intelligence Features 🧠
-- **6-layer intelligence engine** with sub-millisecond analysis performance
-- **Context analysis** with automatic relationship mapping and pattern detection
-- **Performance correlation analysis** with CW/BW ratio intelligence and network benchmarking
-- **Geographic intelligence** with concentration risk analysis and jurisdiction mapping
-- **Infrastructure intelligence** with AS concentration and provider diversity assessment
-- **Statistical intelligence** with network percentiles and outlier detection
-- **22 template integration points** across contact pages, health dashboard, and relay info
-- **Dynamic classification system** with tier-based country rankings
-- **Underutilized relay detection** identifying optimization opportunities for operators
+<details>
+<summary><strong>AROI Leaderboards (21 Categories)</strong></summary>
 
-## 🌐 API Data Sources
+Authenticated Relay Operator Identification system ranking verified operators:
 
-allium integrates with multiple Tor Project APIs:
+**Capacity**: Bandwidth Contributed, Consensus Weight Leaders, Total Data Transferred Champions (5yr)  
+**Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
+**Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
+**Diversity** (two co-equal boards per dimension — Volume = scale of non-dominant contribution, Breadth = distinct spread within one operator): Diversity All-Rounders (overall, ranked by a 0-100 Diversity Index averaging four co-equal Geographic/Platform/Network/Scale sub-scores with yardsticks derived from the live network), Non-Linux Powerhouses (platform volume), OS Polyglots (platform breadth, 2+ distinct OSes incl. Linux), Global Powerhouses (non-EU volume), Jurisdiction Globetrotters (non-EU breadth), Frontier Builders (rare-country breadth)  
+**Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions (with v2/v3 split columns + tiered migration badges 🔍/🔁/🚀/🏆)
+
+- Paginated rankings (Top 10, 11-20, 21-25) with CSS-only navigation
+- Champion badge system for top performers
+- Dual CIISS spec support: tracks both ciissversion:2 (RSA-fingerprint proofs) and ciissversion:3 (ed25519 happy-family proofs) with operator-level migration tier classification
+
+</details>
+
+<details>
+<summary><strong>Reliability System</strong></summary>
+
+- Multi-period uptime tracking: 1-month, 6-month, 1-year, 5-year
+- Flag-specific uptime with priority: Exit > Guard > Fast > Running
+- Network percentile positioning (5th, 25th, 50th, 75th, 90th, 95th, 99th)
+- Statistical outlier detection using ≥2σ standard deviation threshold
+- Uptime normalization from Onionoo 0-999 scale to 0-100%
+- Minimum 30 data points required for valid calculations
+
+</details>
+
+<details>
+<summary><strong>Network Health Dashboard</strong></summary>
+
+Real-time metrics at `network-health.html`:
+
+- Relay counts by role (exit/guard/middle) with percentages
+- Bandwidth distribution (total, by role, mean/median per category)
+- Uptime statistics (1mo mean/median by role, multi-period series)
+- AROI validation status (CIISS spec v2 + v3 dual-spec): per-version success rates, ciissversion adoption, peer-issue alerts (🚨 leaked-key incidents, ⏳ pending Onionoo refresh)
+- IPv4/IPv6 adoption rates
+- Flag distribution (Fast, Stable, HSDir, V2Dir, Authority)
+- New relay tracking (24h, 30d, 6mo, 1yr)
+
+</details>
+
+<details>
+<summary><strong>Intelligence Engine (6 Layers)</strong></summary>
+
+Pre-computed analysis attached to contact pages:
+
+1. **Basic Relationships** — total countries, networks, operators, families, platforms
+2. **Concentration Patterns** — top-3 country/AS weight, Five Eyes percentage, no-contact percentage
+3. **Performance Correlation** — measured percentage, underutilized relay detection, CW/BW efficiency ratio
+4. **Infrastructure Dependency** — unique Tor versions, critical AS identification (>5% weight), sync risk assessment
+5. **Geographic Clustering** — Five/Fourteen Eyes influence, regional HHI concentration index
+6. **Capacity Distribution** — Gini coefficient, guard/exit capacity percentages
+
+</details>
+
+<details>
+<summary><strong>Directory Authorities</strong></summary>
+
+`misc/authorities.html` provides:
+
+- Authority uptime statistics with Z-score outlier detection
+- Version compliance tracking
+- Consensus participation monitoring
+- Geographic distribution
+
+</details>
+
+## Usage & Configuration
+
+```bash
+./allium.py [options]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--out` | `./www` | Output directory for generated files |
+| `--onionoo-url` | `https://onionoo.torproject.org/details` | Onionoo API endpoint |
+| `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Historical bandwidth API endpoint |
+| `--bandwidth-cache-hours` | `12` | Cache time for historical bandwidth data (hours) |
+| `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
+| `--progress` | `false` | Show detailed progress with memory usage |
+| `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
+| `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
+| `--workers` | CPU count (min 4) | Parallel workers for page generation |
+| `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
+| `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) plus the cairo library ([PNG charts](#png-charts)), without which the default writes SVG with a notice naming the install commands and an explicit `--chart-format png` stops; DejaVu Sans (`fonts-dejavu-core`) keeps the chart font; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~10 KB per chart, no extra packages, blank at Safest |
+| `--chart-scale` | `2` | PNG resolution: `2` (2160 px wide, sharp on HiDPI screens), `1.5` or `1`; the page lays charts out at 1080 px either way |
+| `--chart-colors` | `64` | PNG colors: `64` (a fixed palette, ~53 KB a chart at 2x, looks the same) or `full` (~150 KB) |
+| `--chart-layout` | `beside` | Where the charts go: `beside` (in each relay's and contact's page folder) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, linked relative to each page, to serve them apart from the pages); a build leaves no charts of the other layout behind |
+
+**Examples**:
+
+```bash
+# Generate with progress tracking
+./allium.py --progress
+
+# Custom output with bytes units
+./allium.py --out /var/www/tor-metrics --display-bandwidth-units bytes
+
+# Minimal memory mode (~400MB instead of ~2.4GB)
+./allium.py --apis details --progress
+```
+
+## API Data Sources
+
+Allium integrates with multiple Tor Project APIs:
 
 ### Onionoo Details API
+
 - **URL**: `https://onionoo.torproject.org/details`
 - **Purpose**: Core relay information (bandwidth, flags, location, technical details)
-- **Memory Usage**: ~400MB during processing
-- **Usage**: Primary data source for relay listings, geographic analysis, operator metrics
+- **Memory**: ~400MB during processing
 
-**Sample Data**:
+<details>
+<summary>Sample response</summary>
+
 ```json
 {
   "relays": [{
@@ -128,19 +232,17 @@ allium integrates with multiple Tor Project APIs:
 }
 ```
 
-### Onionoo Uptime API  
+</details>
+
+### Onionoo Uptime API
+
 - **URL**: `https://onionoo.torproject.org/uptime`
-- **Purpose**: Historical uptime statistics and flag history for reliability analysis
-- **Memory Usage**: ~2GB during processing (large historical dataset)
-- **Usage**: Enhanced relay reliability metrics and performance analysis
+- **Purpose**: Historical uptime statistics, flag history for reliability analysis, **and cross-check source for `first_seen` correction** (see Notable behaviour below)
+- **Memory**: ~2GB during processing (large historical dataset)
 
-### Onionoo Bandwidth API
-- **URL**: `https://onionoo.torproject.org/bandwidth`
-- **Purpose**: Historical bandwidth statistics for trend analysis and optimization
-- **Cache**: Configurable cache time (default: 12 hours)
-- **Usage**: Historical bandwidth data for performance tracking and analysis
+<details>
+<summary>Sample response</summary>
 
-**Sample Data**:
 ```json
 {
   "relays": [{
@@ -157,205 +259,165 @@ allium integrates with multiple Tor Project APIs:
 }
 ```
 
+</details>
+
+### Onionoo Bandwidth API
+
+- **URL**: `https://onionoo.torproject.org/bandwidth`
+- **Purpose**: Historical bandwidth statistics for trend analysis
+- **Cache**: Configurable (default: 12 hours)
+
 **Performance Features**: Parallel API fetching, HTTP conditional requests, graceful fallback to cached data
 
-## 📋 Usage & Configuration
+### Notable behaviour: first_seen correction
 
-```bash
-./allium.py [options]
-```
+Allium repairs the `first_seen` field on each relay using Onionoo's
+`/uptime` endpoint before page generation. This works around a long-standing
+upstream Onionoo bug (issues
+[#40018](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40018),
+[#40028](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40028),
+[#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),
+[#40042](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042))
+which periodically resets `first_seen` for large fractions of the network
+after backend state-loss events. When the bug is active, a per-run summary
+log line reports how many relays were repaired and the resulting
+`network_mean_age_formatted` reflects the corrected (older) dates. Logic
+lives in `allium/lib/first_seen_correction.py` and will be removed once
+the upstream bug is fixed.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--out` | `./www` | Output directory for generated files |
-| `--onionoo-url` | `https://onionoo.torproject.org/details` | Onionoo API endpoint |
-| `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Historical bandwidth API endpoint |
-| `--bandwidth-cache-hours` | `12` | Cache time for historical bandwidth data (hours) |
-| `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
-| `--progress` | `false` | Show detailed progress with memory usage |
-
-**Examples**:
-```bash
-# Generate with progress tracking
-./allium.py --progress
-
-# Custom output with bytes units
-./allium.py --out /var/www/tor-metrics --display-bandwidth-units bytes
-```
-
-## 📊 Generated Content
-
-### Main Analytics
-- **Index page** - Top 500 relays by consensus weight
-- **Complete relay listing** - All active relays with filtering
-- **AROI leaderboards** - 17 specialized operator categories
-- **Geographic analysis** - Rare country intelligence
-
-### Categorized Views
-- **By Country** - Rare/frontier country analysis
-- **By Platform** - OS and version distributions  
-- **By AS Number** - Autonomous system diversity
-- **By Contact** - Operator family groupings
-- **By Bandwidth/Weight** - Multiple sorting options
-
-### Individual Pages
-- **Per-relay details** - Complete technical specifications
-- **Operator profiles** - Achievement metrics and diversity scoring
-- **Geographic summaries** - Country-level statistics
-- **Network Health Dashboard** - Real-time network monitoring and analysis
-- **Directory Authorities** - Consensus health tracking with uptime analysis and version compliance monitoring
-
-## 🌍 AROI Leaderboards
-
-Seventeen specialized categories tracking authenticated operator achievements across five core dimensions:
-
-**🚀 Capacity & Performance**  
-1. **Bandwidth Contributed** - Total observed bandwidth capacity  
-2. **Consensus Weight Authority** - Network routing control influence
-
-**🛡️ Network Role Specialization**  
-3. **Exit Authority Champions** - Exit consensus weight control  
-4. **Guard Authority Champions** - Guard consensus weight control  
-5. **Exit Operators** - Exit relay infrastructure providers  
-6. **Guard Operators** - Guard relay infrastructure providers
-
-**⏰ Reliability & Performance Excellence**  
-7. **Reliability Masters** - 6-month average uptime (25+ relays)  
-8. **Legacy Titans** - 5-year average uptime (25+ relays)
-
-**🌍 Diversity & Geographic Leadership**  
-9. **Most Diverse Operators** - Multi-factor diversity scoring  
-10. **Platform Diversity Heroes** - Non-Linux operational excellence  
-11. **Non-EU Leaders** - Geographic expansion beyond EU  
-12. **Frontier Builders** - Operations in underrepresented countries
-
-**🏆 Innovation & Leadership**  
-13. **Network Veterans** - Scale-weighted operational tenure  
-14. **IPv4 Address Leaders** - Unique IPv4 address diversity  
-15. **IPv6 Address Leaders** - Unique IPv6 address diversity
-
-**📊 Bandwidth Performance Excellence**  
-16. **Bandwidth Served Masters** - 6-month bandwidth performance (25+ relays)  
-17. **Bandwidth Served Legends** - 5-year bandwidth performance (25+ relays)
-
-## 🔒 Security & Performance
+## Security & Performance
 
 - **Global XSS protection** via Jinja2 autoescape
 - **Input sanitization** for all external data sources
-- **Static generation** eliminating server-side vulnerabilities  
+- **Static generation** eliminating server-side vulnerabilities
 - **No JavaScript dependencies** for maximum security
 - **Real-time memory usage tracking** during generation
-- **Optimized template rendering** with security hardening
 - **Scalable architecture** supporting large relay counts
 
-## 🛠️ Requirements
+## Requirements
 
-### Production (Minimal)
+### Production
+
 - **Python 3.8+**
 - **Jinja2 ≥2.11.2**
 
+### PNG charts
+
+PNG is the default chart format; `--chart-format svg` and `--no-charts` need none of this. It needs
+**cairocffi ≥1.2.0** and **numpy ≥1.17** from `config/requirements.txt` (and optionally **zlib-ng**, ~4x faster
+deflate), plus the cairo library, which pip cannot install. Without them allium writes SVG charts and prints the
+commands that install them for the Python it runs on. The DejaVu Sans font, also a system package, keeps the chart
+font: without it allium warns, and the PNG text falls back to another font.
+
+```bash
+# A virtualenv, after pip install -r config/requirements.txt
+sudo apt install libcairo2 fonts-dejavu-core   # Debian/Ubuntu
+sudo dnf install cairo dejavu-sans-fonts       # Fedora
+
+# Debian/Ubuntu's own python3, no virtualenv (on Ubuntu, python3-cairocffi is in universe)
+sudo apt install python3-jinja2 python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
+```
+
 ### Development (Additional)
-- **pytest ≥6.0.0** - Unit testing framework
-- **pytest-cov ≥2.10.0** - Coverage reporting
-- **flake8 ≥3.8.0** - Code style checker
-- **bandit ≥1.7.0** - Security vulnerability scanner
-- **safety ≥1.10.0** - Dependency vulnerability checker
-- **djlint ≥1.0.0** - HTML/template linter
-- **memory-profiler ≥0.60.0** - Memory usage profiling
 
-## 📚 Documentation
+- **pytest ≥6.0.0** — Unit testing framework
+- **pytest-cov ≥2.10.0** — Coverage reporting
+- **flake8 ≥3.8.0** — Code style checker
+- **bandit ≥1.7.0** — Security vulnerability scanner
+- **safety ≥1.10.0** — Dependency vulnerability checker
+- **djlint ≥1.0.0** — HTML/template linter
+- **memory-profiler ≥0.60.0** — Memory usage profiling
 
-Comprehensive documentation is available in the [`docs/`](docs/) directory:
+## Documentation
 
-### 👥 For Users
-- **[Quick Start Guide](docs/user-guide/quick-start.md)** - Get running in 5 minutes
-- **[Configuration Guide](docs/user-guide/configuration.md)** - All options and automation setup
-- **[Updating Guide](docs/user-guide/updating.md)** - Keep data and code current
-- **[Features Guide](docs/user-guide/features.md)** - Understanding all 17 AROI categories and features
+Comprehensive documentation in [`docs/`](docs/):
 
-### 👨‍💻 For Developers
-- **[Development Guide](docs/development/README.md)** - Contributing and development setup
-- **[Testing Standards](docs/development/testing.md)** - Test naming and organization
-- **[Performance Guide](docs/development/performance.md)** - Current status and optimization
-- **[Security Guide](docs/development/security.md)** - Security best practices
+### For Users
 
-### 📖 Additional Resources
-- **[Complete Documentation Index](docs/README.md)** - Full documentation navigation
-- **[Roadmap 2025-2026](docs/ROADMAP.md)** - Future plans and milestones
-- **[Architecture Overview](docs/architecture/README.md)** - System design
-- **[Implemented Features](docs/features/implemented/)** - What works now
-- **[Planned Features](docs/features/planned/)** - What's coming next
+- **[Configuration Guide](docs/user-guide/configuration.md)** — All options and automation setup
+- **[Deployment Guide](docs/user-guide/deployment.md)** — Web server setup
+- **[Troubleshooting](docs/user-guide/troubleshooting.md)** — Common issues and solutions
 
-## 🤝 Contributing
+### For Developers
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed setup instructions.
+- **[Architecture Overview](docs/architecture/overview.md)** — System design and data flow
+- **[Testing Standards](docs/development/testing.md)** — Test naming and organization
+- **[Security Guide](docs/development/security.md)** — Security best practices
 
-### 🧪 Developer Setup
+### Additional Resources
 
-**Quick developer setup** (includes testing and linting tools):
+- **[Documentation Index](docs/README.md)** — Full navigation
+- **[Roadmap 2025-2026](docs/features/planned/allium-roadmap-2025.md)** — Future plans
+- **[Current Capabilities](docs/reference/current-capabilities.md)** — All working features
+- **[Planned Features](docs/features/planned/)** — What's coming next
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
+
+### Developer Setup
+
+Follow [Quick Start](#quick-start), then install dev dependencies:
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -s -- --dev
-```
-
-**Manual developer setup**:
-```bash
-git clone https://github.com/1aeo/allium.git && cd allium
-python3 -m venv venv && source venv/bin/activate
 pip install -r config/requirements-dev.txt
-cd allium && python3 allium.py --progress
 ```
 
-**Run tests**: `pytest` • **Lint code**: `flake8 .` • **Security scan**: `bandit -r .`
+**Run tests**: `pytest` • **Lint**: `flake8 .` • **Security scan**: `bandit -r .`
 
-### 🎯 Contributing Areas
+### Contributing Areas
 
-Areas where contributions are particularly welcome:
 - Security enhancements and vulnerability reporting
 - Analytics improvements and new leaderboard categories
 - Geographic intelligence and country classification updates
 - Performance optimizations and memory efficiency
 - Template improvements and UI enhancements
 
-## 📷 Screenshots
+## Screenshots
 
-### AROI Leaderboard - Top 3 and Top 6 Champions
+### AROI Leaderboard — Top 3 and Top 6 Champions
+
 ![AROI Leaderboard Top 3 and Top 6](docs/screenshots/aroi-leaderboard-top3-top6.png)
 
-Main AROI leaderboard showing top operators across categories with expandable views highlighting achievements in bandwidth, consensus weight, and network diversity.
+Main AROI leaderboard showing top operators across categories with expandable views.
 
-### AROI Leaderboard - Top 25 Bandwidth Capacity Champions
+### AROI Leaderboard — Top 25 Bandwidth Champions
+
 ![AROI Leaderboard Top 25 Bandwidth](docs/screenshots/aroi-leaderboard-top25-bandwidth.png)
 
-Detailed ranking of the top 25 bandwidth contributors showing authenticated relay operators with precise measurements and network impact metrics.
+Detailed ranking of top bandwidth contributors with network impact metrics.
 
-### AROI Leaderboard - Champions Badges
+### AROI Leaderboard — Champions Badges
+
 ![AROI Leaderboard Champions Badges](docs/screenshots/aroi-leaderboard-champions-badges.png)
 
-Achievement badge system displaying operator accomplishments including geographic diversity, platform diversity, frontier building, and network veteran status.
+Achievement badge system displaying operator accomplishments.
 
 ### Browse by Contact
+
 ![Browse by Contact](docs/screenshots/browse-by-contact.png)
 
-Contact-based interface for exploring relay operators grouped by contact information, enabling easy navigation of operator families and collective contributions.
+Contact-based interface for exploring relay operators grouped by contact information.
 
-### Browse by Contact - 1aeo Example
-![Browse by Contact 1aeo](docs/screenshots/browse-by-contact-1aeo.png.jpg)
+### Browse by Contact — 1aeo Example
 
-Individual operator profile showing relay family details, geographic distribution, and technical specifications across their network infrastructure.
+![Browse by Contact 1aeo](docs/screenshots/browse-by-contact-1aeo.png)
 
-## 📄 License
+Individual operator profile showing relay family details and geographic distribution.
+
+## License
 
 **UNLICENSE** (public domain)
 
 **Third-Party Assets**: Country flags (GoSquared), Relay flags (The Tor Project)
 
-## 🔗 References
+## References
 
-- [Original allium](https://git.jordan.im/allium) - Fork source
-- [Tor Metrics Project](https://metrics.torproject.org/) - Official metrics (inspiration)
-- [Onionoo API](https://onionoo.torproject.org/) - Tor relay data source
-- [Tor Project](https://www.torproject.org/) - Privacy and anonymity network
+- [Original allium](https://git.jordan.im/allium) — Fork source
+- [Tor Metrics Project](https://metrics.torproject.org/) — Official metrics (inspiration)
+- [Onionoo API](https://onionoo.torproject.org/) — Tor relay data source
+- [Tor Project](https://www.torproject.org/) — Privacy and anonymity network
 
 ---
 
-**allium** - Empowering Tor network analysis with intelligence, security, and performance.
+**allium** — Empowering Tor network analysis with intelligence, security, and performance.
