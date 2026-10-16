@@ -1262,7 +1262,7 @@ Platform: unknown
             <span class="al-status-success">{{ relay['version_status']|capitalize|escape }}</span>
         {% elif relay['version_status'] == 'obsolete' -%}
             <span class="al-status-danger-bold">{{ relay['version_status']|capitalize|escape }}</span>
-            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>{% set _op = (relays.json.network_health.get('obsolete_operators') or {}).get(relay['contact_md5']) %}{% if _op %}<span class="al-text-small-muted"> — {{ _op.relay_plain|e }} <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/#version-compliance">Operator versions</a></span>{% endif %}{{ '' }}
         {% elif relay['version_status'] == 'experimental' -%}
             <span class="al-status-warning">{{ relay['version_status']|capitalize|escape }}</span>
         {% else -%}

@@ -910,6 +910,13 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         intelligence_formatted['version_status'] = result
     
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
+    # Same ranking the network-health card computed while scanning relays.
+    _ops = {}
+    if hasattr(relay_set, 'json'):
+        _ops = (relay_set.json.get('network_health') or {}).get('obsolete_operators') or {}
+    _hit = _ops.get(v)
+    if _hit:
+        intelligence_formatted['obsolete_weight_li'] = _hit['weight_li']
     
     # 4b. Family support counts (replaces former Family Certificate Migration section)
     # Counts are computed in the version compliance loop above — no separate loop needed.

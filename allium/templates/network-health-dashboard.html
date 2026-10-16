@@ -741,6 +741,20 @@ Network Health Dashboard
                         <span class="metric-label">Outdated</span>
                     </div>
                 </div>
+                {% if relays.json.network_health.obsolete_operator_top %}
+                <div class="obsolete-operators">
+                    <div class="obsolete-operators-label" title="Operators with the most consensus weight on relays directory authorities mark obsolete. Consensus weight estimates relay utility (Dejaeghere et al. 2026, section 6.5). Relays with no contact are omitted.">Highest-weight obsolete operators</div>
+                    <div class="metric-grid">
+                        {% for op in relays.json.network_health.obsolete_operator_top %}
+                        <a class="metric-item" href="{{ page_ctx.path_prefix }}contact/{{ op.contact_hash }}/#version-compliance" title="{{ op.title|e }}">
+                            <span class="metric-value">{{ op.weight_pct }}</span>
+                            <span class="metric-label">{{ op.display_name|e }}</span>
+                            <span class="metric-subtext">{{ op.count_label }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         
