@@ -1763,6 +1763,24 @@ class TestHSDirUptimeRow:
         assert rows['Uptime']['status_text'] == 'Below (4/9 DA)'
         assert '2.0d' in rows['Uptime']['value']
 
+    def test_inactive_vote_is_not_an_uptime_pass(self, fetcher):
+        """Eight HSDir votes plus one vote with no Running or Valid stay 8/9.
+
+        That authority also lacks Fast, Stable and V2Dir, so the relay-reported
+        uptime would otherwise be counted as a ninth pass.
+        """
+        votes = fetcher.relay_index[self.FINGERPRINT]['votes']
+        for auth, (hsdir, _wfu, _tk) in self.VOTES.items():
+            if auth == 'dannenberg' or hsdir:
+                continue
+            votes[auth]['flags'].append('HSDir')
+        flags = votes['dannenberg']['flags']
+        for flag in ('Fast', 'Stable', 'V2Dir', 'Running', 'Valid', 'Guard'):
+            if flag in flags:
+                flags.remove(flag)
+        _, rows = self._hsdir_rows(fetcher, 12.4 * SECONDS_PER_DAY)
+        assert rows['Uptime']['status_text'] == 'Partial (8/9 DA)'
+
     def test_older_collector_details_still_count_relay_uptime(self):
         """A cache written before uptime_fallback still counts authorities missing a prerequisite."""
         evaluation = {

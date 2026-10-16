@@ -552,14 +552,18 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     relay_tk = tk_stats['primary_value']
 
     # HSDir uptime: the vote stands in once Fast, Stable and V2Dir passed.
-    # An authority still missing one of those is judged by the relay-reported uptime.
+    # An authority still missing one of those is judged by the relay-reported uptime,
+    # and only when that vote also has Running and Valid. Without them the authority
+    # never applied the 96-hour check. Older details omit the two flags and still count.
     hsdir_eligibility = flag_eligibility.get('hsdir', {})
     hsdir_details = hsdir_eligibility.get('details') or []
     uptime_ok = relay_uptime is not None and relay_uptime >= HSDIR_UPTIME_DEFAULT
     if hsdir_details:
         hsdir_uptime_meets_count = sum(
             1 for detail in hsdir_details
-            if detail.get('assigned') or (uptime_ok and not _hsdir_prereqs(detail)))
+            if detail.get('assigned') or (
+                uptime_ok and not _hsdir_prereqs(detail)
+                and detail.get('has_running', True) and detail.get('has_valid', True)))
     else:
         hsdir_uptime_meets_count = hsdir_eligibility.get('assigned_count', 0)
     hsdir_strict_note = _hsdir_stricter_note(flag_thresholds)

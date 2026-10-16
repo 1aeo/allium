@@ -1295,11 +1295,18 @@ class CollectorFetcher:
             })
             
             # 96h uptime is not in the vote. The HSDir vote stands in once Fast, Stable and V2Dir passed.
+            # Running and Valid are recorded so a vote that never reached that check is not
+            # later counted as an uptime pass from the relay's own uptime.
             has_hsdir_flag = 'HSDir' in auth_flags
             if has_hsdir_flag:
                 eligibility['hsdir']['eligible_count'] += 1
                 eligibility['hsdir']['assigned_count'] += 1
-            eligibility['hsdir']['details'].append({'assigned': has_hsdir_flag, 'prereqs': guard_prereqs_met})
+            eligibility['hsdir']['details'].append({
+                'assigned': has_hsdir_flag,
+                'prereqs': guard_prereqs_met,
+                'has_running': 'Running' in auth_flags,
+                'has_valid': 'Valid' in auth_flags,
+            })
             
             # Simple flag tracking: Exit, MiddleOnly, BadExit
             # These flags have no numeric thresholds — purely presence-based.
