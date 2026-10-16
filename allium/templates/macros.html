@@ -159,14 +159,68 @@
 {% macro family_support_inline(fsc) -%}
 {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) -%}
 {% if fsc_total > 0 -%}
-{% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
+{% if fsc.get('both', 0) > 0 %}<span class="al-status-success">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('happy_families', 0) > 0 %}<span class="al-status-success">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('my_family', 0) > 0 %}<span class="al-status-danger">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('none', 0) > 0 %}<span class="al-status-muted">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
 {% endif -%}
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none) -%}
+{# DRY: DNS health summary bullet — used by detail_summary, contact.html, country.html #}
+{%- macro dns_health_bullet(summary, label="exit relays") -%}
+<span class="al-status-success">{{ summary.healthy }} healthy ({{ summary.healthy_pct }}%)</span>
+{%- if summary.failing > 0 %}, <span class="al-status-danger">{{ summary.failing }} failing ({{ summary.failing_pct }}%)</span>{% endif %}
+{%- if summary.untested > 0 %}, {{ summary.untested }} untested ({{ summary.untested_pct }}%){% endif %}
+ of {{ summary.exit_count }} {{ label }}
+{%- endmacro -%}
+
+{# DRY: Overload summary bullet — used by detail_summary (family/AS pages) and contact.html.
+   Hidden entirely when summary is none/empty (0 overloaded relays).
+   Whitespace-stripped so a missing bullet leaves no blank-line residue in the <ul>.
+   Optional (contact pages): link_href wraps the count in a link to the by-overload.html
+   sort variant; path_prefix renders a fully expanded sub-list linking every overloaded
+   relay (impact order) to its relay/<FP>/#overload detail section. Defaults keep
+   family/AS output unchanged. #}
+{%- macro overload_bullet(summary, link_href=none, path_prefix=none) -%}
+{%- if summary -%}
+<li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor proposal 328: out-of-memory, onionskin drops, TCP port exhaustion), hits its configured bandwidth rate limits, or exhausts file descriptors. Sources: Onionoo /details and /bandwidth endpoints.">Overloaded</span>:</strong>
+{% if link_href %}
+    <a href="{{ link_href }}" class="al-status-danger" title="Show the relay table with overloaded relays sorted first">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</a>
+{%- else %}
+    <span class="al-status-danger">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</span>
+{%- endif %}
+{%- if path_prefix is not none and summary.relays %}
+    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+        <li style="font-size: 13px;">
+            {%- for r in summary.relays %}<a href="{{ path_prefix }}relay/{{ r['fingerprint']|escape }}/#overload" class="al-status-danger" title="{{ r['stability_tooltip']|escape }}">{{ r['nickname']|escape }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        </li>
+    </ul>
+{%- endif -%}
+</li>
+{%- endif -%}
+{%- endmacro -%}
+
+{# DRY: Network-wide DNS health bullet — used by all 5 misc listing pages #}
+{%- macro network_dns_health_bullet(nh) -%}
+{% if nh.exit_dns_health_available %}
+<li><strong>Exit DNS Health</strong>: <span class="al-status-success">{{ nh.exit_dns_health_success_formatted }} healthy</span> / <span class="al-status-danger">{{ nh.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(nh.exit_dns_health_success_rate) }}% success rate, {{ nh.exit_dns_health_tested_formatted }} of {{ nh.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
+{% endif %}
+{%- endmacro -%}
+
+{# =============================================================================
+   OPERATOR LINK URL (DRY - single source for the validated-AROI vs contact-page
+   link target; used by detail_summary here and the operator link macros in
+   aroi_macros.html). Emits just the URL with no surrounding whitespace.
+   ============================================================================= #}
+{% macro operator_href(aroi_domain, contact_hash, path_prefix) -%}
+    {%- if base_url and aroi_domain and aroi_domain in validated_aroi_domains -%}
+        {{- base_url }}/{{ aroi_domain|lower|escape }}/
+    {%- else -%}
+        {{- path_prefix }}contact/{{ contact_hash }}/
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none, exit_dns_health_summary=none, overload_summary=none, aroi_section_hrefs=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -193,6 +247,15 @@
     {%- endif %}
     {%- if total_data_formatted and total_data_formatted != 'N/A' %}
     <li><strong><span title="Total data transferred (read + write) over bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}{% if total_data_pct %} ({{ total_data_pct }}){% endif %}</li>
+    {%- endif -%}
+    {{- overload_bullet(overload_summary) -}}
+    {%- if exit_dns_health_summary %}
+    <li><strong><span title="DNS resolution health of exit relays in this group. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
+        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
+        {%- if exit_dns_health_summary.failing > 0 %}, <span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}
+        {%- if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
+        of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
+    </li>
     {%- endif %}
     {%- if unique_aroi_count is not none and unique_contact_count is not none %}
     <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> {{ unique_contact_count }}
@@ -204,17 +267,13 @@
     {%- set has_validation = contact_validation_status and contact_validation_status.has_aroi -%}
     {%- if has_aroi_domain and (contact_validation_status is none or has_validation) %}
     <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong> 
-    {% if base_url and aroi_domain in validated_aroi_domains -%}
-    <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ aroi_domain|escape }}</a>
-    {% else -%}
-    <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{{ aroi_domain|escape }}</a>
-    {% endif -%}
-    {{- aroi_validation_badge(contact_validation_status) -}}
+<a href="{{ operator_href(aroi_domain, contact_md5|escape, page_ctx.path_prefix if page_ctx else '../../') }}">{{ aroi_domain|escape }}</a>
+{{ aroi_validation_badge(contact_validation_status, section_hrefs=aroi_section_hrefs) -}}
     </li>
     {%- elif has_validation %}
     {#- Show validation status even when AROI domain wasn't parsed -#}
     <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong>
-        {{- aroi_validation_badge(contact_validation_status, show_count=true) -}}
+        {{- aroi_validation_badge(contact_validation_status, show_count=true, section_hrefs=aroi_section_hrefs) -}}
     </li>
     {%- endif %}
     {%- if contact_md5 %}
@@ -223,15 +282,32 @@
 </ul>
 {%- endmacro %}
 
-{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps) -%}
-    {% if fingerprint in validated_fps -%}
-        <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+{# AROI section link target for aroi_validation_badge and aroi_sub_bullets:
+   where page_writer._aroi_section_hrefs found the section (another page of
+   the listing, or the contact page from a relay page), else this page #}
+{% macro aroi_section_href(section, section_hrefs) -%}
+{{ section_hrefs[section] if section_hrefs is mapping and section_hrefs.get(section) else '#' ~ section ~ '-relays' }}
+{%- endmacro %}
+
+{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps, security_fps=none, pending_fps=none, aroi_version=none) -%}
+    {# B1.5: peer issue icons take visual precedence over cascade icons —
+       a leaked-key relay shows 🚨 even if the operator's other relays
+       validated. aroi_version (str|None) appended as a small label. #}
+    {% if security_fps and fingerprint in security_fps -%}
+        <a href="#security_incident-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="🚨 SECURITY: This relay appears to have published .secret_family_key. Rotate the family key immediately.">🚨</a>
+    {% elif pending_fps and fingerprint in pending_fps -%}
+        <a href="#pending_onionoo-relays" class="al-status-info al-link-plain" style="margin-left: 4px;" title="⏳ Pending: Onionoo hasn't refreshed family_ids yet. Typically resolves within 24h after restarting Tor with the happy-family directive.">⏳</a>
+    {% elif fingerprint in validated_fps -%}
+        <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's identity has been cryptographically verified via the operator's AROI proof">✓</span>
     {% elif fingerprint in unauthorized_fps -%}
-        <a href="#unauthorized-relays" style="color: #dc3545; margin-left: 4px; text-decoration: none;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</a>
+        <a href="#unauthorized-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but is NOT in the AROI proof">🚫</a>
     {% elif fingerprint in misconfigured_fps -%}
-        <a href="#misconfigured-relays" style="color: #ffc107; margin-left: 4px; text-decoration: none;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
+        <a href="#misconfigured-relays" class="al-status-warning al-link-plain" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
     {% elif aroi_domain and aroi_domain != 'none' -%}
-        <span style="color: #dc3545; margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
+        <span class="al-status-danger" style="margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
+    {% endif -%}
+    {%- if aroi_version and aroi_domain and aroi_domain != 'none' %}
+        <span style="font-size: 9px; padding: 0px 3px; border-radius: 2px; background-color: {{ '#007bff' if aroi_version == '3' else '#6c757d' }}; color: white; vertical-align: middle; margin-left: 2px;" title="ciissversion:{{ aroi_version }}">v{{ aroi_version }}</span>
     {% endif -%}
 {%- endmacro %}
 
@@ -247,20 +323,62 @@
    
    Set show_count=true to include relay counts (used when domain isn't displayed)
    ============================================================================= #}
-{% macro aroi_validation_badge(contact_validation_status, show_count=false) -%}
+{% macro aroi_validation_badge(contact_validation_status, show_count=false, section_hrefs=none) -%}
 {% if contact_validation_status -%}
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
+    {# B1.1: peer security badge ALWAYS rendered first when present, regardless of cascade.
+       It does not replace the cascade badge below — both surface concurrently
+       so a "validated" operator with one leaked-key relay still shows
+       "✓ Validated" but ALSO sees "🚨 SECURITY" right next to it. #}
+    {% if summary.security_incident_count > 0 -%}
+        <a href="{{ aroi_section_href('security_incident', section_hrefs) }}" class="al-status-danger-bold al-link-plain" style="margin-left: 5px; padding: 1px 6px; background-color: #f8d7da; border-radius: 3px;" title="{{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} appear to have leaked .secret_family_key. Rotate the family key immediately.">🚨 SECURITY{% if show_count %} ({{ summary.security_incident_count }}){% endif %}</a>
+    {% endif -%}
     {% if status == 'validated' -%}
-        <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
+        <span class="al-status-success-bold"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
     {% elif status == 'unauthorized' -%}
-        <a href="#unauthorized-relays" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details below">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('unauthorized', section_hrefs) }}" class="al-status-danger-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
     {% elif status == 'misconfigured' -%}
-        <a href="#misconfigured-relays" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.misconfigured_count }} relays with AROI config errors - see details below">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('misconfigured', section_hrefs) }}" class="al-status-warning-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.misconfigured_count }} relays with AROI config errors - see details">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
     {% elif status == 'incomplete' -%}
-        <a href="#not_configured-relays" style="color: #6c757d; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
+        <a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain" style="font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
     {# not_configured status shows no badge #}
     {% endif -%}
+    {# UX-fix: pending_onionoo peer badge REMOVED from the header.
+       Per UX feedback ('it's confusing to say validated and pending at
+       the same time'), pending-Onionoo is dual-bucketed in cascade as
+       'misconfigured' already, so the cascade badge already conveys
+       "something needs attention". Operators can drill into
+       #misconfigured-relays to see the per-relay error category. #}
+{% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI v2/v3 STATUS PILLS (B1.2)
+   Compact dual-version summary rendered above the validation badge.
+   Only shown when operator has at least one v2 or v3 declaring relay.
+   ============================================================================= #}
+{% macro aroi_v2v3_pills(contact_validation_status) -%}
+{% if contact_validation_status and contact_validation_status.validation_summary -%}
+{%- set summary = contact_validation_status.validation_summary -%}
+{%- set v2_count = summary.v2_relay_count -%}
+{%- set v3_count = summary.v3_relay_count -%}
+{% if v2_count > 0 or v3_count > 0 -%}
+<span style="font-size: 11px; margin-left: 6px;">
+    {%- if v2_count > 0 -%}
+    <span title="ciissversion:2 (RSA-fingerprint proofs, legacy)" style="padding: 1px 5px; background-color: #6c757d; color: white; border-radius: 3px;">v2: {{ v2_count }}</span>
+    {%- endif -%}
+    {%- if v2_count > 0 and v3_count > 0 %} {% endif -%}
+    {%- if v3_count > 0 -%}
+    <span title="ciissversion:3 (ed25519 happy-family proofs, recommended)" style="padding: 1px 5px; background-color: #007bff; color: white; border-radius: 3px;">v3: {{ v3_count }}</span>
+    {%- endif -%}
+    {%- if summary.is_mixed_migration %}
+    <span title="Migration in progress: {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% of AROI-declaring relays on v3" style="padding: 1px 5px; background-color: #17a2b8; color: white; border-radius: 3px;">🔁 {{ '%.0f'|format(summary.v3_migration_progress_pct) }}% v3</span>
+    {%- elif summary.v3_tier == 'complete' %}
+    <span title="100% v3 — all relays on ciissversion:3" style="padding: 1px 5px; background-color: #ffc107; color: #212529; border-radius: 3px;">🏆 v3 complete</span>
+    {%- endif -%}
+</span>
+{%- endif -%}
 {% endif -%}
 {%- endmacro %}
 
@@ -268,28 +386,63 @@
    AROI SUB-BULLETS MACRO (DRY - shows category counts as sub-bullets)
    Used in Contact & Network Overview section
    ============================================================================= #}
-{% macro aroi_sub_bullets(contact_validation_status) -%}
+{% macro aroi_sub_bullets(contact_validation_status, section_hrefs=none) -%}
 {% if contact_validation_status -%}
 {% set summary = contact_validation_status.validation_summary -%}
 {% set status = contact_validation_status.validation_status -%}
-{# Only show sub-bullets for categories OTHER than the main status #}
+{# UX-fix (condensed v2/v3 line): merge what used to be two sub-bullets
+   ('ciissversion:2: N relays (X% valid)' + 'ciissversion:3: M relays
+   (Y% valid) — v3 Mostly') into ONE summary line of the form:
+     'N total relays, X% valid, Y% v3, Z% v2'
+   For v3-only operators we collapse to just 'N relays, X% valid, 100% v3'.
+   For v2-only we use 'N relays, X% valid, 100% v2'.
+   The v3-tier label (Explorer/Migrating/Mostly/Complete) is dropped
+   from the operator overview because the percentage already conveys
+   the same meaning more concisely; tier is still surfaced on listings
+   and leaderboards where ranking is relevant. #}
+{% set v2_count = summary.v2_relay_count -%}
+{% set v3_count = summary.v3_relay_count -%}
+{% set v_total = v2_count + v3_count -%}
+{% set show_v2v3 = (v_total > 0) -%}
+{# Show peer issue categories (B1.1) FIRST when present — they
+   represent active problems regardless of cascade. #}
+{% set show_security = summary.security_incident_count > 0 -%}
+{# UX-fix: pending_onionoo sub-bullet REMOVED. Pending relays are
+   dual-bucketed into 'misconfigured' already, so the misconfigured
+   sub-bullet (or section header) covers the same relays. #}
+{# Only show cascade sub-bullets for categories OTHER than the main status #}
 {% set show_unauthorized = summary.unauthorized_count > 0 and status != 'unauthorized' -%}
 {% set show_misconfigured = summary.misconfigured_count > 0 and status != 'misconfigured' -%}
 {% set show_incomplete = summary.incomplete_count > 0 and status != 'incomplete' -%}
 {% set show_not_configured = summary.not_configured_count > 0 -%}
-{% if show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
+{% if show_v2v3 or show_security or show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
 <ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+{# Condensed single-line v2/v3 summary. #}
+{% if show_v2v3 -%}
+{% set _validated_total = (summary.v2_validated_count|default(0)) + (summary.v3_validated_count|default(0)) -%}
+{% set _valid_pct = (100.0 * _validated_total / v_total) if v_total > 0 else 0.0 -%}
+{% set _v3_pct = (100.0 * v3_count / v_total) if v_total > 0 else 0.0 -%}
+{% set _v2_pct = (100.0 * v2_count / v_total) if v_total > 0 else 0.0 -%}
+<li>{{ v_total }} relay{{ 's' if v_total != 1 else '' }}, {{ '%.0f'|format(_valid_pct) }}% valid,
+{%- if v3_count > 0 and v2_count > 0 %} {{ '%.0f'|format(_v3_pct) }}% v3, {{ '%.0f'|format(_v2_pct) }}% v2
+{%- elif v3_count > 0 %} 100% v3
+{%- elif v2_count > 0 %} 100% v2
+{%- endif -%}</li>
+{% endif -%}
+{% if show_security -%}
+<li><a href="{{ aroi_section_href('security_incident', section_hrefs) }}" class="al-status-danger al-link-plain">🚨 SECURITY: {{ summary.security_incident_count }} relay{{ 's' if summary.security_incident_count != 1 else '' }} — rotate family key now</a></li>
+{% endif -%}
 {% if show_unauthorized -%}
-<li><a href="#unauthorized-relays" style="color: #dc3545; text-decoration: none;">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('unauthorized', section_hrefs) }}" class="al-status-danger al-link-plain">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_misconfigured -%}
-<li><a href="#misconfigured-relays" style="color: #ffc107; text-decoration: none;">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('misconfigured', section_hrefs) }}" class="al-status-warning al-link-plain">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_incomplete -%}
-<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_not_configured -%}
-<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
+<li><a href="{{ aroi_section_href('not_configured', section_hrefs) }}" class="al-status-muted al-link-plain">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
 {% endif -%}
 </ul>
 {% endif -%}
@@ -301,11 +454,12 @@
    Shows per-relay status details in a styled box below each table
    ============================================================================= #}
 {% macro aroi_relay_detail_box(relays, box_type, page_ctx, aroi_validation_timestamp) -%}
-{# box_type: 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{# box_type: 'misconfigured' | 'unauthorized' | 'not_configured'
+            | 'security_incident' | 'pending_onionoo' #}
 {% if relays %}
     {# Style configuration based on box type #}
     {% if box_type == 'misconfigured' -%}
-        {% set bg_color = '#fff3cd' -%}
+        {% set box_class = 'al-box-warning' -%}
         {% set border_color = '#ffc107' -%}
         {% set text_color = '#856404' -%}
         {% set icon = '⚠️' -%}
@@ -313,24 +467,43 @@
         {% set description = 'These relays have AROI configured but validation failed due to errors.' -%}
         {% set help_text = 'Fix: Check DNS records, renew SSL certificates, or verify server connectivity.' -%}
     {% elif box_type == 'unauthorized' -%}
-        {% set bg_color = '#f8d7da' -%}
+        {% set box_class = 'al-box-danger' -%}
         {% set border_color = '#dc3545' -%}
         {% set text_color = '#721c24' -%}
         {% set icon = '🚫' -%}
         {% set title = 'UNAUTHORIZED RELAY DETAILS' -%}
         {% set description = 'These relays claim this domain but their fingerprints are NOT in the AROI proof file. This could be someone falsely claiming your domain.' -%}
         {% set help_text = 'If this is YOUR relay: Add the fingerprint to your AROI proof file.' -%}
+    {% elif box_type == 'security_incident' -%}
+        {# B1.1: secret_family_key leaked. Highest urgency. #}
+        {% set box_class = 'al-box-danger' -%}
+        {% set border_color = '#c82333' -%}
+        {% set text_color = '#721c24' -%}
+        {% set icon = '🚨' -%}
+        {% set title = 'SECURITY INCIDENT — KEY ROTATION REQUIRED' -%}
+        {% set description = 'These relays appear to have published .secret_family_key contents instead of .public_family_id. The key MUST be rotated immediately.' -%}
+        {% set help_text = 'Rotate now: tor --keygen-family /path/newfile  → publish the new .public_family_id, then redeploy newfile.secret_family_key to every relay.' -%}
+    {% elif box_type == 'pending_onionoo' -%}
+        {# B1.1: missing_family_ids — Onionoo lag, transient. #}
+        {% set box_class = 'al-box-info' -%}
+        {% set border_color = '#17a2b8' -%}
+        {% set text_color = '#0c5460' -%}
+        {% set icon = '⏳' -%}
+        {% set title = 'WAITING FOR ONIONOO TO REFRESH' -%}
+        {% set description = "These relays declared ciissversion:3 but Onionoo hasn't picked up family_ids yet. This is transient — Onionoo refreshes hourly; expect resolution within 24 hours of restarting Tor with the happy-family directive." -%}
+        {% set help_text = 'No action needed if you recently changed torrc; wait < 24h. If still pending after 24h: verify FamilyId line in torrc and that .secret_family_key is in Tor KeyDir.' -%}
     {% else -%}
-        {% set bg_color = '#e9ecef' -%}
+        {% set box_class = 'al-box-muted' -%}
         {% set border_color = '#6c757d' -%}
         {% set text_color = '#495057' -%}
         {% set icon = '○' -%}
         {% set title = 'NOT CONFIGURED RELAY DETAILS' -%}
         {% set description = 'These relays have no AROI configuration or incomplete setup.' -%}
-        {% set help_text = 'To add AROI: Set contact info with ciissversion:2, proof:dns-rsa or proof:uri-rsa, and url:yourdomain.com' -%}
+        {# B1.3: pasteable v2 + v3 examples — operator chooses one. v3 listed FIRST as recommended. #}
+        {% set help_text = 'Add to torrc ContactInfo line (pick one):  v3 (recommended): ciissversion:3 url:yourdomain.com proof:uri-familyid-ed25519  ·  v2 (legacy): ciissversion:2 url:yourdomain.com proof:uri-rsa' -%}
     {% endif -%}
     
-<div style="margin-top: 15px; padding: 15px; background-color: {{ bg_color }}; border-left: 4px solid {{ border_color }}; border-radius: 4px;">
+<div class="{{ box_class }}" style="margin-top: 15px; padding: 15px; border-left-width: 4px; border-left-style: solid; border-radius: 4px;">
     <h5 style="margin-top: 0; margin-bottom: 10px; color: {{ text_color }}; font-size: 14px;">
         <strong>{{ icon }} {{ title }}</strong>
     </h5>
@@ -349,16 +522,39 @@
         {% for relay_info in relays %}
         <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid {{ border_color }}40;">
             <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay_info.fingerprint }}/">{{ relay_info.nickname|escape }}</a></strong>
+            {%- if relay_info.aroi_version %}
+                <span style="font-size: 10px; padding: 1px 5px; border-radius: 3px; background-color: {{ '#007bff' if relay_info.aroi_version == '3' else '#6c757d' }}; color: white; vertical-align: middle;">v{{ relay_info.aroi_version }}</span>
+            {% endif -%}
             <span style="color: #666;">•</span>
             {% if relay_info.error -%}
-                <span style="color: #dc3545;">{{ relay_info.error|escape }}</span>
+                <span class="al-status-danger">{{ relay_info.error|escape }}</span>
             {% elif relay_info.missing -%}
-                <span style="color: #856404;">{{ relay_info.missing|escape }}</span>
+                <span class="al-status-warning">{{ relay_info.missing|escape }}</span>
             {% endif -%}
             {% if relay_info.proof_type and relay_info.proof_type != 'unknown' %}
                 <span style="color: #666;">• Proof: {{ relay_info.proof_type }}</span>
             {% endif %}
             <span style="color: #666;">• FP: <code style="font-size: 11px;">{{ relay_info.fingerprint }}</code></span>
+            {%- if relay_info.hint %}
+            {# B1.3: Pasteable fix example from upstream's `hint` field
+               (or our V3_CATEGORY_LABELS lookup for parse-time errors).
+               Surfaced verbatim so operators get spec-grade actionable
+               text rather than paraphrased prose. #}
+            <div style="margin-top: 4px; font-size: 12px;">
+                <span style="color: {{ text_color }};">💡 Fix:</span>
+                <code style="background: #f8f9fa; padding: 2px 5px; border-radius: 3px; font-size: 11px; display: inline-block; word-break: break-all;">{{ relay_info.hint|escape }}</code>
+            </div>
+            {% endif -%}
+            {%- if relay_info.pasteable_example and relay_info.pasteable_example != relay_info.hint %}
+            {# B-final: pasteable one-line example from V3_CATEGORY_LABELS.
+               Rendered separately from `hint` because the upstream `hint`
+               may be multi-sentence prose; this is always a single
+               copy-paste-able line. #}
+            <div style="margin-top: 2px; font-size: 11px;">
+                <span style="color: {{ text_color }};">📋 Paste:</span>
+                <code style="background: #fff; padding: 2px 5px; border-radius: 3px; font-size: 11px; display: inline-block; word-break: break-all; border: 1px dashed {{ border_color }}80;">{{ relay_info.pasteable_example|escape }}</code>
+            </div>
+            {% endif -%}
         </li>
         {% endfor %}
     </ul>
@@ -373,29 +569,48 @@
 
 {# =============================================================================
    AROI SECTION HEADER MACRO (DRY - reused by all section macros)
+   Supports both v2-era cascade categories and B1.1 peer issue categories.
    ============================================================================= #}
 {% macro aroi_section_header(title, count, style_type) -%}
-{# style_type: 'validated' | 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{# style_type: 'validated' | 'misconfigured' | 'unauthorized' | 'not_configured'
+              | 'security_incident' | 'pending_onionoo' | 'v3_migration' #}
 {% if style_type == 'validated' -%}
     {% set border_style = '3px solid #28a745' -%}
     {% set icon = '✓' -%}
-    {% set color = '#28a745' -%}
+    {% set link_class = 'al-status-success al-link-plain' -%}
 {% elif style_type == 'misconfigured' -%}
     {% set border_style = '3px solid #ffc107' -%}
     {% set icon = '⚠' -%}
-    {% set color = '#ffc107' -%}
+    {% set link_class = 'al-status-warning al-link-plain' -%}
 {% elif style_type == 'unauthorized' -%}
     {% set border_style = '3px dashed #dc3545' -%}
     {% set icon = '🚫' -%}
-    {% set color = '#dc3545' -%}
+    {% set link_class = 'al-status-danger al-link-plain' -%}
+{% elif style_type == 'security_incident' -%}
+    {# B1.1: highest visual priority — secret_family_key was leaked. #}
+    {% set border_style = '4px solid #c82333' -%}
+    {% set icon = '🚨' -%}
+    {% set link_class = 'al-status-danger al-link-plain' -%}
+{% elif style_type == 'pending_onionoo' -%}
+    {# B1.1: Onionoo lag — operator changed torrc but family_ids
+       haven't propagated yet. Transient (< 24h). #}
+    {% set border_style = '3px dotted #17a2b8' -%}
+    {% set icon = '⏳' -%}
+    {% set link_class = 'al-status-info al-link-plain' -%}
+{% elif style_type == 'v3_migration' -%}
+    {# B1.1: operator has both v2 + v3 declarations. Informational only;
+       neither alarming nor an issue. #}
+    {% set border_style = '3px dotted #007bff' -%}
+    {% set icon = '🔁' -%}
+    {% set link_class = 'al-status-info al-link-plain' -%}
 {% else -%}
     {% set border_style = '3px solid #6c757d' -%}
     {% set icon = '○' -%}
-    {% set color = '#6c757d' -%}
+    {% set link_class = 'al-status-muted al-link-plain' -%}
 {% endif -%}
 <div id="{{ style_type }}-relays" style="margin-top: 30px; padding: 15px 0; border-top: {{ border_style }};">
     <h3 style="margin: 0 0 15px 0; font-size: 16px;">
-        <a href="#{{ style_type }}-relays" style="color: {{ color }}; text-decoration: none;">{{ icon }} {{ title }} ({{ count }})</a>
+        <a href="#{{ style_type }}-relays" class="{{ link_class }}">{{ icon }} {{ title }} ({{ count }})</a>
     </h3>
 {%- endmacro %}
 
@@ -406,4 +621,40 @@
 {% macro aroi_validation_issues_section(contact_validation_status, aroi_validation_timestamp, page_ctx) -%}
 {# This macro is deprecated - issues are now shown in per-category sections #}
 {# Kept empty for backwards compatibility during transition #}
-{%- endmacro %} 
+{%- endmacro %}
+
+{#- History charts, one per period. The first shows; a thumbnail link shows its period
+    through CSS :target instead (no JavaScript, no page copy). As in the AROI pagination,
+    the default chart is last in the DOM so the ~ combinator can hide it. Deep links:
+    #<name>-<period> switches this chart, #<period> (chart_period_anchors) every chart on
+    the page; chart-on-<period> marks what shows for a period, the default standing in for
+    periods this chart lacks. Each chart links to its full-size image for zooming. periods
+    maps each drawn period to its chart's height, so the page reserves the image's box.
+    chart_spans is a fixed global; pass ext=chart_ext, which allium.py changes after the
+    macros may already be imported and cached. -#}
+{% macro chart_history(name, periods, alt, src='', ext='svg') %}
+{% if periods %}
+{% set order = periods|list %}
+{% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
+<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<div class="chart-history">
+    {% for period in order[1:] + order[:1] %}
+    <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="{{ alt }}, {{ chart_spans[period] }}" loading="lazy"></a>
+    {% endfor %}
+    {% if periods|length > 1 %}
+    <div class="chart-sparks">
+        {% for period in order %}
+        <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="{{ period|upper }}: show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{#- Targets for #1m/#6m/#1y/#5y, which switch every chart on the page. Place them before
+    (as earlier siblings of an ancestor of) all the page's chart_history blocks; ``above`` adds a class for
+    the CSS of where they sit (above the relay page's bandwidth or, without it, uptime details). -#}
+{% macro chart_period_anchors(above='') %}
+{% for period in chart_spans %}<span id="{{ period }}" class="chart-period{{ ' chart-period-' ~ above if above }}"></span>{% endfor %}
+{% endmacro %}

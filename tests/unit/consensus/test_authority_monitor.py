@@ -12,7 +12,7 @@ Current directory authorities (as of 2025):
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 
 from allium.lib.consensus.authority_monitor import (
@@ -228,7 +228,7 @@ class TestAuthorityMonitor:
             'moria1': {'online': True, 'latency_ms': 100},
         }
         monitor._cached_status = cached_status
-        monitor._last_check = datetime.utcnow()
+        monitor._last_check = datetime.now(timezone.utc)
         
         # Should return cached data without making requests
         result = monitor.check_all_authorities(force=False)
@@ -244,7 +244,7 @@ class TestAuthorityMonitor:
             'moria1': {'online': True, 'latency_ms': 100},
         }
         monitor._cached_status = cached_status
-        monitor._last_check = datetime.utcnow()
+        monitor._last_check = datetime.now(timezone.utc)
         
         # With force=True, should make new requests (will fail without network)
         # We just verify it doesn't immediately return the cached data
@@ -254,7 +254,7 @@ class TestAuthorityMonitor:
                 'latency_ms': 200,
                 'status_code': 200,
                 'error': None,
-                'checked_at': datetime.utcnow().isoformat(),
+                'checked_at': datetime.now(timezone.utc).isoformat(),
             }
             
             result = monitor.check_all_authorities(force=True)

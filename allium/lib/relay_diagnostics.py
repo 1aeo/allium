@@ -8,7 +8,8 @@ This module consolidates all issue detection into a single source of truth:
 - Version issues (not recommended)
 - Overload issues (general, rate limits, FD exhaustion)
 
-Each issue includes severity, category, title, description, and actionable suggestion.
+Each issue includes severity, category, title, description, actionable suggestion,
+and a `section` fragment for the relay-info row or column that shows the details.
 
 Issue Severities:
 - error: Critical issues requiring immediate attention
@@ -19,27 +20,24 @@ Per Tor spec proposal 328, overload status remains for 72 hours after
 the last detected overload event.
 """
 
-import time
+import html as _html
+from collections import Counter
 from datetime import datetime, timezone
 from typing import List, Optional
 
 # Import flag thresholds from centralized module
-try:
-    from .consensus.flag_thresholds import (
-        SECONDS_PER_DAY,
-        GUARD_TK_DEFAULT,
-        GUARD_WFU_DEFAULT,
-        GUARD_BW_GUARANTEE,
-        HSDIR_TK_DEFAULT,
-        HSDIR_WFU_DEFAULT,
-    )
-except ImportError:
-    SECONDS_PER_DAY = 86400
-    GUARD_TK_DEFAULT = 691200  # 8 days
-    GUARD_WFU_DEFAULT = 0.98
-    GUARD_BW_GUARANTEE = 2_000_000
-    HSDIR_TK_DEFAULT = 90000  # 25 hours
-    HSDIR_WFU_DEFAULT = 0.98
+from .consensus.flag_thresholds import (
+    SECONDS_PER_DAY,
+    GUARD_TK_DEFAULT,
+    GUARD_WFU_DEFAULT,
+    GUARD_BW_GUARANTEE,
+    FAST_BW_GUARANTEE,
+    HSDIR_TK_DEFAULT,
+    HSDIR_WFU_DEFAULT,
+    BW_SOURCE_MEASURED,
+    BW_SOURCE_REPORTED,
+    BW_SOURCE_UNMEASURED,
+)
 
 # Import authority data from collector_fetcher
 try:
@@ -54,18 +52,15 @@ except ImportError:
     def get_voting_authority_count():
         return 9
 
-# Import bandwidth formatter
+# Import bandwidth formatter (shared cached instances, keyed by use_bits)
 try:
-    from .bandwidth_formatter import BandwidthFormatter
-    _BandwidthFormatterClass = BandwidthFormatter
+    from .bandwidth_formatter import _get_formatter as _get_bw_formatter
 except ImportError:
-    _BandwidthFormatterClass = None
+    _get_bw_formatter = None
 
-# Import canonical overload threshold from stability_utils (DRY)
-from .stability_utils import OVERLOAD_THRESHOLD_HOURS
-
-# Cache formatters
-_bw_formatter_cache = {}
+# Shared overload fact evaluation from stability_utils (DRY).
+# OVERLOAD_THRESHOLD_HOURS is re-exported: tests import it from this module.
+from .stability_utils import OVERLOAD_THRESHOLD_HOURS, evaluate_overload  # noqa: F401
 
 
 def generate_relay_issues(relay: dict, consensus_data: dict = None, 
@@ -75,7 +70,7 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     Generate ALL issues for a relay (consensus + overload).
     
     This is the main entry point for issue detection. It combines:
-    - 16 consensus-related issue types
+    - 23 consensus-related issue types
     - 6 overload issue types
     
     Args:
@@ -86,18 +81,20 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
                       If None, time.time() is called once.
     
     Returns:
-        List of issue dicts with: severity, category, title, description, suggestion
+        List of issue dicts with: severity, category, title, description,
+        suggestion, section (page anchor for detailed view)
     """
     issues = []
-    
-    # Consensus-related issues (16 types)
+
+    # Consensus-related issues (23 types)
     if consensus_data:
         issues.extend(generate_issues_from_consensus(
             consensus_data,
             relay.get('flags', []),
             relay.get('observed_bandwidth', 0),
             relay.get('version'),
-            relay.get('recommended_version')
+            relay.get('recommended_version'),
+            use_bits
         ))
     
     # Overload issues (6 types) - pass timestamp for efficiency
@@ -111,7 +108,8 @@ def generate_issues_from_consensus(
     current_flags: list = None,
     observed_bandwidth: int = 0,
     version: str = None,
-    recommended_version: bool = None
+    recommended_version: bool = None,
+    use_bits: bool = False
 ) -> List[dict]:
     """
     Consensus-related issue detection.
@@ -130,9 +128,11 @@ def generate_issues_from_consensus(
     Args:
         consensus_data: Raw consensus evaluation data
         current_flags: Relay's current flags (from Onionoo)
-        observed_bandwidth: Relay's observed bandwidth for Guard eligibility
+        observed_bandwidth: Relay's observed bandwidth; only used for the Guard bandwidth
+                            check when the votes give no per-authority details
         version: Tor version string running on the relay
         recommended_version: Whether the version is recommended
+        use_bits: Whether to show bandwidth in bits
     
     Returns:
         List of issue dicts
@@ -178,6 +178,7 @@ def generate_issues_from_consensus(
             'title': 'Not in consensus',
             'description': f"Only {vote_count}/{total} authorities voted for this relay (need {majority_threshold})",
             'suggestion': 'Verify your relay is reachable from multiple geographic locations. Check firewall rules allow incoming connections on your ORPort from all directory authority IP addresses.',
+            'section': 'col-running',
             'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
         })
     
@@ -197,6 +198,7 @@ def generate_issues_from_consensus(
             'title': 'IPv4 reachability issues',
             'description': f"Only {ipv4_count}/{auth_count} authorities can reach this relay",
             'suggestion': f"Authorities that cannot reach you: {', '.join(unreachable_ipv4)}. Check: 1) Firewall allows incoming TCP on ORPort, 2) No ISP-level blocking, 3) Tor is running and listening. Use 'nc -zv your-ip your-orport' from external hosts to test.",
+            'section': 'flag-running-ipv4-reachability',
             'doc_ref': 'https://community.torproject.org/relay/setup/',
         })
     elif ipv4_count < auth_count and unreachable_ipv4:
@@ -207,6 +209,7 @@ def generate_issues_from_consensus(
             'title': 'Partial IPv4 reachability',
             'description': f"{ipv4_count}/{auth_count} authorities can reach this relay",
             'suggestion': f"Some authorities cannot reach you: {', '.join(unreachable_ipv4)}. This may be temporary or due to geographic routing issues.",
+            'section': 'flag-running-ipv4-reachability',
         })
     
     # IPv6 reachability issues
@@ -233,7 +236,37 @@ def generate_issues_from_consensus(
             'title': 'IPv6 not reachable',
             'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
             'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
+            'section': 'flag-running-ipv6-reachability',
             'doc_ref': 'https://community.torproject.org/relay/setup/',
+        })
+    
+    # =========================================================================
+    # FAST FLAG (1 issue type)
+    # Each authority decides Fast from the bandwidth it credits the relay with:
+    # its bandwidth scanner's Measured= value when it has one, not the bandwidth
+    # the relay reports (tor bwauth.c dirserv_get_credible_bandwidth_kb).
+    # =========================================================================
+    has_fast = 'Fast' in current_flags
+    fast_details = flag_eligibility.get('fast', {}).get('details', [])
+    fast_votes = flag_eligibility.get('fast', {}).get('assigned_count', 0)
+    fast_suggestion = (f'Fast requires a bandwidth in the top 7/8 of relays or at least AuthDirFastGuarantee '
+                       f'({_format_rate(FAST_BW_GUARANTEE, use_bits, decimal_places=1)} by default), judged by '
+                       'each authority. Authorities that have a bandwidth-scanner measurement of your relay '
+                       'judge by it, not by the bandwidth your relay reports.')
+    if not has_fast and fast_details and fast_votes < majority_threshold:
+        issues.append({
+            'severity': 'warning',
+            'category': 'fast',
+            'title': 'Not getting the Fast flag',
+            'description': _describe_fast_shortfall(
+                fast_details, fast_votes, auth_count, majority_threshold,
+                consensus_data.get('bandwidth') or {}, use_bits),
+            'suggestion': fast_suggestion + (
+                ' A low measurement means the scanners see your relay underperforming compared with other '
+                'relays that report a similar speed. Clients only build circuits through Fast relays, so a relay '
+                'near the threshold can gain and lose most of its traffic from one hourly consensus to the next.'),
+            'section': 'flag-fast-speed',
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
         })
     
     # =========================================================================
@@ -241,8 +274,12 @@ def generate_issues_from_consensus(
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
-    has_fast = 'Fast' in current_flags
-    guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
+    guard_details = flag_eligibility.get('guard', {}).get('details', [])
+    guard_bw_votes = sum(1 for d in guard_details if d.get('bw_met'))
+    if guard_details:
+        guard_bw_eligible = guard_bw_votes >= majority_threshold
+    else:
+        guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
     wfu_eligible = relay_wfu and relay_wfu >= GUARD_WFU_DEFAULT
     tk_eligible = relay_tk and relay_tk >= GUARD_TK_DEFAULT
     
@@ -256,7 +293,8 @@ def generate_issues_from_consensus(
                 'category': 'guard',
                 'title': 'Guard: requires Fast flag',
                 'description': 'Guard flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+                'suggestion': fast_suggestion,
+                'section': 'flag-guard-prereq-fast',
             })
         
         if not has_stable:
@@ -266,20 +304,31 @@ def generate_issues_from_consensus(
                 'title': 'Guard: requires Stable flag',
                 'description': 'Guard flag requires having the Stable flag first',
                 'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running).',
+                'section': 'flag-guard-prereq-stable',
             })
         
         # Note: V2Dir prereq for Guard is checked via the flag table but not
         # as a separate diagnostic — V2Dir is almost always present (default on)
         
         # Metric thresholds
-        if not guard_bw_eligible and observed_bandwidth:
-            bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s"
+        if not guard_bw_eligible and (guard_details or observed_bandwidth):
+            guarantee = _format_rate(GUARD_BW_GUARANTEE, use_bits, decimal_places=1)
+            if guard_details:
+                description = _describe_guard_bw_shortfall(
+                    guard_details, guard_bw_votes, auth_count, majority_threshold, guarantee, use_bits)
+            else:
+                description = (f"Observed bandwidth {_format_rate(observed_bandwidth, use_bits)} is below "
+                               f"the {guarantee} AuthDirGuardBWGuarantee")
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: bandwidth below threshold',
-                'description': f"Observed bandwidth {bw_display} is below 2 MB/s minimum (AuthDirGuardBWGuarantee)",
-                'suggestion': 'Guard requires ≥2 MB/s bandwidth OR being in top 25% of network. To increase bandwidth: 1) Ensure adequate upstream capacity, 2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx or ARM.',
+                'description': description,
+                'suggestion': (f'Guard requires a bandwidth of at least AuthDirGuardBWGuarantee ({guarantee} by '
+                               'default) or one in the top 25% of relays, judged by each authority the same way '
+                               'as for Fast. To increase bandwidth: 1) Ensure adequate upstream capacity, '
+                               '2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx.'),
+                'section': 'flag-guard-bandwidth',
                 'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
             })
         
@@ -291,6 +340,7 @@ def generate_issues_from_consensus(
                 'title': 'Guard: WFU below threshold',
                 'description': f"Weighted Fractional Uptime {wfu_pct:.1f}% is below 98% requirement",
                 'suggestion': 'WFU measures recent uptime (recent downtime weighs more heavily). To improve: 1) Minimize restarts, 2) Use systemd with Restart=always, 3) Monitor for OOM kills, 4) Schedule updates during low-traffic periods.',
+                'section': 'flag-guard-wfu',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
         
@@ -303,6 +353,7 @@ def generate_issues_from_consensus(
                 'title': 'Guard: Time Known below threshold',
                 'description': f"Time Known {tk_days:.1f} days is below 8 days requirement ({days_needed:.1f} more days needed)",
                 'suggestion': 'Time Known tracks how long authorities have observed your relay. This resets if: 1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.',
+                'section': 'flag-guard-time-known',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
     
@@ -318,6 +369,7 @@ def generate_issues_from_consensus(
                 'title': 'Not eligible for Stable flag',
                 'description': 'Uptime or MTBF below network median for most authorities',
                 'suggestion': 'Stable flag requires uptime/MTBF at or above network median. Keep your relay running continuously for 2-3 weeks. Avoid restarts. Use reliable hardware and network connection.',
+                'section': 'flag-stable-mtbf',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
     
@@ -338,7 +390,8 @@ def generate_issues_from_consensus(
                 'category': 'hsdir',
                 'title': 'HSDir: requires Fast flag',
                 'description': 'HSDir flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+                'suggestion': fast_suggestion,
+                'section': 'flag-hsdir-prereq-fast',
             })
         
         if not has_stable:
@@ -348,6 +401,7 @@ def generate_issues_from_consensus(
                 'title': 'HSDir: requires Stable flag',
                 'description': 'HSDir flag requires having the Stable flag first',
                 'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running). Avoid restarts.',
+                'section': 'flag-hsdir-prereq-stable',
             })
         
         # V2Dir / tunnelled-dir-server check
@@ -362,8 +416,9 @@ def generate_issues_from_consensus(
                               'This relay is missing V2Dir — the descriptor likely does not include '
                               '<code>tunnelled-dir-server</code>, usually because <code>DirCache 0</code> is set in torrc.',
                 'suggestion': 'Remove <code>DirCache 0</code> from torrc (DirCache is enabled by default in Tor ≥0.3.3). '
-                             'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
-                             'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
+                              'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
+                              'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
+                'section': 'flag-hsdir-prereq-v2dir',
             })
         
         # WFU check
@@ -374,6 +429,7 @@ def generate_issues_from_consensus(
                 'title': 'HSDir: WFU below threshold',
                 'description': f"WFU {relay_wfu*100:.1f}% below 98% required for HSDir",
                 'suggestion': 'HSDir requires ≥98% WFU, Stable flag, and Time Known ≥25 hours (or ~10 days for moria1). Improve uptime consistency.',
+                'section': 'flag-hsdir-wfu',
             })
         
         # CHANGED: info → warning
@@ -385,6 +441,7 @@ def generate_issues_from_consensus(
                 'title': 'HSDir: Time Known below threshold',
                 'description': f"Time Known {tk_hours:.1f} hours below 25 hours (dir-spec default)",
                 'suggestion': 'Most authorities use 25 hours for HSDir TK. moria1 uses ~10 days. Keep running stably.',
+                'section': 'flag-hsdir-time-known',
             })
     
     # =========================================================================
@@ -401,6 +458,7 @@ def generate_issues_from_consensus(
                 'title': 'High consensus weight deviation',
                 'description': "Large variation in Consensus Weight values across authorities (see 'Cons Wt' column in Per-Authority Details below)",
                 'suggestion': 'Consensus weight measurements vary significantly between authorities. This can affect traffic distribution. Ensure stable network connection and consistent bandwidth availability.',
+                'section': 'col-cons-wt',
             })
         
         # NEW: Bandwidth authority measurement issues
@@ -425,6 +483,7 @@ def generate_issues_from_consensus(
                                  '2) ORPort accepts connections from bandwidth scanners, '
                                  '3) RelayBandwidthRate in torrc matches actual capacity. '
                                  'New relays may take 1-2 days to be measured by all authorities.',
+                    'section': 'bw-measured-by',
                     'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
                 })
             elif bw_auth_measured < bw_auth_majority:
@@ -438,6 +497,7 @@ def generate_issues_from_consensus(
                     'suggestion': 'Some bandwidth authorities cannot measure your relay. This may be temporary or '
                                  'due to geographic routing. Monitor over 24-48 hours. If persistent, check firewall '
                                  'rules and ensure ORPort is accessible from various locations.',
+                    'section': 'bw-measured-by',
                 })
     
     # =========================================================================
@@ -451,6 +511,7 @@ def generate_issues_from_consensus(
                 'title': 'StaleDesc flag assigned',
                 'description': 'Relay descriptor is older than 18 hours',
                 'suggestion': 'Your relay is not publishing fresh descriptors. Check: 1) Tor process is running, 2) Network connectivity, 3) Clock is synchronized (NTP). Restart Tor if needed.',
+                'section': 'col-desc-published',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
             break  # Only report once
@@ -465,6 +526,7 @@ def generate_issues_from_consensus(
             'title': 'BadExit flag assigned',
             'description': 'This relay has been flagged as a bad exit by directory authorities. BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.).',
             'suggestion': 'Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> to understand and resolve this issue.',
+            'section': 'flag-badexit-restriction-by-da',
             'doc_ref': 'https://community.torproject.org/relay/',
         })
     
@@ -478,6 +540,7 @@ def generate_issues_from_consensus(
             'title': 'MiddleOnly restriction active',
             'description': 'This relay has been restricted to middle position only by directory authorities. MiddleOnly removes Guard, Exit, HSDir, and V2Dir flags, and adds BadExit. This significantly limits the relay\'s role in the network.',
             'suggestion': 'This may indicate suspicious behavior patterns, Sybil risk indicators, or policy violations. Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> for more information.',
+            'section': 'flag-middleonly-restriction-by-da',
             'doc_ref': 'https://spec.torproject.org/dir-spec/',
         })
     
@@ -489,8 +552,9 @@ def generate_issues_from_consensus(
             'severity': 'warning',
             'category': 'version',
             'title': 'Tor version not recommended',
-            'description': f'Running Tor version {version} which is not on the recommended list.',
+            'description': f'Running Tor version {_html.escape(str(version))} which is not on the recommended list.',
             'suggestion': 'Update to the latest stable Tor version. Outdated versions may have security vulnerabilities and could eventually be rejected by the network. See <a href="https://www.torproject.org/download/tor/">torproject.org/download</a> for latest releases.',
+            'section': 'version',
             'doc_ref': 'https://www.torproject.org/download/tor/',
         })
     
@@ -519,58 +583,58 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
         List of overload issue dicts
     """
     issues = []
-    now_ts = now_timestamp if now_timestamp is not None else time.time()
-    
+    # Shared fact evaluation (stability_utils.evaluate_overload); presentation
+    # policy below is specific to the diagnostics page — see evaluate_overload
+    # docstring for how it differs from compute_relay_stability.
+    facts = evaluate_overload(relay, now_timestamp)
+
     # =========================================================================
     # SCENARIO 1 & 2: General Overload (overload_general_timestamp)
     # Per Tor spec proposal 328: 72-hour threshold
     # =========================================================================
-    general_ts = relay.get('overload_general_timestamp')
-    if general_ts:
-        # Onionoo timestamps are in milliseconds
-        age_hours = (now_ts - general_ts / 1000) / 3600
-        
-        if age_hours < OVERLOAD_THRESHOLD_HOURS:
+    if facts['general_ts']:
+        if facts['general_active']:
             # Scenario 1: Active overload (within 72 hours)
-            ts_str = datetime.fromtimestamp(general_ts / 1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
             issues.append({
                 'severity': 'error',
                 'category': 'overload',
                 'title': 'General Overload Active',
-                'description': f'Relay reported general overload at {ts_str} UTC. '
+                'description': f"Relay reported general overload at {facts['general_date']} UTC. "
                               'This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion.',
                 'suggestion': 'Check CPU/memory with htop. Review logs for "out of memory" or "onionskins" warnings. '
                              'Consider increasing MaxMemInQueues in torrc. Verify TCP ports available.',
+                'section': 'overload-general',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
             })
-        elif age_hours < 168:  # Within 7 days
+        elif facts['general_age_hours'] < 168:  # Within 7 days
             # Scenario 2: Recent overload (stale but notable)
-            days_ago = int(age_hours / 24)
+            # This caller only reports stale overloads within 7 days
+            # (the stability cell reports them no matter how old)
             issues.append({
                 'severity': 'info',
                 'category': 'overload',
                 'title': 'Recent Overload Reported',
-                'description': f'Relay reported overload {days_ago} days ago (no longer active per 72h threshold).',
+                'description': f"Relay reported overload {facts['general_days_ago']} days ago (no longer active per 72h threshold).",
                 'suggestion': 'Monitor for recurring issues. Check system resources periodically.',
+                'section': 'overload-general',
             })
-    
+
     # =========================================================================
     # SCENARIO 3: File Descriptor Exhaustion (overload_fd_exhausted)
+    # This caller requires a dict (the stability cell accepts any truthy value)
     # =========================================================================
-    fd_exhausted = relay.get('overload_fd_exhausted')
-    if isinstance(fd_exhausted, dict):
-        issues.append(_create_fd_exhaustion_issue(fd_exhausted.get('timestamp')))
-    
+    if isinstance(facts['fd_exhausted'], dict):
+        issues.append(_create_fd_exhaustion_issue(facts['fd_timestamp']))
+
     # =========================================================================
     # SCENARIOS 4, 5, 6: Rate Limit Issues (overload_ratelimits)
     # =========================================================================
-    ratelimits = relay.get('overload_ratelimits')
-    if ratelimits:
-        rate_limit = ratelimits.get('rate-limit', 0)
-        burst_limit = ratelimits.get('burst-limit', 0)
-        write_count = ratelimits.get('write-count', 0)
-        read_count = ratelimits.get('read-count', 0)
-        
+    if facts['ratelimits']:
+        rate_limit = facts['rate_limit']
+        burst_limit = facts['burst_limit']
+        write_count = facts['write_count']
+        read_count = facts['read_count']
+
         # Format rate using BandwidthFormatter
         rate_str = _format_rate(rate_limit, use_bits)
         
@@ -584,6 +648,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               'Relay is throttling outbound traffic.',
                 'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
                              'if your connection has more upload capacity.',
+                'section': 'overload-write',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
             })
         
@@ -597,12 +662,13 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               'Relay is throttling inbound traffic.',
                 'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
                              'if your connection has more download capacity.',
+                'section': 'overload-read',
                 'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
             })
         
         # Scenario 6: Rate Limit Configuration (info context)
         if rate_limit > 0 and (write_count > 0 or read_count > 0):
-            burst_str = _format_rate(burst_limit, use_bits)
+            burst_str = _format_volume(burst_limit)
             issues.append({
                 'severity': 'info',
                 'category': 'overload',
@@ -611,6 +677,7 @@ def _check_overload_issues(relay: dict, use_bits: bool = False,
                               f'Limits hit: Write={write_count:,}, Read={read_count:,}.',
                 'suggestion': 'These are your configured torrc limits. Adjust RelayBandwidthRate '
                              'and RelayBandwidthBurst to match your actual network capacity.',
+                'section': 'overload-rate-config',
             })
     
     return issues
@@ -645,29 +712,117 @@ def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
                       'For systemd: add "LimitNOFILE=65535" to [Service] section. '
                       'For shell: ulimit -n 65535. '
                       'Persistent: edit /etc/security/limits.conf.'),
+        'section': 'overload-fd',
         'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
     }
 
 
-def _format_rate(rate_bytes: int, use_bits: bool = False) -> str:
-    """Format rate limit value for display."""
+def _format_volume(volume_bytes: int) -> str:
+    """Format a data volume (e.g. BandwidthBurst token-bucket size).
+
+    Per proposal 328 / dir-spec, overload_ratelimits burst-limit is a
+    quantity of bytes, not a rate - no '/s' suffix.
+    """
+    if not volume_bytes:
+        return "unknown"
+    from .bandwidth_formatter import format_data_volume_with_unit
+    return format_data_volume_with_unit(volume_bytes)
+
+
+def _authority_names(details: list) -> str:
+    """The details' authority names as 'a', 'a and b' or 'a, b and c'."""
+    names = [d.get('authority', '?') for d in details]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _rate_range(values: list, use_bits: bool) -> str:
+    """'low – high' for the rates, or a single rate when both ends display the same."""
+    low, high = (_format_rate(v, use_bits, decimal_places=1) for v in (min(values), max(values)))
+    return low if low == high else f"{low} – {high}"
+
+
+def _threshold_summary(details: list, key: str, use_bits: bool) -> str:
+    """Most common threshold, then each authority that differs ('102.0 KB/s; moria1: 1.0 MB/s')."""
+    typical = Counter(d[key] for d in details).most_common(1)[0][0]
+    others = [f"{d.get('authority', '?')}: {_format_rate(d[key], use_bits, decimal_places=1)}"
+              for d in details if d[key] != typical]
+    return '; '.join([_format_rate(typical, use_bits, decimal_places=1)] + others)
+
+
+# What each bandwidth source an authority judged the relay by says about it
+_BW_SOURCE_SENTENCES = {
+    BW_SOURCE_MEASURED: '{names} measured this relay at {rate}{below}.',
+    BW_SOURCE_REPORTED: '{names} used the relay-reported {rate}{below}.',
+    BW_SOURCE_UNMEASURED: '{names} counted this relay as 0 (no measurement, relay-reported bandwidth ignored).',
+}
+
+
+def _bandwidth_source_sentences(details: list, value_key: str, source_key: str, use_bits: bool,
+                                fast_threshold_key: Optional[str] = None) -> List[str]:
+    """One sentence per bandwidth source, for the details that have a value."""
+    sentences = []
+    for source, sentence in _BW_SOURCE_SENTENCES.items():
+        group = [d for d in details if d.get(source_key) == source and d.get(value_key) is not None]
+        if group:
+            below = (f", below the Fast threshold ({_threshold_summary(group, fast_threshold_key, use_bits)})"
+                     if fast_threshold_key else '')
+            sentences.append(sentence.format(names=_authority_names(group), below=below,
+                                             rate=_rate_range([d[value_key] for d in group], use_bits)))
+    return sentences
+
+
+def _describe_fast_shortfall(details: list, fast_votes: int, auth_count: int, majority: int,
+                             bandwidth: dict, use_bits: bool = False) -> str:
+    """Why authorities withheld Fast, from the bandwidth each one judged the relay by."""
+    withheld = [d for d in details if not d.get('assigned') and not d.get('sybil')]
+    known = [d for d in withheld if d.get('speed_value') is not None and d.get('speed_threshold') is not None]
+    below = [d for d in known if d['speed_value'] < d['speed_threshold']]
+    sentences = [f"Only {fast_votes}/{auth_count} authorities vote Fast ({majority} needed)."]
+    sentences += _bandwidth_source_sentences(below, 'speed_value', 'speed_source', use_bits, 'speed_threshold')
+    for group, text in (([d for d in details if d.get('sybil')],
+                         'listed it as Sybil (more relays on its IP address than allowed), which clears all flags'),
+                        ([d for d in known if d['speed_value'] >= d['speed_threshold']],
+                         'did not vote Fast despite enough bandwidth'),
+                        ([d for d in withheld if d.get('speed_value') is None],
+                         'judged it by bandwidth not shown in the votes')):
+        if group:
+            sentences.append(f"{_authority_names(group)} {text}.")
+    weight = bandwidth.get('median')
+    if any(d.get('speed_source') == BW_SOURCE_MEASURED for d in below) and weight and not bandwidth.get('unmeasured'):
+        sentences.append(f"Its consensus weight, the median of the {bandwidth.get('measurement_count', 0)} "
+                         f"bandwidth-scanner measurements, is {_format_rate(weight, use_bits, decimal_places=1)}.")
+    return ' '.join(sentences)
+
+
+def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int, majority: int,
+                                 guarantee: str, use_bits: bool = False) -> str:
+    """How far each authority's bandwidth for this relay is from the Guard requirement."""
+    top = [d['bw_top25_threshold'] for d in details if d.get('bw_top25_threshold') is not None]
+    top25 = f" or a place in their top 25% ({_rate_range(top, use_bits)})" if top else ''
+    return ' '.join([f"{met_count}/{auth_count} authorities credit this relay with enough bandwidth for Guard "
+                     f"({majority} needed): at least {guarantee} (AuthDirGuardBWGuarantee){top25}."]
+                    + _bandwidth_source_sentences([d for d in details if not d.get('bw_met')],
+                                                  'bw_value', 'bw_source', use_bits))
+
+
+def _format_rate(rate_bytes: int, use_bits: bool = False, decimal_places: int = 0) -> str:
+    """Format a bandwidth rate (bytes/second) for display."""
     if not rate_bytes:
         return "unknown"
-    
-    # Use BandwidthFormatter if available (preferred)
-    if _BandwidthFormatterClass is not None:
-        if use_bits not in _bw_formatter_cache:
-            _bw_formatter_cache[use_bits] = _BandwidthFormatterClass(use_bits=use_bits)
+
+    # Use shared cached BandwidthFormatter if available (preferred)
+    if _get_bw_formatter is not None:
         try:
-            fmt = _bw_formatter_cache[use_bits]
-            return fmt.format_bandwidth_with_suffix(rate_bytes, fmt.determine_unit(rate_bytes), decimal_places=0)
+            fmt = _get_bw_formatter(use_bits=use_bits)
+            return fmt.format_bandwidth_with_suffix(rate_bytes, fmt.determine_unit(rate_bytes),
+                                                    decimal_places=decimal_places)
         except Exception:
             pass
-    
+
     # Fallback: simple formatting
     value, suffix = (rate_bytes * 8, "bit/s") if use_bits else (rate_bytes, "B/s")
     for threshold, prefix in [(1e9, "G"), (1e6, "M"), (1e3, "K")]:
         if value >= threshold:
-            return f"{value / threshold:.0f} {prefix}{suffix}"
+            return f"{value / threshold:.{decimal_places}f} {prefix}{suffix}"
     return f"{value:.0f} {suffix}"
 

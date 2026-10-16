@@ -3,10 +3,11 @@
 {% block title -%}
     Relay Radar :: Directory Authorities by Network Health
 {% endblock -%}
+{% block meta_description %}Live Tor directory authority status, votes, reachability, latency, versions, uptime, consensus methods, and bandwidth thresholds.{% endblock %}
 {% block body -%}
-    <h2>
+    <h1 class="page-title">
         Directory Authorities by Network Health
-    </h2>
+    </h1>
     
     {{ navigation('authorities', page_ctx) }}
     
@@ -15,17 +16,23 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)</li>
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)
+            {% if relays.authorities_summary.offline_count %}
+            <ul style="margin-top: 4px;">
+                <li><span class="al-status-danger">🔴 {{ relays.authorities_summary.offline_count }} offline</span>: {{ relays.authorities_summary.offline_names | join(', ') }} <span style="font-size: 0.85em; color: #666;">(shown for historical context)</span></li>
+            </ul>
+            {% endif %}
+        </li>
         
         {# Consensus status from CollecTor #}
         {% if relays.consensus_status %}
         <li><strong>Consensus Status:</strong> 
             {% if relays.consensus_status.freshness == 'fresh' %}
-                <span style="color: green; font-weight: bold;">FRESH</span>
+                <span class="al-status-success-bold">FRESH</span>
             {% elif relays.consensus_status.freshness == 'stale' %}
-                <span style="color: #ff8c00; font-weight: bold;">STALE</span>
+                <span class="al-status-warning-bold">STALE</span>
             {% else %}
-                <span style="color: red; font-weight: bold;">{{ relays.consensus_status.freshness|upper }}</span>
+                <span class="al-status-danger-bold">{{ relays.consensus_status.freshness|upper }}</span>
             {% endif %}
             | {{ relays.consensus_status.voted_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} Voted at {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] if relays.collector_fetched_at else relays.timestamp }} (fetch time, votes from same consensus period)
             {% if relays.consensus_status.next_consensus_time %}
@@ -38,12 +45,9 @@
         {% if relays.consensus_method_info and relays.consensus_method_info.current_method %}
         <li><strong>Consensus Method:</strong> 
             <span style="font-weight: bold;">{{ relays.consensus_method_info.current_method }}</span>
-            (from consensus document{% if relays.consensus_method_info.consensus_valid_after %}, {{ relays.consensus_method_info.consensus_valid_after }}{% endif %})
+            (from consensus document)
             {% if relays.consensus_method_info.max_method and relays.consensus_method_info.max_method > relays.consensus_method_info.current_method %}
             | Max available: <strong>{{ relays.consensus_method_info.max_method }}</strong> (supported by {{ relays.consensus_method_info.max_method_support }}/{{ relays.consensus_method_info.total_voters }} authorities)
-            {% endif %}
-            {% if relays.consensus_method_info.latest_vote_valid_after %}
-            <span style="color: #6c757d; font-size: 0.9em;" title="CollecTor data may lag behind the live network. Vote method support is based on CollecTor vote files from this timestamp.">| Votes from {{ relays.consensus_method_info.latest_vote_valid_after }}</span>
             {% endif %}
         </li>
         {% endif %}
@@ -55,31 +59,31 @@
         </li>
         <li><strong>Uptime Status (1M):</strong> 
             {% if relays.authorities_summary.above_average_uptime -%}
-                <span style="color: green; font-weight: bold;">{{ relays.authorities_summary.above_average_uptime|length }} above average</span>
+                <span class="al-status-success-bold">{{ relays.authorities_summary.above_average_uptime|length }} above average</span>
             {% else -%}
-                <span style="color: green; font-weight: bold;">0 above average</span>
+                <span class="al-status-success-bold">0 above average</span>
             {%- endif %} | 
             {% if relays.authorities_summary.below_average_uptime -%}
-                <span style="color: #ff8c00; font-weight: bold;">{{ relays.authorities_summary.below_average_uptime|length }} below average</span>
+                <span class="al-status-warning-bold">{{ relays.authorities_summary.below_average_uptime|length }} below average</span>
             {% else -%}
-                <span style="color: #ff8c00; font-weight: bold;">0 below average</span>
+                <span class="al-status-warning-bold">0 below average</span>
             {%- endif %} | 
             {% if relays.authorities_summary.problem_uptime -%}
-                <span style="color: red; font-weight: bold;">{{ relays.authorities_summary.problem_uptime|length }} problematic</span>
+                <span class="al-status-danger-bold">{{ relays.authorities_summary.problem_uptime|length }} problematic</span>
             {% else -%}
-                <span style="color: red; font-weight: bold;">0 problematic</span>
+                <span class="al-status-danger-bold">0 problematic</span>
             {%- endif %}
         </li>
         
         {# Latency status (voting authorities only) #}
         {% if relays.latency_summary %}
         <li><strong>Latency Status</strong> <span style="font-size: 0.85em; color: #666;">(voting authorities)</span><strong>:</strong> 
-            <span style="color: green;">{{ relays.latency_summary.ok_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} OK</span>
+            <span class="al-status-success">{{ relays.latency_summary.ok_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} OK</span>
             {% if relays.latency_summary.slow_count > 0 %}
-            | <span style="color: #ff8c00;">{{ relays.latency_summary.slow_count }} slow</span>
+            | <span class="al-status-warning">{{ relays.latency_summary.slow_count }} slow</span>
             {% endif %}
             {% if relays.latency_summary.down_count > 0 %}
-            | <span style="color: red;">{{ relays.latency_summary.down_count }} down</span>
+            | <span class="al-status-danger">{{ relays.latency_summary.down_count }} down</span>
             {% endif %}
         </li>
         {% endif %}
@@ -90,7 +94,7 @@
     <br>
 
     <!-- MAIN AUTHORITY TABLE -->
-    <h3>Directory Authority Status</h3>
+    <h2>Directory Authority Status</h2>
     <br>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -134,7 +138,6 @@
             <th title="Source: CollecTor | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
             <th title="TCP connection test to authority's directory port | Response time in milliseconds">Latency (ms)</th>
             <th title="Source: CollecTor | Consensus method this authority supports (from consensus-methods line in vote)">Consensus Method</th>
-            <th title="Source: CollecTor | The valid-after timestamp from this authority's vote file. Color-coded: green = matches latest consensus period, red = older than other authorities (CollecTor may be lagging or authority missed a vote).">Vote Time (UTC)</th>
             {# Existing columns #}
             <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
             <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
@@ -150,17 +153,22 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
+                    {% if authority.is_known_offline %}
+                    {# Removed authority aged out of live data: no relay page exists, so plain text (no 404 link) #}
+                    <span style="color: #dc3545; font-weight: bold;">{{ authority.nickname }}</span> <span class="al-status-muted" style="font-size: 0.85em;" title="{{ authority.offline_note }}">(Onionoo removed due to offline longer than 1 week — shown for context)</span>
+                    {% else %}
                     <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
                        {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
-                       {% else %}style="text-decoration: underline;"{% endif %}>
+                       {% else %}class="al-link-plain"{% endif %}>
                         {{ authority.nickname }}
                     </a>
+                    {% endif %}
                 </td>
                 <td>
                     {% if authority.running -%}
-                        <span style="color: green; font-weight: bold;">🟢 Online</span>
+                        <span class="al-status-success-bold">🟢 Online</span>
                     {% else -%}
-                        <span style="color: red; font-weight: bold;">🔴 Offline</span>
+                        <span class="al-status-danger-bold">🔴 Offline</span>
                     {%- endif %}
                 </td>
                 
@@ -168,20 +176,20 @@
                 <td>
                     {% if authority.collector_data and authority.collector_data.voted %}
                         {% set relay_count = authority.collector_data.relay_count|default(0) %}
-                        <span style="color: {% if relay_count > 1 %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;" title="Vote received with {{ relay_count }} relays{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ relay_count }}</span>
+                        <span class="{% if relay_count > 1 %}al-status-success-bold{% else %}al-status-danger-bold{% endif %}" title="Vote received with {{ relay_count }} relays{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ relay_count }}</span>
                     {% elif authority.collector_data is defined %}
-                        <span style="color: #dc3545; font-weight: bold;" title="No vote file found at https://collector.torproject.org/recent/relay-descriptors/votes/{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">0</span>
+                        <span class="al-status-danger-bold" title="No vote file found at https://collector.torproject.org/recent/relay-descriptors/votes/{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">0</span>
                     {% else %}
-                        <span style="color: #6c757d;" title="CollecTor data not available">—</span>
+                        <span class="al-status-muted" title="CollecTor data not available">—</span>
                     {% endif %}
                 </td>
                 
                 {# NEW: BW Authority status #}
                 <td>
                     {% if authority.collector_data and authority.collector_data.is_bw_authority %}
-                        <span style="color: #28a745; font-weight: bold;" title="Runs bandwidth scanner (sbws)">Yes</span>
+                        <span class="al-status-success-bold" title="Runs bandwidth scanner (sbws)">Yes</span>
                     {% else %}
-                        <span style="color: #6c757d;" title="Does not run bandwidth scanner">No</span>
+                        <span class="al-status-muted" title="Does not run bandwidth scanner">No</span>
                     {% endif %}
                 </td>
                 
@@ -189,18 +197,18 @@
                 <td>
                     {% if authority.latency_ms is defined and authority.latency_ms is not none %}
                         {% if authority.latency_ms >= 2000 %}
-                            <span style="color: #dc3545; font-weight: bold;" title="Connection timed out after 2 seconds{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">Timeout</span>
+                            <span class="al-status-danger-bold" title="Connection timed out after 2 seconds{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">Timeout</span>
                         {% elif authority.latency_ms > 500 %}
-                            <span style="color: #dc3545; font-weight: bold;" title="Response time: {{ authority.latency_ms|round|int }} ms (slow, >500ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
+                            <span class="al-status-danger-bold" title="Response time: {{ authority.latency_ms|round|int }} ms (slow, >500ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
                         {% elif authority.latency_ms > 200 %}
-                            <span style="color: #ff8c00;" title="Response time: {{ authority.latency_ms|round|int }} ms (moderate, >200ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
+                            <span class="al-status-warning" title="Response time: {{ authority.latency_ms|round|int }} ms (moderate, >200ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
                         {% else %}
                             <span title="Response time: {{ authority.latency_ms|round|int }} ms (good, ≤200ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
                         {% endif %}
                     {% elif authority.latency_error is defined and authority.latency_error %}
-                        <span style="color: #dc3545; font-weight: bold;" title="Error: {{ authority.latency_error }}{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">✗</span>
+                        <span class="al-status-danger-bold" title="Error: {{ authority.latency_error }}{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">✗</span>
                     {% else %}
-                        <span style="color: #6c757d;" title="Latency check not performed">—</span>
+                        <span class="al-status-muted" title="Latency check not performed">—</span>
                     {% endif %}
                 </td>
                 
@@ -209,26 +217,9 @@
                     {% if authority.collector_data and authority.collector_data.max_consensus_method %}
                         {% set auth_max = authority.collector_data.max_consensus_method %}
                         {% set network_max = relays.consensus_method_info.max_method if relays.consensus_method_info else None %}
-                        <span style="{% if network_max and auth_max >= network_max %}color: #28a745; font-weight: bold;{% elif auth_max %}color: #dc3545;{% endif %}" title="This authority supports consensus method {{ auth_max }}{% if network_max and auth_max < network_max %} (network highest: {{ network_max }}){% endif %}">{{ auth_max }}</span>
+                        <span class="{% if network_max and auth_max >= network_max %}al-status-success-bold{% elif auth_max %}al-status-danger{% endif %}" title="This authority supports consensus method {{ auth_max }}{% if network_max and auth_max < network_max %} (network highest: {{ network_max }}){% endif %}">{{ auth_max }}</span>
                     {% else %}
-                        <span style="color: #6c757d;" title="No vote data available">—</span>
-                    {% endif %}
-                </td>
-                
-                {# Per-authority vote valid-after timestamp, color-coded against latest #}
-                <td style="white-space: nowrap; font-size: 12px;">
-                    {% if authority.collector_data and authority.collector_data.vote_valid_after %}
-                        {% set auth_vote_time = authority.collector_data.vote_valid_after %}
-                        {% set latest_vote_time = relays.consensus_method_info.latest_vote_valid_after if relays.consensus_method_info else None %}
-                        {% if latest_vote_time and auth_vote_time == latest_vote_time %}
-                            <span style="color: #28a745;" title="Vote from latest consensus period ({{ auth_vote_time }})">{{ auth_vote_time }}</span>
-                        {% elif latest_vote_time and auth_vote_time < latest_vote_time %}
-                            <span style="color: #dc3545; font-weight: bold;" title="Vote is OLDER than other authorities ({{ auth_vote_time }} vs latest {{ latest_vote_time }}). This authority may have missed a vote or CollecTor is missing its latest vote.">{{ auth_vote_time }}</span>
-                        {% else %}
-                            <span title="Vote valid-after: {{ auth_vote_time }}">{{ auth_vote_time }}</span>
-                        {% endif %}
-                    {% else %}
-                        <span style="color: #6c757d;" title="No vote timestamp available (non-voting authority or no vote data)">—</span>
+                        <span class="al-status-muted" title="No vote data available">—</span>
                     {% endif %}
                 </td>
                 
@@ -247,7 +238,7 @@
                     {%- endif %}
                 </td>
                 <td>
-                    {% if authority.country -%}
+                    {% if relays.has_page('country', authority.country) -%}
                         <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country|lower }}.png"
                                  title="{{ authority.country_name }}"
@@ -282,11 +273,11 @@
                     {% if authority.uptime_zscore is not none -%}
                         | <span 
                         {% if authority.uptime_zscore > 0.3 -%}
-                            style="color: green; font-weight: bold;"
+                            class="al-status-success-bold"
                         {% elif authority.uptime_zscore <= -2.0 -%}
-                            style="color: red; font-weight: bold;"
+                            class="al-status-danger-bold"
                         {% else -%}
-                            style="color: #ff8c00; font-weight: bold;"
+                            class="al-status-warning-bold"
                         {%- endif %}
                         title="Z-score: Statistical measure of how far this authority's uptime deviates from the average. Values below -2.0 indicate significantly poor uptime.">Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
                     {%- endif %}
@@ -295,9 +286,9 @@
                 <td>
                     {% if authority.recommended_version is not none -%}
                         {% if authority.recommended_version -%}
-                            <span style="color: #28a745; font-weight: bold;" title="Running recommended version">Yes</span>
+                            <span class="al-status-success-bold" title="Running recommended version">Yes</span>
                         {% else -%}
-                            <span style="color: #dc3545; font-weight: bold;" title="Not running recommended version">No</span>
+                            <span class="al-status-danger-bold" title="Not running recommended version">No</span>
                         {%- endif %}
                     {% else -%}
                         Unknown
@@ -305,9 +296,9 @@
                 </td>
                 <td>
                     {% if authority.first_seen_relative -%}
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen_timestamp }}">{{ authority.first_seen_relative }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ', 1)[0] }}/" title="{{ authority.first_seen_timestamp }}">{{ authority.first_seen_relative }}</a>
                     {% elif authority.first_seen -%}
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ', 1)[0] }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
                     {% else -%}
                         Unknown
                     {%- endif %}
@@ -337,12 +328,13 @@
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
             <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
-            <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span style="color: #28a745; font-weight: bold;">Green (&gt;1)</span> = Vote received with relays, <span style="color: #dc3545; font-weight: bold;">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
-            <li><strong>BW Auth:</strong> <span style="color: #28a745; font-weight: bold;">Yes</span> = Runs bandwidth scanner (sbws), <span style="color: #6c757d;">No</span> = Does not run scanner</li>
-            <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span style="color: #ff8c00;">Orange = &gt;200ms</span>, <span style="color: #dc3545; font-weight: bold;">Red = &gt;500ms</span>, <span style="color: #dc3545; font-weight: bold;">Timeout</span> = &gt;2s, <span style="color: #dc3545; font-weight: bold;">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>
+            <li><strong>🔴 "Onionoo removed due to offline longer than 1 week — shown for context":</strong> A directory authority that stopped voting and was then dropped by Onionoo, which only lists relays seen in a network status within the past week (~7 days, per the <a href="https://metrics.torproject.org/onionoo.html" target="_blank" rel="noopener">Onionoo protocol</a>). Retained here as a hardcoded placeholder for historical context after such a critical change; all other data on this page is dynamic. If the authority returns, its live data automatically supersedes this placeholder.</li>
+            <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span class="al-status-success-bold">Green (&gt;1)</span> = Vote received with relays, <span class="al-status-danger-bold">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
+            <li><strong>BW Auth:</strong> <span class="al-status-success-bold">Yes</span> = Runs bandwidth scanner (sbws), <span class="al-status-muted">No</span> = Does not run scanner</li>
+            <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span class="al-status-warning">Orange = &gt;200ms</span>, <span class="al-status-danger-bold">Red = &gt;500ms</span>, <span class="al-status-danger-bold">Timeout</span> = &gt;2s, <span class="al-status-danger-bold">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>
             <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
-            <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
-            <li><strong>Rec. Ver.:</strong> <span style="color: green; font-weight: bold;">Yes</span> = On recommended version, <span style="color: red; font-weight: bold;">No</span> = Not recommended</li>
+            <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span class="al-status-success-bold">Green (above average)</span>, <span class="al-status-warning-bold">Yellow (normal)</span>, <span class="al-status-danger-bold">Red (significantly below average, ≤-2.0)</span></li>
+            <li><strong>Rec. Ver.:</strong> <span class="al-status-success-bold">Yes</span> = On recommended version, <span class="al-status-danger-bold">No</span> = Not recommended</li>
             <li><strong>Age:</strong> Time since authority was first observed on the network (hover for exact timestamp)</li>
         </ul>
     </div>
@@ -385,7 +377,7 @@
                             ≥{{ "%.1f%%"|format(thresholds['guard-wfu']) }}
                         {% endif %}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -399,7 +391,7 @@
                         {% set days = thresholds['guard-tk'] / 86400 %}
                         ≥{{ "%.1f d"|format(days) }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -415,7 +407,7 @@
                         {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
                         ≥{{ bw_formatted }} {{ bw_unit }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -427,9 +419,9 @@
                 <td style="text-align: center;">
                     {# V2Dir is a capability flag, not threshold-based. All authorities require it for Guard. #}
                     {% if thresholds.get('known_flags') and 'V2Dir' in thresholds.get('known_flags', []) %}
-                        <span style="color: #28a745;">✓ Required</span>
+                        <span class="al-status-success">✓ Required</span>
                     {% else %}
-                        <span style="color: #28a745;">✓ Required</span>
+                        <span class="al-status-success">✓ Required</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -448,7 +440,7 @@
                         {% set days = thresholds['stable-uptime'] / 86400 %}
                         ≥{{ "%.1f d"|format(days) }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -462,7 +454,7 @@
                         {% set days = thresholds['stable-mtbf'] / 86400 %}
                         ≥{{ "%.1f d"|format(days) }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -474,12 +466,12 @@
                 <td style="text-align: center;">
                     {% if thresholds.get('enough-mtbf') is not none %}
                         {% if thresholds['enough-mtbf'] == 1 %}
-                            <span style="color: #28a745;">✓</span>
+                            <span class="al-status-success">✓</span>
                         {% else %}
-                            <span style="color: #dc3545;">✗</span>
+                            <span class="al-status-danger">✗</span>
                         {% endif %}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -500,7 +492,7 @@
                         {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
                         ≥{{ bw_formatted }} {{ bw_unit }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -522,7 +514,7 @@
                             ≥{{ "%.1f%%"|format(thresholds['hsdir-wfu']) }}
                         {% endif %}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -536,7 +528,7 @@
                         {% set days = thresholds['hsdir-tk'] / 86400 %}
                         ≥{{ "%.1f d"|format(days) }}
                     {% else %}
-                        <span style="color: #6c757d;">—</span>
+                        <span class="al-status-muted">—</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -657,7 +649,7 @@
             <p style="margin: 5px 0; font-size: 12px; color: #666;">
                 <strong>⚠️ Study Finding:</strong> Our analysis of 10k+ relays shows authorities assigning Stable to relays with MTBF as low as ~5 days, 
                 below both the published threshold and 7-day minimum. The <code>stable-mtbf</code> in flag-thresholds is the <em>median</em> MTBF value, not the minimum threshold.
-                See <a href="../docs/studies/stable-flag-threshold-study.md">Stable Flag Threshold Study</a>.
+                See Stable Flag Threshold Study.
                 <br><strong>Sources:</strong> 
                 <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec</a> |
                 <a href="https://research.torproject.org/techreports/relay-stability-2011-06-30.pdf" target="_blank" rel="noopener">Relay Stability Research (2011)</a>
@@ -690,8 +682,8 @@
             <li><strong>Fast Speed (7/8ths):</strong> Bandwidth threshold for Fast flag (top 7/8ths of network OR ≥100 KB/s).</li>
             <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag. WFU ≥98% (all authorities). TK per dir-spec: ≥25 hours (most authorities use default); moria1 uses ≥10 days.</li>
             <li><strong>Enough MTBF:</strong> Boolean flag from <code>flag-thresholds</code> line (0 or 1). 
-                <span style="color: #28a745;">✓ (=1)</span> = Authority has collected <strong>sufficient MTBF stability data</strong> to accurately compute stability-related thresholds. 
-                <span style="color: #dc3545;">✗ (=0)</span> = Authority recently restarted or lacks historical uptime data. 
+                <span class="al-status-success">✓ (=1)</span> = Authority has collected <strong>sufficient MTBF stability data</strong> to accurately compute stability-related thresholds. 
+                <span class="al-status-danger">✗ (=0)</span> = Authority recently restarted or lacks historical uptime data. 
                 When =0, the authority may use conservative fallback thresholds instead of computed medians.</li>
             <li><strong>V2Dir:</strong> Relay supports directory protocol v2+ (required for Guard flag).</li>
             <li><strong>—</strong> = Threshold not available from this authority.</li>
@@ -712,4 +704,4 @@
     <p><i>Data sources: <a href="https://onionoo.torproject.org" target="_blank" rel="noopener">Onionoo API</a>{% if relays.collector_flag_thresholds %}, <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>{% endif %}</i></p>
     <p><i>Last updated: {{ relays.timestamp }} (updates every 15-60 minutes depending on data source)</i></p>
 
-{% endblock -%} 
+{% endblock -%}

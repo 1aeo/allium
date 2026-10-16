@@ -1,262 +1,14 @@
 {% from "macros.html" import navigation %}
 {% extends "skeleton.html" -%}
 
-{% block page_css %}
-/* =============================================================================
-   API Diagnostics Page Styles (page-specific — only loaded on diagnostics page)
-   ============================================================================= */
-
-/* Overall status banner */
-.diag-overall-banner {
-    padding: 18px 24px;
-    border-radius: 8px;
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-.diag-overall-fresh {
-    background: linear-gradient(135deg, #d4edda, #c3e6cb);
-    border: 2px solid var(--color-success);
-}
-.diag-overall-aging {
-    background: linear-gradient(135deg, #fff3cd, #ffeeba);
-    border: 2px solid var(--color-warning-bg);
-}
-.diag-overall-stale {
-    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-    border: 2px solid var(--color-danger);
-}
-.diag-overall-unavailable {
-    background: linear-gradient(135deg, #e9ecef, #dee2e6);
-    border: 2px solid var(--color-muted);
-}
-.diag-overall-status {
-    font-size: 20px;
-    font-weight: 700;
-    color: #2c3e50;
-}
-.diag-overall-meta {
-    font-size: 13px;
-    color: var(--color-text-dark);
-    text-align: right;
-}
-.diag-overall-meta div { margin-bottom: 2px; }
-
-/* API cards grid - 3 columns matching network health ribbon */
-.diag-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-bottom: 30px;
-}
-
-.diag-card {
-    background: #fff;
-    border-radius: 8px;
-    border: 2px solid #e1e8ed;
-    padding: 0;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    transition: all 0.2s ease;
-    overflow: hidden;
-}
-.diag-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    transform: translateY(-1px);
-}
-
-/* Colored left border per freshness */
-.diag-card-border-fresh { border-left: 4px solid var(--color-success); }
-.diag-card-border-aging { border-left: 4px solid var(--color-warning-bg); }
-.diag-card-border-stale { border-left: 4px solid var(--color-danger); }
-.diag-card-border-unavailable { border-left: 4px solid var(--color-muted); }
-
-.diag-card-header {
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #f0f4f8;
-}
-.diag-card-header h4 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-/* Freshness badges */
-.diag-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-.diag-badge-fresh { background-color: #d4edda; color: #155724; border: 1px solid var(--color-success); }
-.diag-badge-aging { background-color: #fff3cd; color: var(--color-warning-text); border: 1px solid var(--color-warning-bg); }
-.diag-badge-stale { background-color: #f8d7da; color: #721c24; border: 1px solid var(--color-danger); }
-.diag-badge-unavailable { background-color: #e9ecef; color: var(--color-text-dark); border: 1px solid var(--color-muted); }
-
-.diag-card-body {
-    padding: 10px 16px 14px;
-}
-.diag-card-body dl {
-    margin: 0;
-    display: grid;
-    grid-template-columns: 110px 1fr;
-    gap: 3px 8px;
-    font-size: 12px;
-}
-.diag-card-body dt { color: var(--color-muted); font-weight: 600; }
-.diag-card-body dd { margin: 0; color: #343a40; word-break: break-all; }
-.diag-card-body dd a { color: var(--color-link); text-decoration: none; }
-.diag-card-body dd a:hover { text-decoration: underline; }
-
-/* Progress bar */
-.diag-progress-bar {
-    height: 6px;
-    background: #e9ecef;
-    border-radius: 3px;
-    margin-top: 8px;
-    overflow: hidden;
-}
-.diag-progress-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-.diag-progress-fresh { background: var(--color-success); }
-.diag-progress-aging { background: var(--color-warning-bg); }
-.diag-progress-stale { background: var(--color-danger); }
-
-/* Affected sections tags */
-.diag-affected {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid #f0f4f8;
-    font-size: 12px;
-    color: var(--color-muted);
-}
-.diag-affected strong { color: var(--color-text-dark); }
-.diag-affected-stale strong { color: #721c24; }
-.diag-affected-tag {
-    display: inline-block;
-    background: #f0f4f8;
-    padding: 2px 8px;
-    border-radius: 3px;
-    margin: 2px 3px 2px 0;
-    font-size: 11px;
-    color: var(--color-text-dark);
-}
-.diag-affected-tag-stale {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-/* Section header */
-.diag-section-header {
-    font-size: 18px;
-    font-weight: 600;
-    color: #2c3e50;
-    margin: 30px 0 16px 0;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #e1e8ed;
-}
-
-/* Dependency map table */
-.diag-dep-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-}
-.diag-dep-table thead th {
-    background: var(--color-bg-light);
-    padding: 10px 14px;
-    text-align: left;
-    font-weight: 600;
-    color: var(--color-text-dark);
-    border-bottom: 2px solid var(--color-border-light);
-}
-.diag-dep-table tbody td {
-    padding: 10px 14px;
-    border-bottom: 1px solid #f0f4f8;
-    vertical-align: middle;
-}
-.diag-dep-table tbody tr:hover { background-color: var(--color-bg-light); }
-
-/* Status dots */
-.diag-dep-dot {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-right: 6px;
-    vertical-align: middle;
-}
-.diag-dot-fresh { background: var(--color-success); }
-.diag-dot-aging { background: var(--color-warning-bg); }
-.diag-dot-stale { background: var(--color-danger); }
-.diag-dot-unavailable { background: var(--color-muted); }
-
-/* API pills in dependency table */
-.diag-api-pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    margin: 1px 3px;
-    font-weight: 500;
-}
-.diag-api-pill-fresh { background: #d4edda; color: #155724; }
-.diag-api-pill-aging { background: #fff3cd; color: var(--color-warning-text); }
-.diag-api-pill-stale { background: #f8d7da; color: #721c24; }
-.diag-api-pill-unavailable { background: #e9ecef; color: var(--color-text-dark); }
-
-/* Legend box */
-.diag-legend {
-    background: var(--color-bg-light);
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 24px;
-}
-.diag-legend h5 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 14px;
-    color: var(--color-text-dark);
-}
-.diag-legend-items {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    font-size: 13px;
-}
-.diag-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-/* Responsive: 2 columns on medium, 1 on small */
-@media (max-width: 1200px) {
-    .diag-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 768px) {
-    .diag-grid { grid-template-columns: 1fr; }
-    .diag-overall-banner { flex-direction: column; text-align: center; }
-    .diag-overall-meta { text-align: center; }
-    .diag-card-body dl { grid-template-columns: 100px 1fr; }
-}
-{% endblock %}
+{% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/api-diagnostics.css">{% endblock %}
 
 {% block title -%}
 API Diagnostics
 {% endblock -%}
+
+{% block robots_meta %}<meta name="robots" content="noindex,follow">{% endblock %}
+{% block meta_description %}Operational diagnostics for the APIs and cached data sources used to generate 1AEO Tor Metrics.{% endblock %}
 
 {% block body -%}
 
@@ -303,7 +55,7 @@ API Diagnostics
                 <dt>URL</dt>
                 <dd>
                     <a href="{{ api.url }}" target="_blank" rel="noopener">{{ api.url|replace('https://', '') }}</a>
-                    {% if api.url_note %}<span style="color:#6c757d;"> ({{ api.url_note }})</span>{% endif %}
+                    {% if api.url_note %}<span class="al-status-muted"> ({{ api.url_note }})</span>{% endif %}
                 </dd>
                 <dt>Owner</dt>
                 <dd>{{ api.owner }}</dd>
@@ -313,15 +65,15 @@ API Diagnostics
                 <dt>Cache Age</dt>
                 <dd>
                     {% if api.freshness == 'stale' and api.cache_exceeded %}
-                        <span class="status-danger">{{ api.cache_age_display }}</span>
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
-                        <span class="status-danger">EXCEEDED</span>
+                        <span class="al-status-danger">{{ api.cache_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-danger">EXCEEDED</span>
                     {% elif api.freshness == 'aging' %}
-                        <span class="status-warning">{{ api.cache_age_display }}</span>
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-warning">{{ api.cache_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
                     {% elif api.cache_age_seconds is not none %}
                         {{ api.cache_age_display }}
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
                     {% else %}
                         N/A
                     {% endif %}
@@ -329,50 +81,120 @@ API Diagnostics
                 <dt>Worker Status</dt>
                 <dd>
                     {% if api.worker_status == 'ready' %}
-                        <span class="status-success">{{ api.worker_status }}</span>
+                        <span class="al-status-success">{{ api.worker_status }}</span>
                     {% elif api.worker_status == 'stale' %}
-                        <span class="status-danger">{{ api.worker_status }}</span>
+                        <span class="al-status-danger">{{ api.worker_status }}</span>
                     {% else %}
                         {{ api.worker_status }}
                     {% endif %}
                 </dd>
                 {% if api.worker_error %}
                 <dt>Error</dt>
-                <dd><span class="status-danger">{{ api.worker_error }}</span></dd>
+                <dd><span class="al-status-danger">{{ api.worker_error }}</span></dd>
                 {% endif %}
                 <dt>Items Loaded</dt>
                 <dd>
                     {{ api.item_count_display }} {{ api.count_label }}
                     {% if api.extra_info %}
-                        <span style="color:#6c757d;">({{ api.extra_info }})</span>
+                        <span class="al-status-muted">({{ api.extra_info }})</span>
                     {% endif %}
                 </dd>
-                {% if api.upstream_data and api.upstream_data.vote_valid_after %}
-                <dt>Upstream Vote Data</dt>
-                <dd>
-                    {{ api.upstream_data.vote_valid_after }} UTC
-                    <span style="color:#6c757d;" title="The valid-after timestamp from the latest CollecTor vote file. CollecTor can lag hours behind the live Tor network — this shows the actual age of the vote data, not just when we cached it.">(CollecTor may lag behind live network)</span>
-                </dd>
-                {% if api.upstream_data.consensus_valid_after %}
-                <dt>Upstream Consensus</dt>
-                <dd>
-                    {{ api.upstream_data.consensus_valid_after }} UTC
-                    · Method <strong>{{ api.upstream_data.consensus_method|default('?', true) }}</strong>
-                    {% if api.upstream_data.max_method and api.upstream_data.consensus_method and api.upstream_data.max_method > api.upstream_data.consensus_method %}
-                        <span style="color:#6c757d;">· Max {{ api.upstream_data.max_method }} ({{ api.upstream_data.max_method_support }}/{{ api.upstream_data.total_voters }} DAs)</span>
-                    {% endif %}
-                </dd>
-                {% endif %}
-                {% endif %}
                 {% else %}
                 <dt>Status</dt>
-                <dd><span class="status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
+                <dd><span class="al-status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
                 {% endif %}
             </dl>
 
             {% if api.enabled %}
             <div class="diag-progress-bar">
                 <div class="diag-progress-fill diag-progress-{{ api.freshness }}" style="width: {{ api.cache_pct }}%;"></div>
+            </div>
+            {% endif %}
+
+            {# B6: AROI-specific extended diagnostics block. Helps
+               non-developer operators diagnose upstream regressions.
+               Uses a CSS grid for clean label-on-left/value-on-right
+               layout that doesn't break when content wraps (the prior
+               dt/dd inline-display approach broke with line wrap). #}
+            {% if api.aroi_extras %}
+            <div style="margin-top: 12px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
+                <strong style="color: #495057;">AROI extended diagnostics</strong>
+                <table style="width: 100%; margin-top: 6px; font-size: 12px; border-collapse: collapse;">
+                    {% if api.aroi_extras.schema_version is not none %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Schema version:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">v{{ api.aroi_extras.schema_version }}{% if api.aroi_extras.schema_version > 2 %} <span style="color: #c82333;">⚠ newer than tested</span>{% endif %}</td>
+                    </tr>
+                    {% endif %}
+                    {# Item D: ciissversion_declared_rows is pre-formatted in
+                       api_diagnostics.py (_format_ciissversion_rows) so the
+                       template just iterates ready-to-render rows with
+                       stable badge_color/is_none flags. #}
+                    {% if api.aroi_extras.ciissversion_declared_rows %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">ciissversion declared:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for row in api.aroi_extras.ciissversion_declared_rows -%}
+                        {%- if not loop.first %} {% endif -%}
+                        {%- if row.is_none -%}<span style="color: #6c757d; margin-right: 4px;">none: {{ row.count }}</span>
+                        {%- else -%}<span style="background-color: {{ row.badge_color }}; color: white; padding: 1px 4px; border-radius: 2px; margin-right: 4px;">v{{ row.key }}: {{ row.count }}</span>
+                        {%- endif -%}
+                        {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {# Item D: proof_types_rows is pre-formatted in
+                       api_diagnostics.py (_format_proof_type_rows) so the
+                       template doesn't need to do dictsort + 'familyid in
+                       pt' string classification + bucket exclusion in
+                       Jinja. Each row already carries version + badge_color. #}
+                    {% if api.aroi_extras.proof_types_rows %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Proof types:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for row in api.aroi_extras.proof_types_rows -%}
+                        <span style="display: inline-block; margin-right: 4px; margin-bottom: 2px;">
+                            <span style="font-size: 10px; padding: 1px 4px; background-color: {{ row.badge_color }}; color: white; border-radius: 2px;">v{{ row.version }}</span>
+                            <code style="background: #fff; padding: 1px 4px; border-radius: 2px;">{{ row.proof_type }}: {{ row.valid }}/{{ row.total }}</code>
+                        </span>
+                        {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if api.aroi_extras.top_error_categories %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Top v3 error categories:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for cat, count in api.aroi_extras.top_error_categories -%}
+                        <code style="background: #fff3cd; padding: 1px 4px; border-radius: 2px; margin-right: 4px; display: inline-block;">{{ cat }}: {{ count }}</code>
+                        {%- endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
+
+                {# B6 (final): warning feed from this build's
+                   aroi_validation module. Plan called for last-warning
+                   timestamps so operators can spot upstream regressions. #}
+                {% if api.aroi_extras.warnings %}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #dee2e6;">
+                    <strong style="color: #495057; font-size: 11px;">⚠️ Build-time warnings ({{ api.aroi_extras.warnings|length }}):</strong>
+                    <ul style="margin: 4px 0 0 0; padding-left: 20px; font-size: 11px;">
+                        {% for w in api.aroi_extras.warnings -%}
+                        <li>
+                            <code style="background: #fff3cd; padding: 1px 3px; border-radius: 2px;">{{ w.kind }}</code>
+                            =
+                            <code style="background: #fff; padding: 1px 3px; border-radius: 2px; border: 1px solid #dee2e6;">{{ w.value|escape }}</code>
+                            <span style="color: #6c757d;">(first seen {{ w.timestamp_iso }}{% if w.count > 1 %}, ×{{ w.count }}{% endif %})</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #dee2e6; font-size: 11px; color: #6c757d;">
+                    ✓ No build-time AROI warnings (no unknown error_categories, proof_types, or schema mismatches).
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -423,20 +245,20 @@ API Diagnostics
                 <td>
                     <span class="diag-dep-dot diag-dot-{{ dep.worst_freshness }}"></span>
                     {% if dep.worst_freshness == 'stale' %}
-                        <strong class="status-danger">Stale</strong>
+                        <strong class="al-status-danger">Stale</strong>
                     {% elif dep.worst_freshness == 'aging' %}
-                        <span class="status-warning">Aging</span>
+                        <span class="al-status-warning">Aging</span>
                     {% elif dep.worst_freshness == 'fresh' %}
-                        <span class="status-success">Fresh</span>
+                        <span class="al-status-success">Fresh</span>
                     {% else %}
-                        <span class="status-muted">N/A</span>
+                        <span class="al-status-muted">N/A</span>
                     {% endif %}
                 </td>
                 <td>
                     {% if dep.link %}
                         <a href="{{ page_ctx.path_prefix }}{{ dep.link }}">{{ dep.link }}</a>
                     {% elif dep.link_label %}
-                        <span style="color:#6c757d;">{{ dep.link_label }}</span>
+                        <span class="al-status-muted">{{ dep.link_label }}</span>
                     {% endif %}
                 </td>
             </tr>

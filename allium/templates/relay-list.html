@@ -4,10 +4,10 @@
     Tor Relays
 {% endblock -%}
 {% block body -%}
-<h2>
+<h1 class="page-title">
 {% block header -%}
 {% endblock -%}
-</h2>
+</h1>
 
 {% block navigation -%}
 {% endblock -%}
@@ -20,6 +20,9 @@
 <p class="text-muted" style="margin-bottom: 15px;">
 <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
 </p>
+
+<div id="relay-table"></div>
+{% include "pagination.html" %}
 
 <table class="table table-condensed">
 <tr>
@@ -37,6 +40,7 @@
     <th>Country</th>
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg" title="Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com">DNS</th>
     <th class="visible-md visible-lg">First Seen</th>
     {% if key and not is_index -%}
     <th class="visible-md visible-lg">Last Restarted</th>
@@ -80,6 +84,12 @@
 			    {% else -%}
 			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
 			    {% endif -%}
+			    {#- B5.2: per-relay version badge in AROI cell of relay-list pages
+			        (country, AS, family, networks, platforms, all-relays).
+			        Sparse: omitted when relay didn't declare a version. -#}
+			    {%- if relay.get('aroi_version') %}
+			    <span style="font-size: 9px; padding: 0 3px; border-radius: 2px; background-color: {{ '#007bff' if relay.get('aroi_version') == '3' else '#6c757d' }}; color: white; vertical-align: middle;" title="ciissversion:{{ relay.get('aroi_version') }}">v{{ relay.get('aroi_version') }}</span>
+			    {%- endif %}
 			</td>
 		    {% else -%}
 			<td>none</td>
@@ -139,7 +149,7 @@
 		{% else -%}
 		    <td>Unknown</td>
 		{% endif -%}
-		{% if relay['country'] -%}
+		{% if relays.has_page('country', relay['country']) -%}
 		    {% if key != 'country' -%}
 			<td>
 			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
@@ -157,9 +167,11 @@
 			</td>
 		    {% endif -%}
 		{% else -%}
-		    <td>X</td>
+		    <td>Unknown</td>
 		{% endif -%}
-		{% if key != 'platform' -%}
+		{% if not relays.has_page('platform', relay['platform']) -%}
+		    <td>Unknown</td>
+		{% elif key != 'platform' -%}
 		    <td>
 			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
 			relay['platform']|truncate(length=10)|escape }}</a>
@@ -169,6 +181,7 @@
 		{% endif -%}
 		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
 		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+		<td class="visible-md visible-lg">{% if relay.get('exit_dns_health_status') == 'success' %}<span class="al-status-success" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span class="al-status-danger" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span class="al-status-muted" title="Not yet tested">-</span>{% else %}<span class="al-status-muted">NA</span>{% endif %}</td>
 		{# PERF: Use pre-computed first_seen_date_escaped from _preprocess_template_data() #}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
@@ -187,4 +200,5 @@
 	{% endfor -%}
     </tbody>
 </table>
+{% include "pagination.html" %}
 {% endblock -%}

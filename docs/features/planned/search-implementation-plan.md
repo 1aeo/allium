@@ -189,7 +189,7 @@ The ~1.5ms difference is negligible for a search redirect.
 
 | Field | Source | Example | Redirects To |
 |-------|--------|---------|--------------|
-| **Platform** | `relay['platform']` | `linux`, `freebsd` | `/platform/linux/` |
+| **Platform** | `relay['platform']` | `linux`, `freebsd` | `/platform/Linux/` (page folder's case) |
 | **Flag** | `relay['flags']` | `Exit`, `Guard` | `/flag/exit/` |
 | **Family** | `relay['effective_family'][0]` | `ABCD1234...` | `/family/ABCD.../` |
 
@@ -254,7 +254,7 @@ For families without AROI domain or matching contacts:
       "de": "Germany",
       "us": "United States"
     },
-    "platforms": ["linux", "freebsd", "windows", "darwin"],
+    "platforms": ["Darwin", "FreeBSD", "Linux", "Windows"],
     "flags": ["exit", "guard", "stable", "fast", "hsdir", "v2dir"]
   }
 }
@@ -614,7 +614,8 @@ def generate_search_index(relays_data: Dict[str, Any], output_path: str) -> Dict
         'lookups': {
             'as_names': {},
             'country_names': {},
-            'platforms': set(),
+            # /platform/<key>/ page keys, case kept (see _platform_page_keys)
+            'platforms': [],
             'flags': set()
         }
     }
@@ -636,9 +637,6 @@ def generate_search_index(relays_data: Dict[str, Any], output_path: str) -> Dict
         if relay.get('country') and relay.get('country_name'):
             index['lookups']['country_names'][relay['country'].lower()] = relay['country_name']
         
-        if relay.get('platform'):
-            index['lookups']['platforms'].add(relay['platform'].lower())
-        
         for flag in relay.get('flags', []):
             index['lookups']['flags'].add(flag.lower())
     
@@ -651,8 +649,9 @@ def generate_search_index(relays_data: Dict[str, Any], output_path: str) -> Dict
         entry = compact_family_entry(family_id, fdata, relays, relay_indices)
         index['families'].append(entry)
     
+    # Platforms: one page key per case-insensitive name (most relays wins)
+    index['lookups']['platforms'] = _platform_page_keys(relays_data['sorted'].get('platform', {}))
     # Convert sets to sorted lists
-    index['lookups']['platforms'] = sorted(index['lookups']['platforms'])
     index['lookups']['flags'] = sorted(index['lookups']['flags'])
     
     # Write minified JSON
@@ -1211,8 +1210,9 @@ function search(query, index) {
     if (ipMatch) return Result.relay(ipMatch.f);
   }
   
-  // Step 9: Platform or flag
-  if (lookups.platforms.includes(qLower)) return Result.platform(qLower);
+  // Step 9: Platform or flag (platforms keep their page folder's case)
+  const platform = lookups.platforms.find(p => p.toLowerCase() === qLower);
+  if (platform) return Result.platform(platform);
   if (lookups.flags.includes(qLower)) return Result.flag(qLower);
   
   // Step 10: Fuzzy nickname

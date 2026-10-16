@@ -13,9 +13,10 @@ ModuleNotFoundError: No module named 'jinja2'
 
 **Solution**:
 ```bash
-pip3 install jinja2
-# or
-pip3 install -r config/requirements.txt
+# Debian/Ubuntu's own python3 (no virtualenv): pip is missing or refused there (PEP 668)
+sudo apt install python3-jinja2
+# A virtualenv, from the repository root
+venv/bin/python3 -m pip install -r config/requirements.txt
 ```
 
 ### "Python version too old"
@@ -41,6 +42,29 @@ ModuleNotFoundError: No module named 'lib'
 cd allium  # Must be in the allium/ subdirectory
 python3 allium.py --progress
 ```
+
+### "PNG charts need cairocffi, numpy and the cairo library"
+
+```
+⚠️ PNG charts need cairocffi, numpy and the cairo library (No module named 'cairocffi'); writing SVG charts
+💡 Install them for /usr/bin/python3: sudo apt install python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
+```
+
+The build goes on with SVG charts (an explicit `--chart-format png` stops instead). The `💡` lines are the
+commands for the Python that ran `allium.py`.
+
+**Solution**:
+
+```bash
+# Debian/Ubuntu's own python3 (no virtualenv): every package from apt
+sudo apt install python3-cairocffi python3-numpy libcairo2 fonts-dejavu-core
+# A virtualenv, from the repository root: pip, then what pip cannot install
+venv/bin/python3 -m pip install -r config/requirements.txt
+sudo apt install libcairo2 fonts-dejavu-core   # Fedora: sudo dnf install cairo dejavu-sans-fonts
+```
+
+To keep SVG charts without the notice, run `python3 allium.py --chart-format svg`; `python3 allium.py --no-charts`
+builds without charts.
 
 ## Permission Issues
 

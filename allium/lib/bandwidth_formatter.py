@@ -15,6 +15,8 @@ Replaces:
 - _format_bandwidth_with_unit() (Relays method)
 """
 
+from .time_utils import ONIONOO_HISTORY_PERIODS
+
 
 class BandwidthFormatter:
     """
@@ -144,36 +146,49 @@ class BandwidthFormatter:
         return f"{value} {unit}"
 
 
+# Cached formatter instances (BandwidthFormatter has no mutable state, safe to reuse)
+_formatter_bits = BandwidthFormatter(use_bits=True)
+_formatter_bytes = BandwidthFormatter(use_bits=False)
+
+
+def _get_formatter(*, use_bits: bool = False) -> BandwidthFormatter:
+    """Get cached formatter instance for the given use_bits setting."""
+    return _formatter_bits if use_bits else _formatter_bytes
+
+
 # Convenience functions for backwards compatibility and Jinja2 filters
-def determine_unit(bandwidth_bytes, use_bits=False):
-    """Convenience function that creates a formatter and determines unit."""
-    formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.determine_unit(bandwidth_bytes)
+def determine_unit(bandwidth_bytes, *, use_bits: bool = False):
+    """Convenience function that determines appropriate bandwidth unit."""
+    return _get_formatter(use_bits=use_bits).determine_unit(bandwidth_bytes)
 
 
 def get_divisor_for_unit(unit):
     """Convenience function that gets divisor for a unit."""
-    # Use a dummy formatter since divisors are static
-    formatter = BandwidthFormatter()
-    return formatter.get_divisor_for_unit(unit)
+    return _formatter_bytes.get_divisor_for_unit(unit)
 
 
 def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
     """Convenience function that formats bandwidth with specified unit."""
-    # Use a dummy formatter since this doesn't depend on use_bits
-    formatter = BandwidthFormatter()
-    return formatter.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
+    return _formatter_bytes.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
 
-def determine_unit_filter(bandwidth_bytes, use_bits=False):
-    """Jinja2 filter version of determine_unit."""
-    return determine_unit(bandwidth_bytes, use_bits)
+def determine_unit_filter(bandwidth_bytes, use_bits=False):  # noqa: FBT002
+    """Jinja2 filter version of determine_unit.
+    
+    Note: use_bits must remain positional because Jinja2 filter syntax
+    ``value|determine_unit(relays.use_bits)`` passes it positionally.
+    See _get_formatter for the keyword-only internal API.
+    """
+    return _get_formatter(use_bits=use_bits).determine_unit(bandwidth_bytes)
 
 
-def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
-    """Jinja2 filter for formatting bandwidth with optional unit specification."""
-    formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places)
+def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):  # noqa: FBT002
+    """Jinja2 filter for formatting bandwidth with optional unit specification.
+    
+    Note: use_bits must remain positional because Jinja2 filter syntax passes
+    arguments positionally. See _get_formatter for the keyword-only internal API.
+    """
+    return _get_formatter(use_bits=use_bits).format_bandwidth(bandwidth_bytes, unit, decimal_places)
 
 
 # =============================================================================
@@ -227,7 +242,8 @@ def format_data_volume_with_unit(total_bytes, *, _use_bits=False):
     return f"{value} {unit}"
 
 
-_BEST_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+# Longest-first lookup order, derived from the canonical period tuple
+BEST_PERIOD_ORDER = tuple(reversed(ONIONOO_HISTORY_PERIODS))
 
 def pick_best_period(sums):
     """Return (total, period) for the longest period with non-zero data.
@@ -237,7 +253,7 @@ def pick_best_period(sums):
     Returns:
         tuple: (total_bytes, period_key) or (0, None) if all zero
     """
-    for p in _BEST_PERIOD_ORDER:
+    for p in BEST_PERIOD_ORDER:
         val = sums.get(p, 0)
         if val > 0:
             return val, p

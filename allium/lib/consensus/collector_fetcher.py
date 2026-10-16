@@ -11,14 +11,13 @@ Data sources:
 
 import re
 import base64
-import hashlib
 import urllib.request
 import urllib.error
 import socket
 import concurrent.futures
-from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Any, Callable
-from datetime import datetime
+from functools import cached_property
+from typing import Dict, List, Optional
+from datetime import datetime, timezone
 import logging
 import time
 
@@ -26,7 +25,6 @@ import time
 from ..workers import (
     _fetch_url_with_total_timeout,
     _retry_with_backoff,
-    _is_retryable_error,
     TotalTimeoutError,
 )
 
@@ -80,6 +78,50 @@ AUTHORITY_COUNTRIES = {
 
 
 # ============================================================================
+# KNOWN OFFLINE / REMOVED AUTHORITIES - small hardcoded bridge list
+# ============================================================================
+# Directory-authority membership changing is rare but critical. When an authority
+# is removed from the consensus it eventually ages out of ALL live data sources
+# (Onionoo drops a relay ~1 week after its last consensus; CollecTor 'recent/' only
+# retains ~3-4 days), so it would silently disappear from every page. To preserve
+# historical context, we keep a SMALL hardcoded list of recently-removed authorities
+# and surface them (as offline) on the dedicated Directory Authorities page ONLY.
+#
+# This list is display-only: entries here are NEVER fed into the voting registry,
+# never counted as voters, and never affect reachability/consensus math. Each entry
+# is shown only if the authority is NOT already present dynamically from Onionoo, so
+# if it ever returns the live data supersedes the hardcoded row automatically.
+#
+# Keep this list SMALL: add an entry only when an authority is actually removed, and
+# prune it once the authority is permanently gone (no longer needs context) or has
+# returned. The 'fingerprint' is the Onionoo RELAY fingerprint (used for dedupe
+# against live Onionoo data) - NOT the V3 signing key used in vote filenames.
+KNOWN_OFFLINE_AUTHORITIES = [
+    {
+        'nickname': 'gabelmoo',
+        'fingerprint': 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281',
+        # Uppercase to match _preprocess_template_data (relay["country"] = country.upper())
+        # and the country-page URL convention (country/DE/), so the offline row links correctly.
+        'country': 'DE',
+        'country_name': 'Germany',
+        'offline_since': '2026-06-30',  # last vote 2026-06-29 23:00 UTC (CollecTor archive)
+        'note': ('Went offline on 2026-06-30 (last vote 2026-06-29) and was '
+                 'subsequently removed from the directory authority list.'),
+    },
+]
+
+
+def get_known_offline_authorities() -> List[dict]:
+    """Return the (small) hardcoded list of known removed/offline authorities.
+
+    Display-only, used to keep recently-removed authorities visible (as offline) on
+    the dedicated Directory Authorities page after they age out of live data sources.
+    Returns copies so callers can't mutate the module-level entries.
+    """
+    return [dict(entry) for entry in KNOWN_OFFLINE_AUTHORITIES]
+
+
+# ============================================================================
 # DYNAMIC AUTHORITY REGISTRY - Prefers Onionoo data, falls back to hardcoded
 # ============================================================================
 class AuthorityRegistry:
@@ -98,6 +140,12 @@ class AuthorityRegistry:
         self._discovered_authorities = []  # From Onionoo
         self._authority_names = None  # Cached sorted names
         self._using_fallback = True
+        # Dynamic voting-authority list, derived from the authorities that actually
+        # produced a vote in the most recent consensus round (CollecTor). None means
+        # "not yet discovered" -> fall back to the hardcoded voting list. This makes
+        # the voting set track reality when authorities are added/removed (e.g. an
+        # authority going offline like gabelmoo) instead of a stale hardcoded 9.
+        self._voting_authority_names = None
     
     def update_from_onionoo(self, relays: list) -> int:
         """
@@ -141,36 +189,69 @@ class AuthorityRegistry:
             return len(self._discovered_authorities)
         return _FALLBACK_AUTHORITY_COUNT
     
-    def get_discovered_authorities(self) -> List[dict]:
-        """Get list of discovered authority dicts from Onionoo."""
-        return self._discovered_authorities
-    
     def is_using_fallback(self) -> bool:
         """Check if using fallback data (Onionoo not available)."""
         return self._using_fallback
     
+    def update_voting_authorities(self, vote_authority_names) -> int:
+        """
+        Set the actively-voting authority list from CollecTor vote data.
+
+        Args:
+            vote_authority_names: iterable of authority names that produced a vote
+                this consensus round (e.g. flag_thresholds.keys() or votes.keys()).
+
+        Empty/falsy input is ignored so a failed or empty fetch never wipes the list
+        (the previous value, or the hardcoded fallback, is kept). This keeps the
+        voting set - used for reachability denominators, per-authority tables, and
+        diagnostics - consistent with the authorities that actually voted.
+
+        Returns:
+            The effective number of voting authorities in use after the update
+            (the dynamic list if set, otherwise the hardcoded fallback) - so an
+            ignored empty update never reads as "zero voters".
+        """
+        names = sorted({n for n in (vote_authority_names or []) if n})
+        if names:
+            self._voting_authority_names = names
+            logger.info(
+                f"AuthorityRegistry: {len(names)} voting authorities discovered "
+                f"from CollecTor: {names}"
+            )
+        return self.get_voting_authority_count()
+
+    def clear_voting_authorities(self) -> None:
+        """Reset the dynamic voting list back to the hardcoded fallback.
+
+        Primarily for test isolation and fresh generation runs, since the module
+        registry is a shared singleton.
+        """
+        self._voting_authority_names = None
+
+    def has_dynamic_voting_authorities(self) -> bool:
+        """True when the voting list was discovered from CollecTor vote data
+        (via update_voting_authorities) rather than the hardcoded fallback."""
+        return self._voting_authority_names is not None
+
     def get_voting_authority_names(self) -> List[str]:
         """
-        Get sorted list of VOTING authority names (9 authorities).
-        NOTE: Serge has Authority flag but doesn't vote.
+        Get sorted list of VOTING authority names.
+
+        Prefers the dynamic list discovered from CollecTor votes (via
+        update_voting_authorities); falls back to the hardcoded 9 voting authorities
+        when no vote data is available. NOTE: Serge has Authority flag but doesn't vote.
+        Returns a copy so callers can't mutate the registry's internal state.
         """
-        # If we have Onionoo data, filter out non-voting authorities
-        # For now, we use the signing key mapping as source of truth for voters
-        return _FALLBACK_VOTING_AUTHORITY_NAMES
+        if self._voting_authority_names:
+            return list(self._voting_authority_names)
+        return list(_FALLBACK_VOTING_AUTHORITY_NAMES)
     
     def get_voting_authority_count(self) -> int:
-        """Get number of voting authorities (9)."""
+        """Get number of voting authorities (dynamic from CollecTor, else fallback 9)."""
+        if self._voting_authority_names:
+            return len(self._voting_authority_names)
         return _FALLBACK_VOTING_AUTHORITY_COUNT
     
-    def get_signing_key_to_name(self) -> Dict[str, str]:
-        """
-        Get signing key fingerprint to name mapping.
-        NOTE: This always uses the hardcoded mapping because signing key fingerprints
-        are different from Onionoo relay fingerprints - we can't discover this dynamically.
-        Only includes the 9 voting authorities.
-        """
-        return _FALLBACK_SIGNING_KEY_TO_NAME
-
 
 # Global registry instance - can be updated when Onionoo data is loaded
 _authority_registry = AuthorityRegistry()
@@ -205,6 +286,15 @@ def get_voting_authority_count() -> int:
     return _authority_registry.get_voting_authority_count()
 
 
+def update_voting_authorities(vote_authority_names) -> int:
+    """Update the global registry's voting-authority list from CollecTor vote data.
+
+    See AuthorityRegistry.update_voting_authorities. Empty input is ignored (keeps
+    the previous/fallback list). Returns the current voting authority count.
+    """
+    return _authority_registry.update_voting_authorities(vote_authority_names)
+
+
 # Signing key mapping - always hardcoded (different from relay fingerprints)
 AUTHORITIES = _FALLBACK_SIGNING_KEY_TO_NAME  # For backward compatibility
 AUTHORITIES_BY_NAME = {name: fp for fp, name in _FALLBACK_SIGNING_KEY_TO_NAME.items()}
@@ -218,16 +308,13 @@ from .flag_thresholds import (
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
-    GUARD_WFU_DEFAULT,
     HSDIR_TK_DEFAULT,
-    HSDIR_WFU_DEFAULT,
-    FAST_BW_GUARANTEE,
-    parse_wfu_threshold,
-    format_time_as_days,
-    check_guard_eligibility,
-    check_hsdir_eligibility,
-    check_fast_eligibility,
+    MAX_UNMEASURED_BW_KB,
+    VOTE_BW_KB_BYTES,
     check_stable_eligibility,
+    credible_bandwidth,
+    guard_bw_top_threshold,
+    low_median,
 )
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
@@ -290,7 +377,7 @@ class CollectorFetcher:
             'flag_thresholds': {},
             'bw_authorities': [],
             'ipv6_testing_authorities': [],
-            'fetched_at': datetime.utcnow().isoformat(),  # Note: uses UTC for consistency
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'errors': [],
             'timings': {},
         }
@@ -338,41 +425,16 @@ class CollectorFetcher:
             
             self._timings['index'] = time.time() - start_time
         
-        # Fetch and parse the microdesc consensus ONCE — both the consensus
-        # method info and the family-ids mapping need this data.  One fetch,
-        # one parse, two consumers.
-        start_time = time.time()
-        mc_method, mc_valid_after, digest_to_fp = None, None, {}
+        # Compute consensus method info from per-authority vote data (zero extra I/O)
         try:
-            mc_method, mc_valid_after, digest_to_fp = self._fetch_and_parse_microdesc_consensus()
-        except Exception as e:
-            logger.warning(f"Failed to fetch microdesc consensus: {e}")
-            result['errors'].append(f"microdesc_consensus: {e}")
-        self._timings['microdesc_consensus'] = time.time() - start_time
-        
-        # Compute consensus method info (uses microdesc result + vote data + fallbacks)
-        try:
-            result['consensus_method_info'] = self._compute_consensus_method_info(
-                mc_method, mc_valid_after
-            )
+            result['consensus_method_info'] = self._compute_consensus_method_info()
         except Exception as e:
             logger.error(f"Failed to compute consensus method info: {e}")
             result['errors'].append(f"consensus_method_info: {e}")
             result['consensus_method_info'] = {}
         
-        # Build DA-validated family-ids mapping from microdesc files,
-        # using the digest→fingerprint map from the microdesc consensus.
-        try:
-            start_time = time.time()
-            result['microdesc_family'] = self._fetch_microdesc_family_ids(digest_to_fp)
-            self._timings['microdesc_family'] = time.time() - start_time
-        except Exception as e:
-            logger.error(f"Failed to fetch microdesc family-ids: {e}")
-            result['errors'].append(f"microdesc_family: {e}")
-            result['microdesc_family'] = {}
-        
-        result['bw_authorities'] = list(self.bw_authorities)
-        result['ipv6_testing_authorities'] = list(self.ipv6_testing_authorities)
+        result['bw_authorities'] = sorted(self.bw_authorities)
+        result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
         result['timings'] = self._timings
         
         # Log performance metrics
@@ -535,20 +597,23 @@ class CollectorFetcher:
                 future = executor.submit(self._fetch_and_parse_vote, url, auth_fp)
                 future_to_auth[future] = auth_fp
             
+            fetched_votes = {}
             for future in concurrent.futures.as_completed(future_to_auth):
                 auth_fp = future_to_auth[future]
                 try:
                     vote_data = future.result()
                     if vote_data:
                         auth_name = AUTHORITIES.get(auth_fp, auth_fp[:8])
-                        votes[auth_name] = vote_data
-                        
+                        fetched_votes[auth_name] = vote_data
+
                         # Track if this authority runs a bandwidth scanner
                         if vote_data.get('has_bandwidth_file_headers'):
                             self.bw_authorities.add(auth_name)
                 except Exception as e:
                     logger.warning(f"Failed to fetch vote for {auth_fp}: {e}")
-        
+
+        votes = {auth_name: fetched_votes[auth_name]
+                 for auth_name in sorted(fetched_votes)}
         logger.info(f"Fetched {len(votes)} authority votes")
         return votes
     
@@ -579,8 +644,6 @@ class CollectorFetcher:
             'has_bandwidth_file_headers': False,
             'consensus_methods': [],  # Methods this authority supports (from header)
             'params': {},  # Voted consensus params (from header)
-            'published': None,  # When this vote was published (UTC)
-            'valid_after': None,  # Consensus period this vote is for (UTC)
         }
         
         lines = content.split('\n')
@@ -596,12 +659,6 @@ class CollectorFetcher:
             # Check for bandwidth-file-headers (indicates bandwidth authority)
             elif line.startswith('bandwidth-file-headers'):
                 vote['has_bandwidth_file_headers'] = True
-            
-            # Parse vote header timestamps (before relay entries)
-            elif line.startswith('published ') and not current_relay:
-                vote['published'] = line[len('published '):]
-            elif line.startswith('valid-after ') and not current_relay:
-                vote['valid_after'] = line[len('valid-after '):]
             
             # Parse consensus-methods header (methods this authority supports)
             elif line.startswith('consensus-methods '):
@@ -811,7 +868,7 @@ class CollectorFetcher:
         self.relay_index = {}
         self.flag_thresholds = {}  # Extract thresholds in same loop
         
-        for auth_name, vote_data in self.votes.items():
+        for auth_name, vote_data in sorted(self.votes.items()):
             if not vote_data:
                 continue
             
@@ -824,7 +881,7 @@ class CollectorFetcher:
             if not relays:
                 continue
             
-            for fingerprint, relay_data in relays.items():
+            for fingerprint, relay_data in sorted(relays.items()):
                 if fingerprint not in self.relay_index:
                     self.relay_index[fingerprint] = {
                         'fingerprint': fingerprint,
@@ -847,30 +904,32 @@ class CollectorFetcher:
                 }
         
         # Add bandwidth measurements from bandwidth files
-        for fingerprint, bw_data in self.bandwidth_files.items():
+        for fingerprint, bw_data in sorted(self.bandwidth_files.items()):
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
-    def _compute_consensus_method_info(
-        self,
-        mc_method: Optional[int] = None,
-        mc_valid_after: Optional[str] = None,
-    ) -> dict:
+    def _compute_consensus_method_info(self) -> dict:
         """
-        Combine per-authority vote data with the pre-fetched consensus method.
-
-        Args:
-            mc_method: Consensus method from microdesc consensus (pre-fetched).
-            mc_valid_after: Valid-after from microdesc consensus (pre-fetched).
+        Get the current consensus method from the actual consensus document
+        and extract per-authority method support from votes.
+        
+        The current_method is read directly from the CollecTor consensus document
+        (the 'consensus-method' line) — NOT computed from votes. Only Tor itself
+        determines what the active consensus method is.
+        
+        Per-authority consensus-methods lists from votes are used to show which
+        authorities support which methods (e.g., how many support method 35).
+        
+        Also extracts family-related consensus params from votes
+        (use-family-ids, use-family-lists) for Happy Family migration tracking.
         """
         from collections import Counter
         
-        per_authority = {}
+        per_authority = {}  # auth_name -> sorted list of supported methods
         method_counts = Counter()
-        family_params = {}
-        vote_valid_afters = []
+        family_params = {}  # param_name -> {auth_name: value}
         
         for auth_name, vote_data in self.votes.items():
             if not vote_data:
@@ -880,29 +939,29 @@ class CollectorFetcher:
             for m in methods:
                 method_counts[m] += 1
             
+            # Extract family-related consensus params from this authority's vote
             params = vote_data.get('params', {})
             for key in ('use-family-ids', 'use-family-lists'):
                 if key in params:
-                    family_params.setdefault(key, {})[auth_name] = params[key]
-            
-            va = vote_data.get('valid_after')
-            if va:
-                vote_valid_afters.append(va)
+                    if key not in family_params:
+                        family_params[key] = {}
+                    family_params[key][auth_name] = params[key]
         
         total_voters = len(per_authority)
-        latest_vote_valid_after = max(vote_valid_afters) if vote_valid_afters else None
         
-        # Start with microdesc consensus result (pre-fetched in fetch_all),
-        # then try CollecTor regular consensus and direct DA for fresher data.
-        current_method, consensus_valid_after = self._best_consensus_method(
-            mc_method, mc_valid_after
-        )
+        # Get the ACTUAL current consensus method from the consensus document
+        # This is the authoritative source — we never compute it ourselves
+        current_method = self._fetch_current_consensus_method()
         
+        # Max method any authority supports (shows what's coming next)
         all_methods = [m for methods in per_authority.values() for m in methods]
         max_method = max(all_methods) if all_methods else None
         max_method_support = method_counts.get(max_method, 0) if max_method else 0
         
-        # Infer from votes if all document fetches failed (dirvote.c algorithm).
+        # Infer consensus method from vote data if consensus document fetch failed.
+        # Uses the same supermajority algorithm as Tor's dirvote.c:
+        #   threshold = floor(n * 2 / 3) + 1  (strictly more than 2/3)
+        # The active consensus method is the highest method supported by >= threshold voters.
         if current_method is None and method_counts and total_voters > 0:
             threshold = (total_voters * 2) // 3 + 1
             for method in sorted(method_counts.keys(), reverse=True):
@@ -918,288 +977,59 @@ class CollectorFetcher:
             'per_authority': per_authority,
             'method_support_counts': dict(method_counts),
             'family_params_votes': family_params,
-            'consensus_valid_after': consensus_valid_after,
-            'latest_vote_valid_after': latest_vote_valid_after,
         }
-
-    def _best_consensus_method(
-        self,
-        mc_method: Optional[int] = None,
-        mc_valid_after: Optional[str] = None,
-    ) -> Tuple[Optional[int], Optional[str]]:
-        """
-        Determine the freshest consensus method across up to 3 sources:
-          1. Microdesc consensus (already fetched, passed in as args)
-          2. CollecTor regular consensus (4KB header fetch)
-          3. Direct DA fetch (only if both CollecTor sources are >2h stale)
-        """
-        best_method, best_va = mc_method, mc_valid_after
-
-        # CollecTor regular consensus — may be fresher than microdesc consensus
-        try:
-            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
-            matches = self._CONSENSUS_FILE_PATTERN.findall(html)
-            if matches:
-                url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{max(matches)}"
-                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    header = resp.read(4096).decode('utf-8', errors='replace')
-                m, va = self._parse_consensus_header(header)
-                if m is not None and (best_va is None or (va and va > best_va)):
-                    best_method, best_va = m, va
-        except Exception as e:
-            logger.debug(f"CollecTor regular consensus unavailable: {e}")
-
-        # Direct DA — only when CollecTor data is stale (>2h)
-        stale = best_va is None
-        if not stale:
-            try:
-                age = (datetime.utcnow() - datetime.strptime(best_va, "%Y-%m-%d %H:%M:%S")).total_seconds()
-                stale = age > 7200
-            except (ValueError, TypeError):
-                stale = True
-        if stale:
-            m, va = self._fetch_consensus_method_from_da()
-            if m is not None and (best_va is None or (va and va > best_va)):
-                best_method, best_va = m, va
-                logger.info(f"Using direct DA consensus: method {m}, valid-after {va}")
-
-        if best_method:
-            logger.info(f"Consensus method {best_method} (valid-after {best_va})")
-        else:
-            logger.warning("Could not determine consensus method from any source")
-        return best_method, best_va
-
-    def _fetch_and_parse_microdesc_consensus(self) -> Tuple[Optional[int], Optional[str], Dict[str, str]]:
-        """
-        Fetch the latest microdesc consensus from CollecTor, parse it ONCE,
-        and return both the consensus method and the digest→fingerprint map.
-
-        Returns:
-            (method, valid_after, digest_to_fp) where digest_to_fp maps
-            base64 microdesc SHA256 digests to relay fingerprints.
-        """
-        try:
-            listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
-            html = self._fetch_url(listing_url)
-            matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(html))
-            if not matches:
-                return None, None, {}
-
-            mc_url = f"{listing_url}{matches[-1]}"
-            content = self._fetch_url(mc_url)
-
-            method, valid_after = self._parse_consensus_header(content)
-
-            digest_to_fp = {}
-            current_fp = None
-            for line in content.split('\n'):
-                if line.startswith('r '):
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        ib64 = parts[2]
-                        pad = 4 - len(ib64) % 4
-                        if pad != 4:
-                            ib64 += '=' * pad
-                        try:
-                            current_fp = base64.b64decode(ib64).hex().upper()
-                        except Exception:
-                            current_fp = None
-                elif line.startswith('m ') and current_fp:
-                    digest_to_fp[line.split()[1]] = current_fp
-                    current_fp = None
-
-            logger.info(f"Microdesc consensus: method {method}, valid-after {valid_after}, "
-                        f"{len(digest_to_fp)} relay→digest mappings")
-            return method, valid_after, digest_to_fp
-
-        except Exception as e:
-            logger.warning(f"Failed to fetch microdesc consensus: {e}")
-            return None, None, {}
-
-    def _fetch_consensus_method_from_da(self) -> Tuple[Optional[int], Optional[str]]:
-        """
-        Fetch the live consensus-method directly from a directory authority.
-
-        Tries multiple DAs (using Onionoo-discovered data when available,
-        falling back to well-known addresses).  Returns on the first
-        successful fetch.  Only reads the first 4 KB of the response.
-        """
-        da_endpoints = []
-
-        for auth in self.authorities:
-            addr = auth.get('address', '')
-            port = auth.get('dir_port', '80')
-            if addr:
-                da_endpoints.append((auth.get('nickname', addr), addr, port))
-
-        if not da_endpoints:
-            da_endpoints = [
-                ('gabelmoo', '131.188.40.189', '80'),
-                ('maatuska', '171.25.193.9', '443'),
-                ('dannenberg', '193.23.244.244', '80'),
-            ]
-
-        da_timeout = min(self.timeout, 10)
-        for nickname, addr, port in da_endpoints:
-            try:
-                url = f"http://{addr}:{port}/tor/status-vote/current/consensus"
-                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                with urllib.request.urlopen(req, timeout=da_timeout) as resp:
-                    header_text = resp.read(4096).decode('utf-8', errors='replace')
-                m, va = self._parse_consensus_header(header_text)
-                if m is not None:
-                    logger.info(f"Got consensus method {m} directly from DA {nickname}")
-                    return m, va
-            except Exception as e:
-                logger.debug(f"DA {nickname} ({addr}:{port}) unreachable: {e}")
-                continue
-
-        logger.warning("Could not fetch consensus from any DA directly")
-        return None, None
-
-    @staticmethod
-    def _parse_consensus_header(header_text: str) -> Tuple[Optional[int], Optional[str]]:
-        """Extract consensus-method and valid-after from the first few lines of a consensus."""
-        method = None
-        valid_after = None
-        for line in header_text.split('\n'):
-            if line.startswith('consensus-method '):
-                try:
-                    method = int(line.split()[1])
-                except (ValueError, IndexError):
-                    pass
-            elif line.startswith('valid-after '):
-                valid_after = line[len('valid-after '):]
-            if method is not None and valid_after is not None:
-                break
-        return method, valid_after
     
-    # Pre-compiled patterns for microdescriptor parsing
-    _FAMILY_IDS_PATTERN = re.compile(r'^family-ids (.+)$', re.MULTILINE)
-    _LEGACY_FAMILY_PATTERN = re.compile(r'^family \$', re.MULTILINE)
-    # Byte-level markers for fast pre-filtering before regex (avoids decode + regex on entries without family data)
-    _FAMILY_IDS_BYTES = b'\nfamily-ids '
-    _LEGACY_FAMILY_BYTES = b'\nfamily $'
-    # Pre-compiled CollecTor listing patterns (reused across consensus method and microdesc fetches)
-    _CONSENSUS_FILE_PATTERN = re.compile(
-        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
-    )
-    _MICRODESC_CONSENSUS_FILE_PATTERN = re.compile(
-        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus-microdesc)"'
-    )
-    _MICRODESC_FILE_PATTERN = re.compile(
-        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
-    )
-
-    def _fetch_microdesc_family_ids(self, digest_to_fp: Dict[str, str]) -> dict:
+    def _fetch_current_consensus_method(self) -> Optional[int]:
         """
-        Fetch microdesc files and build the DA-validated family-ids mapping.
-
-        Uses the pre-parsed digest→fingerprint map (from the microdesc
-        consensus, fetched once in fetch_all) to join microdescriptor
-        entries back to relay fingerprints via SHA256 digest matching.
-
-        Args:
-            digest_to_fp: Map of base64 microdesc SHA256 digest → relay fingerprint,
-                          from _fetch_and_parse_microdesc_consensus().
+        Fetch the actual consensus-method from the latest CollecTor consensus document.
+        
+        Only reads the first few lines of the consensus header to extract
+        the 'consensus-method' line. This is the authoritative value from Tor.
+        
+        Returns:
+            int: The current consensus method number, or None on failure.
         """
-        empty = {
-            'family_ids_count': 0,
-            'family_ids_fps': [],
-            'family_key_groups': {},
-            'legacy_family_count': 0,
-            'unique_family_keys': [],
-            'total_microdescs': 0,
-        }
-
-        if not digest_to_fp:
-            return empty
-
         try:
-            listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/micro/"
-            html = self._fetch_url(listing_url)
-            all_files = sorted(self._MICRODESC_FILE_PATTERN.findall(html))
-            if not all_files:
-                logger.info("No microdescriptor files found on CollecTor")
-                return empty
-
-            family_ids_fps = set()
-            family_key_groups = defaultdict(set)
-            legacy_family_fps = set()
-            total_matched = 0
-            matched_digests = set()
-
-            microdesc_timeout = max(self.timeout, 60)
-            fid_marker = self._FAMILY_IDS_BYTES
-            legacy_marker = self._LEGACY_FAMILY_BYTES
-            headers = {'User-Agent': 'Allium/1.0'}
-
-            def _fetch_file(fname):
-                url = f"{listing_url}{fname}"
-                return _fetch_url_with_total_timeout(url, microdesc_timeout, headers)
-
-            # Fetch files in parallel — the sequential loop was 22s, network I/O bound
-            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                future_to_fname = {executor.submit(_fetch_file, f): f for f in all_files}
-                for future in concurrent.futures.as_completed(future_to_fname):
-                    fname = future_to_fname[future]
-                    try:
-                        raw_bytes = future.result()
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch microdesc file {fname}: {e}")
-                        continue
-
-                    for entry in raw_bytes.split(b'@type microdescriptor 1.0\n'):
-                        ok_idx = entry.find(b'onion-key')
-                        if ok_idx < 0:
-                            continue
-                        hashable = entry[ok_idx:]
-                        if not hashable.endswith(b'\n'):
-                            hashable += b'\n'
-
-                        d64 = base64.b64encode(hashlib.sha256(hashable).digest()).decode('ascii').rstrip('=')
-
-                        # Skip already-matched digests (same microdesc in multiple incremental files)
-                        if d64 in matched_digests:
-                            continue
-
-                        fp = digest_to_fp.get(d64)
-                        if not fp:
-                            continue
-                        matched_digests.add(d64)
-                        total_matched += 1
-
-                        if fid_marker in entry:
-                            family_ids_fps.add(fp)
-                            fid_line_start = entry.find(fid_marker) + len(fid_marker)
-                            fid_line_end = entry.find(b'\n', fid_line_start)
-                            for key in entry[fid_line_start:fid_line_end].decode('ascii').strip().split():
-                                family_key_groups[key].add(fp)
-                        elif legacy_marker in entry:
-                            legacy_family_fps.add(fp)
-
-            serializable_groups = {k: sorted(v) for k, v in family_key_groups.items()}
-
-            logger.info(
-                f"Microdesc family-ids: {len(family_ids_fps)} DA-validated, "
-                f"{len(legacy_family_fps)} legacy, {len(family_key_groups)} unique families, "
-                f"{total_matched} microdescs matched from {len(all_files)} files"
+            # Get listing of consensus files
+            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
+            consensus_pattern = re.compile(
+                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
             )
-
-            return {
-                'family_ids_count': len(family_ids_fps),
-                'family_ids_fps': sorted(family_ids_fps),
-                'family_key_groups': serializable_groups,
-                'legacy_family_count': len(legacy_family_fps),
-                'unique_family_keys': sorted(family_key_groups.keys()),
-                'total_microdescs': total_matched,
-            }
-
+            matches = consensus_pattern.findall(html)
+            if not matches:
+                logger.warning("No consensus files found on CollecTor")
+                return None
+            
+            latest_file = max(matches)
+            url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
+            
+            # Fetch only the first 4KB — consensus-method is in the first 5 lines.
+            # We intentionally read only 4KB (not the full ~30MB consensus document),
+            # so socket-level timeout is safe here (one small read, not a slow-drip risk).
+            # Wrapped in retry for transient connection failures.
+            def _fetch_header():
+                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    return response.read(4096).decode('utf-8', errors='replace')
+            
+            header_text = _retry_with_backoff(
+                fetch_fn=_fetch_header,
+                retry_count=self.retry_count,
+                retry_delay_base=self.retry_delay_base,
+                operation_name="consensus method header",
+            )
+            
+            for line in header_text.split('\n'):
+                if line.startswith('consensus-method '):
+                    return int(line.split()[1])
+            
+            logger.warning("consensus-method line not found in consensus header")
+            return None
+            
         except Exception as e:
-            logger.warning(f"Failed to fetch microdesc family-ids: {e}")
-            return empty
-
+            logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
+            return None
+    
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
         if not fingerprint:
@@ -1212,6 +1042,24 @@ class CollectorFetcher:
         except ValueError:
             return False
     
+    @cached_property
+    def measuring_authorities(self) -> set:
+        """Authorities whose votes carry Measured= values (dirvote.c has_measured_bws)."""
+        return {auth_name for relay in self.relay_index.values()
+                for auth_name, vote in relay.get('votes', {}).items() if vote.get('measured') is not None}
+
+    def _credible_bandwidth(self, auth_name: str, vote_info: dict) -> tuple:
+        """Bandwidth (bytes/s, source) this authority judges Fast and Guard by.
+
+        Without a Measured= value for the relay, an authority that ignores advertised bandwidth
+        uses a measurement from an earlier bandwidth file if it kept one: surely when it still
+        votes Fast, and likely when its vote has no Measured= values at all.
+        """
+        return credible_bandwidth(
+            vote_info.get('measured'), vote_info.get('bandwidth'),
+            self.flag_thresholds.get(auth_name, {}).get('ignoring-advertised-bws') == 1,
+            unpublished='Fast' in vote_info.get('flags', []) or auth_name not in self.measuring_authorities)
+
     def _format_authority_votes(self, relay: dict) -> List[dict]:
         """
         Format per-authority vote information for display.
@@ -1271,8 +1119,12 @@ class CollectorFetcher:
         2. Must be Stable
         3. WFU >= guard-wfu threshold
         4. TK >= guard-tk threshold (makes relay "familiar")
-        5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB/s default) OR in top 25% (>= guard-bw-inc-exits)
+        5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB) OR in top 25%
+           (>= min(guard-bw-inc-exits, guard-bw-exc-exits))
         6. Must have V2Dir flag
+
+        Fast and Guard bandwidth is _credible_bandwidth(); when the vote doesn't show it,
+        the authority's actual Fast/Guard vote stands in.
         """
         eligibility = {
             'guard': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
@@ -1295,19 +1147,11 @@ class CollectorFetcher:
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
             guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
-            guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
+            guard_bw_top25_threshold = guard_bw_top_threshold(thresholds)
             
             relay_wfu = vote_info.get('wfu', 0)
             relay_tk = vote_info.get('tk', 0)
-            # Use measured bandwidth (from sbws) for Guard eligibility, fall back to self-reported
-            relay_measured_bw = vote_info.get('measured') or vote_info.get('bandwidth', 0)
-            
-            # Guard BW check: bandwidth >= 2 MB/s (guarantee) OR in top 25% (>= guard-bw-inc-exits)
-            # Per Tor dir-spec: "bandwidth is at least AuthDirGuardBWGuarantee (2 MB by default), 
-            # OR its bandwidth is among the 25% fastest relays"
-            guard_bw_meets_guarantee = relay_measured_bw >= AUTH_DIR_GUARD_BW_GUARANTEE  # Use module constant
-            guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
-            guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
+            relay_bw, relay_bw_source = self._credible_bandwidth(auth_name, vote_info)
             
             # Guard flag prerequisites: must have Fast, Stable, and V2Dir flags from this authority
             # Per Tor dir-spec Section 3.4.2: Guard requires Fast, Stable, and V2Dir
@@ -1315,19 +1159,25 @@ class CollectorFetcher:
             has_stable = 'Stable' in auth_flags
             has_v2dir = 'V2Dir' in auth_flags
             guard_prereqs_met = has_fast and has_stable and has_v2dir
+            has_guard_flag = 'Guard' in auth_flags
             
-            guard_eligible = (
-                guard_prereqs_met and
-                relay_wfu >= guard_wfu_threshold and
-                relay_tk >= guard_tk_threshold and
-                guard_bw_eligible
-            )
+            # Guard BW: bandwidth >= AuthDirGuardBWGuarantee OR >= its top-25% cutoff
+            if relay_bw is None:
+                guard_bw_eligible = guard_eligible = has_guard_flag
+            else:
+                guard_bw_eligible = relay_bw >= AUTH_DIR_GUARD_BW_GUARANTEE or (
+                    guard_bw_top25_threshold is not None and relay_bw >= guard_bw_top25_threshold)
+                guard_eligible = (
+                    guard_prereqs_met and
+                    relay_wfu >= guard_wfu_threshold and
+                    relay_tk >= guard_tk_threshold and
+                    guard_bw_eligible
+                )
             
             if guard_eligible:
                 eligibility['guard']['eligible_count'] += 1
             
             # Count actual Guard flag assignment by this authority
-            has_guard_flag = 'Guard' in auth_flags
             if has_guard_flag:
                 eligibility['guard']['assigned_count'] += 1
             
@@ -1348,21 +1198,24 @@ class CollectorFetcher:
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
-                # BW requirement
-                'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,  # 2 MB/s minimum
-                'bw_top25_threshold': guard_bw_top25_threshold,  # Top 25% cutoff
-                'bw_value': relay_measured_bw,
-                'bw_meets_guarantee': guard_bw_meets_guarantee,
-                'bw_in_top25': guard_bw_in_top25,
+                # BW requirement (bytes/s; bw_value None: not in the vote, so bw_met is its Guard vote)
+                'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,
+                'bw_top25_threshold': guard_bw_top25_threshold,
+                'bw_value': relay_bw,
+                'bw_source': relay_bw_source,
                 'bw_met': guard_bw_eligible,
             })
             
-            # Stable flag eligibility
+            # Stable flag eligibility - dir-spec OR-condition via the
+            # shared helper. An authority publishing no thresholds no longer
+            # marks every relay eligible (votes carry no relay uptime, so
+            # only the MTBF arm can be satisfied here).
             stable_uptime = thresholds.get('stable-uptime', 0)
             stable_mtbf = thresholds.get('stable-mtbf', 0)
             relay_mtbf = vote_info.get('mtbf', 0)
-            
-            stable_eligible = relay_mtbf >= stable_mtbf if stable_mtbf > 0 else True
+
+            stable_eligible = check_stable_eligibility(
+                None, relay_mtbf, stable_uptime, stable_mtbf)['eligible']
             if stable_eligible:
                 eligibility['stable']['eligible_count'] += 1
             
@@ -1379,9 +1232,15 @@ class CollectorFetcher:
                 'mtbf_value': relay_mtbf,
             })
             
-            # Fast flag eligibility - use measured bandwidth
-            fast_speed = thresholds.get('fast-speed', 0)
-            fast_eligible = relay_measured_bw >= fast_speed
+            # Fast flag eligibility: bandwidth >= this authority's fast-speed. Its actual vote
+            # also stands in for a relay it lists as Sybil, which loses every flag
+            # (dirvote.c clear_status_flags_on_sybil).
+            fast_speed = thresholds.get('fast-speed')
+            is_sybil = 'Sybil' in auth_flags
+            if relay_bw is None or fast_speed is None or is_sybil:
+                fast_eligible = has_fast
+            else:
+                fast_eligible = relay_bw >= fast_speed
             if fast_eligible:
                 eligibility['fast']['eligible_count'] += 1
             
@@ -1395,7 +1254,9 @@ class CollectorFetcher:
                 'eligible': fast_eligible,
                 'assigned': has_fast,  # Whether authority actually assigned Fast flag
                 'speed_threshold': fast_speed,
-                'speed_value': relay_measured_bw,
+                'speed_value': relay_bw,
+                'speed_source': relay_bw_source,
+                'sybil': is_sybil,
             })
             
             # HSDir flag eligibility
@@ -1446,65 +1307,38 @@ class CollectorFetcher:
     
     def _format_bandwidth(self, relay: dict) -> dict:
         """
-        Format bandwidth information from all sources.
-        
+        Consensus weight and bandwidth-authority measurements for one relay, in bytes/second.
+
+        The consensus weight follows dir-spec "Computing a consensus": the low median of the
+        votes' Measured= values when 3 or more have one, otherwise of their Bandwidth= values,
+        capped at maxunmeasuredbw while 3 or more votes carry measurements.
+
         Tracks:
         - bw_auth_measured_count: How many BW authorities actually measured this relay
         - bw_auth_total: Total number of BW authorities (denominator)
-        - measurement_count: Total bandwidth values (from all sources)
+        - measurement_count: Number of Measured= values in the votes
         """
         votes = relay.get('votes', {})
-        measurements = relay.get('bandwidth_measurements', {})
-        
-        bandwidth_values = []
-        bw_auth_measured_count = 0  # BW authorities that measured THIS relay
-        bw_auth_measured_set = set()  # Track names only for "not measured" display
-        
-        for auth_name, vote in votes.items():
-            if vote.get('measured') is not None:
-                bandwidth_values.append(vote['measured'])
-                if auth_name in self.bw_authorities:
-                    bw_auth_measured_count += 1
-                    bw_auth_measured_set.add(auth_name)
-            elif vote.get('bandwidth') is not None:
-                bandwidth_values.append(vote['bandwidth'])
-        
-        # Add measurements from bandwidth files
-        bandwidth_values.extend(measurements.values())
-        
-        bw_auth_total = len(self.bw_authorities)
-        # Only compute missing names when not all BW authorities measured (template only uses this case)
-        bw_auth_not_measured = (sorted(self.bw_authorities - bw_auth_measured_set)
-                                if bw_auth_measured_count < bw_auth_total else [])
-        
-        if not bandwidth_values:
-            return {
-                'median': None, 'average': None, 'min': None, 'max': None, 
-                'deviation': None, 'measurement_count': 0,
-                'bw_auth_measured_count': 0,
-                'bw_auth_total': bw_auth_total,
-                'bw_auth_not_measured_names': sorted(self.bw_authorities),
-            }
-        
-        # Calculate median (what Tor consensus actually uses)
-        sorted_values = sorted(bandwidth_values)
-        n = len(sorted_values)
-        if n % 2 == 0:
-            median = (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2
-        else:
-            median = sorted_values[n // 2]
-        
-        avg = sum(bandwidth_values) / len(bandwidth_values)
+        measured = {auth_name: vote['measured'] * VOTE_BW_KB_BYTES
+                    for auth_name, vote in votes.items() if vote.get('measured') is not None}
+        values = sorted(measured.values())
+        unmeasured = len(values) < 3
+        median = low_median(values if not unmeasured else
+                            [vote['bandwidth'] * VOTE_BW_KB_BYTES for vote in votes.values()
+                             if vote.get('bandwidth') is not None])
+        if unmeasured and median is not None and len(self.measuring_authorities) >= 3:
+            median = min(median, MAX_UNMEASURED_BW_KB * VOTE_BW_KB_BYTES)
         return {
-            'median': median,  # Tor consensus uses median
-            'average': avg,    # For reference
-            'min': min(bandwidth_values),
-            'max': max(bandwidth_values),
-            'deviation': max(bandwidth_values) - min(bandwidth_values) if len(bandwidth_values) > 1 else 0,
-            'measurement_count': len(bandwidth_values),
-            'bw_auth_measured_count': bw_auth_measured_count,
-            'bw_auth_total': bw_auth_total,
-            'bw_auth_not_measured_names': bw_auth_not_measured,
+            'median': median,  # Consensus weight
+            'unmeasured': unmeasured,
+            'average': sum(values) / len(values) if values else None,
+            'min': values[0] if values else None,
+            'max': values[-1] if values else None,
+            'deviation': values[-1] - values[0] if not unmeasured else 0,
+            'measurement_count': len(values),
+            'bw_auth_measured_count': len(self.bw_authorities & measured.keys()),
+            'bw_auth_total': len(self.bw_authorities),
+            'bw_auth_not_measured_names': sorted(self.bw_authorities - measured.keys()),
         }
     
     def _format_reachability(self, relay: dict) -> dict:
@@ -1572,32 +1406,6 @@ def discover_authorities(relays: list, update_registry: bool = True) -> list:
         logger.info(f"discover_authorities: Found {len(authorities)} authorities from Onionoo")
     
     return authorities
-
-
-def get_best_family_groups(relay_set) -> Tuple[dict, str]:
-    """
-    Get the best available family group data, preferring DA-validated
-    microdescriptor family-ids over server descriptor family-cert.
-
-    Returns:
-        Tuple of (groups_dict, source_name) where groups_dict maps
-        family_key → list of relay fingerprints, and source_name is
-        'microdesc' or 'server_descriptor'.
-    """
-    collector_consensus = getattr(relay_set, 'collector_consensus_data', None)
-    if collector_consensus and isinstance(collector_consensus, dict):
-        md_family = collector_consensus.get('microdesc_family', {})
-        groups = md_family.get('family_key_groups', {})
-        if groups:
-            return groups, 'microdesc'
-
-    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
-    if collector_descs and isinstance(collector_descs, dict):
-        groups = collector_descs.get('family_cert_groups', {})
-        if groups:
-            return groups, 'server_descriptor'
-
-    return {}, 'none'
 
 
 def calculate_consensus_requirement(authority_count: int) -> dict:

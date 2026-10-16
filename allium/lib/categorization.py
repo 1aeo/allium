@@ -6,12 +6,27 @@ AS rarity scoring, contact derived data, and display value precomputation.
 Extracted from relays.py for better modularity.
 """
 
+import functools
+import html as _html
 import re
+from typing import Dict, List
 
-from .string_utils import extract_contact_display_name
+from .file_io_utils import sanitize_path_component
+from .string_utils import extract_contact_display_name, URL_FIELD_TOKEN_RE
 
-# Pre-compiled regex for sort key validation (called ~49K times per run)
+# Pre-compiled regex for sort key validation (through _is_page_key, cached)
 _VALID_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+@functools.lru_cache(maxsize=None)
+def _is_page_key(v):
+    """True if v gets a page at its own name: <k>/<v>/, the folder links point at.
+
+    Pages are written to <k>/<sanitize_path_component(v)>/, which renames a key
+    with a leading or trailing "_", a trailing newline or over 240 characters.
+    Cached: sort_relay sees the same keys ~650K times per run.
+    """
+    return bool(_VALID_KEY_RE.match(v)) and sanitize_path_component(v) == v
 
 
 def calculate_network_totals(relay_set):
@@ -143,7 +158,7 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         cw:    consensus weight for this relay (passed to avoid repeated extraction)
         cw_fraction: consensus weight fraction (API value preferred, computed fallback)
     """
-    if not v or not _VALID_KEY_RE.match(v):
+    if not v or not _is_page_key(v):
         return
 
     if not k in relay_set.json["sorted"]:
@@ -255,6 +270,28 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         relay_set.json["sorted"][k][v]["contact"] = relay.get("contact", "")
         relay_set.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
         relay_set.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
+
+        # Item 3 (variant-aware list views): track distinct raw ContactInfo
+        # strings per contact group so list-view tooltips can stop showing
+        # one representative string and instead say "N distinct ContactInfo
+        # strings — see operator page". A single set.add() per relay is
+        # the cheapest way to count without a second pass; we keep it
+        # ONLY for contact groups (the only listing where the operator-
+        # detail page is the authoritative variant view).
+        if k == "contact":
+            cv_set = relay_set.json["sorted"][k][v].get("_contact_variant_set")
+            if cv_set is None:
+                cv_set = set()
+                relay_set.json["sorted"][k][v]["_contact_variant_set"] = cv_set
+            cv_set.add(relay.get("contact", "") or "")
+            relay_set.json["sorted"][k][v]["contact_variant_count"] = len(cv_set)
+            # NOTE: _contact_variant_set is a Python set — not JSON-
+            # serialisable. It's removed by calculate_contact_derived_data()
+            # in a single finalisation pass after categorisation completes,
+            # so the long-lived sorted.contact data structure never carries
+            # the live set. Keeping it ONLY across the categorisation loop
+            # is what lets us count distinct contacts in O(N) without
+            # rescanning members.
         
         # Track country counts for contacts (primary country calculation)
         # relay["country"] is already UPPERCASE from _preprocess_template_data()
@@ -567,10 +604,10 @@ def finalize_unique_as_counts(relay_set):
                     else:
                         data["unique_family_count"] = 0
                         
-                    # APPROACH 1 SIMPLIFIED: Use already-built sets and mappings from _sort()
+                    # APPROACH 1 SIMPLIFIED: Use already-built sets and mappings from sort_relay()
                     unique_aroi_domains = data.get("unique_aroi_set", set())
                     unique_contact_hashes = data.get("unique_contact_set", set())
-                    # aroi_to_contact_map already built during _sort(), no need to rebuild
+                    # aroi_to_contact_map already built during sort_relay(), no need to rebuild
                     
                     # APPROACH 1: Simplified HTML generation from existing data
                     aroi_contact_html_items = []
@@ -578,18 +615,22 @@ def finalize_unique_as_counts(relay_set):
                     aroi_map = data.get("aroi_to_contact_map", {})
                     
                     # Add AROI domain links first
+                    # HTML-escape AROI domains and base_url to prevent XSS
+                    # (domains shouldn't contain HTML chars, but defense-in-depth)
                     for aroi in sorted(unique_aroi_domains):
                         if aroi and aroi != "none":
+                            safe_aroi = _html.escape(aroi)
                             contact_hash = aroi_map.get(aroi, "")
                             if contact_hash:
                                 # Use vanity URL if base_url is configured and domain is validated
                                 if relay_set.base_url and hasattr(relay_set, 'validated_aroi_domains') and aroi in relay_set.validated_aroi_domains:
-                                    aroi_contact_html_items.append(f'<a href="{relay_set.base_url}/{aroi.lower()}/">{aroi}</a>')
+                                    safe_base = _html.escape(relay_set.base_url)
+                                    aroi_contact_html_items.append(f'<a href="{safe_base}/{safe_aroi.lower()}/">{safe_aroi}</a>')
                                 else:
-                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{safe_aroi}</a>')
                                 used_contacts.add(contact_hash)
                             else:
-                                aroi_contact_html_items.append(aroi)
+                                aroi_contact_html_items.append(safe_aroi)
                     
                     # Add non-AROI contact links (truncated to 8 characters)
                     for contact_hash in sorted(unique_contact_hashes):
@@ -626,6 +667,112 @@ def propagate_as_rarity(relay_set):
         cw = e.get('consensus_weight_fraction', 0)
         relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
+# Shared url: token pattern (string_utils is the single source of truth)
+_INCOMPLETE_URL_RE = URL_FIELD_TOKEN_RE
+
+
+def _build_incomplete_aroi_sibling_map(relay_set) -> Dict[str, Dict[str, List[str]]]:
+    """Option B: surface BOTH authenticated and self-asserted incomplete-
+    AROI relays on the validated operator's detail page, in TWO
+    separately-labelled buckets so visitors and the operator can tell
+    them apart:
+
+      authenticated_family:
+        Incomplete relays that this operator's validated relays
+        MUTUALLY-DECLARE in their effective_family. Tor's family
+        mechanism requires both relays to list each other in their
+        family configuration, so this is a cryptographically
+        authenticated signal — relay X cannot unilaterally inject
+        itself into relay Y's family pool.
+
+      url_claim:
+        Incomplete relays that publish ``url:<this-domain>`` in their
+        own ContactInfo but are NOT in this operator's
+        effective_family. These are SELF-ASSERTED and unauthenticated.
+        They could be:
+          (a) the operator's own additional relays that forgot BOTH
+              ciissversion AND family declaration — actionable for
+              the operator (fix the ContactInfo to merge them); OR
+          (b) third parties spoofing the operator's domain — also
+              actionable (operator can investigate / report rogue
+              operators / contact the directory authorities).
+
+    Both cases are useful for the operator to see; the page renders
+    them under separate, clearly-labelled headings so neither is
+    confused with the operator's authenticated relays.
+
+    Reviewed and intentionally restored after a brief detour where
+    the url-claim bucket was suppressed entirely. The operator's
+    visibility into spoofing claims is a feature, not a vulnerability,
+    provided the framing makes the unauthenticated nature explicit
+    (which contact.html does — the heading says "Self-asserted" and
+    the body explicitly notes the relays could be misconfigured
+    siblings OR spoofing attempts).
+
+    Returns:
+        dict aroi_domain -> {
+            'authenticated_family': sorted [fingerprints],
+            'url_claim': sorted [fingerprints],
+        }
+        Only includes operators where at least one bucket is non-empty.
+    """
+    family_pool = {}
+    validated_fps_by_domain = {}
+    for relay in relay_set.json.get("relays", []):
+        if not relay.get("aroi_configured"):
+            continue
+        domain = (relay.get("aroi_domain") or "").lower().strip()
+        if not domain or domain == "none":
+            continue
+        fp = relay.get("fingerprint")
+        if fp:
+            validated_fps_by_domain.setdefault(domain, set()).add(fp)
+        ef = relay.get("effective_family") or []
+        if ef:
+            family_pool.setdefault(domain, set()).update(ef)
+
+    incomplete_fps = set()
+    incomplete_url_claims = {}  # domain -> set of fps
+    for relay in relay_set.json.get("relays", []):
+        if relay.get("aroi_configured"):
+            continue
+        fp = relay.get("fingerprint")
+        if not fp:
+            continue
+        contact = relay.get("contact", "") or ""
+        if not contact.strip():
+            continue
+        incomplete_fps.add(fp)
+        # Parse the url: token (if any) so we can attribute the relay
+        # to the unauthenticated bucket of whatever domain it claims.
+        m = _INCOMPLETE_URL_RE.search(contact)
+        if m:
+            domain = m.group(1)
+            if "://" in domain:
+                domain = domain.split("://", 1)[1]
+            domain = domain.split("/", 1)[0].split("?", 1)[0]
+            if domain.startswith("www."):
+                domain = domain[4:]
+            domain = domain.rstrip(".,;:").lower()
+            if domain:
+                incomplete_url_claims.setdefault(domain, set()).add(fp)
+
+    # Combine: every operator with EITHER bucket non-empty appears in
+    # the result.
+    all_domains = set(family_pool) | set(incomplete_url_claims) | set(validated_fps_by_domain)
+    siblings = {}
+    for domain in all_domains:
+        own_validated = validated_fps_by_domain.get(domain, set())
+        family_only = family_pool.get(domain, set()) & incomplete_fps - own_validated
+        url_only = incomplete_url_claims.get(domain, set()) - own_validated - family_only
+        if family_only or url_only:
+            siblings[domain] = {
+                'authenticated_family': sorted(family_only),
+                'url_claim': sorted(url_only),
+            }
+    return siblings
+
+
 def calculate_contact_derived_data(relay_set):
     """
     Calculate derived contact data: primary countries and bandwidth means in single pass.
@@ -633,6 +780,11 @@ def calculate_contact_derived_data(relay_set):
     """
     if "contact" not in relay_set.json["sorted"]:
         return
+
+    # Option B: pre-compute the global incomplete-AROI sibling map ONCE
+    # before the per-contact loop, then attach the count to each
+    # contact_data whose aroi_domain matches.
+    incomplete_siblings = _build_incomplete_aroi_sibling_map(relay_set)
         
     for contact_hash, contact_data in relay_set.json["sorted"]["contact"].items():
         # PRIMARY COUNTRIES CALCULATION (from _calculate_primary_countries)
@@ -670,6 +822,38 @@ def calculate_contact_derived_data(relay_set):
             
         # Clean up temporary country_counts to save memory
         del contact_data["country_counts"]
+
+        # Drop the temporary _contact_variant_set inserted by sort_relay()
+        # so downstream code can json.dumps(sorted.contact) — Python sets
+        # are not JSON-serialisable. The accumulated count survives in
+        # contact_data["contact_variant_count"]; the set itself is no
+        # longer needed.
+        contact_data.pop("_contact_variant_set", None)
+
+        # Option B: cross-reference this AROI-complete operator against
+        # the incomplete-AROI sibling map. Two separately-labelled
+        # buckets surface to the contact page:
+        #   - authenticated_family: incomplete relays mutually declared
+        #     in this operator's validated relays' effective_family
+        #     (Tor's bidirectional family mechanism — authenticated)
+        #   - url_claim: incomplete relays that publish url:<this-domain>
+        #     in their ContactInfo but are NOT in effective_family
+        #     (self-asserted, unauthenticated — could be the operator's
+        #     own misconfigured relays OR third-party spoofers; either
+        #     way the operator wants visibility)
+        # See _build_incomplete_aroi_sibling_map for the rationale.
+        aroi_domain = (contact_data.get("aroi_domain") or "").lower().strip()
+        if aroi_domain and aroi_domain != "none":
+            buckets = incomplete_siblings.get(aroi_domain) or {}
+            auth_fps = buckets.get('authenticated_family', [])
+            claim_fps = buckets.get('url_claim', [])
+            if auth_fps:
+                contact_data["incomplete_family_count"] = len(auth_fps)
+                # Cap the rendered list to keep the page bounded.
+                contact_data["incomplete_family_fingerprints"] = auth_fps[:25]
+            if claim_fps:
+                contact_data["incomplete_url_claim_count"] = len(claim_fps)
+                contact_data["incomplete_url_claim_fingerprints"] = claim_fps[:25]
         
         # BANDWIDTH MEANS CALCULATION (optimized from _calculate_bandwidth_means)
         relays = contact_data.get("relays", [])

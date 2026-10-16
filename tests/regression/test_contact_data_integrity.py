@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
 from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
+from allium.lib.operator_analysis import compute_contact_display_data, format_intelligence_rating
 from allium.lib.relays import Relays
 
 
@@ -136,8 +137,8 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
             'exit_consensus_weight_fraction': 0.015
         }
         
-        result = self.relays._compute_contact_display_data(
-            relay_data, 'MB/s', None, 'test_hash', []
+        result = compute_contact_display_data(
+            relay_data, 'MB/s', None, 'test_hash', [], self.relays
         )
         
         new_breakdown = result['bandwidth_breakdown']
@@ -276,8 +277,8 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
             'exit_consensus_weight_fraction': 0.01
         }
         
-        result = self.relays._compute_contact_display_data(
-            relay_data_with_zeros, 'MB/s', None, 'test_hash', []
+        result = compute_contact_display_data(
+            relay_data_with_zeros, 'MB/s', None, 'test_hash', [], self.relays
         )
         
         # Bandwidth breakdown should exclude zero middle bandwidth
@@ -291,18 +292,17 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
         self.assertIn('1.00% exit', result['consensus_weight_breakdown'] or '')
 
     def test_intelligence_rating_color_coding_consistency(self):
-        """Test that intelligence rating color coding remains consistent."""
+        """Test that intelligence rating CSS classes remain consistent."""
         test_cases = [
-            ('Poor, 1 network (0 rare)', '#c82333'),      # Red for Poor
-            ('Okay, 2 networks (0 rare)', '#cc9900'),    # Orange for Okay  
-            ('Great, 4 networks (2 rare)', '#2e7d2e'),   # Green for Great
+            ('Poor, 1 network (0 rare)', 'al-rating-poor'),      # Red for Poor
+            ('Okay, 2 networks (0 rare)', 'al-rating-okay'),    # Orange for Okay  
+            ('Great, 4 networks (2 rare)', 'al-rating-great'),   # Green for Great
         ]
         
-        for rating_text, expected_color in test_cases:
+        for rating_text, expected_class in test_cases:
             with self.subTest(rating=rating_text):
-                result = self.relays._format_intelligence_rating(rating_text)
-                self.assertIn(expected_color, result)
-                self.assertIn('font-weight: bold', result)
+                result = format_intelligence_rating(rating_text)
+                self.assertIn(expected_class, result)
                 
                 # Verify the rating word is correctly highlighted
                 if 'Poor' in rating_text:

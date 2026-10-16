@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
 from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
+from allium.lib.operator_analysis import compute_contact_display_data, format_intelligence_rating
 from allium.lib.relays import Relays
 
 
@@ -85,35 +86,35 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_format_intelligence_rating_poor(self):
         """Test color-coded formatting for Poor intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Poor, 1 network')
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 network'
+        result = format_intelligence_rating('Poor, 1 network')
+        expected = '<span class="al-rating-poor">Poor</span>, 1 network'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_okay(self):
         """Test color-coded formatting for Okay intelligence ratings.""" 
-        result = self.relays._format_intelligence_rating('Okay, 2 countries')
-        expected = '<span style="color: #cc9900; font-weight: bold;">Okay</span>, 2 countries'
+        result = format_intelligence_rating('Okay, 2 countries')
+        expected = '<span class="al-rating-okay">Okay</span>, 2 countries'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_great(self):
         """Test color-coded formatting for Great intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Great, 4 networks (2 rare)')
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks (2 rare)'
+        result = format_intelligence_rating('Great, 4 networks (2 rare)')
+        expected = '<span class="al-rating-great">Great</span>, 4 networks (2 rare)'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_invalid_format(self):
         """Test handling of invalid rating format."""
-        result = self.relays._format_intelligence_rating('Invalid format')
+        result = format_intelligence_rating('Invalid format')
         self.assertEqual(result, 'Invalid format')
 
     def test_format_intelligence_rating_empty_string(self):
         """Test handling of empty string."""
-        result = self.relays._format_intelligence_rating('')
+        result = format_intelligence_rating('')
         self.assertEqual(result, '')
 
     def test_format_intelligence_rating_none(self):
         """Test handling of None input."""
-        result = self.relays._format_intelligence_rating(None)
+        result = format_intelligence_rating(None)
         self.assertEqual(result, None)
 
     @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
@@ -121,8 +122,8 @@ class TestContactDisplayData(unittest.TestCase):
         """Test bandwidth breakdown formatting with mixed relay types."""
         mock_format_bw.side_effect = lambda bw, unit: f"{bw/1000000:.1f}"  # Convert to MB
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         # Should include all three bandwidth types
@@ -140,8 +141,8 @@ class TestContactDisplayData(unittest.TestCase):
         relay_data = self.sample_relay_data.copy()
         relay_data['middle_bandwidth'] = 0  # Zero middle bandwidth
         
-        result = self.relays._compute_contact_display_data(
-            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         breakdown = result['bandwidth_breakdown']
@@ -151,8 +152,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_consensus_weight_breakdown(self):
         """Test consensus weight breakdown with filtering of zero values."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         self.assertIn('consensus_weight_breakdown', result)
@@ -168,8 +169,8 @@ class TestContactDisplayData(unittest.TestCase):
         relay_data = self.sample_relay_data.copy()
         relay_data['middle_consensus_weight_fraction'] = 0  # Zero middle consensus weight
         
-        result = self.relays._compute_contact_display_data(
-            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         breakdown = result['consensus_weight_breakdown']
@@ -182,42 +183,41 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 100.0
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertIn('color: #28a745', uptime_formatted)  # Should be green highlighted
-        self.assertIn('font-weight: bold', uptime_formatted)
+        self.assertIn('al-status-success-bold', uptime_formatted)  # Should be green highlighted
 
     def test_compute_contact_display_data_uptime_highlighting_near_100(self):
         """Test uptime highlighting for near-100% values (99.99%)."""
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 99.99
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertIn('color: #28a745', uptime_formatted)  # Should be green highlighted
+        self.assertIn('al-status-success-bold', uptime_formatted)  # Should be green highlighted
 
     def test_compute_contact_display_data_uptime_highlighting_below_threshold(self):
         """Test uptime highlighting for values below highlighting threshold."""
         reliability_data = self.sample_reliability.copy()
         reliability_data['overall_uptime']['6_months']['average'] = 99.9  # Below 99.99 threshold
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertNotIn('color: #28a745', uptime_formatted)  # Should not be highlighted
+        self.assertNotIn('al-status-success-bold', uptime_formatted)  # Should not be highlighted
 
     def test_compute_contact_display_data_outliers_calculation(self):
         """Test statistical outliers calculation and tooltip generation."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         outliers = result['outliers']
@@ -244,8 +244,8 @@ class TestContactDisplayData(unittest.TestCase):
         reliability_data = self.sample_reliability.copy()
         reliability_data['outliers'] = {'low_outliers': [], 'high_outliers': []}
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', reliability_data, 'test_contact_hash', [], self.relays
         )
         
         outliers = result['outliers']
@@ -253,23 +253,23 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_operator_intelligence_formatting(self):
         """Test operator intelligence data formatting with color coding."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should format network diversity with color coding
         self.assertIn('network_diversity', intelligence)
-        self.assertIn('<span style="color: #2e7d2e', intelligence['network_diversity'])  # Great = green
+        self.assertIn('<span class="al-rating-great', intelligence['network_diversity'])  # Great = green
         
         # Should format geographic diversity with color coding
         self.assertIn('geographic_diversity', intelligence)
-        self.assertIn('<span style="color: #cc9900', intelligence['geographic_diversity'])  # Okay = orange
+        self.assertIn('<span class="al-rating-okay', intelligence['geographic_diversity'])  # Okay = orange
         
         # Should format infrastructure diversity with color coding
         self.assertIn('infrastructure_diversity', intelligence)
-        self.assertIn('<span style="color: #c82333', intelligence['infrastructure_diversity'])  # Poor = red (1 platform)
+        self.assertIn('<span class="al-rating-poor', intelligence['infrastructure_diversity'])  # Poor = red (1 platform)
 
     def test_compute_contact_display_data_no_intelligence_data(self):
         """Test handling when no intelligence data is available."""
@@ -285,8 +285,8 @@ class TestContactDisplayData(unittest.TestCase):
             
             relays_no_intel.json = {}  # No intelligence data
             
-            result = relays_no_intel._compute_contact_display_data(
-                self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+            result = compute_contact_display_data(
+                self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], relays_no_intel
             )
         
         # Should handle gracefully when no intelligence data exists
@@ -305,8 +305,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_no_reliability_data(self):
         """Test handling when no reliability data is available."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', None, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', None, 'test_contact_hash', [], self.relays
         )
         
         # Should handle gracefully when no reliability data exists
@@ -330,8 +330,8 @@ class TestContactDisplayData(unittest.TestCase):
             'exit_consensus_weight_fraction': 0
         }
         
-        result = self.relays._compute_contact_display_data(
-            single_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            single_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         # Should only include guard information (no middle/exit)
@@ -354,15 +354,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should count version compliance correctly (2/5 = 40% compliant, which is ≤50% so "Poor")
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 2 (40%) compliant, 2 (40%) not compliant, 1 (20%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 2 (40%) compliant, 2 (40%) not compliant, 1 (20%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
         
         # Should include version status tooltips
@@ -379,14 +379,14 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show green "All" for fully compliant operator
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 (100%) compliant'
+        expected = '<span class="al-rating-great">All</span>, 3 (100%) compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
         self.assertNotIn('not compliant', intelligence['version_compliance'])
         self.assertNotIn('unknown', intelligence['version_compliance'])
@@ -403,8 +403,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'new in series', 'version': '0.4.8.9'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -414,7 +414,7 @@ class TestContactDisplayData(unittest.TestCase):
         version_status = intelligence['version_status']
         
         # Check that it shows "Poor" indicator since only 2/6 = 33% are recommended (≤50%)
-        self.assertIn('<span style="color: #c82333; font-weight: bold;">Poor</span>', version_status)
+        self.assertIn('<span class="al-rating-poor">Poor</span>', version_status)
         self.assertIn('2 (33%) recommended', version_status)
         self.assertIn('1 (17%) experimental', version_status)
         self.assertIn('1 (17%) obsolete', version_status)
@@ -445,15 +445,15 @@ class TestContactDisplayData(unittest.TestCase):
             # No obsolete, experimental, new in series, or unrecommended
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         version_status = intelligence['version_status']
         
         # Should only show recommended with "All" status indicator (non-zero count)
-        expected_status = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8" style="cursor: help;">2 (100%) recommended</span>'
+        expected_status = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8">2 (100%) recommended</span>'
         self.assertEqual(version_status, expected_status)
         self.assertNotIn('experimental', version_status)
         self.assertNotIn('obsolete', version_status)
@@ -474,14 +474,14 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show green "All" for fully compliant operator
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 (100%) compliant'
+        expected = '<span class="al-rating-great">All</span>, 3 (100%) compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
         self.assertNotIn('not compliant', intelligence['version_compliance'])
         self.assertNotIn('unknown', intelligence['version_compliance'])
@@ -498,8 +498,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -521,8 +521,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_version_empty_members(self):
         """Test version compliance/status handling with empty member list."""
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -541,8 +541,8 @@ class TestContactDisplayData(unittest.TestCase):
             {'version_status': 'recommended', 'version': '0.4.8.8'},  # Missing recommended_version
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
@@ -550,9 +550,9 @@ class TestContactDisplayData(unittest.TestCase):
         # Should handle missing fields gracefully (1/3 = 33% compliant, which is ≤50% so "Poor")
         # recommended_version: None=2 (missing fields treated as None), True=1, False=0 
         # version_status: None=2 (missing fields), recommended=1
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
-        expected_status = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions: 0.4.8.8" style="cursor: help;">1 (33%) recommended</span>'
+        expected_status = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.8">1 (33%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected_status)
         
         # Should include tooltip for the one valid recommended relay
@@ -569,15 +569,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show orange "Partial" when >50% but not 100% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, 3 (75%) compliant, 1 (25%) not compliant'
+        expected = '<span class="al-rating-okay">Partial</span>, 3 (75%) compliant, 1 (25%) not compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_exactly_50_percent(self):
@@ -590,15 +590,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show red "Poor" when exactly 50% are compliant (not >50%)
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 2 (50%) compliant, 2 (50%) not compliant'
+        expected = '<span class="al-rating-poor">Poor</span>, 2 (50%) compliant, 2 (50%) not compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_just_over_50_percent(self):
@@ -612,15 +612,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.1-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show orange "Partial" when just over 50% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, 3 (60%) compliant, 1 (20%) not compliant, 1 (20%) unknown'
+        expected = '<span class="al-rating-okay">Partial</span>, 3 (60%) compliant, 1 (20%) not compliant, 1 (20%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_zero_compliant(self):
@@ -632,15 +632,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show red "Poor" when 0% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 0 (0%) compliant, 2 (67%) not compliant, 1 (33%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 0 (0%) compliant, 2 (67%) not compliant, 1 (33%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_status_all_recommended(self):
@@ -652,15 +652,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'recommended', 'version': '0.4.8.9'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show green "All" when all relays have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (100%) recommended</span>'
+        expected = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9">3 (100%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_partial_recommended(self):
@@ -673,15 +673,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show orange "Partial" when >50% but not 100% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (25%) obsolete</span>'
+        expected = '<span class="al-rating-okay">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10">1 (25%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_poor_recommended(self):
@@ -694,15 +694,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show red "Poor" when ≤50% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions: 0.4.8.7" style="cursor: help;">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11" style="cursor: help;">2 (50%) obsolete</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.7">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11">2 (50%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_zero_recommended(self):
@@ -714,15 +714,15 @@ class TestContactDisplayData(unittest.TestCase):
             {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
         ]
         
-        result = self.relays._compute_contact_display_data(
-            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        result = compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members, self.relays
         )
         
         intelligence = result['operator_intelligence']
         
         # Should show red "Poor" when 0% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5">1 (33%) unrecommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
 

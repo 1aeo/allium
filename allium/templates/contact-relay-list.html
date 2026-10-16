@@ -4,10 +4,10 @@
     Tor Relays
 {% endblock -%}
 {% block body -%}
-<h2>
+<h1 class="page-title">
 {% block header -%}
 {% endblock -%}
-</h2>
+</h1>
 
 {% block navigation -%}
 {% endblock -%}
@@ -29,19 +29,71 @@
    2. When operator has no AROI (not_configured): Single table (original behavior)
    ============================================================================= #}
 
+{% macro relay_table_start() -%}
+<div id="relay-table"></div>
+{% if contact_sort_mode == 'overload' -%}
+<p class="al-status-danger-bold" style="margin: 20px 0 0;">
+    ⚡︎ Overloaded relays are shown first{% if overload_summary %} ({{ overload_summary.overloaded }} currently overloaded){% endif %}.
+</p>
+{% endif -%}
+{%- endmacro %}
+{% include "pagination.html" %}
+
 {# Pre-compute fingerprint sets for O(1) lookups #}
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
 {% set unauthorized_fps = contact_validation_status.unauthorized_fingerprints if contact_validation_status else {} -%}
 {% set misconfigured_fps = contact_validation_status.misconfigured_fingerprints if contact_validation_status else {} -%}
+{# B1.5: peer-issue fingerprint sets for inline icons #}
+{% set security_fps = contact_validation_status.security_incident_fingerprints if contact_validation_status else {} -%}
+{% set pending_fps = contact_validation_status.pending_onionoo_fingerprints if contact_validation_status else {} -%}
 
 {# Determine if we should use the 4-section layout #}
 {% set use_sections = contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.validation_status != 'not_configured' -%}
+{% set is_contact_sortable = sortable_scope == 'contact' and contact_sort_enabled is defined and contact_sort_enabled -%}
 
 {# =============================================================================
    MACRO: Render relay table header (DRY - used by all sections)
    ============================================================================= #}
+{% macro sort_header(label, sort_mode, title='') -%}
+<th{% if title %} title="{{ title }}"{% endif %}>
+    {% if is_contact_sortable -%}
+        {% if contact_sort_mode == sort_mode -%}
+            <strong>{{ label|safe }}</strong> ▾
+        {% else -%}
+            <a href="{{ contact_sort_links.get(sort_mode, 'index.html')|escape }}#relay-table">{{ label|safe }}</a>
+        {% endif -%}
+    {% else -%}
+        {{ label|safe }}
+    {% endif -%}
+</th>
+{%- endmacro %}
+
 {% macro relay_table_header(table_has_ipv6) -%}
 <tr>
+    {% if is_contact_sortable %}
+        {{ sort_header('Status', 'status', 'Relay online/offline status. ⚡ = currently overloaded (click it for details).') }}
+        {{ sort_header('Nickname', 'nickname') }}
+        {{ sort_header('BW Cap (' ~ bandwidth ~ ' ' ~ bandwidth_unit ~ ')', 'bandwidth', 'Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.') }}
+        {{ sort_header('Total Data', 'total_data', 'Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.') }}
+        {{ sort_header('Uptime/Downtime', 'uptime') }}
+        {{ sort_header('Uptime (1M/6M/1Y/5Y)', 'uptime_percentage', contact_display_data.outliers.tooltip if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip else 'Statistical outliers: ≥2σ from average') }}
+        {{ sort_header('Flag Uptime (1M/6M/1Y/5Y)', 'flag_uptime', 'Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.') }}
+        {{ sort_header('IPv4', 'ipv4') }}
+        {{ sort_header('Flags', 'flags') }}
+        {{ sort_header('DNS', 'dns', 'Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com') }}
+        {{ sort_header('Family', 'family', 'Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.') }}
+        {{ sort_header('Country', 'country') }}
+        {{ sort_header('AS Number', 'as_number') }}
+        {{ sort_header('AS Name', 'as_name') }}
+        {{ sort_header('Platform', 'platform') }}
+        {{ sort_header('First Seen', 'first_seen') }}
+        {{ sort_header('Last Restarted', 'last_restarted') }}
+        {% if table_has_ipv6 and (contact_has_ipv6 is not defined or contact_has_ipv6) %}
+        {{ sort_header('IPv6', 'ipv6') }}
+        {% elif table_has_ipv6 %}
+        <th>IPv6</th>
+        {% endif %}
+    {% else %}
     <th></th>
     <th>Nickname</th>
     <th title="Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW Cap ({{ bandwidth }} {{ bandwidth_unit }})</th>
@@ -51,6 +103,7 @@
     <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
     <th>IPv4</th>
     <th>Flags</th>
+    <th title="Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com">DNS</th>
     <th title="Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.">Family</th>
     <th>Country</th>
     <th>AS Number</th>
@@ -58,21 +111,25 @@
     <th>Platform</th>
     <th>First Seen</th>
     <th>Last Restarted</th>
-    {% if table_has_ipv6 -%}
+    {% if table_has_ipv6 %}
     <th>IPv6</th>
-    {% endif -%}
+    {% endif %}
+    {% endif %}
 </tr>
 {%- endmacro %}
 
 {# =============================================================================
    MACRO: Render a single relay row (DRY - used by all sections)
    PERF: IPv6 check is now passed as parameter (computed once per table, not per row)
+   PERF: relay_row_head is memoized per process by relay_row_cache (a page_writer
+   global), so it may only read what relay_row_cache() keys on; cells derived
+   from the current time live in relay_row_tail.
    ============================================================================= #}
-{% macro relay_row(relay, show_validation_icon=true, validation_icon_type=none, table_has_ipv6=false) -%}
+{% macro relay_row_head(relay, show_validation_icon=true, validation_icon_type=none) -%}
 <tr>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-    <td>
+    <td{% if relay.get('stability_is_overloaded') %} style="white-space: nowrap;"{% endif %}>
         {% if relay['running'] -%}
             <span class="circle circle-online" title="This relay is online"></span>
         {% else -%}
@@ -81,16 +138,20 @@
         {# Show validation icon based on category #}
         {% if show_validation_icon -%}
             {% if validation_icon_type == 'validated' -%}
-                <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+                <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
             {% elif validation_icon_type == 'unauthorized' -%}
-                <span style="color: #dc3545; margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
+                <span class="al-status-danger" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
             {% elif validation_icon_type == 'misconfigured' -%}
-                <span style="color: #ffc107; margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
+                <span class="al-status-warning" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
             {% elif validation_icon_type == 'not_configured' -%}
-                <span style="color: #6c757d; margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
+                <span class="al-status-muted" style="margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
             {% else -%}
-                {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
+                {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps, security_fps, pending_fps, relay.get('aroi_version')) }}
             {% endif -%}
+        {% endif -%}
+        {# Overload badge: links to the relay's #overload detail section (tooltip = reason) #}
+        {% if relay.get('stability_is_overloaded') -%}
+            <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/#overload" class="al-link-plain" title="Overloaded — {{ relay['stability_tooltip']|escape }}. Click for overload details." aria-label="{{ relay['nickname']|escape }} is overloaded; view overload details"><span class="al-status-danger-bold" style="margin-left: 3px;">⚡︎</span></a>
         {% endif -%}
     </td>
     {% if relay['effective_family']|length > 1 -%}
@@ -107,12 +168,12 @@
         {{ obs_bandwidth }} {{ obs_unit }}
         {% if relay['measured'] is not none -%}
             {% if relay['measured'] -%}
-                &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
+                &nbsp;&nbsp;<span class="al-status-success-bold" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
             {% else -%}
-                &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
+                &nbsp;&nbsp;<span class="al-status-danger-bold" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
             {% endif -%}
         {% else -%}
-            &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
+            &nbsp;&nbsp;<span class="al-status-muted" title="Bandwidth measurement status unknown">?</span>
         {% endif -%}
     </td>
     <td>
@@ -125,7 +186,7 @@
     <td>
         {% if relay.get('uptime_display') -%}
             {% if relay['uptime_display'].startswith('DOWN') -%}
-                <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+                <span class="al-status-danger">{{ relay['uptime_display']|escape }}</span>
             {% else -%}
                 {{ relay['uptime_display']|escape }}
             {% endif -%}
@@ -157,18 +218,19 @@
     </td>
     {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
     <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+    <td>{% if relay.get('exit_dns_health_status') == 'success' %}<span class="al-status-success" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span class="al-status-danger" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span class="al-status-muted" title="Not yet tested">-</span>{% else %}<span class="al-status-muted">NA</span>{% endif %}</td>
     <td>
         {% if relay.get('family_support_type') == 'both' -%}
-            <span style="color: #28a745;" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>
+            <span class="al-status-success" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>
         {% elif relay.get('family_support_type') == 'happy_families' -%}
-            <span style="color: #28a745;" title="Has family-cert in server descriptor (Happy Families)">Happy Families</span>
+            <span class="al-status-success" title="Has family-cert in server descriptor (Happy Families)">Happy Families</span>
         {% elif relay.get('family_support_type') == 'my_family' -%}
-            <span style="color: #dc3545;" title="MyFamily only — no family-cert. Consider migrating to Happy Families.">MyFamily</span>
+            <span class="al-status-danger" title="MyFamily only — no family-cert. Consider migrating to Happy Families.">MyFamily</span>
         {% else -%}
-            <span style="color: #6c757d;">None</span>
+            <span class="al-status-muted">None</span>
         {% endif -%}
     </td>
-    {% if relay['country'] -%}
+    {% if relays.has_page('country', relay['country']) -%}
         {% if key != 'country' -%}
             <td>
                 <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
@@ -187,7 +249,7 @@
             </td>
         {% endif -%}
     {% else -%}
-        <td>X</td>
+        <td>Unknown</td>
     {% endif -%}
     {% if relay['as'] -%}
         {% if key != 'as' -%}
@@ -210,7 +272,9 @@
     {% else -%}
         <td>Unknown</td>
     {% endif -%}
-    {% if key != 'platform' -%}
+    {% if not relays.has_page('platform', relay['platform']) -%}
+        <td>Unknown</td>
+    {% elif key != 'platform' -%}
         <td>
             <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
             relay['platform']|truncate(length=10)|escape }}</a>
@@ -218,6 +282,9 @@
     {% else -%}
         <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
     {% endif -%}
+{%- endmacro %}
+
+{%- macro relay_row_tail(relay, table_has_ipv6) -%}
     {% if key != 'first_seen' -%}
         <td>
             <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
@@ -244,21 +311,13 @@
             unknown
         {% endif -%}
     </td>
-    {# PERF: IPv6 column uses pre-computed table_has_ipv6 flag (O(1) instead of O(n²)) #}
+    {# PERF: IPv6 address pre-computed in Python (relays.py _preprocess_template_data).
+       Jinja2 set-inside-for does not survive endfor, so the old in-template loop
+       always rendered N/A (scoping bug). #}
     {% if table_has_ipv6 -%}
     <td>
-        {% set ipv6_found = false -%}
-        {% set ipv6_addr = '' -%}
-        {% if relay.get('or_addresses') -%}
-            {% for addr in relay['or_addresses'] -%}
-                {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
-                    {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
-                    {% set ipv6_found = true -%}
-                {% endif -%}
-            {% endfor -%}
-        {% endif -%}
-        {% if ipv6_found -%}
-            {{ ipv6_addr|escape }}
+        {% if relay.get('ipv6_display_address') -%}
+            {{ relay['ipv6_display_address']|escape }}
         {% else -%}
             N/A
         {% endif -%}
@@ -267,14 +326,198 @@
 </tr>
 {%- endmacro %}
 
+{%- macro relay_row(relay, show_validation_icon=true, validation_icon_type=none, table_has_ipv6=false) -%}
+{% if relay_row_cache is defined %}{{ relay_row_cache(relay_row_head, relay, show_validation_icon, validation_icon_type, page_ctx.path_prefix, key, relays.use_bits, validated_fps, unauthorized_fps, misconfigured_fps, security_fps, pending_fps) }}{% else %}{{ relay_row_head(relay, show_validation_icon, validation_icon_type) }}{% endif %}{{ relay_row_tail(relay, table_has_ipv6) }}
+{%- endmacro %}
+
 {% if use_sections %}
+{% set full_contact_validation_status = contact_validation_status_full|default(contact_validation_status, true) %}
+{# =============================================================================
+   B5.3: v2 \u2192 v3 UPGRADE NUDGE for v2-only validated operators.
+   Rendered ONLY when:
+     - operator status == 'validated' (v2 setup is working today)
+     - v3_relay_count == 0 (haven't started migrating yet)
+     - has_aroi (operator declared AROI in the first place)
+   Goal: keep the migration funnel moving without nagging operators
+   with active issues.
+   ============================================================================= #}
+{%- set _summary = full_contact_validation_status.validation_summary -%}
+{%- if full_contact_validation_status.validation_status == 'validated'
+        and _summary.v3_relay_count == 0
+        and _summary.v2_relay_count > 0 %}
+{%- set _all_relays = (full_contact_validation_status.validated_relays or []) -%}
+{%- set _example_domain = (_all_relays[0].aroi_domain if _all_relays else 'yourdomain.com') -%}
+<div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; font-size: 13px;">
+    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #856404;">💡 Want to upgrade to ciissversion:3?</h3>
+    <p style="margin: 0 0 8px 0; color: #856404;">
+        All {{ _summary.v2_relay_count }} of your relays validate cleanly on CIISS v2 (RSA fingerprint proofs). The new <strong>CIISS v3</strong> spec replaces per-relay RSA proofs with a single shared ed25519 family-id proof — same url, one published file for the whole family.
+    </p>
+    <p style="margin: 0 0 6px 0; color: #856404;"><strong>To migrate, change torrc ContactInfo to:</strong></p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #ffe69c; border-radius: 3px; font-size: 12px; word-break: break-all;">ciissversion:3 url:{{ _example_domain|escape }} proof:uri-familyid-ed25519</code>
+    <p style="margin: 8px 0 6px 0; color: #856404;"><strong>And on a secure host, generate the happy-family key:</strong></p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #ffe69c; border-radius: 3px; font-size: 12px;">tor --keygen-family /path/to/myfamily   # then deploy myfamily.secret_family_key to every relay's KeyDir</code>
+    <p style="margin: 8px 0 0 0; font-size: 12px; color: #856404;">
+        Publish <code>.public_family_id</code> at <code>/.well-known/tor-relay/ed25519-family-id.txt</code>.
+        Allow ~24h after restarting Tor for Onionoo to refresh family_ids.
+        Full guide: <a href="https://github.com/1aeo/aroivalidator#operator-setup-guide-building-a-ciissversion3-aroi-from-scratch" target="_blank" rel="noopener">aroivalidator setup guide</a>.
+    </p>
+</div>
+{%- endif %}
+
+{# =============================================================================
+   B1.4: PER-OPERATOR ERROR ROLLUP TABLE
+   For operators with >= 3 failing relays, render a small grouped summary
+   so they see the "what's wrong" pattern at a glance without scanning
+   each per-relay detail box. Sourced from each operator's OWN
+   error_category counts; does not duplicate the network-wide rollup
+   that B2.4 will surface on the dashboard.
+   ============================================================================= #}
+{# Dedupe by fingerprint: pending_onionoo_relays is intentionally
+   dual-bucketed into misconfigured_relays for cascade purposes, and a
+   secret-key-leaked relay also lands in misconfigured. Naïvely
+   concatenating those four lists therefore double- or triple-counts
+   the same relay in this rollup table and inflates the
+   "N affected" header. Fix: collect unique relay objects keyed by
+   fingerprint before counting. #}
+{%- set _all_error_relays = (full_contact_validation_status.unauthorized_relays or [])
+    + (full_contact_validation_status.misconfigured_relays or [])
+    + (full_contact_validation_status.pending_onionoo_relays or [])
+    + (full_contact_validation_status.security_incident_relays or []) -%}
+{%- set _seen_fps = namespace(s=[]) -%}
+{%- set error_relays = [] -%}
+{%- for r in _all_error_relays -%}
+    {%- set _fp = r.fingerprint -%}
+    {%- if _fp and _fp not in _seen_fps.s -%}
+        {%- set _ = _seen_fps.s.append(_fp) -%}
+        {%- set _ = error_relays.append(r) -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- if error_relays|length >= 3 -%}
+    {%- set ns = namespace(rollup={}) -%}
+    {%- for r in error_relays -%}
+        {%- set cat = r.error_category or 'unknown' -%}
+        {%- if cat in ns.rollup -%}
+            {%- set _ = ns.rollup.update({cat: ns.rollup[cat] + 1}) -%}
+        {%- else -%}
+            {%- set _ = ns.rollup.update({cat: 1}) -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {%- if ns.rollup -%}
+<div style="margin-top: 30px; padding: 15px; background-color: #f8f9fa; border-left: 3px solid #6c757d; border-radius: 4px;">
+    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057;">📋 Issues Across This Operator's Relays ({{ error_relays|length }} affected)</h3>
+    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <th style="text-align: left; padding: 4px 6px;">Issue</th>
+                <th style="text-align: right; padding: 4px 6px;">Affected relays</th>
+            </tr>
+        </thead>
+        <tbody>
+        {%- for cat, count in ns.rollup|dictsort(by='value', reverse=true) %}
+            <tr style="border-bottom: 1px solid #f1f3f5;">
+                <td style="padding: 4px 6px;">{{ cat|replace('_', ' ')|capitalize|escape }}</td>
+                <td style="text-align: right; padding: 4px 6px;"><strong>{{ count }}</strong></td>
+            </tr>
+        {%- endfor %}
+        </tbody>
+    </table>
+    <p style="margin: 8px 0 0 0; color: #6c757d; font-size: 11px;">See per-relay details with pasteable fix examples in the sections below.</p>
+</div>
+    {%- endif -%}
+{%- endif %}
+
+{{ relay_table_start() }}
+
+{# =============================================================================
+   B1.1: PEER ISSUE SECTIONS (rendered above the cascade so urgent
+   problems surface first regardless of operator-level status).
+   ============================================================================= #}
+
+{# PEER 1: Security incident (highest urgency) — leaked .secret_family_key. #}
+{% if contact_validation_status.security_incident_relays %}
+{% set sec_relays = full_contact_validation_status.security_incident_relays|map(attribute='relay')|list %}
+{% set sec_has_ipv6 = sec_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or sec_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{{ aroi_section_header('SECURITY INCIDENT — ROTATE FAMILY KEY', contact_validation_status.security_incident_relays|length, 'security_incident') }}
+<table class="table table-condensed" style="border-left: 4px solid #c82333;">
+{{ relay_table_header(sec_has_ipv6) }}
+<tbody>
+    {% for relay_info in contact_validation_status.security_incident_relays -%}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='security_incident', table_has_ipv6=sec_has_ipv6) }}
+    {% endfor -%}
+</tbody>
+</table>
+{{ aroi_relay_detail_box(contact_validation_status.security_incident_relays, 'security_incident', page_ctx, aroi_validation_timestamp) }}
+</div>
+{% endif %}
+
+{# PEER 2: Pending Onionoo refresh — transient (< 24h after torrc change). #}
+{% if contact_validation_status.pending_onionoo_relays %}
+{% set pend_relays = full_contact_validation_status.pending_onionoo_relays|map(attribute='relay')|list %}
+{% set pend_has_ipv6 = pend_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or pend_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{{ aroi_section_header('PENDING ONIONOO REFRESH', contact_validation_status.pending_onionoo_relays|length, 'pending_onionoo') }}
+<table class="table table-condensed" style="border-left: 3px dotted #17a2b8;">
+{{ relay_table_header(pend_has_ipv6) }}
+<tbody>
+    {% for relay_info in contact_validation_status.pending_onionoo_relays -%}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='pending_onionoo', table_has_ipv6=pend_has_ipv6) }}
+    {% endfor -%}
+</tbody>
+</table>
+{{ aroi_relay_detail_box(contact_validation_status.pending_onionoo_relays, 'pending_onionoo', page_ctx, aroi_validation_timestamp) }}
+</div>
+{% endif %}
+
+{# PEER 3: v3 migration summary — informational. Operator has both v2
+   and v3 declarations. Help text shows pasteable v3 example using the
+   operator's actual url so they can finish the migration. #}
+{% if full_contact_validation_status.validation_summary.is_mixed_migration %}
+{%- set summary = full_contact_validation_status.validation_summary -%}
+{# Pull aroi_domain from validation_status (parent template variable name
+   differs between contact.html and family.html contexts). #}
+{%- set _all_validated_or_failed = (full_contact_validation_status.validated_relays or [])
+    + (full_contact_validation_status.unauthorized_relays or [])
+    + (full_contact_validation_status.misconfigured_relays or []) -%}
+{%- set _example_domain = (_all_validated_or_failed[0].aroi_domain if _all_validated_or_failed else 'yourdomain.com') -%}
+{{ aroi_section_header('v2 → v3 MIGRATION IN PROGRESS', summary.v3_relay_count|string + '/' + summary.total_relays|string + ' on v3', 'v3_migration') }}
+<div style="padding: 15px; background-color: #d1ecf1; border-left: 3px dotted #007bff; border-radius: 4px; font-size: 13px;">
+    {# B1.1 (final): per-version success-rate pills side-by-side, as plan
+       called for. Visualizes where each version is failing for THIS
+       operator (e.g. v2 100% but v3 25% means v3 setup not yet propagated). #}
+    <div style="margin-bottom: 10px;">
+        <span style="display: inline-block; padding: 4px 10px; background-color: #fff; border: 1px solid #6c757d; border-radius: 3px; margin-right: 8px;">
+            <strong style="color: #495057;">v2:</strong>
+            <span style="color: #28a745;">{{ summary.v2_validated_count }}</span> /
+            {{ summary.v2_relay_count }}
+            <small style="color: #6c757d;">({{ '%.0f'|format(summary.v2_success_rate) }}%)</small>
+        </span>
+        <span style="display: inline-block; padding: 4px 10px; background-color: #fff; border: 1px solid #007bff; border-radius: 3px;">
+            <strong style="color: #007bff;">v3:</strong>
+            <span style="color: #28a745;">{{ summary.v3_validated_count }}</span> /
+            {{ summary.v3_relay_count }}
+            <small style="color: #6c757d;">({{ '%.0f'|format(summary.v3_success_rate) }}%)</small>
+        </span>
+    </div>
+    <p style="margin: 0 0 8px 0;">
+        <strong>{{ '%.0f'|format(summary.v3_pct_of_total) }}%</strong> of this operator's relays already declare ciissversion:3
+        ({{ summary.v3_relay_count }} of {{ summary.total_relays }}).
+        Tier: <strong>{{ summary.v3_tier|capitalize }}</strong>.
+    </p>
+    <p style="margin: 0 0 8px 0;">To finish the migration, change v2 relays' ContactInfo to:</p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #b8daff; border-radius: 3px; font-size: 12px;">ciissversion:3 url:{{ _example_domain|escape }} proof:uri-familyid-ed25519</code>
+    <p style="margin: 8px 0 0 0; color: #0c5460; font-size: 12px;">
+        💡 The same url and family key apply across all relays — one shared proof, not per-relay RSA fingerprints.
+    </p>
+</div>
+</div>
+{% endif %}
+
 {# =============================================================================
    4-SECTION LAYOUT (for operators with AROI: validated/unauthorized/misconfigured)
    ============================================================================= #}
 
 {# SECTION 1: Validated Relays (Green border) #}
 {% if contact_validation_status.validated_relays %}
-{% set section1_relays = contact_validation_status.validated_relays|map(attribute='relay')|list %}
+{% set section1_relays = full_contact_validation_status.validated_relays|map(attribute='relay')|list %}
 {% set section1_has_ipv6 = section1_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section1_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('VALIDATED RELAYS', contact_validation_status.validated_relays|length, 'validated') }}
 <table class="table table-condensed" style="border-left: 3px solid #28a745;">
@@ -290,7 +533,7 @@
 
 {# SECTION 2: Misconfigured Relays (Yellow border) #}
 {% if contact_validation_status.misconfigured_relays %}
-{% set section2_relays = contact_validation_status.misconfigured_relays|map(attribute='relay')|list %}
+{% set section2_relays = full_contact_validation_status.misconfigured_relays|map(attribute='relay')|list %}
 {% set section2_has_ipv6 = section2_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section2_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('MISCONFIGURED RELAYS', contact_validation_status.misconfigured_relays|length, 'misconfigured') }}
 <table class="table table-condensed" style="border-left: 3px solid #ffc107;">
@@ -307,7 +550,7 @@
 
 {# SECTION 3: Unauthorized Relays (Red dashed border) #}
 {% if contact_validation_status.unauthorized_relays %}
-{% set section3_relays = contact_validation_status.unauthorized_relays|map(attribute='relay')|list %}
+{% set section3_relays = full_contact_validation_status.unauthorized_relays|map(attribute='relay')|list %}
 {% set section3_has_ipv6 = section3_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section3_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('UNAUTHORIZED RELAYS', contact_validation_status.unauthorized_relays|length, 'unauthorized') }}
 <table class="table table-condensed" style="border-left: 3px dashed #dc3545;">
@@ -325,7 +568,8 @@
 {# SECTION 4: Not Configured Relays (Gray border) - includes incomplete_relays + not_configured_relays #}
 {% set not_configured_combined = (contact_validation_status.incomplete_relays or []) + (contact_validation_status.not_configured_relays or []) %}
 {% if not_configured_combined %}
-{% set section4_relays = not_configured_combined|map(attribute='relay')|list %}
+{% set full_not_configured_combined = (full_contact_validation_status.incomplete_relays or []) + (full_contact_validation_status.not_configured_relays or []) %}
+{% set section4_relays = full_not_configured_combined|map(attribute='relay')|list %}
 {% set section4_has_ipv6 = section4_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section4_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('NOT CONFIGURED RELAYS', not_configured_combined|length, 'not_configured') }}
 <table class="table table-condensed" style="border-left: 3px solid #6c757d;">
@@ -345,8 +589,9 @@
    SINGLE TABLE LAYOUT (original behavior for operators without AROI)
    DRY: Reuses relay_table_header and relay_row macros
    ============================================================================= #}
+{{ relay_table_start() }}
 {% set relay_list = relay_subset[:500] if is_index else relay_subset %}
-{% set single_table_has_ipv6 = relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{% set single_table_has_ipv6 = group_has_ipv6 if group_has_ipv6 is defined else (relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0) %}
 <table class="table table-condensed">
 {{ relay_table_header(single_table_has_ipv6) }}
 <tbody>
@@ -356,6 +601,8 @@
 </tbody>
 </table>
 {% endif %}
+
+{% include "pagination.html" %}
 
 {# Additional content block for child templates to add content after the table #}
 {% block after_table %}{% endblock %}
