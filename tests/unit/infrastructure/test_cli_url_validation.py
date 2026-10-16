@@ -19,6 +19,20 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 ALLIUM_DIR = PROJECT_ROOT / "allium"
 _CLI_MODULE = None
+_ADDED_MODULES = []
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _drop_modules_loaded_by_the_cli():
+    """allium.py imports `lib.*` from its own directory.
+
+    Leaving that package in sys.modules publishes the real data paths and
+    fails the worker cache-isolation scan. Drop only the modules this file
+    loaded.
+    """
+    yield
+    for name in _ADDED_MODULES:
+        sys.modules.pop(name, None)
 
 
 def _load_allium_cli_module():
@@ -32,6 +46,7 @@ def _load_allium_cli_module():
     inserted = allium_dir not in sys.path
     if inserted:
         sys.path.insert(0, allium_dir)
+    before = set(sys.modules)
     try:
         spec = importlib.util.spec_from_file_location("allium_cli_module", allium_cli)
         module = importlib.util.module_from_spec(spec)
@@ -40,6 +55,7 @@ def _load_allium_cli_module():
     finally:
         if inserted:
             sys.path.remove(allium_dir)
+        _ADDED_MODULES.extend(name for name in sys.modules if name not in before)
     _CLI_MODULE = module
     return module
 
