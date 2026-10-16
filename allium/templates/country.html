@@ -7,7 +7,8 @@
 {% else %}
     {% set country_name = country_orig %}
 {% endif %}
-{% block title %}Tor Relays :: {{ country_name }}{% endblock %}
+{% block title %}Tor Relays in {{ country_name }}{% endblock %}
+{% block meta_description %}Live metrics for {{ group_relay_count }} Tor relays in {{ country_name }}: bandwidth, consensus weight, roles, operators, networks, and DNS health.{% endblock %}
 {% block header %}View {{ country_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('countries', page_ctx) }}

@@ -9,11 +9,10 @@ import statistics
 
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
-from .time_utils import parse_onionoo_timestamp, create_time_thresholds
+from .time_utils import parse_onionoo_timestamp, create_time_thresholds, ONIONOO_HISTORY_PERIODS
 from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
-from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
 from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count
 
 
@@ -120,11 +119,15 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
         'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
         'exit_dns_health_socks_error', 'exit_dns_health_network_error',
+        # Exit DNS upstream resolver coverage (None when the report has no resolver data)
+        'exit_dns_health_resolver_exits_total', 'exit_dns_health_resolver_exits_covered',
+        'exit_dns_health_resolver_exits_labelled', 'exit_dns_health_resolver_exits_using_public',
     ]
-    
+
     for key in integer_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:,}"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:,}" if value is not None else "n/a"
     
     # Format all percentage values with 1 decimal place (12+ format operations eliminated)
     percentage_format_keys = [
@@ -160,8 +163,16 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
         'hf_ready_cw_percentage', 'hf_some_operators_percentage',
         'hf_all_operators_percentage', 'hf_not_ready_relays_percentage',
+        # Exit DNS upstream resolver shares (None when the report has no resolver data)
+        'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
+        'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
+        'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_unknown_percentage',
     ]
-    
+
     # Add 1_month period formatting keys (used directly in templates) 
     roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
     stat_types = ['mean', 'median']
@@ -171,7 +182,13 @@ def preformat_network_health_template_strings(health_metrics):
     
     for key in percentage_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:.1f}%"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:.1f}%" if value is not None else "n/a"
+
+    # Resolver shares are rounded together, so All Public + Local + Other + Unknown show 100.0%
+    from .exit_dns_health import resolver_share_tenths
+    for key, tenths in (resolver_share_tenths(health_metrics) or {}).items():
+        health_metrics[f'{key}_formatted'] = f"{tenths / 10:.1f}%"
     
     # Format uptime time series data (4+ format operations eliminated)
     # Using consistent naming pattern: {role}_uptime_{period}_mean
@@ -563,7 +580,7 @@ def calculate_network_health_metrics(relay_set):
         'exit_percentage': _pct(network_totals['exit_count'], total_relays_count)
     }
     
-    # OPTIMIZED: Reuse cached unique families count from _calculate_and_cache_family_statistics()
+    # OPTIMIZED: Reuse cached unique families count from categorization.calculate_and_cache_family_statistics()
     # This eliminates duplicate deduplication loops for better performance
     health_metrics['families_count'] = relay_set.json.get('family_statistics', {}).get('unique_families_count', 0)
     
@@ -624,7 +641,7 @@ def calculate_network_health_metrics(relay_set):
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
     network_total_data = exit_total_data = guard_total_data = middle_total_data = 0
-    network_total_data_by_period = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+    network_total_data_by_period = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -1416,7 +1433,7 @@ def calculate_network_health_metrics(relay_set):
             ('hsdir',     'HSDir',     network_flag_statistics),
         ]
         
-        for period in ['1_month', '6_months', '1_year', '5_years']:
+        for period in ONIONOO_HISTORY_PERIODS:
             for role, flag_key, source in uptime_sources:
                 # Flag-based: source[flag_key][period], non-flag: source[period]
                 period_stats = (source.get(flag_key, {}).get(period, {})
@@ -1435,7 +1452,7 @@ def calculate_network_health_metrics(relay_set):
         health_metrics['uptime_percentiles'] = None
         
         # REFACTORED: Consistent fallback initialization using unified pattern
-        uptime_periods = ['1_month', '6_months', '1_year', '5_years']
+        uptime_periods = ONIONOO_HISTORY_PERIODS
         roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
         stat_types = ['mean', 'median']
         

@@ -12,7 +12,8 @@ Each API source is classified by freshness:
 """
 
 import logging
-import time
+
+from .time_utils import format_timestamp_gmt
 
 logger = logging.getLogger(__name__)
 
@@ -326,10 +327,14 @@ def _format_time_ago(seconds):
 
 
 def _format_timestamp(epoch_time):
-    """Format epoch timestamp to GMT string."""
+    """Format epoch timestamp to GMT string.
+
+    Thin wrapper over time_utils.format_timestamp_gmt — this page uses an
+    ISO-style display format instead of the HTTP-header default.
+    """
     if epoch_time is None:
         return "N/A"
-    return time.strftime("%Y-%m-%d %H:%M:%S GMT", time.gmtime(epoch_time))
+    return format_timestamp_gmt(epoch_time, fmt="%Y-%m-%d %H:%M:%S GMT")
 
 
 # ============================================================================

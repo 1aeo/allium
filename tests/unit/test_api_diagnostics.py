@@ -1383,3 +1383,274 @@ class TestDashboardTileValidityAccuracy:
         assert 'ciissversion_validated' in m
         assert isinstance(m['ciissversion_declared'], dict)
         assert isinstance(m['ciissversion_validated'], dict)
+
+
+# ============================================================================
+# Option A: friendlier display name for incomplete-AROI fallback rows
+# ============================================================================
+
+
+class TestIncompleteAROIDisplayName:
+    """Option A: leaderboard rows for relays with a parseable url: token
+    but failed AROI parsing now render as '<domain> (incomplete AROI)'
+    instead of a truncated raw blob."""
+
+    def _name(self, contact, contact_hash='aaaaaaaa') -> str:
+        from allium.lib.aroileaders import _incomplete_aroi_display_name
+        return _incomplete_aroi_display_name(contact, contact_hash)
+
+    def test_url_token_extracted_and_tagged(self):
+        # The actual real-world case: 60 1aeo relays missing
+        # ciissversion. Display must surface their AROI domain.
+        result = self._name(
+            'email:tor[]1aeo.com url:https://www.1aeo.com '
+            'proof:uri-familyid-ed25519 abuse:abuse[]1aeo.com',
+        )
+        assert result == '1aeo.com (incomplete AROI)'
+
+    def test_bare_url_token_normalised(self):
+        result = self._name('contact:foo url:bar.example')
+        assert result == 'bar.example (incomplete AROI)'
+
+    def test_falls_back_to_email_or_name_when_no_url(self):
+        result = self._name(
+            'Brandon Kuschel <tor AT NOSPAM brandonkuschel dot com>'
+        )
+        assert '(incomplete AROI)' not in result
+        # Falls back through extract_contact_display_name.
+        assert 'brandonkuschel' in result.lower()
+
+    def test_empty_contact_uses_hash_fallback(self):
+        result = self._name(None, 'deadbeef00')
+        assert result == 'contact_deadbeef'
+
+    def test_truncates_when_no_url_no_email_no_name(self):
+        long_contact = 'random_unparseable_blob_of_text_far_too_long_for_a_display_name'
+        result = self._name(long_contact)
+        # Truncated to 30 chars + '...' = 33 total (cascade 3).
+        assert len(result) == 33
+        assert result.endswith('...')
+
+    def test_url_with_path_drops_path(self):
+        result = self._name('email:foo[]bar.com url:https://bar.com/some/path?q=1')
+        assert result == 'bar.com (incomplete AROI)'
+
+
+# ============================================================================
+# Option B: incomplete-AROI sibling map + per-operator count
+# ============================================================================
+
+
+class TestIncompleteAROISiblingMap:
+    """Option B: two clearly-labelled buckets of incomplete-AROI relays
+    on the validated operator's detail page:
+      - authenticated_family: relays in mutual effective_family
+      - url_claim: relays self-asserting url:<this-domain> but NOT
+        in effective_family (operator gets visibility into spoofing
+        attempts and missing-family own-relays alike).
+    The contact-page template renders these under DISTINCT headings
+    with the second one explicitly labelled 'Self-asserted ... claims
+    (unverified)' so visitors don't conflate them with authenticated
+    relays. Importantly: neither bucket affects the operator's
+    validated metrics, bandwidth totals, relay counts, etc."""
+
+    def test_authenticated_family_bucket(self):
+        """Incomplete relay in validated relay's effective_family
+        lands in the authenticated_family bucket."""
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                {'fingerprint': 'A' * 40, 'aroi_configured': True,
+                 'aroi_domain': '1aeo.com',
+                 'effective_family': ['B' * 40]},
+                {'fingerprint': 'B' * 40, 'aroi_configured': False,
+                 'effective_family': ['A' * 40],
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519'},
+            ]
+        }
+        siblings = _build_incomplete_aroi_sibling_map(rs)
+        bucket = siblings.get('1aeo.com', {})
+        assert bucket.get('authenticated_family') == ['B' * 40]
+        # B was attributed via family, NOT also as a url_claim
+        # (we partition: family wins).
+        assert bucket.get('url_claim') == []
+
+    def test_url_claim_bucket_keeps_unauthenticated_claims(self):
+        """A relay claiming url:victim.example WITHOUT mutual family
+        declaration lands in the url_claim bucket, NOT the
+        authenticated_family bucket. The operator gets visibility
+        into the unverified claim (could be misconfig OR spoofing)
+        without being told this relay is authenticated."""
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                {'fingerprint': 'V' * 40, 'aroi_configured': True,
+                 'aroi_domain': 'victim.example', 'effective_family': []},
+                {'fingerprint': 'R' * 40, 'aroi_configured': False,
+                 'effective_family': [],
+                 'contact': 'url:victim.example proof:uri-familyid-ed25519'},
+            ]
+        }
+        siblings = _build_incomplete_aroi_sibling_map(rs)
+        bucket = siblings.get('victim.example', {})
+        # The unverified claim is preserved (operator wants visibility)
+        assert bucket.get('url_claim') == ['R' * 40]
+        # But NOT promoted to the authenticated bucket.
+        assert bucket.get('authenticated_family') == []
+
+    def test_buckets_are_partitioned_no_double_counting(self):
+        """A relay that's BOTH in the validated operator's family AND
+        publishes url:<domain> goes ONLY to authenticated_family."""
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                {'fingerprint': 'A' * 40, 'aroi_configured': True,
+                 'aroi_domain': '1aeo.com',
+                 'effective_family': ['B' * 40]},
+                {'fingerprint': 'B' * 40, 'aroi_configured': False,
+                 'effective_family': ['A' * 40],
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519'},
+            ]
+        }
+        bucket = _build_incomplete_aroi_sibling_map(rs)['1aeo.com']
+        assert bucket['authenticated_family'] == ['B' * 40]
+        assert bucket['url_claim'] == []  # NOT double-counted
+
+    def test_validated_self_excluded(self):
+        from allium.lib.categorization import _build_incomplete_aroi_sibling_map
+        rs = MagicMock()
+        rs.json = {
+            'relays': [
+                {'fingerprint': 'A' * 40, 'aroi_configured': True,
+                 'aroi_domain': '1aeo.com',
+                 'effective_family': ['A' * 40, 'B' * 40]},
+                {'fingerprint': 'B' * 40, 'aroi_configured': True,
+                 'aroi_domain': '1aeo.com',
+                 'effective_family': ['A' * 40, 'B' * 40]},
+            ]
+        }
+        siblings = _build_incomplete_aroi_sibling_map(rs)
+        # Both validated -> no incomplete siblings to attribute.
+        assert siblings == {} or all(
+            not v.get('authenticated_family') and not v.get('url_claim')
+            for v in siblings.values()
+        )
+
+    def test_calculate_contact_derived_data_populates_both_counts(self):
+        """End-to-end: contact_data carries SEPARATE counts for each
+        bucket, ready for contact.html to render distinct hints."""
+        from allium.lib.categorization import (
+            sort_relay, calculate_contact_derived_data,
+        )
+        rs = MagicMock()
+        base = {
+            'flags': [], 'observed_bandwidth': 100, 'consensus_weight': 1,
+            'consensus_weight_fraction': 0.0,
+            'guard_consensus_weight_fraction': 0.0,
+            'middle_consensus_weight_fraction': 0.0,
+            'exit_consensus_weight_fraction': 0.0,
+            'first_seen': '2025-01-01 00:00:00',
+            'country': 'US', 'platform': 'Linux',
+            'as': '111', 'as_name': '',
+        }
+        rs.json = {
+            'relays': [
+                {**base, 'fingerprint': 'A' * 40,
+                 'effective_family': ['B' * 40],
+                 'aroi_domain': '1aeo.com', 'aroi_configured': True,
+                 'contact': 'ciissversion:3 url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': '1aeohash'},
+                # Authenticated family member (in validated A's family).
+                {**base, 'fingerprint': 'B' * 40,
+                 'effective_family': ['A' * 40],
+                 'aroi_domain': 'none', 'aroi_configured': False,
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': 'famhash'},
+                # Unauthenticated url-claim relay (NOT in family).
+                {**base, 'fingerprint': 'R' * 40,
+                 'effective_family': [],
+                 'aroi_domain': 'none', 'aroi_configured': False,
+                 'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                 'contact_md5': 'rogue_hash'},
+            ],
+            'sorted': {'contact': {}},
+        }
+        sort_relay(rs, rs.json['relays'][0], 0, 'contact', '1aeohash', 1, 0.0)
+        rs.json['sorted']['contact']['1aeohash']['bandwidth'] = 100
+        calculate_contact_derived_data(rs)
+
+        cd = rs.json['sorted']['contact']['1aeohash']
+        assert cd.get('incomplete_family_count') == 1
+        assert 'B' * 40 in cd.get('incomplete_family_fingerprints', [])
+        assert cd.get('incomplete_url_claim_count') == 1
+        assert 'R' * 40 in cd.get('incomplete_url_claim_fingerprints', [])
+
+    def test_sibling_fingerprints_capped_at_25(self):
+        """The 25-fingerprint cap on the rendered list keeps operator
+        pages bounded even when many incomplete relays are attributable
+        to one operator. The total *count* still reflects all matches.
+
+        Note: an earlier review-round prompt referenced the obsolete
+        field names ``incomplete_sibling_count`` /
+        ``incomplete_sibling_fingerprints``. Those were renamed in the
+        Option B v2 commit which split the data into two distinct
+        buckets; this test uses the current names. The same ``[:25]``
+        cap is applied to ``incomplete_url_claim_fingerprints`` in the
+        production code, so testing the family bucket exercises the
+        cap logic for both."""
+        from allium.lib.categorization import (
+            sort_relay, calculate_contact_derived_data,
+        )
+        rs = MagicMock()
+        base = {
+            'flags': [], 'observed_bandwidth': 100, 'consensus_weight': 1,
+            'consensus_weight_fraction': 0.0,
+            'guard_consensus_weight_fraction': 0.0,
+            'middle_consensus_weight_fraction': 0.0,
+            'exit_consensus_weight_fraction': 0.0,
+            'first_seen': '2025-01-01 00:00:00',
+            'country': 'US', 'platform': 'Linux',
+            'as': '111', 'as_name': '',
+        }
+        # 30 incomplete sibling fingerprints (>25, exercises the cap).
+        sibling_fps = [f"{i:040X}" for i in range(30)]
+        validated = {
+            **base, 'fingerprint': 'A' * 40,
+            'effective_family': sibling_fps,
+            'aroi_domain': '1aeo.com', 'aroi_configured': True,
+            'contact': 'ciissversion:3 url:1aeo.com proof:uri-familyid-ed25519',
+            'contact_md5': '1aeohash',
+        }
+        # Each sibling mutually declares the validated relay (authenticated).
+        incomplete_relays = [
+            {
+                **base, 'fingerprint': fp,
+                'effective_family': ['A' * 40],
+                'aroi_domain': 'none', 'aroi_configured': False,
+                'contact': 'url:1aeo.com proof:uri-familyid-ed25519',
+                'contact_md5': f'sib_{i}',
+            }
+            for i, fp in enumerate(sibling_fps)
+        ]
+        rs.json = {
+            'relays': [validated] + incomplete_relays,
+            'sorted': {'contact': {}},
+        }
+        sort_relay(rs, validated, 0, 'contact', '1aeohash', 1, 0.0)
+        rs.json['sorted']['contact']['1aeohash']['bandwidth'] = 100
+        calculate_contact_derived_data(rs)
+
+        cd = rs.json['sorted']['contact']['1aeohash']
+        # Full count surfaces (all 30 incomplete family members).
+        assert cd.get('incomplete_family_count') == 30
+        # Rendered list is capped at exactly 25.
+        capped_fps = cd.get('incomplete_family_fingerprints', [])
+        assert len(capped_fps) == 25
+        # Every capped entry must be a real sibling fp — i.e. the cap
+        # selects a subset of the expected fingerprints rather than
+        # inventing or corrupting any.
+        expected_sibling_fingerprints = set(sibling_fps)
+        assert set(capped_fps).issubset(expected_sibling_fingerprints)

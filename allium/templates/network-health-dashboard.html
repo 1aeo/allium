@@ -6,6 +6,7 @@
 {% block title -%}
 Network Health Dashboard
 {% endblock -%}
+{% block meta_description %}Live Tor network health: relay counts, bandwidth, consensus weight, geographic and network diversity, versions, operators, and DNS status.{% endblock %}
 
 {% block body -%}
 
@@ -531,7 +532,12 @@ Network Health Dashboard
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" class="al-link-plain">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
-                <!-- NEW: Top 3 Countries by Consensus Weight -->
+                <!-- Concentration & Jurisdiction: these metrics measure how
+                     concentrated capacity is (geographically and by legal
+                     jurisdiction) — the network-level mirror of operator
+                     diversity, deliberately NOT labeled "diversity" -->
+                <div style="font-size: 0.85em; font-weight: bold; color: #666; margin: 8px 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px;" title="How concentrated the network's capacity is across countries and legal jurisdictions. Lower concentration = more resilient network.">Concentration &amp; Jurisdiction</div>
+                <!-- Top 3 Countries by Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     {% for country in relays.json.network_health.top_3_countries %}
                     <div class="metric-item" title="Country ranked #{{ country.rank }} by consensus weight concentration in the Tor network.">
@@ -557,15 +563,17 @@ Network Health Dashboard
                 </div>
                 <!-- Second Row: Five Eyes and Fourteen Eyes Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Total consensus weight held by relays in Five Eyes intelligence alliance countries (US, UK, CA, AU, NZ). Shows Five Eyes influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in Five Eyes intelligence alliance countries (US, UK, CA, AU, NZ). Measures jurisdictional concentration of network routing power.">
                         <span class="metric-value">{{ relays.json.network_health.jurisdiction_five_eyes }}%</span>
                         <span class="metric-label">Five Eyes Consensus Weight</span>
                     </div>
-                    <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Shows extended intelligence alliance influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Measures extended jurisdictional concentration of network routing power.">
                         <span class="metric-value">{{ relays.json.network_health.jurisdiction_fourteen_eyes }}%</span>
                         <span class="metric-label">Fourteen Eyes Consensus Weight</span>
                     </div>
                 </div>
+                <!-- Participation & Reach -->
+                <div style="font-size: 0.85em; font-weight: bold; color: #666; margin: 8px 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px;" title="Where operators and relay capabilities are located.">Participation &amp; Reach</div>
                 <!-- Top 3 Countries by Validated AROI Operators -->
                 {% if relays.json.network_health.top_3_aroi_countries %}
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
@@ -1013,6 +1021,79 @@ Network Health Dashboard
                         <span class="metric-label">Other Circuit</span>
                     </div>
                 </div>
+                {# Upstream resolvers: metadata.resolvers, absent in older reports and failed runs #}
+                {% set _nh = relays.json.network_health %}
+                {% if _nh.exit_dns_health_resolvers_available %}
+                <div style="font-size: 11px; color: #666; margin-top: 4px;" title="Estimated from sampled queries reaching the validator's authoritative DNS over recent scans (3.5-day half-life).">
+                    Upstream resolvers: estimated share of exit DNS lookups{% if _nh.exit_dns_health_resolver_weighted %}, weighted by exit probability{% elif _nh.exit_dns_health_resolver_weighted is sameas false %}, unweighted{% endif %}.
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
+                        <span class="metric-label">Exits Covered</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services. Every lookup is in exactly one of All Public, Local, Other and Unknown.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
+                        <span class="metric-label">All Public</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups resolved by the exit's own network or operator: local /24 + /22 + AS + operator (older reports: one local bucket, the exit's own address or origin AS).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
+                        <span class="metric-label">Local</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
+                        <span class="metric-label">Other</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
+                        <span class="metric-label">Unknown</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Google Public DNS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_google_percentage_formatted }}</span>
+                        <span class="metric-label">Google</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Cloudflare 1.1.1.1.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_cloudflare_percentage_formatted }}</span>
+                        <span class="metric-label">Cloudflare</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Quad9 (a lower bound: only Quad9's own networks are recognized).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_quad9_percentage_formatted }}</span>
+                        <span class="metric-label">Quad9</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via OpenDNS (Cisco Umbrella).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_opendns_percentage_formatted }}</span>
+                        <span class="metric-label">OpenDNS</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via Freifunk München public DNS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_ffmuc_percentage_formatted }}</span>
+                        <span class="metric-label">Freifunk München</span>
+                    </div>
+                </div>
+                {% if _nh.exit_dns_health_resolver_local_24_percentage is not none or _nh.exit_dns_health_resolver_local_22_percentage is not none or _nh.exit_dns_health_resolver_local_as_percentage is not none or _nh.exit_dns_health_resolver_local_operator_percentage is not none %}
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="metric-item" title="Resolver in the same IPv4 /24 or IPv6 /64 as the exit, including the exit's own address.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_24_percentage_formatted }}</span>
+                        <span class="metric-label">Local /24</span>
+                    </div>
+                    <div class="metric-item" title="Same IPv4 /22 or IPv6 /48 as the exit, but not the same /24 or /64.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_22_percentage_formatted }}</span>
+                        <span class="metric-label">Local /22</span>
+                    </div>
+                    <div class="metric-item" title="Same origin AS as the exit, outside its IPv4 /22 or IPv6 /48.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_as_percentage_formatted }}</span>
+                        <span class="metric-label">Local AS</span>
+                    </div>
+                    <div class="metric-item" title="Run by the same operator as the exit, but outside the exit's prefix and origin AS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_operator_percentage_formatted }}</span>
+                        <span class="metric-label">Local operator</span>
+                    </div>
+                </div>
+                {% endif %}
+                {% else %}
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Upstream resolvers: not available.</div>
+                {% endif %}
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">
                     Source: <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>.
                     Last scan: {{ relays.json.network_health.exit_dns_health_timestamp }}.
@@ -1030,4 +1111,4 @@ Network Health Dashboard
     
 </div>
 
-{% endblock -%} 
+{% endblock -%}

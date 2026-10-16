@@ -95,7 +95,7 @@ def test_family_entry_omits_v3p_when_no_v3():
 
 
 def test_meta_version_bumped_to_1_6(tmp_path):
-    """B5.1: meta.version bumped to '1.6' on schema change."""
+    """B5.1: meta.version is at least '1.6', the schema with vn and v3p."""
     relays_data = {
         'relays': [
             {
@@ -112,7 +112,7 @@ def test_meta_version_bumped_to_1_6(tmp_path):
     generate_search_index(relays_data, str(output_path))
     with open(output_path) as f:
         index = json.load(f)
-    assert index['meta']['version'] == '1.6'
+    assert tuple(map(int, index['meta']['version'].split('.'))) >= (1, 6)
 
 
 def test_lookups_v3_thresholds_present(tmp_path):

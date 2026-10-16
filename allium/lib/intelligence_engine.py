@@ -4,7 +4,6 @@ All calculations moved from Jinja2 templates to Python for maximum performance.
 """
 
 import statistics
-import math
 from .statistical_utils import StatisticalUtils
 
 class IntelligenceEngine:
@@ -50,11 +49,12 @@ class IntelligenceEngine:
         self.guard_network_ratio = self._calculate_cw_bw_ratio(self.guard_network_consensus_weight, self.guard_network_bandwidth)
         self.exit_network_ratio = self._calculate_cw_bw_ratio(self.exit_network_consensus_weight, self.exit_network_bandwidth)
         
-        # Pre-calculate underutilized fingerprints once (eliminates duplication)
-        self.underutilized_fingerprints = self._get_underutilized_fingerprints()
-        
-        # Pre-calculate network-wide relay ratios for percentile calculations once
-        self.all_relay_ratios, self.guard_relay_ratios, self.exit_relay_ratios = self._calculate_network_relay_ratios()
+        # Pre-calculate underutilized fingerprints and network-wide relay
+        # ratios for percentile calculations in ONE pass over all relays
+        (self.underutilized_fingerprints,
+         self.all_relay_ratios,
+         self.guard_relay_ratios,
+         self.exit_relay_ratios) = self._scan_relay_performance()
         
         # Calculate medians once (reused in multiple places)
         self.overall_network_median = self._calculate_median(self.all_relay_ratios)
@@ -69,29 +69,28 @@ class IntelligenceEngine:
         """Centralized CW/BW ratio calculation - eliminates duplication"""
         return consensus_weight / bandwidth * 1000000 if bandwidth > 0 else 0.0
         
-    def _get_underutilized_fingerprints(self):
-        """Centralized underutilized relay detection - eliminates duplication"""
+    def _scan_relay_performance(self):
+        """Single pass over all relays computing underutilized-relay detection
+        AND the network-wide CW/BW ratio lists (all/guard/exit) used for
+        percentile calculations - previously two separate full passes."""
         underutilized = set()
-        for relay in self.relays:
-            bandwidth = relay.get('observed_bandwidth', 0)
-            consensus_weight = relay.get('consensus_weight', 0)
-            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:
-                underutilized.add(relay.get('fingerprint', ''))
-        return underutilized
-        
-    def _calculate_network_relay_ratios(self):
-        """Pre-calculate all network relay ratios once - major optimization"""
         all_ratios, guard_ratios, exit_ratios = [], [], []
-        
+
         for relay in self.relays:
             bandwidth = relay.get('observed_bandwidth', 0)
             consensus_weight = relay.get('consensus_weight', 0)
-            flags = relay.get('flags', [])
+
+            # Underutilized: high bandwidth but disproportionately low weight
+            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:
+                fingerprint = relay.get('fingerprint')
+                if isinstance(fingerprint, str) and fingerprint:
+                    underutilized.add(fingerprint)
             
             if bandwidth > 0:
                 ratio = self._calculate_cw_bw_ratio(consensus_weight, bandwidth)
                 all_ratios.append(ratio)
                 
+                flags = relay.get('flags', [])
                 if 'Guard' in flags:
                     guard_ratios.append(ratio)
                 if 'Exit' in flags:
@@ -102,7 +101,7 @@ class IntelligenceEngine:
         guard_ratios.sort()
         exit_ratios.sort()
         
-        return all_ratios, guard_ratios, exit_ratios
+        return underutilized, all_ratios, guard_ratios, exit_ratios
     
     def _calculate_median(self, sorted_list):
         """Centralized median calculation using unified StatisticalUtils"""
@@ -172,7 +171,8 @@ class IntelligenceEngine:
                 'regional_concentration_tooltip': 'Regional analysis unavailable'
             }},
             'capacity_distribution': {'template_optimized': {
-                'gini_coefficient': '0.000', 'diversity_status': 'UNKNOWN',
+                'gini_coefficient': '0.000', 'capacity_spread_status': 'UNKNOWN',
+                'capacity_spread_phrase': 'insufficient data',
                 'exit_capacity_status': 'UNKNOWN', 'guard_capacity_percentage': '0.0',
                 'exit_capacity_percentage': '0.0', 'gini_tooltip': 'Gini coefficient calculation unavailable'
             }},
@@ -305,7 +305,7 @@ class IntelligenceEngine:
         
         # Use pre-computed underutilized relays
         template_values['underutilized_count'] = len(self.underutilized_fingerprints)
-        template_values['underutilized_fingerprints'] = list(self.underutilized_fingerprints)
+        template_values['underutilized_fingerprints'] = sorted(self.underutilized_fingerprints)
         
         # Use pre-computed network ratio
         template_values['efficiency_ratio'] = f"{self.overall_network_ratio:.2f}"
@@ -404,33 +404,53 @@ class IntelligenceEngine:
         """Layer 13: Capacity distribution analysis"""
         template_values = {}
         
-        # Gini coefficient calculation
-        consensus_weights = [relay.get('consensus_weight', 0) for relay in self.relays]
-        consensus_weights = [w for w in consensus_weights if w > 0]  # Remove zero weights
+        # Single pass: non-zero weights for Gini + guard/exit/total capacity
+        # (previously one list build + a re-filter + three separate sum() passes)
+        consensus_weights = []
+        guard_capacity = exit_capacity = total_capacity = 0
+        for relay in self.relays:
+            weight = relay.get('consensus_weight', 0)
+            total_capacity += weight
+            if weight > 0:
+                consensus_weights.append(weight)
+            flags = relay.get('flags', [])
+            if 'Guard' in flags:
+                guard_capacity += weight
+            if 'Exit' in flags:
+                exit_capacity += weight
         
         if len(consensus_weights) > 1:
             gini = self._calculate_gini_coefficient(sorted(consensus_weights))
             template_values['gini_coefficient'] = f"{gini:.3f}"
             
+            # capacity_spread_status: Gini measures INEQUALITY of capacity, not
+            # diversity (renamed from the misleading 'diversity_status').
+            # The verdict word carries the judgment; the shared tooltip always
+            # explains the Gini scale so "is high or low good?" is unambiguous.
+            gini_explainer = (
+                f"Gini coefficient {gini:.3f}. Measures how evenly network capacity is "
+                f"spread across relays: 0.0 = perfectly even (best), values approaching "
+                f"1.0 = maximally concentrated (worst). Lower is better. Under 0.4 = "
+                f"EXCELLENT spread, 0.4 to under 0.6 = GOOD, 0.6 and above = POOR "
+                f"(concentrated)."
+            )
             if gini < 0.4:
-                template_values['diversity_status'] = 'EXCELLENT'
-                template_values['gini_tooltip'] = 'Low inequality - excellent capacity distribution'
+                template_values['capacity_spread_status'] = 'EXCELLENT'
+                template_values['capacity_spread_phrase'] = 'capacity evenly spread across many relays'
             elif gini < 0.6:
-                template_values['diversity_status'] = 'GOOD'
-                template_values['gini_tooltip'] = 'Moderate inequality - good capacity distribution'
+                template_values['capacity_spread_status'] = 'GOOD'
+                template_values['capacity_spread_phrase'] = 'capacity reasonably spread across relays'
             else:
-                template_values['diversity_status'] = 'POOR'
-                template_values['gini_tooltip'] = 'High inequality - concentrated capacity distribution'
+                template_values['capacity_spread_status'] = 'POOR'
+                template_values['capacity_spread_phrase'] = 'a few relays hold most capacity'
+            template_values['gini_tooltip'] = gini_explainer
         else:
             template_values['gini_coefficient'] = '0.000'
-            template_values['diversity_status'] = 'UNKNOWN'
+            template_values['capacity_spread_status'] = 'UNKNOWN'
+            template_values['capacity_spread_phrase'] = 'insufficient data'
             template_values['gini_tooltip'] = 'Insufficient data for Gini calculation'
         
-        # Guard and Exit capacity analysis
-        guard_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays if 'Guard' in relay.get('flags', []))
-        exit_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays if 'Exit' in relay.get('flags', []))
-        total_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays)
-        
+        # Guard and Exit capacity analysis (computed in the single pass above)
         if total_capacity > 0:
             guard_percentage = (guard_capacity / total_capacity) * 100
             exit_percentage = (exit_capacity / total_capacity) * 100
@@ -606,7 +626,13 @@ class IntelligenceEngine:
                 else:
                     geo_rating = "Great"
                 
-                geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
+                # Q6 tweak (reviewer-approved): append the relay count so the
+                # country spread is readable in context, e.g.
+                # "Great, 14 countries (15 relays)"
+                geo_risk = (
+                    f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'} "
+                    f"({total_relays} relay{'' if total_relays == 1 else 's'})"
+                )
                 
                 # 4. Performance Insights - using pre-computed data
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
@@ -728,5 +754,5 @@ class IntelligenceEngine:
                     'infrastructure_risk': infra_risk,
                     'maturity': maturity
                 }
-        
-        return {'template_optimized': contact_intelligence} 
+
+        return {'template_optimized': contact_intelligence}

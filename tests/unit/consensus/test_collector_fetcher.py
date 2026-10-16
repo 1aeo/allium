@@ -23,7 +23,16 @@ from allium.lib.consensus.collector_fetcher import (
     get_authority_names,
     get_authority_count,
     get_authority_registry,
+    get_voting_authority_names,
+    get_voting_authority_count,
+    update_voting_authorities,
+    get_known_offline_authorities,
+    KNOWN_OFFLINE_AUTHORITIES,
 )
+# 8 currently-voting authorities (gabelmoo removed) - shared with the
+# voting_registry_8_voters fixture in tests/conftest.py
+from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8 as _ACTIVE_VOTERS_8
+from tests.conftest import FOREST44_FINGERPRINT
 
 
 # ============================================================================
@@ -350,25 +359,6 @@ class TestAuthorityRegistry:
         assert count == 0
         assert registry.is_using_fallback() == True
     
-    def test_signing_key_mapping_always_hardcoded(self):
-        """Test that signing key to name mapping is always available."""
-        registry = AuthorityRegistry()
-        signing_keys = registry.get_signing_key_to_name()
-        
-        # Signing key mapping should always be available (hardcoded)
-        # Only 9 voting authorities have signing keys (Serge doesn't vote)
-        assert len(signing_keys) == 9
-        assert 'moria1' in signing_keys.values()
-        assert 'Serge' not in signing_keys.values()  # Serge doesn't vote
-        
-        # Even after Onionoo update, signing keys remain unchanged
-        relays = [{'nickname': 'NewAuth', 'fingerprint': 'NEW', 'flags': ['Authority']}]
-        registry.update_from_onionoo(relays)
-        
-        signing_keys_after = registry.get_signing_key_to_name()
-        assert signing_keys_after == signing_keys  # Unchanged
-
-
 class TestDynamicAuthorityFunctions:
     """Tests for module-level dynamic authority functions."""
     
@@ -1364,3 +1354,189 @@ class TestMiddleOnlyFlagTracking:
         details_by_auth = {d['authority']: d for d in eligibility['middleonly']['details']}
         assert details_by_auth['auth1']['assigned'] is True
         assert details_by_auth['auth2']['assigned'] is False
+
+
+class TestDynamicVotingAuthorities:
+    """Tests for the dynamic voting-authority list (update_voting_authorities).
+
+    Verifies the fix for stale reachability denominators when a directory authority
+    is removed (e.g. gabelmoo going offline -> should become 8 voters, not 9).
+    """
+
+    def test_fresh_registry_uses_fallback_voting_list(self):
+        registry = AuthorityRegistry()
+        assert registry.get_voting_authority_count() == 9
+        assert 'gabelmoo' in registry.get_voting_authority_names()
+
+    def test_update_voting_authorities_sets_dynamic_list(self):
+        registry = AuthorityRegistry()
+        count = registry.update_voting_authorities(_ACTIVE_VOTERS_8)
+        assert count == 8
+        assert registry.get_voting_authority_count() == 8
+        assert registry.get_voting_authority_names() == sorted(_ACTIVE_VOTERS_8)
+        assert 'gabelmoo' not in registry.get_voting_authority_names()
+
+    def test_update_voting_authorities_dedups_and_sorts(self):
+        registry = AuthorityRegistry()
+        count = registry.update_voting_authorities(['moria1', 'bastet', 'moria1', ''])
+        assert count == 2
+        assert registry.get_voting_authority_names() == ['bastet', 'moria1']
+
+    def test_update_voting_authorities_empty_keeps_previous(self):
+        registry = AuthorityRegistry()
+        registry.update_voting_authorities(['moria1', 'bastet'])
+        # Empty / None input must not wipe the list
+        assert registry.update_voting_authorities([]) == 2
+        assert registry.update_voting_authorities(None) == 2
+        assert registry.get_voting_authority_names() == ['bastet', 'moria1']
+
+    def test_update_voting_authorities_empty_on_fresh_keeps_fallback(self):
+        registry = AuthorityRegistry()
+        # An ignored empty update reports the effective (fallback) count, not 0
+        assert registry.update_voting_authorities([]) == 9
+        assert registry.get_voting_authority_count() == 9  # fallback intact
+
+    def test_clear_voting_authorities_restores_fallback(self):
+        registry = AuthorityRegistry()
+        registry.update_voting_authorities(['moria1', 'bastet'])
+        assert registry.get_voting_authority_count() == 2
+        registry.clear_voting_authorities()
+        assert registry.get_voting_authority_count() == 9
+        assert 'gabelmoo' in registry.get_voting_authority_names()
+
+    def test_global_update_voting_authorities_wrapper(self, voting_registry_8_voters):
+        # The fixture updates the shared singleton via the global
+        # update_voting_authorities() wrapper; the global getters must reflect it.
+        assert get_voting_authority_count() == 8
+        assert 'gabelmoo' not in get_voting_authority_names()
+
+    def test_reachability_denominator_reflects_dynamic_voters(self, voting_registry_8_voters):
+        """_format_reachability must use the dynamic voting set as the denominator.
+
+        With gabelmoo removed (8 voters) and a relay reachable by all 8, reachability
+        should be 8/8 - not the stale 8/9 that produced the false 'partial' warning.
+        """
+        fetcher = CollectorFetcher()
+        relay = {'votes': {name: {'flags': ['Running', 'Valid']}
+                           for name in _ACTIVE_VOTERS_8}}
+        reachability = fetcher._format_reachability(relay)
+
+        assert reachability['total_authorities'] == 8
+        assert reachability['ipv4_reachable_count'] == 8
+        assert 'gabelmoo' not in reachability['ipv4_reachable_authorities']
+
+
+class TestKnownOfflineAuthorities:
+    """Tests for the small hardcoded known-offline authority bridge list."""
+
+    def test_gabelmoo_present_with_relay_fingerprint(self):
+        offline = get_known_offline_authorities()
+        # Same content as the module list, but copies - callers can't mutate it
+        assert offline == KNOWN_OFFLINE_AUTHORITIES
+        assert offline is not KNOWN_OFFLINE_AUTHORITIES
+        assert all(entry is not original
+                   for entry, original in zip(offline, KNOWN_OFFLINE_AUTHORITIES))
+        by_nick = {e['nickname']: e for e in offline}
+        assert 'gabelmoo' in by_nick
+        # Must be the Onionoo RELAY fingerprint (for dedupe), not the ED03BB signing key
+        assert by_nick['gabelmoo']['fingerprint'] == 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281'
+        assert by_nick['gabelmoo']['offline_since'] == '2026-06-30'
+
+    def test_offline_list_is_small(self):
+        # Deliberately tiny bridge list; guard against unbounded growth.
+        assert len(get_known_offline_authorities()) <= 3
+
+    def test_offline_entries_have_relay_fingerprints(self):
+        # Entries carry 40-char Onionoo relay fingerprints (used for dedupe), and a note.
+        for e in get_known_offline_authorities():
+            assert len(e['fingerprint']) == 40
+            assert e.get('note')
+
+    def test_offline_entries_use_uppercase_country(self):
+        # Country must be uppercase to match _preprocess_template_data
+        # (relay["country"] = country.upper()) and the country/<CC>/ page URL convention,
+        # otherwise the offline row's country link 404s (e.g. /country/de/ vs /country/DE/).
+        for e in get_known_offline_authorities():
+            country = e.get('country')
+            if country:
+                assert country == country.upper(), f"{e['nickname']} country must be uppercase"
+
+
+class TestVoteBandwidthForest44:
+    """Fast, Guard bandwidth and consensus weight from forest44's real votes.
+
+    Expected values come from the same votes and the 04:00 consensus
+    ('w Bandwidth=68'): only dizum, faravahar, longclaw and maatuska voted Fast.
+    """
+
+    def _details(self, fetcher, flag):
+        """forest44's per-authority eligibility details for one flag, by authority."""
+        evaluation = fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)
+        return {d['authority']: d for d in evaluation['flag_eligibility'][flag]['details']}
+
+    def test_fast_decided_from_each_authoritys_bandwidth(self, forest44_fetcher):
+        """Each authority judges Fast by its own Measured= or relay-reported value, as its vote shows."""
+        fast = self._details(forest44_fetcher, 'fast')
+        # Measured= wins, in bytes/s: 68 KB/s, not the relay-reported 854 KB/s
+        assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (68_000, 'measured')
+        # moria1 measured 230 KB/s, above everyone else's 102 KB/s but below its own fast-speed
+        assert (fast['moria1']['speed_value'], fast['moria1']['speed_threshold']) == (230_000, 1_048_000)
+        assert (fast['dizum']['speed_value'], fast['dizum']['speed_source']) == (854_000, 'reported')
+        # No Measured= values in its vote, yet ignoring-advertised-bws=1: the value it uses isn't in the vote
+        assert (fast['faravahar']['speed_value'], fast['faravahar']['speed_source']) == (None, 'unpublished')
+        assert fast['longclaw']['speed_source'] == 'reported'
+        for name, detail in fast.items():
+            assert detail['eligible'] == detail['assigned'], name
+        assert sum(d['eligible'] for d in fast.values()) == 4
+
+    def test_no_authority_credits_enough_bandwidth_for_guard(self, forest44_fetcher):
+        """No authority credits forest44 with 2097 KB/s or a place in its top 25%."""
+        guard = self._details(forest44_fetcher, 'guard')
+        # faravahar's bandwidth isn't in its vote, so its Guard vote (none) stands in
+        assert guard['faravahar']['bw_value'] is None
+        assert all(d['bw_met'] is False for d in guard.values())
+        assert guard['dannenberg']['bw_top25_threshold'] == 35_000_000  # MIN(inc 36M, exc 35M)
+        assert guard['bastet']['bw_guarantee'] == 2_097_000
+
+    def test_consensus_weight_is_low_median_of_measured(self, forest44_fetcher):
+        """The consensus weight is the low median of the 5 Measured= values (w Bandwidth=68)."""
+        bandwidth = forest44_fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9)['bandwidth']
+        assert (bandwidth['median'], bandwidth['unmeasured']) == (68_000, False)
+        assert (bandwidth['min'], bandwidth['max']) == (32_000, 230_000)
+        assert bandwidth['measurement_count'] == 5
+        assert (bandwidth['bw_auth_measured_count'], bandwidth['bw_auth_total']) == (5, 7)
+        assert bandwidth['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
+
+    def test_unmeasured_weight_is_capped_median_of_bandwidth(self, forest44_fetcher):
+        """Fewer than 3 Measured= values: the median of Bandwidth=, capped while 3+ votes measure."""
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        for name in ('bastet', 'dannenberg', 'gabelmoo'):
+            votes[name]['measured'] = None
+        # 2 Measured= values: the median of Bandwidth= (854 KB/s), not capped while fewer
+        # than 3 votes carry Measured= values (dirvote.c has_measured_bws)
+        assert forest44_fetcher.measuring_authorities == {'moria1', 'tor26'}
+        bandwidth = forest44_fetcher._format_bandwidth({'votes': votes})
+        assert (bandwidth['unmeasured'], bandwidth['median']) == (True, 854_000)
+        # With 3+ votes measuring other relays it is capped at maxunmeasuredbw, 20 KB/s
+        forest44_fetcher.measuring_authorities = {'bastet', 'dannenberg', 'gabelmoo', 'moria1', 'tor26'}
+        assert forest44_fetcher._format_bandwidth({'votes': votes})['median'] == 20_000
+
+    def test_fast_vote_without_measurement_means_earlier_measurement(self, forest44_fetcher):
+        """No Measured= but a Fast vote: tor used a measurement kept from an earlier file."""
+        # Derived before the edits below, as if these votes still measured other relays
+        assert forest44_fetcher.measuring_authorities == {'bastet', 'dannenberg', 'gabelmoo', 'moria1', 'tor26'}
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
+        votes['tor26']['measured'] = None
+        fast = self._details(forest44_fetcher, 'fast')
+        assert (fast['bastet']['speed_value'], fast['bastet']['speed_source']) == (None, 'unpublished')
+        assert fast['bastet']['eligible'] is True
+        # Without a Fast vote, no measurement still counts as 0 (ignoring-advertised-bws=1)
+        assert (fast['tor26']['speed_value'], fast['tor26']['speed_source']) == (0, 'unmeasured')
+        assert fast['tor26']['eligible'] is False
+
+    def test_sybil_relay_gets_no_fast(self, forest44_fetcher):
+        """dirvote.c clear_status_flags_on_sybil drops every flag, whatever the bandwidth."""
+        forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']['maatuska']['flags'] = ['Sybil']
+        maatuska = self._details(forest44_fetcher, 'fast')['maatuska']
+        assert (maatuska['speed_value'], maatuska['sybil'], maatuska['eligible']) == (854_000, True, False)

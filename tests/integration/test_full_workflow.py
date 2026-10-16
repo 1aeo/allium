@@ -5,6 +5,9 @@ import json
 import os
 import pytest
 import tempfile
+from types import SimpleNamespace
+
+from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
 import time
 import urllib.error
 from unittest.mock import patch, MagicMock
@@ -20,6 +23,41 @@ from allium.lib.relays import Relays
 pytestmark = [pytest.mark.slow, pytest.mark.integration]
 
 
+
+
+def _make_args(**overrides):
+    """argparse-like namespace matching allium.py's CLI surface (the
+    coordinator entry point has taken an args namespace since the CLI
+    refactor; these tests still used the ancient kwargs signature)."""
+    defaults = {
+        'output_dir': './output',
+        'onionoo_details_url': 'https://test.details.url',
+        'onionoo_uptime_url': 'https://test.uptime.url',
+        'onionoo_bandwidth_url': 'https://test.bandwidth.url',
+        'aroi_url': 'https://test.aroi.url/latest.json',
+        'exit_dns_health_url': 'https://test.dns.url/latest.json',
+        'bandwidth_cache_hours': 12,
+        'bandwidth_units': 'bytes',
+        'progress': False,
+        'enabled_apis': 'all',
+        'filter_downtime_days': 7,
+        'base_url': '',
+        'mp_workers': 4,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+def _fresh_response_factory(payload_bytes):
+    """Return a urlopen side_effect producing a FRESH mock per call:
+    payload once, then EOF - the production chunk loop reads until an
+    empty read, and each API worker makes its own urlopen call."""
+    def _factory(*args, **kwargs):
+        resp = MagicMock()
+        resp.read1.side_effect = [payload_bytes, b'']
+        return resp
+    return _factory
+
+
 class TestFullIntegrationFlow:
     """Test the complete integration flow from coordinator to workers to relays"""
     
@@ -27,10 +65,15 @@ class TestFullIntegrationFlow:
         """Test complete successful flow from coordinator through workers to relay processing"""
         # Mock onionoo data
         mock_onionoo_data = {
+            # The downtime filter measures last_seen from here
+            "relays_published": "2024-01-01 12:00:00",
             "relays": [
                 {
                     "nickname": "TestRelay1",
                     "fingerprint": "ABC123DEF456",
+                    # Relays._filter_and_fix_relays drops relays whose last_seen
+                    # is more than filter_downtime_days before relays_published
+                    "running": True,
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,
                     "consensus_weight_fraction": 0.001,
@@ -43,14 +86,23 @@ class TestFullIntegrationFlow:
                     "first_seen": "2023-01-01 12:00:00",
                     "last_seen": "2024-01-01 12:00:00",
                     "or_addresses": ["192.168.1.1:9001"],
+                    # Real onionoo /uptime document shape ({first, interval,
+                    # values}) - the mocked urlopen serves this same payload
+                    # to EVERY API endpoint, so the uptime worker/pipeline
+                    # parses it too; flat strings crash uptime processing
                     "uptime": {
-                        "1_month": "995",
-                        "1_year": "980"
+                        "1_month": {"first": "2023-12-01 00:00:00",
+                                    "interval": 3600,
+                                    "values": [995] * 60},
+                        "1_year": {"first": "2023-01-01 00:00:00",
+                                   "interval": 43200,
+                                   "values": [980] * 60}
                     }
                 },
                 {
-                    "nickname": "TestRelay2", 
+                    "nickname": "TestRelay2",
                     "fingerprint": "DEF456ABC123",
+                    "running": True,
                     "observed_bandwidth": 2000000,
                     "consensus_weight": 1000,
                     "consensus_weight_fraction": 0.002,
@@ -68,17 +120,21 @@ class TestFullIntegrationFlow:
             "version": "1.0"
         }
         
-        # Use consolidated test utilities for mock HTTP response
-        mock_response = TestPatchingHelpers.create_mock_http_response(mock_onionoo_data)
+        mock_urlopen_factory = _fresh_response_factory(
+            json.dumps(mock_onionoo_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = os.path.join(temp_dir, "output")
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory):
                         with patch('builtins.print'):  # Suppress progress output
                             
                             # Create cache directory since workers expect it to exist
@@ -128,6 +184,7 @@ class TestFullIntegrationFlow:
                 {
                     "nickname": "CachedRelay",
                     "fingerprint": "CACHED123",
+                    "running": True,  # keeps relay past the downtime filter
                     "observed_bandwidth": 500000,
                     "consensus_weight": 250,
                     "flags": ["Running", "Valid"],
@@ -139,6 +196,7 @@ class TestFullIntegrationFlow:
                     "or_addresses": ["192.168.1.100:9001"]
                 }
             ],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "cached"
         }
         
@@ -153,8 +211,12 @@ class TestFullIntegrationFlow:
             with open(cache_file, 'w') as f:
                 json.dump(cached_data, f)
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
                     # Simulate network error
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
                         with patch('builtins.print'):  # Suppress output
@@ -167,10 +229,13 @@ class TestFullIntegrationFlow:
                             assert len(relay_set.json["relays"]) == 1
                             assert relay_set.json["relays"][0]["nickname"] == "CachedRelay"
                             
-                            # Worker should be marked as stale
+                            # Current design (_fetch_with_cache_fallback):
+                            # a successful cache fallback marks the worker
+                            # "ready" - "stale" is reserved for failures with
+                            # NO usable data (see test_end_to_end_flow_complete_failure)
                             status = get_worker_status("onionoo_details")
-                            assert status["status"] == "stale"
-                            assert "Network error" in status["error"]
+                            assert status["status"] == "ready"
+                            assert status["error"] is None
     
     def test_end_to_end_flow_complete_failure(self):
         """Test flow when both network and cache fail"""
@@ -179,8 +244,12 @@ class TestFullIntegrationFlow:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
                     # Simulate network error with no cache
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
                         with patch('builtins.print'):  # Suppress output
@@ -202,6 +271,7 @@ class TestBackwardsCompatibilityIntegration:
                 {
                     "nickname": "CompatRelay",
                     "fingerprint": "COMPAT123",
+                    "running": True,  # keeps relay past the downtime filter
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,
                     "flags": ["Running", "Valid"],
@@ -216,27 +286,26 @@ class TestBackwardsCompatibilityIntegration:
             "version": "1.0"
         }
         
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_onionoo_data).encode('utf-8')
+        mock_urlopen_factory = _fresh_response_factory(json.dumps(mock_onionoo_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = os.path.join(temp_dir, "output")
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory):
                         with patch('builtins.print'):  # Suppress output
                             
                             # Use backwards compatibility function
                             relay_set = create_relay_set_with_coordinator(
-                                output_dir=output_dir,
-                                onionoo_details_url="https://test.details.url",
-                                onionoo_uptime_url="https://test.uptime.url",
-                                use_bits=True,
-                                progress=False
-                            )
+                                _make_args(output_dir=output_dir,
+                                           bandwidth_units='bits'))
                             
                             # Should work exactly like original
                             assert relay_set is not None
@@ -254,6 +323,7 @@ class TestBackwardsCompatibilityIntegration:
                 {
                     "nickname": "OriginalRelay",
                     "fingerprint": "ORIGINAL123",
+                    "running": True,  # keeps relay past the downtime filter
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,
                     "flags": ["Running", "Valid"],
@@ -268,17 +338,20 @@ class TestBackwardsCompatibilityIntegration:
             "version": "1.0"
         }
         
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_onionoo_data).encode('utf-8')
+        mock_urlopen_factory = _fresh_response_factory(json.dumps(mock_onionoo_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = os.path.join(temp_dir, "output")
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory):
                         with patch('builtins.print'):  # Suppress output
                             
                             # Create cache directory
@@ -287,12 +360,7 @@ class TestBackwardsCompatibilityIntegration:
                             # Use coordinator pattern instead of old direct constructor
                             from allium.lib.coordinator import create_relay_set_with_coordinator
                             relay_set = create_relay_set_with_coordinator(
-                                output_dir=output_dir,
-                                onionoo_details_url="https://test.details.url",
-                                onionoo_uptime_url="https://test.uptime.url",
-                                use_bits=False,
-                                progress=False
-                            )
+                                _make_args(output_dir=output_dir))
                             
                             # Should work exactly like before
                             assert relay_set is not None
@@ -307,6 +375,7 @@ class TestBackwardsCompatibilityIntegration:
                 {
                     "nickname": "InjectedRelay",
                     "fingerprint": "INJECTED123",
+                    "running": True,  # keeps relay past the downtime filter
                     "observed_bandwidth": 1000000,
                     "consensus_weight": 500,
                     "flags": ["Running", "Valid"],
@@ -366,16 +435,19 @@ class TestWorkerStateManagement:
             "version": "1.0"
         }
         
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+        mock_urlopen_factory = _fresh_response_factory(json.dumps(mock_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory):
                         with patch('builtins.print'):  # Suppress output
                             
                             # First coordinator call
@@ -401,45 +473,50 @@ class TestWorkerStateManagement:
                             )
                             
                             # Get status before second call
-                            status_summary = coordinator2.get_worker_status_summary()
-                            assert status_summary["worker_count"] >= 1
-                            assert status_summary["ready_count"] >= 1
+                            from allium.lib.workers import get_all_worker_status
+                            statuses = get_all_worker_status()
+                            assert len(statuses) >= 1
+                            assert sum(1 for s in statuses.values()
+                                       if s.get("status") == "ready") >= 1
                             
                             relay_set2 = coordinator2.get_relay_set()
                             assert relay_set2 is not None
     
-    def test_multiple_worker_status_tracking(self):
+    def test_multiple_worker_status_tracking(
+            self, isolated_worker_registry, consensus_evaluation_enabled,
+            successful_worker_backends):
         """Test that multiple workers are tracked correctly"""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
                     with patch('builtins.print'):  # Suppress output
-                        
-                        # Clear existing worker state for this test
-                        with patch('lib.workers._worker_status', {}):
-                            # Import and run multiple workers
-                            from allium.lib.workers import fetch_onionoo_uptime, fetch_collector_data, fetch_consensus_health
-                            
-                            # Run placeholder workers
-                            fetch_onionoo_uptime()
-                            fetch_collector_data()
-                            fetch_consensus_health()
-                            
-                            # Create coordinator and check status
-                            coordinator = Coordinator(
-                                output_dir=temp_dir,
-                                onionoo_details_url="https://test.details.url",
-                                onionoo_uptime_url="https://test.uptime.url",
-                                progress=True
-                            )
-                            summary = coordinator.get_worker_status_summary()
-                            
-                            assert summary["worker_count"] >= 3
-                            assert summary["ready_count"] >= 3
-                            assert summary["stale_count"] == 0
+                        # Import and run multiple workers
+                        from allium.lib.workers import (
+                            fetch_collector_consensus_data,
+                            fetch_consensus_health,
+                            fetch_onionoo_uptime,
+                            get_all_worker_status,
+                        )
+
+                        fetch_onionoo_uptime()
+                        fetch_collector_consensus_data()
+                        fetch_consensus_health()
+
+                        # Check worker status tracked by the module registry
+                        statuses = get_all_worker_status()
+
+                        assert len(statuses) >= 3
+                        assert sum(1 for s in statuses.values()
+                                   if s.get("status") == "ready") >= 3
+                        assert sum(1 for s in statuses.values()
+                                   if s.get("status") == "stale") == 0
 
 
 class TestErrorRecoveryIntegration:
@@ -451,8 +528,12 @@ class TestErrorRecoveryIntegration:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
                     # Simulate various types of errors
                     with patch('urllib.request.urlopen', side_effect=TimeoutError("Request timeout")):
                         with patch('builtins.print'):  # Suppress output
@@ -477,18 +558,21 @@ class TestErrorRecoveryIntegration:
         """Test scenarios where some operations succeed and others fail"""
         # Test successful fetch but failed relay creation
         mock_data = {"relays": [{"nickname": "TestRelay"}], "version": "1.0"}
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+        mock_urlopen_factory = _fresh_response_factory(json.dumps(mock_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory):
                         # Make Relays constructor fail
-                        with patch('lib.coordinator.Relays', side_effect=Exception("Relay creation failed")):
+                        with patch('allium.lib.coordinator.Relays', side_effect=Exception("Relay creation failed")):
                             with patch('builtins.print'):  # Suppress output
                                 
                                 # Create cache directory
@@ -522,8 +606,9 @@ class TestPerformanceAndCaching:
         """Test that caching reduces network calls on subsequent requests"""
         mock_data = {
             "relays": [{
-                "nickname": "CachedTestRelay", 
+                "nickname": "CachedTestRelay",
                 "fingerprint": "CACHE123",
+                "running": True,  # keeps relay past the downtime filter
                 "flags": ["Running", "Valid"],
                 "consensus_weight": 1000,
                 "observed_bandwidth": 500000,
@@ -533,19 +618,23 @@ class TestPerformanceAndCaching:
                 "contact": "cached@example.com",
                 "platform": "Tor 0.4.5.7 on Linux"
             }],
+            "relays_published": "2024-01-01 12:00:00",
             "version": "1.0"
         }
         
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+        mock_urlopen_factory = _fresh_response_factory(json.dumps(mock_data).encode('utf-8'))
         
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = os.path.join(temp_dir, "cache")
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.STATE_FILE', state_file):
-                    with patch('urllib.request.urlopen', return_value=mock_response) as mock_urlopen:
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir), \
+                 patch('allium.lib.workers._cache_manager',
+                       create_cache_manager(cache_dir)), \
+                 patch('allium.lib.workers._timestamp_manager',
+                       create_timestamp_manager(cache_dir)):
+                with patch('allium.lib.workers.STATE_FILE', state_file):
+                    with patch('urllib.request.urlopen', side_effect=mock_urlopen_factory) as mock_urlopen:
                         with patch('builtins.print'):  # Suppress output
                             
                             # Create cache directory

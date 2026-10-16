@@ -12,7 +12,6 @@ import json
 import os
 import sys
 import tempfile
-import types
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -72,6 +71,31 @@ TEST_AROI_URL = "https://test.aroi.url/validate"
 TEST_EXIT_DNS_HEALTH_URL = "https://test.exitdnshealth.url/latest.json"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
+# The 8 currently-voting directory authorities (gabelmoo removed) - alphabetical.
+# Shared by the dynamic voting-authority tests (collector fetcher, diagnostics).
+ACTIVE_VOTING_AUTHORITIES_8 = ['bastet', 'dannenberg', 'dizum', 'faravahar',
+                               'longclaw', 'maatuska', 'moria1', 'tor26']
+
+# Relay forest44 in the 2026-10-08 04:00 CollecTor votes, the case Roger Dingledine
+# answered on tor-relays ("Relay suddenly stopped relaying traffic", 2026-10-04).
+# Per authority: 's' flags, 'w' Bandwidth= and Measured= (KB/s), then its
+# flag-thresholds fast-speed, guard-bw-inc-exits, guard-bw-exc-exits (bytes/s)
+# and ignoring-advertised-bws. Bandwidth authorities faravahar and longclaw had an
+# empty bandwidth-file-headers line and no Measured= values in their votes.
+FOREST44_FINGERPRINT = '0EF2A357140FCBDAE2F948CC2228909695B81B35'
+FOREST44_VOTES = {
+    'bastet': ('Running Stable V2Dir Valid', 854, 68, 102000, 25000000, 26000000, 1),
+    'dannenberg': ('Running Stable V2Dir Valid', 854, 53, 102000, 36000000, 35000000, 1),
+    'dizum': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'faravahar': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 40000000, 35000000, 1),
+    'gabelmoo': ('Running Stable V2Dir Valid', 854, 84, 102000, 35000000, 34000000, 1),
+    'longclaw': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'maatuska': ('Fast HSDir Running Stable V2Dir Valid', 854, None, 102000, 10000000, 10000000, 0),
+    'moria1': ('Running Stable V2Dir Valid', 854, 230, 1048000, 26000000, 27000000, 1),
+    'tor26': ('Running Stable V2Dir Valid', 854, 32, 102000, 33000000, 34000000, 1),
+}
+FOREST44_BW_AUTHORITIES = {'bastet', 'dannenberg', 'faravahar', 'gabelmoo', 'longclaw', 'moria1', 'tor26'}
+
 
 # ============================================================================
 # PYTEST FIXTURES - Common test data and utilities
@@ -82,6 +106,236 @@ def temp_dir():
     """Fixture that provides a temporary directory that's cleaned up after the test."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+
+
+@pytest.fixture(autouse=True)
+def isolated_worker_data(tmp_path_factory, monkeypatch):
+    """Point every test's API cache, timestamps and worker state at a temp dir.
+
+    allium.lib.workers derives DATA_DIR, CACHE_DIR and STATE_FILE from its own
+    location and builds _cache_manager and _timestamp_manager on CACHE_DIR at
+    import, so a test that reaches a worker would otherwise write fixture data
+    into the real allium/data/ that site builds load from. _worker_status is
+    reset too, since _load_state() seeds it from the real state.json and
+    _save_state() writes the whole registry back out.
+    """
+    from allium.lib import workers
+    from allium.lib.file_io_utils import create_cache_manager, create_timestamp_manager
+
+    data_dir = tmp_path_factory.mktemp('allium-data')
+    cache_dir = os.path.join(str(data_dir), 'cache')
+    monkeypatch.setattr(workers, 'DATA_DIR', str(data_dir))
+    monkeypatch.setattr(workers, 'CACHE_DIR', cache_dir)
+    monkeypatch.setattr(workers, 'STATE_FILE', os.path.join(str(data_dir), 'state.json'))
+    monkeypatch.setattr(workers, '_cache_manager', create_cache_manager(cache_dir))
+    monkeypatch.setattr(workers, '_timestamp_manager', create_timestamp_manager(cache_dir))
+    monkeypatch.setattr(workers, '_worker_status', {})
+    return data_dir
+
+
+@pytest.fixture
+def isolated_worker_registry(monkeypatch):
+    """Give a test a fresh worker-status registry."""
+    from allium.lib import workers
+
+    registry = {}
+    monkeypatch.setattr(workers, '_worker_status', registry)
+    return registry
+
+
+@pytest.fixture
+def consensus_evaluation_enabled(monkeypatch):
+    """Enable consensus workers independently of the process environment."""
+    from allium.lib import consensus
+
+    monkeypatch.setattr(consensus, 'is_consensus_evaluation_enabled', lambda: True)
+
+
+@pytest.fixture
+def successful_worker_backends(monkeypatch):
+    """Replace worker network boundaries with deterministic successful data."""
+    from allium.lib import consensus, workers
+
+    uptime_data = json.dumps({'relays': []}).encode('utf-8')
+    monkeypatch.setattr(
+        workers,
+        '_fetch_url_with_total_timeout',
+        lambda *_args, **_kwargs: uptime_data,
+    )
+
+    collector = MagicMock()
+    collector.fetch_all.return_value = {
+        'votes': {'moria1': {}},
+        'relay_index': {'TEST': {}},
+        'fetched_at': '2026-01-01T00:00:00+00:00',
+        'consensus_method_info': {'total_voters': 1},
+    }
+    collector_factory = MagicMock(return_value=collector)
+    monkeypatch.setattr(consensus, 'CollectorFetcher', collector_factory)
+
+    monitor = MagicMock()
+    monitor.check_all_authorities.return_value = {
+        'moria1': {'online': True, 'latency_ms': 1},
+    }
+    monitor.get_summary.return_value = {
+        'online_count': 1,
+        'total_authorities': 1,
+        'checked_at': '2026-01-01T00:00:00+00:00',
+    }
+    monitor.get_alerts.return_value = []
+    monitor_factory = MagicMock(return_value=monitor)
+    monkeypatch.setattr(consensus, 'AuthorityMonitor', monitor_factory)
+
+    return {
+        'collector': collector_factory,
+        'consensus_health': monitor_factory,
+    }
+
+
+@pytest.fixture
+def voting_registry_8_voters():
+    """Set the shared authority registry to the 8 active voters (gabelmoo removed).
+
+    Updates the module singleton via the global update_voting_authorities()
+    wrapper before the test and restores the hardcoded fallback afterwards, so
+    dynamic-voting tests never leak state into other tests.
+    """
+    from allium.lib.consensus.collector_fetcher import (
+        get_authority_registry,
+        update_voting_authorities,
+    )
+    registry = get_authority_registry()
+    update_voting_authorities(ACTIVE_VOTING_AUTHORITIES_8)
+    yield registry
+    registry.clear_voting_authorities()
+
+
+@pytest.fixture
+def forest44_fetcher():
+    """CollectorFetcher indexed with forest44's votes (FOREST44_VOTES), all 9 voting."""
+    from allium.lib.consensus.collector_fetcher import (
+        CollectorFetcher,
+        get_authority_registry,
+        update_voting_authorities,
+    )
+    registry = get_authority_registry()
+    update_voting_authorities(sorted(FOREST44_VOTES))
+    fetcher = CollectorFetcher()
+    fetcher.bw_authorities = set(FOREST44_BW_AUTHORITIES)
+    votes = {}
+    for auth, (flags, bandwidth, measured, fast, inc, exc, ignoring) in FOREST44_VOTES.items():
+        fetcher.flag_thresholds[auth] = {
+            'fast-speed': fast, 'guard-bw-inc-exits': inc, 'guard-bw-exc-exits': exc,
+            'guard-wfu': 0.98, 'guard-tk': 691200, 'ignoring-advertised-bws': ignoring,
+        }
+        votes[auth] = {'flags': flags.split(), 'bandwidth': bandwidth, 'measured': measured,
+                       'wfu': 0.998, 'tk': 2100000, 'mtbf': 1700000}
+    fetcher.relay_index = {FOREST44_FINGERPRINT: {'votes': votes}}
+    yield fetcher
+    registry.clear_voting_authorities()
+
+
+@pytest.fixture
+def make_relays(temp_dir):
+    """Factory that builds a Relays instance writing into a per-test temp directory.
+
+    Shared setup for the directory-authority integration tests (and any other
+    test that needs a real Relays object without hitting the network).
+    """
+    from allium.lib.relays import Relays
+
+    def _make(relay_data, onionoo_url=TEST_DETAILS_URL) -> Relays:
+        return Relays(temp_dir, onionoo_url, relay_data)
+
+    return _make
+
+
+@pytest.fixture
+def mock_uptime_response():
+    """Onionoo uptime document for three mock directory authorities
+    (moria1: good, tor26: excellent, dannenberg: poor uptime)."""
+    return {
+        "version": "10.0",
+        "build_revision": "unknown",
+        "relays_published": "2025-01-01 00:00:00",
+        "relays": [
+            {
+                "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [99.2, 98.8, 99.1, 99.0, 98.9]  # Good uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [98.5, 98.8, 99.0, 98.7, 98.6]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [97.5, 97.8, 98.0, 97.9, 97.6]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [96.8, 97.0, 97.2, 96.9, 96.7]
+                    }
+                }
+            },
+            {
+                "fingerprint": "847B1F850344D7876491A54892F904934E4EB85D",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [99.8, 99.6, 99.7, 99.5, 99.9]  # Excellent uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [99.6, 99.4, 99.5, 99.3, 99.7]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [99.1, 99.0, 99.2, 98.9, 99.3]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [98.7, 98.5, 98.9, 98.6, 98.8]
+                    }
+                }
+            },
+            {
+                "fingerprint": "7BE683E65D48141321C5ED92F075C55364AC7123",
+                "uptime": {
+                    "1_month": {
+                        "factor": 0.01,
+                        "count": 720,
+                        "values": [89.2, 88.5, 90.1, 87.8, 89.9]  # Poor uptime
+                    },
+                    "6_months": {
+                        "factor": 0.01,
+                        "count": 4320,
+                        "values": [85.7, 86.2, 85.0, 86.8, 85.3]
+                    },
+                    "1_year": {
+                        "factor": 0.01,
+                        "count": 8760,
+                        "values": [82.1, 83.0, 81.5, 82.8, 81.9]
+                    },
+                    "5_years": {
+                        "factor": 0.01,
+                        "count": 43800,
+                        "values": [78.5, 79.2, 78.0, 79.8, 78.1]
+                    }
+                }
+            }
+        ]
+    }
 
 
 @pytest.fixture
@@ -189,6 +443,70 @@ def sample_relay_data():
 
 
 @pytest.fixture
+def search_index_contract_relays_data():
+    """Small relay set for the search-index public contract tests."""
+    return {
+        'relays': [
+            {
+                'fingerprint': 'A' * 40,
+                'nickname': 'contractRelay',
+                'aroi_domain': 'example.org',
+                'contact_md5': '0123456789abcdef0123456789abcdef',
+                'as': 'AS64500',
+                'as_name': 'Example Network',
+                'country': 'DE',
+                'country_name': 'Germany',
+                'or_addresses': ['203.0.113.7:9001'],
+                'platform': 'Tor 0.4.8.x on Linux',
+                'flags': ['Running', 'Fast', 'Guard'],
+            }
+        ],
+        'sorted': {'family': {}},
+        'relays_published': '2026-05-05 00:00:00',
+    }
+
+
+@pytest.fixture
+def search_index_parallel_contract_relays_data():
+    """Relay set large enough to force search-index threaded processing."""
+    from allium.lib.search_index import PARALLEL_THRESHOLD
+
+    countries = [('de', 'Germany'), ('us', 'United States'),
+                 ('fr', 'France'), ('nl', 'Netherlands'), ('se', 'Sweden')]
+    relays = []
+    for i in range(PARALLEL_THRESHOLD + 200):
+        country, country_name = countries[i % len(countries)]
+        relays.append({
+            'fingerprint': f'{i:040X}',
+            'nickname': f'contractRelay{i}',
+            'aroi_domain': 'example.org' if i % 17 == 0 else '',
+            'contact_md5': f'{i % 65536:032x}',
+            'as': f'AS{i % 400}',
+            'as_name': f'Provider {i % 400}',
+            'country': country,
+            'country_name': country_name,
+            'or_addresses': [f'203.0.113.{i % 255}:9001'],
+            'platform': f'Tor 0.4.{i % 3}.x on Linux',
+            'flags': ['Running', 'Fast'] + (['Exit'] if i % 4 == 0 else []),
+        })
+
+    return {
+        'relays': relays,
+        'sorted': {'family': {}},
+        'relays_published': '2026-05-05 00:00:00',
+    }
+
+
+@pytest.fixture
+def sorted_json_cache_payload():
+    """Nested payload for verifying deterministic JSON cache rendering."""
+    return {
+        'z': 1,
+        'a': {'d': 4, 'b': 2},
+    }
+
+
+@pytest.fixture
 def onionoo_response():
     """Fixture that provides realistic onionoo API response data with 5 relays."""
     relays = []
@@ -245,41 +563,76 @@ def uptime_data():
 
 
 @pytest.fixture
+def stub_bandwidth_formatter():
+    """Lightweight bandwidth formatter stub for AROI leaderboard unit tests."""
+    from helpers.fixtures import StubBandwidthFormatter
+    return StubBandwidthFormatter()
+
+
+@pytest.fixture
 def mock_aroi_leaderboard_entry():
-    """Fixture that creates a mock AROI leaderboard entry."""
-    def _create_entry(rank=1, contact_hash='test_hash'):
-        entry = types.SimpleNamespace()
-        entry.contact_hash = contact_hash
-        entry.contact_info_escaped = f'operator{rank}@example.com'
-        entry.display_name = f'Operator{rank}'
-        entry.rank = rank
-        entry.total_relays = 10 + rank
-        entry.measured_count = 5 + (rank // 2)
-        entry.total_bandwidth = f'{1.0 + (rank * 0.1):.1f}'
-        entry.bandwidth_unit = 'MB/s'
-        entry.total_consensus_weight_pct = f'{1.0 + (rank * 0.1):.1f}%'
-        entry.exit_consensus_weight_pct = f'{0.5 + (rank * 0.05):.1f}%'
-        entry.guard_consensus_weight_pct = f'{0.5 + (rank * 0.05):.1f}%'
-        entry.exit_count = 5 + rank
-        entry.guard_count = 3 + rank
-        entry.middle_count = 2 + rank
-        entry.diversity_score = 50 + rank
-        entry.country_count = 2 + (rank // 5)
-        entry.platform_count = 1 + (rank // 3)
-        entry.unique_as_count = 1 + (rank // 2)
-        entry.non_linux_count = 1 + (rank // 3)
-        entry.non_eu_count = 1 + (rank // 2)
-        entry.non_eu_count_with_percentage = f'{1 + (rank // 2)} ({50 + rank}%)'
-        entry.rare_country_count = 1 + (rank // 10)
-        entry.relays_in_rare_countries = 1 + (rank // 8)
-        entry.veteran_days = 100 + (rank * 10)
-        entry.veteran_score = (100 + (rank * 10)) * (10 + rank)
-        entry.reliability_score = f'{90.0 + rank:.1f}%'
-        entry.reliability_average = f'{90.0 + rank:.1f}%'
-        entry.unique_ipv4_count = 10 + rank
-        entry.unique_ipv6_count = 5 + rank
-        return entry
-    return _create_entry
+    """Fixture that creates a mock AROI leaderboard entry.
+
+    Delegates to the shared TestDataFactory so the mock entry schema lives
+    in exactly one place and cannot drift between test suites."""
+    from helpers.fixtures import TestDataFactory
+    return TestDataFactory.create_aroi_leaderboard_entry
+
+
+@pytest.fixture
+def jinja_env():
+    """Jinja2 environment loading allium templates with the custom filters
+    they depend on (shared helper in helpers.fixtures)."""
+    from helpers.fixtures import TestSetupHelpers
+    return TestSetupHelpers.setup_jinja_environment()
+
+
+@pytest.fixture
+def mock_aroi_leaderboards(mock_aroi_leaderboard_entry):
+    """25 shared-schema mock entries (3 pagination pages) for every AROI
+    category rendered through the paginated generic ranking tables."""
+    from helpers.fixtures import AROI_PAGINATED_CATEGORIES
+    return {
+        category: [
+            mock_aroi_leaderboard_entry(rank=i + 1, contact_hash=f'hash{i + 1}')
+            for i in range(25)
+        ]
+        for category in AROI_PAGINATED_CATEGORIES
+    }
+
+
+@pytest.fixture
+def aroi_template_context(mock_aroi_leaderboards):
+    """Template context for rendering aroi-leaderboards.html with mock data."""
+    from helpers.fixtures import AROI_CATEGORY_TITLES, AROI_PAGINATED_CATEGORIES
+    return {
+        'relays': {
+            'json': {
+                'aroi_leaderboards': {
+                    'leaderboards': mock_aroi_leaderboards,
+                    'summary': {
+                        'categories': dict(AROI_CATEGORY_TITLES),
+                        'total_operators': 150,
+                        'total_bandwidth_formatted': '1.5 GB/s',
+                        'total_consensus_weight_pct': '25.5%',
+                        'live_categories_count': len(AROI_PAGINATED_CATEGORIES),
+                        'update_timestamp': '2025-06-15 01:00:00 UTC'
+                    }
+                }
+            },
+            'use_bits': False
+        },
+        'page_ctx': {
+            'path_prefix': './'
+        }
+    }
+
+
+@pytest.fixture
+def rendered_aroi_leaderboards(jinja_env, aroi_template_context):
+    """aroi-leaderboards.html rendered with the mock AROI template context."""
+    template = jinja_env.get_template('aroi-leaderboards.html')
+    return template.render(**aroi_template_context)
 
 
 @pytest.fixture
@@ -313,32 +666,63 @@ def patch_relays_methods():
 
 
 @pytest.fixture
-def jinja_env():
-    """Fixture that provides a configured Jinja2 environment for template testing."""
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    
-    template_dir = project_root / 'allium' / 'templates'
-    env = Environment(
-        loader=FileSystemLoader(str(template_dir)),
-        autoescape=select_autoescape(['html', 'xml'])
-    )
-    
-    # Add custom filters for template compatibility
-    try:
-        from allium.lib.relays import (
-            determine_unit_filter, 
-            format_bandwidth_with_unit, 
-            format_bandwidth_filter, 
-            format_time_ago
+def templates_dir():
+    """Fixture that provides the allium templates directory as a Path."""
+    return project_root / 'allium' / 'templates'
+
+
+@pytest.fixture
+def process_relays(tmp_path):
+    """Factory fixture: run the full (unpatched) Relays init pipeline on raw
+    onionoo-shaped relay dicts and return the Relays instance.
+
+    Use this when a test must exercise real preprocessing
+    (_preprocess_template_data et al.). Unlike
+    TestSetupHelpers.create_test_relays_instance, nothing is mocked out.
+    """
+    def _process(relays):
+        from allium.lib.relays import Relays
+        return Relays(
+            output_dir=str(tmp_path),
+            onionoo_url='https://test.example.com',
+            relay_data={'relays': relays},
+            use_bits=False,
+            progress=False,
         )
-        env.filters['determine_unit'] = determine_unit_filter
-        env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
-        env.filters['format_bandwidth'] = format_bandwidth_filter
-        env.filters['format_time_ago'] = format_time_ago
-    except ImportError:
-        pass  # Filters may not be available in all test contexts
-    
-    return env
+    return _process
+
+
+@pytest.fixture(scope='module')
+def overload_relay_set(tmp_path_factory):
+    """Module-scoped Relays instance with 4 relays (2 flagged overloaded).
+
+    Shared fixture for group-overload summary tests. Module-scoped because the
+    full Relays init pipeline (categorize -> leaderboards -> intelligence) is
+    expensive; one instance serves all wiring tests. stability_is_overloaded is
+    applied post-init since it is normally set during bandwidth enrichment.
+    """
+    from allium.lib.relays import Relays
+
+    n = 4
+    relays = [{
+        'nickname': f'Relay{i}', 'fingerprint': f'{i:040d}', 'running': True,
+        'flags': ['Running', 'Valid'], 'observed_bandwidth': 1_000_000,
+        'consensus_weight': 100, 'consensus_weight_fraction': 0.01,
+        'or_addresses': [f'192.0.2.{i + 1}:9001'],
+        'as': 'AS64500', 'as_name': 'Test AS',
+        'country': 'us', 'country_name': 'United States', 'platform': 'Linux',
+        'first_seen': '2023-01-01 00:00:00', 'last_seen': '2026-07-12 00:00:00',
+        'contact': 'ops@example.com', 'measured': True,
+        'effective_family': [f'{j:040d}' for j in range(n)],
+    } for i in range(n)]
+
+    rs = Relays(output_dir=str(tmp_path_factory.mktemp('overload')),
+                onionoo_url=TEST_DETAILS_URL,
+                relay_data={'relays': relays},
+                use_bits=False, progress=False, mp_workers=0)
+    for i, relay in enumerate(rs.json['relays']):
+        relay['stability_is_overloaded'] = i < 2  # 2 of 4 overloaded
+    return rs
 
 
 # ============================================================================

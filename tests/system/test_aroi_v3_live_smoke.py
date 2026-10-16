@@ -115,7 +115,8 @@ def test_aroi_v3_a10_smoke_against_live_apis():
     assert isinstance(summary["is_mixed_migration"], bool)
     assert summary["v2_relay_count"] >= 0
     assert summary["v3_relay_count"] >= 0
-    assert 0.0 <= summary["v3_relay_percentage"] <= 100.0
+    assert 0.0 <= summary["v3_pct_of_total"] <= 100.0
+    assert 0.0 <= summary["v3_migration_progress_pct"] <= 100.0
 
 
 if __name__ == "__main__":

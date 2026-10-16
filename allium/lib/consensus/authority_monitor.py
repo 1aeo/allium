@@ -5,12 +5,10 @@ Monitor directory authority health and status.
 Provides latency checks and voting participation metrics.
 """
 
-import urllib.request
-import urllib.error
 import socket
 import time
 import concurrent.futures
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import logging
 
