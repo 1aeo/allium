@@ -10,12 +10,15 @@ Default output directory: ./www
 """
 
 import argparse
+import gc
 import os
+import subprocess
 import sys
 import time
 import urllib.parse
-from lib.coordinator import create_relay_set_with_coordinator
-from lib.progress_logger import create_progress_logger
+from lib import optional_deps
+from lib.coordinator import create_relay_set_with_coordinator, relay_count
+from lib.progress_logger import ProgressLogger
 from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +38,7 @@ def ensure_output_directory(output_dir):
     """
     try:
         os.makedirs(output_dir, exist_ok=True)
-    except PermissionError as e:
+    except PermissionError:
         print(f"❌ Error: Permission denied creating output directory '{output_dir}'")
         print(f"💡 Try running with a different output directory:")
         print(f"   python3 allium.py --out ~/allium-output --progress")
@@ -69,6 +72,16 @@ def check_dependencies(show_progress=False):
         print("💡 Please upgrade Python or use a virtual environment with Python 3.8+")
         sys.exit(1)
 
+
+
+def _tooling_active():
+    """True when a debugger, profiler or coverage tool is attached."""
+    if sys.gettrace() is not None or sys.getprofile() is not None:
+        return True
+    # Python 3.12+ profilers/coverage may use sys.monitoring tool slots instead
+    monitoring = getattr(sys, "monitoring", None)
+    return monitoring is not None and any(
+        monitoring.get_tool(tool_id) is not None for tool_id in range(6))
 
 
 def validate_url_arguments(args):
@@ -129,7 +142,10 @@ if __name__ == "__main__":
         dest="base_url",
         type=str,
         default="",
-        help='base URL for vanity URLs (default: "" for root-relative paths like /domain/)',
+        help=(
+            'public base URL for vanity, canonical, Open Graph, and sitemap '
+            'URLs (default: "" for root-relative local output)'
+        ),
         required=False,
     )
     parser.add_argument(
@@ -228,7 +244,10 @@ if __name__ == "__main__":
         dest="filter_downtime_days",
         type=int,
         default=7,
-        help="filter out relays offline for more than N days (default: 7, use 0 to disable)",
+        help=(
+            "filter out relays not seen for more than N days, even if Onionoo still marks "
+            "them running (default: 7, use 0 to disable)"
+        ),
         required=False,
     )
     parser.add_argument(
@@ -239,64 +258,77 @@ if __name__ == "__main__":
         help="parallel workers for page generation (default: auto-detected CPU count, min 4)",
         required=False,
     )
+    parser.add_argument(
+        "--no-charts",
+        dest="charts",
+        action="store_false",
+        help="skip the bandwidth and uptime history charts on relay and contact pages",
+    )
+    parser.add_argument(
+        "--chart-format",
+        choices=("png", "svg"),
+        help="history chart images: png (default; shows at Tor Browser's Safest level, which turns SVG "
+             "off) or svg (smaller and faster, needs no extra package)",
+    )
+    parser.add_argument(
+        "--chart-scale",
+        type=float,
+        choices=(1.0, 1.5, 2.0),
+        default=2.0,
+        help="PNG chart resolution: 2 (default, 2160 px wide, sharp on HiDPI screens), 1.5 or 1 (smaller files)",
+    )
+    parser.add_argument(
+        "--chart-colors",
+        choices=("64", "full"),
+        default="64",
+        help="PNG chart colors: 64 (default, a fixed palette: about a third of the size, looks the same) or full",
+    )
+    parser.add_argument(
+        "--chart-layout",
+        choices=("beside", "charts"),
+        default="beside",
+        help="where history charts go: beside (default, next to their relay or contact page) or charts "
+             "(charts/relay/<fingerprint>/ and charts/contact/<hash>/, to serve them apart from the pages)",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
     validate_url_arguments(args)
 
+    # Charts only draw the /bandwidth and /uptime histories, which --apis details does not fetch.
+    args.charts = args.charts and args.enabled_apis == "all"
     start_time = time.time()
     
-    # Progress step breakdown (total: 57 steps):
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Setup (4 steps):
-    #   1. Starting allium
-    #   2. Creating output directory
-    #   3. Output directory ready
-    #   4. Initializing relay data
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - API Fetching (18 steps, FIXED count):
-    #   - Section start (1)
-    #   - Starting threaded API fetching (1)
-    #   - 7 API workers start messages (7) - details, uptime, bandwidth, aroi, exit_dns_health, collector, descriptors
-    #   - 7 API workers complete messages (7)
-    #   - All workers completed (1)
-    #   - Section end (1)
-    #   Note: Intermediate messages (cache status, parsing, etc.) are logged
-    #   but don't increment the counter, making total predictable.
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - Data Processing (4 steps):
-    #   - Section start (1)
-    #   - Creating relay set (1) - internal messages don't increment
-    #   - Relay set created (1)
-    #   - Section end (1)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Page Generation (33 steps):
-    #   - Details API data loaded (1)
-    #   - Section start (1)
-    #   - Index page (generating + generated) x2
-    #   - Top 500 page x2
-    #   - All relays page x2
-    #   - AROI leaderboards page x2
-    #   - Network health dashboard x2
-    #   - Directory authorities x2
-    #   - API diagnostics page x2
-    #   - Miscellaneous sorted pages x2
-    #   - 7 key type pages complete (family, contact, as, country, flag, platform, first_seen)
-    #   - Individual relay pages x2
-    #   - Static files x2
-    #   - Search index x2
-    #   - Prometheus metrics x2
-    #   - Section end (1)
-    #   - Completion message (1)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
-    setup_steps = 4
-    coordinator_steps = 22  # API Fetching (18) + Data Processing (4)
-    page_generation_steps = 35  # Page generation and completion (+2 for Prometheus metrics)
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 59 total steps
+    # Progress step accounting - DERIVED from the structures that emit the
+    # steps, so adding an API worker or page type updates the total
+    # automatically (hard-coded 4+22+35 previously drifted: comments said
+    # 57/59 while runs logged 61, and --apis details overcounted).
+    from lib.coordinator import Coordinator
+    from lib.site_generator import STANDALONE_PAGES, SORTED_PAGE_KEYS
 
-    # Create unified progress logger
-    progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
+    # Setup: starting, creating output dir, dir ready, init relay data
+    setup_steps = 4
+
+    # API fetching: section start + threaded-start + one start and one
+    # complete per enabled worker + all-workers-complete + section end;
+    # data processing: section start, creating relay set, created, section
+    # end (intermediate messages log without incrementing the counter).
+    enabled_workers = sum(
+        1 for _ in Coordinator.iter_enabled_worker_entries(args.enabled_apis))
+    coordinator_steps = (4 + 2 * enabled_workers) + 4
+
+    # Page generation: details-loaded + section start, generating+generated
+    # per standalone page, misc sorted pages x2, one completion per detail
+    # page key, then relay pages / static files / search index / prometheus
+    # metrics and search-discovery files x2 each, section end + completion message.
+    page_generation_steps = (2 + 2 * len(STANDALONE_PAGES)
+                             + 2 + len(SORTED_PAGE_KEYS)
+                             + 2 + 2 + 2 + 2 + 2 + 2)
+
+    total_steps = setup_steps + coordinator_steps + page_generation_steps
+
+    # Create the single ProgressLogger threaded through the whole pipeline
+    progress_logger = ProgressLogger(start_time, total_steps, args.progress)
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
@@ -305,6 +337,22 @@ if __name__ == "__main__":
     else:
         check_dependencies(show_progress=False)
     
+    # PNG charts need cairocffi, numpy and the cairo library: check before fetching anything. Asked for, they
+    # are required; by default SVG stands in, and the notice (again at the end) says how to install them.
+    chart_notice = []
+    if args.charts and args.chart_format != "svg":
+        chart_notice = optional_deps.check("png", asked=args.chart_format == "png", show_progress=args.progress)
+        args.chart_format = "svg" if chart_notice else "png"
+        if not chart_notice:
+            # Cairo draws text with this machine's fonts: without DejaVu Sans, "·" and "–" turn into boxes.
+            try:  # fontconfig's fc-match tells; when it is missing or fails, stay quiet
+                font = subprocess.run(["fc-match", "DejaVu Sans"], capture_output=True, text=True, timeout=10).stdout
+            except (OSError, subprocess.SubprocessError):
+                font = "DejaVu Sans"
+            if "DejaVu Sans" not in font:
+                print("⚠️ PNG charts: DejaVu Sans is not installed, so chart text falls back to another font")
+                print("💡 On Debian/Ubuntu: sudo apt install fonts-dejavu-core")
+
     progress_logger.log("Starting allium static site generation...")
 
     # Fail fast - ensure output directory exists before expensive processing
@@ -314,7 +362,12 @@ if __name__ == "__main__":
 
     # object containing onionoo data and processing routines
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
-    
+
+    # Fetching and processing build a multi-GB heap of long-lived objects
+    # (parsed API JSON, per-relay dicts) that holds almost no reference
+    # cycles, yet every full cyclic-GC pass re-traverses all of it (~12s
+    # each, ~45-100s per run). Pause collection until the data set is built.
+    gc.disable()
     try:
         RELAY_SET = create_relay_set_with_coordinator(args, progress_logger=progress_logger)
         if RELAY_SET is None or RELAY_SET.json is None:
@@ -324,6 +377,11 @@ if __name__ == "__main__":
             print("⚠️  No onionoo data available - this might be due to network issues or the service being temporarily unavailable")
             print("🔧 In CI environments, this is often a temporary issue that resolves on retry")
             sys.exit(0)
+        if relay_count(RELAY_SET) == 0:
+            progress_logger.log("Relay data contains 0 relays, stopping before page generation")
+            print("❌ Error: the Onionoo details data has no relays. "
+                  "Check allium/data/cache/onionoo_details.json, or delete it to force a fresh download.")
+            sys.exit(1)
     except Exception as e:
         # Progress-style error context message (conditional on progress flag)
         progress_logger.log(f"Failed to initialize relay data: {e}")
@@ -333,6 +391,44 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
+    # History charts are written next to the relay and contact pages, or with
+    # --chart-layout charts under charts/. Every build removes the charts/
+    # tree first, as the page writer does relay/ and contact/ (and the charts
+    # beside the pages with them), so a build never keeps the charts of an
+    # earlier build in the other layout. Their peer medians need every relay,
+    # so build the writer before forking.
+    from lib.charts.render import CHARTS_DIR, clear_chart_tree
+    clear_chart_tree(args.output_dir)
+    if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
+        from lib.charts.render import ChartWriter
+        from lib.page_writer import ENV
+        apart = args.chart_layout == "charts"
+        RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format, scale=args.chart_scale,
+                                             colors=args.chart_colors,
+                                             root=os.path.join(args.output_dir, CHARTS_DIR) if apart else None)
+        ENV.globals["chart_ext"] = args.chart_format
+        ENV.globals["chart_root"] = CHARTS_DIR + "/" if apart else ""
+
+    # Freeze the finished data set so later collections, here and in the
+    # forked page-rendering workers, skip it (workers then also avoid
+    # copy-on-write copies of the heap that a full collection would cause).
+    gc.freeze()
+    gc.enable()
+
     # Generate the complete static site
     # Page definitions and generation logic are in lib/site_generator.py
     generate_site(RELAY_SET, args, progress_logger)
+    if getattr(RELAY_SET, "chart_writer", None):
+        RELAY_SET.chart_writer.sweep()
+    if chart_notice:  # again last, where cron mail and a `tail` of the log end
+        print("\n".join(chart_notice))
+
+    # The relay set holds several GB of small objects, and freeing them one
+    # by one at interpreter shutdown took ~40s. Every output file is closed
+    # and every worker pool joined by now, so flush and skip the teardown,
+    # unless a tracer, profiler or coverage tool still has to write results.
+    if not _tooling_active():
+        for stream in (sys.stdout, sys.stderr):
+            if stream is not None:
+                stream.flush()
+        os._exit(0)

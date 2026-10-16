@@ -43,7 +43,7 @@
 .aroi-category-table thead th:nth-child(7) { width: 10%; }
 .aroi-category-table thead th:nth-child(8) { width: 15%; }
 
-/* Geographic Champions (Non-EU Leaders) */
+/* Geographic diversity boards (Global Powerhouses / Jurisdiction Globetrotters) */
 .aroi-geographic-table thead th:nth-child(3) { width: 15%; }
 .aroi-geographic-table thead th:nth-child(4) { width: 10%; }
 .aroi-geographic-table thead th:nth-child(5) { width: 8%; }
@@ -55,7 +55,7 @@
 .aroi-frontier-table thead th:nth-child(5) { width: 10%; }
 .aroi-frontier-table thead th:nth-child(6) { width: 23%; }
 
-/* Platform Diversity (Non-Linux Heroes) */
+/* Platform diversity boards (Non-Linux Powerhouses / OS Polyglots) */
 .aroi-platform-table thead th:nth-child(3) { width: 10%; }
 .aroi-platform-table thead th:nth-child(4) { width: 8%; }
 .aroi-platform-table thead th:nth-child(5) { width: 22%; }

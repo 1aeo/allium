@@ -27,9 +27,39 @@
 | **Required** | Only with `--apis all` |
 | **Failure** | Graceful degradation (reliability features disabled) |
 
-**Fields used**: uptime history (1_month, 6_months, 1_year, 5_years), flag-specific uptime history
+**Fields used**: uptime history (1_month, 6_months, 1_year, 5_years), flag-specific uptime history. Also cross-checked against `/details` first_seen — see below.
 
 **Data format**: Values 0-999 representing uptime percentage (divided by 999 * 100 = percentage)
+
+### Workaround: first_seen correction from Uptime API
+
+Onionoo's `/details` endpoint periodically resets `first_seen` for many
+relays (see upstream issues
+[#40018](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40018),
+[#40028](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40028),
+[#40033](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40033),
+[#40042](https://gitlab.torproject.org/tpo/network-health/metrics/onionoo/-/issues/40042)).
+The symptom is a large fraction of running relays sharing one identical
+recent `first_seen` timestamp (matching some specific recent consensus's
+`valid-after`). The `/uptime` endpoint stores history independently and
+survives the reset; you can confirm the bug is currently active by
+checking whether the most common `first_seen` value in `/details`
+accounts for an implausibly large share of the network.
+
+Before constructing the relay set, Allium cross-checks each relay's
+`first_seen` against the earliest non-null entry in its uptime history. If
+the uptime endpoint observed the relay earlier than `/details` claims,
+`first_seen` is moved to the uptime-derived timestamp and the original
+value is preserved under `first_seen_onionoo_raw` for diagnostics.
+
+The correction is conservative (only moves `first_seen` earlier, never
+later) and defensively bounded (rejects pre-2004 garbage values). When
+`/uptime` data is unavailable (e.g. `--apis details`) no corrections are
+applied, but a summary log line is still emitted in progress mode so
+operators can observe the no-op classification. Implementation:
+`allium/lib/first_seen_correction.py`. Repair stats are surfaced on the
+coordinator's relay set as `first_seen_repair_stats` and logged once per
+run. This module is intended to be removed once the upstream bug is fixed.
 
 ### Onionoo Bandwidth API
 
@@ -52,8 +82,24 @@
 | **Memory** | Minimal |
 | **Required** | No |
 | **Failure** | AROI validation features disabled |
+| **Schema versions tested** | 1, 2 (see `AROIVALIDATOR_TESTED_SCHEMAS`) |
 
-**Purpose**: Provides cryptographic proof of relay operator identity for AROI leaderboards.
+**Purpose**: Provides cryptographic proof of relay operator identity for
+AROI leaderboards. Allium consumes the validator's output for both
+**CIISS ContactInfo specification version 2** (RSA-fingerprint proofs:
+`dns-rsa`, `uri-rsa`) and **version 3** (ed25519 happy-family proofs:
+`dns-familyid-ed25519`, `uri-familyid-ed25519`). Both versions are
+supported concurrently during the migration window — operators are
+nudged toward v3 but not forced.
+
+**Schema-version handshake**: Allium reads
+`metadata.aroivalidator_schema_version` and logs a one-time warning
+when an unrecognized schema is received but does **not** reject the
+data — this is forward-compatible by design. The schema version is
+surfaced as `aroi_schema_version` in `network_health` metrics and shown
+as a footnote on the dashboard. When the validator adds a new
+`error_category` value, allium logs a one-time warning so we know to
+update `V3_CATEGORY_LABELS` in `aroi_validation.py`.
 
 ### CollecTor Consensus (Optional)
 

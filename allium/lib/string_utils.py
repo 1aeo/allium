@@ -11,13 +11,7 @@ This module is maintained for backward compatibility.
 from typing import Optional
 
 # Import from centralized HTML escaping utilities
-from .html_escape_utils import (
-    safe_html_escape,
-    UNKNOWN_ESCAPED,
-    UNKNOWN_LOWERCASE, 
-    NONE_ESCAPED,
-    NA_FALLBACK
-)
+from .html_escape_utils import NA_FALLBACK
 
 
 def is_valid_aroi(aroi: Optional[str]) -> bool:
@@ -46,35 +40,6 @@ def is_valid_aroi(aroi: Optional[str]) -> bool:
         True
     """
     return bool(aroi) and aroi != 'none'
-
-def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
-    """
-    Format a decimal value as a percentage with consistent decimal places.
-    
-    Delegates to format_percentage_from_fraction (identical logic, single implementation).
-    
-    Args:
-        value: Decimal value (e.g., 0.1234 for 12.34%)
-        decimals: Number of decimal places (default: 1)
-        fallback: Fallback string for None/invalid values (default: "N/A")
-    
-    Returns:
-        str: Formatted percentage string (e.g., "12.3%")
-    """
-    return format_percentage_from_fraction(value, decimals, fallback)
-
-def format_percentage_or_na(value, decimals=2):
-    """
-    Format a fraction as percentage or return "N/A" - specialized for relay data.
-    
-    Args:
-        value: Decimal fraction value 
-        decimals: Number of decimal places (default: 2 for relay probabilities)
-    
-    Returns:
-        str: Formatted percentage or "N/A"
-    """
-    return format_percentage(value, decimals, NA_FALLBACK)
 
 def format_percentage_from_fraction(value, decimals=1, fallback=NA_FALLBACK):
     """
@@ -135,6 +100,14 @@ _RE_LEADING_URL = re.compile(r'^https?://(?:www\.)?([^\s,/]+)')
 _RE_ANGLE_BRACKET_URL = re.compile(r'<\s*https?://(?:www\.)?([^\s,/>]+)')
 # Onion URL pattern - extract .onion domain from url: field or standalone
 _RE_ONION_URL = re.compile(r'(?:url:)?https?://([a-z2-7]{56}\.onion)', re.I)
+
+# CIISS `url:` field token pattern - matches the url: token in a raw
+# ContactInfo string (optional scheme, captures value up to next
+# comma/whitespace). Shared single source of truth for:
+# - aroi_validation._URL_FIELD_RE (AROI field detection, relays.py hot path)
+# - aroileaders._URL_FIELD_FALLBACK_RE (incomplete-AROI display-name fallback)
+# - categorization._INCOMPLETE_URL_RE (incomplete-AROI sibling map)
+URL_FIELD_TOKEN_RE = re.compile(r'\burl:(?:https?://)?([^,\s]+)', re.IGNORECASE)
 
 # Generic placeholder names to exclude
 _PLACEHOLDER_NAMES = frozenset(['random person', 'dave null', 'abuse team'])

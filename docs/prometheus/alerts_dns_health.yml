@@ -1,5 +1,5 @@
 # 1AEO Exit DNS Health Alerts
-# Schema: v1
+# Schema: v2
 # Install: copy to /etc/prometheus/rules/ and reload Prometheus
 # Customize: replace YOUR_FAMILY_ID with your Ed25519 family key (64-char hex)
 #            or use verifiedaroi label via info metric joins

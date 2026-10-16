@@ -16,15 +16,12 @@ import pytest
 from allium.lib.consensus.consensus_evaluation import (
     format_relay_consensus_evaluation,
     format_authority_consensus_evaluation,
-    _format_consensus_status,
     _format_relay_values,
     _format_authority_table_enhanced,
     _format_flag_summary,
     _format_reachability_summary,
     _format_bandwidth_summary,
     _identify_issues,
-    _generate_advice,
-    _generate_advice_simple,
     _format_thresholds_table,
     _format_bandwidth_value,
 )
@@ -38,6 +35,7 @@ from allium.lib.consensus.flag_thresholds import (
     HSDIR_WFU_DEFAULT,
     SECONDS_PER_DAY,
 )
+from tests.conftest import FOREST44_FINGERPRINT
 
 
 # ============================================================================
@@ -199,38 +197,6 @@ class TestFormatRelayConsensusEvaluation:
         assert result['majority_required'] == 5
 
 
-class TestFormatConsensusStatus:
-    """Tests for _format_consensus_status() function."""
-    
-    def test_in_consensus(self):
-        """Test status when relay is in consensus."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 7,
-            'total_authorities': 9,
-            'majority_required': 5,
-        }
-        result = _format_consensus_status(diagnostics)
-        
-        assert result['status'] == 'IN CONSENSUS'
-        assert result['status_class'] == 'success'
-        assert '7' in result['display']
-        assert '9' in result['display']
-    
-    def test_not_in_consensus(self):
-        """Test status when relay is not in consensus."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 3,
-            'total_authorities': 9,
-            'majority_required': 5,
-        }
-        result = _format_consensus_status(diagnostics)
-        
-        assert result['status'] == 'NOT IN CONSENSUS'
-        assert result['status_class'] == 'danger'
-
-
 class TestFormatRelayValues:
     """Tests for _format_relay_values() function."""
     
@@ -354,82 +320,6 @@ class TestIdentifyIssues:
         
         reachability_issues = [i for i in issues if i['category'] == 'reachability']
         assert len(reachability_issues) >= 1
-
-
-class TestGenerateAdvice:
-    """Tests for _generate_advice() function."""
-    
-    def test_advice_for_low_wfu(self):
-        """Test advice generation for low WFU."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 9}},
-            'authority_votes': [
-                {'wfu': 0.95},  # Below 98% threshold
-            ],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        assert len(advice) >= 1
-        # New format returns list of dicts with 'advice' key
-        advice_texts = [a.get('advice', '') for a in advice]
-        wfu_advice = [a for a in advice_texts if 'WFU' in a or 'uptime' in a.lower()]
-        assert len(wfu_advice) >= 1
-    
-    def test_advice_returns_dict_format(self):
-        """Test that advice returns list of properly formatted dicts."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 3,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 3, 'ipv4_reachable_authorities': []},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        assert len(advice) >= 1
-        for item in advice:
-            assert isinstance(item, dict)
-            assert 'category' in item
-            assert 'priority' in item
-            assert 'title' in item
-            assert 'advice' in item
-    
-    def test_advice_priority_ordering(self):
-        """Test that advice is sorted by priority (errors first)."""
-        diagnostics = {
-            'in_consensus': False,  # Error severity
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.85}],  # Warning severity
-        }
-        advice = _generate_advice(diagnostics)
-        
-        # Should be sorted by priority (1=error, 2=warning, 3=info)
-        priorities = [a.get('priority', 999) for a in advice]
-        assert priorities == sorted(priorities)
-    
-    def test_advice_includes_doc_refs(self):
-        """Test that advice includes documentation references where appropriate."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': ['moria1', 'tor26']},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        advice = _generate_advice(diagnostics)
-        
-        # At least some advice should have doc_ref
-        has_doc_ref = any(a.get('doc_ref') for a in advice)
-        assert has_doc_ref, "Expected at least some advice to include documentation reference"
 
 
 class TestFormatThresholdsTable:
@@ -685,65 +575,6 @@ class TestIssueIdentification:
                        or 'Guard' in i.get('title', '')
                        or 'Guard' in i.get('description', '')]
         assert len(guard_issues) >= 1
-
-
-class TestAdviceGeneration:
-    """Tests for advice generation logic."""
-    
-    def test_advice_for_new_relay(self):
-        """Test advice for relay with low Time Known."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 0}},
-            'authority_votes': [
-                {'wfu': 0.99, 'tk': 172800},  # Only 2 days - new relay
-            ],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        # Should give advice about Time Known
-        assert len(advice) >= 1
-    
-    def test_advice_mentions_specific_thresholds(self):
-        """Test that advice mentions specific threshold values."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {'guard': {'eligible_count': 5}},
-            'authority_votes': [
-                {'wfu': 0.95},  # Below 98%
-            ],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        # Should mention the 98% threshold in advice text
-        advice_texts = [a.get('advice', '') for a in advice]
-        advice_text = ' '.join(advice_texts)
-        assert '98%' in advice_text or 'WFU' in advice_text
-    
-    def test_advice_simple_returns_strings(self):
-        """Test that _generate_advice_simple returns list of strings."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.90}],
-        }
-        
-        advice = _generate_advice_simple(diagnostics)
-        
-        assert isinstance(advice, list)
-        for item in advice:
-            assert isinstance(item, str)
 
 
 class TestIdentifyIssuesComprehensive:
@@ -1016,100 +847,6 @@ class TestIdentifyIssuesComprehensive:
         # Should have no issues (or only informational)
         errors = [i for i in issues if i['severity'] in ['error', 'warning']]
         assert len(errors) == 0
-
-
-class TestAdviceCategories:
-    """Tests for advice categorization."""
-    
-    def test_consensus_category(self):
-        """Test advice has consensus category for not-in-consensus."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'consensus' in categories
-    
-    def test_reachability_category(self):
-        """Test advice has reachability category for unreachable relay."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 5,
-            'total_authorities': 9,
-            'reachability': {
-                'ipv4_reachable_count': 3,
-                'ipv4_reachable_authorities': ['moria1', 'tor26', 'dizum'],
-            },
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'reachability' in categories
-    
-    def test_guard_category(self):
-        """Test advice has guard category for Guard-related issues."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.90}],  # Low WFU
-        }
-        
-        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
-        
-        categories = [a.get('category') for a in advice]
-        assert 'guard' in categories
-
-
-class TestAdviceDocRefs:
-    """Tests for documentation references in advice."""
-    
-    def test_torproject_doc_refs(self):
-        """Test that advice references torproject.org documentation."""
-        diagnostics = {
-            'in_consensus': False,
-            'vote_count': 2,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': []},
-            'flag_eligibility': {},
-            'authority_votes': [],
-        }
-        
-        advice = _generate_advice(diagnostics)
-        
-        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
-        assert len(doc_refs) >= 1
-        # Should reference torproject.org
-        assert any('torproject.org' in ref for ref in doc_refs)
-    
-    def test_spec_doc_refs_for_flags(self):
-        """Test that flag-related advice references dir-spec."""
-        diagnostics = {
-            'in_consensus': True,
-            'vote_count': 9,
-            'total_authorities': 9,
-            'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.85, 'tk': 3 * SECONDS_PER_DAY}],  # Below thresholds
-        }
-        
-        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
-        
-        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
-        # Should reference spec.torproject.org for flag requirements
-        assert any('spec.torproject.org' in ref for ref in doc_refs)
 
 
 class TestStableUptimeFeature:
@@ -1428,7 +1165,7 @@ class TestMiddleOnlyFlag:
         rv = result['relay_values']
         assert rv['middleonly_flagged'] is True
         assert rv['middleonly_count'] == 7
-    
+
     def test_middleonly_in_flag_requirements_table(self):
         """Test that MiddleOnly relay shows MiddleOnly row in requirements table."""
         result = format_relay_consensus_evaluation(
@@ -1482,19 +1219,28 @@ class TestMiddleOnlyFlag:
         assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
     
     def test_middleonly_relay_row_count(self):
-        """Test that MiddleOnly relay has correct row count (base + MiddleOnly).
-        
-        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 20
-        """
+        """Test that MiddleOnly relay has correct row count
+        (base + MiddleOnly + BadExit — the relay carries both flags)."""
         result = format_relay_consensus_evaluation(
             self.MIDDLEONLY_EVALUATION,
             current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
             observed_bandwidth=5000000,
         )
-        
+
         frt = result['flag_requirements_table']
-        assert len(frt) == 20  # 19 base + 1 MiddleOnly
+        # 19 base + MiddleOnly row + BadExit row (flagged from Onionoo flags
+        # even though this fixture's flag_eligibility has no 'badexit' entry)
+        assert len(frt) == 21
+        badexit = next(r for r in frt if r['flag'] == 'BadExit')
+        assert badexit['status_text'] == 'Flagged (?/9 DA)'  # no vote count to show
+
+    def test_flagged_row_keeps_a_recorded_zero(self):
+        """A recorded 0 vote count still shows as 0; only a missing entry shows '?'."""
+        frt = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION, current_flags=['Running', 'Valid', 'MiddleOnly'],
+            observed_bandwidth=5000000)['flag_requirements_table']
+        middleonly = next(r for r in frt if r['flag'] == 'MiddleOnly')
+        assert middleonly['status_text'] == 'Flagged (0/9 DA)'
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""
@@ -1829,3 +1575,111 @@ class TestRunningValidV2DirFlags:
         # Check that threshold shows ≥4/7 DA (not ≥5/9)
         fast_row = frt[0]  # First row is Fast
         assert '≥4/7 DA' in fast_row['threshold'], f"Expected ≥4/7 DA, got: {fast_row['threshold']}"
+
+
+class TestForest44VoteBandwidthDisplay:
+    """forest44's real votes: units, sources and verdicts the relay page shows."""
+
+    @staticmethod
+    def _format(fetcher, **kwargs):
+        """format_relay_consensus_evaluation() for forest44 without the Fast flag."""
+        return format_relay_consensus_evaluation(
+            fetcher.get_relay_consensus_evaluation(FOREST44_FINGERPRINT, 9), fetcher.flag_thresholds,
+            current_flags=['Running', 'Valid', 'V2Dir', 'Stable'], **kwargs)
+
+    @pytest.fixture
+    def formatted(self, forest44_fetcher):
+        """forest44's formatted evaluation, shown in bytes."""
+        return self._format(forest44_fetcher, observed_bandwidth=854_738)
+
+    @pytest.fixture
+    def rows(self, formatted):
+        """Per-Authority table rows by authority."""
+        return {row['authority']: row for row in formatted['authority_table']}
+
+    def test_cons_wt_column_shows_vote_kilobytes_as_bytes(self, rows):
+        """Cons Wt shows each vote's KB/s value in bytes, marks its source and grays out values that don't count."""
+        # Measured=68 (KB/s) in bastet's vote; it counts toward the consensus weight
+        assert (rows['bastet']['measured'], rows['bastet']['measured_display']) == (68_000, '68.0 KB/s')
+        assert (rows['bastet']['cons_wt_mark'], rows['bastet']['cons_wt_counts']) == ('M', True)
+        assert rows['bastet']['cons_wt_title'].startswith("Measured=68 (KB/s) in bastet's vote")
+        # dizum has no measurement: its Bandwidth=854 is shown, but doesn't count
+        assert rows['dizum']['measured_display'] == '854.0 KB/s'
+        assert (rows['dizum']['cons_wt_mark'], rows['dizum']['cons_wt_counts']) == ('R', False)
+        assert "Bandwidth=854 (KB/s), which doesn't count toward the consensus weight" in rows['dizum']['cons_wt_title']
+
+    def test_fast_column_uses_each_authoritys_bandwidth(self, rows):
+        """The Fast column compares each authority's own bandwidth with its own fast-speed."""
+        assert (rows['tor26']['fast_speed_display'], rows['tor26']['fast_threshold_display']) == ('32.0 KB/s', '102.0 KB/s')
+        assert (rows['tor26']['flag_bw_mark'], rows['tor26']['fast_meets']) == ('M', False)
+        assert (rows['moria1']['fast_speed_display'], rows['moria1']['fast_threshold_display']) == ('230.0 KB/s', '1.0 MB/s')
+        assert rows['moria1']['fast_meets'] is False
+        assert (rows['maatuska']['fast_speed_display'], rows['maatuska']['flag_bw_mark']) == ('854.0 KB/s', 'R')
+        assert rows['maatuska']['fast_meets'] is True
+        assert rows['faravahar']['fast_speed_display'] == 'not published'
+        assert rows['faravahar']['fast_meets'] is True  # its actual Fast vote
+        for name, row in rows.items():
+            assert row['fast_meets'] == ('Fast' in row['flags']), name
+            assert row['guard_bw_meets'] is False, name
+
+    def test_fast_row_is_below_with_four_of_nine(self, formatted):
+        """The Fast row reads Below (4/9 DA) next to the bandwidth each authority judged by."""
+        fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
+        assert (fast['anchor'], fast['status']) == ('flag-fast-speed', 'below')
+        assert '4/9 DA' in fast['status_text']
+        assert '32.0 KB/s – 230.0 KB/s' in fast['value'] and '(5 DA measured)' in fast['value']
+        assert '854.0 KB/s' in fast['value'] and '(3 DA relay-reported)' in fast['value']
+        assert 'faravahar: not published' in fast['value']
+        assert fast['threshold'].startswith('≥102.0 KB/s (AuthDirFastGuarantee, or the top-7/8 cutoff if lower)')
+
+    def test_requires_fast_rows_show_the_measurements(self, formatted):
+        """The 'requires Fast flag' issue links land on these rows: Below (4/9) next to the measurements."""
+        rows = {row['anchor']: row for row in formatted['flag_requirements_table']}
+        for anchor in ('flag-guard-prereq-fast', 'flag-hsdir-prereq-fast'):
+            row = rows[anchor]
+            assert row['status'] == 'below', anchor
+            assert '4/9 DA' in row['status_text'], anchor
+            assert row['value'].startswith('4/9 DA assigned Fast<br>'), anchor
+            assert '32.0 KB/s – 230.0 KB/s' in row['value'] and '(5 DA measured)' in row['value'], anchor
+            assert '(3 DA relay-reported)' in row['value'], anchor
+            assert row['threshold'].startswith('≥102.0 KB/s'), anchor
+
+    def test_guard_bandwidth_row_is_below(self, formatted):
+        """No authority credits enough bandwidth for Guard: Below (0/9 DA)."""
+        row = next(row for row in formatted['flag_requirements_table']
+                   if row['flag'] == 'Guard' and row['metric'] == 'Bandwidth')
+        assert row['status'] == 'below'
+        assert '0/9 DA' in row['status_text']
+        assert '≥2.1 MB/s (AuthDirGuardBWGuarantee)' in row['threshold']
+
+    def test_bandwidth_summary_is_the_consensus_weight(self, formatted):
+        """Bandwidth Metrics show the consensus weight and the Measured= range."""
+        summary = formatted['bandwidth_summary']
+        assert summary['median_display'] == '68.0 KB/s'
+        assert (summary['median_int'], summary['median_unit']) == (68, 'KB/s')
+        assert summary['unmeasured'] is False
+        assert (summary['min_display'], summary['max_display']) == ('32.0 KB/s', '230.0 KB/s')
+        assert summary['bw_auth_not_measured_names'] == ['faravahar', 'longclaw']
+
+    def test_bits_display(self, forest44_fetcher):
+        """Vote KB/s values convert to the default bits display."""
+        formatted = self._format(forest44_fetcher, use_bits=True)
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        assert rows['bastet']['measured_display'] == '544.0 Kbit/s'
+        assert rows['bastet']['fast_threshold_display'] == '816.0 Kbit/s'
+        assert formatted['bandwidth_summary']['median_display'] == '544.0 Kbit/s'
+
+    def test_earlier_measurement_and_sybil_cells(self, forest44_fetcher):
+        """A Fast vote without Measured= shows 'not published'; a Sybil listing explains a missing Fast."""
+        votes = forest44_fetcher.relay_index[FOREST44_FINGERPRINT]['votes']
+        votes['bastet'].update(measured=None, flags=['Fast', 'Running', 'Stable', 'V2Dir', 'Valid'])
+        votes['maatuska']['flags'] = ['Sybil']
+        formatted = self._format(forest44_fetcher)
+        rows = {row['authority']: row for row in formatted['authority_table']}
+        assert rows['bastet']['fast_speed_display'] == 'not published'
+        assert rows['bastet']['fast_meets'] is True
+        assert 'earlier bandwidth file' in rows['bastet']['flag_bw_title']
+        assert rows['maatuska']['fast_meets'] is False
+        assert 'lists this relay as Sybil' in rows['maatuska']['flag_bw_title']
+        fast = next(row for row in formatted['flag_requirements_table'] if row['flag'] == 'Fast')
+        assert 'bastet, faravahar: not published' in fast['value']

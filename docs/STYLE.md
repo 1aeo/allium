@@ -34,6 +34,25 @@ Every doc should include:
 - Specific numbers: "Uses ~2.4GB memory with `--apis all`"
 - Code references: "See `lib/aroileaders.py`"
 
+### Pasteable-examples convention (operator-facing UI)
+
+When an Allium template surfaces operator-actionable guidance (AROI
+fix hints, torrc snippets, command-line invocations), the copy MUST
+be pasteable verbatim — never prose. Operators should be able to
+copy a `<code>` block and apply it directly without translating
+instructions into commands.
+
+- Do: `tor --keygen-family /path/myfamily`
+- Do: `ContactInfo ... ciissversion:3 url:foo.bar proof:uri-familyid-ed25519`
+- Don't: "Generate a happy-family key on a secure host using the
+  appropriate Tor command, then..."
+
+For AROI v3 error categories, the pasteable string lives in
+`V3_CATEGORY_LABELS[<category>]['example']` in
+`allium/lib/aroi_validation.py`. When upstream `aroivalidator` adds a
+new `error_category`, A.8 logs a one-time warning so we know to add a
+new entry.
+
 ### Don't
 
 - "We successfully implemented..."

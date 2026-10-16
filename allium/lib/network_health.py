@@ -9,11 +9,10 @@ import statistics
 
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
-from .time_utils import parse_onionoo_timestamp, create_time_thresholds
+from .time_utils import parse_onionoo_timestamp, create_time_thresholds, ONIONOO_HISTORY_PERIODS
 from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
-from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
 from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count
 
 
@@ -120,11 +119,15 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
         'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
         'exit_dns_health_socks_error', 'exit_dns_health_network_error',
+        # Exit DNS upstream resolver coverage (None when the report has no resolver data)
+        'exit_dns_health_resolver_exits_total', 'exit_dns_health_resolver_exits_covered',
+        'exit_dns_health_resolver_exits_labelled', 'exit_dns_health_resolver_exits_using_public',
     ]
-    
+
     for key in integer_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:,}"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:,}" if value is not None else "n/a"
     
     # Format all percentage values with 1 decimal place (12+ format operations eliminated)
     percentage_format_keys = [
@@ -160,8 +163,16 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
         'hf_ready_cw_percentage', 'hf_some_operators_percentage',
         'hf_all_operators_percentage', 'hf_not_ready_relays_percentage',
+        # Exit DNS upstream resolver shares (None when the report has no resolver data)
+        'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
+        'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
+        'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_unknown_percentage',
     ]
-    
+
     # Add 1_month period formatting keys (used directly in templates) 
     roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
     stat_types = ['mean', 'median']
@@ -171,7 +182,13 @@ def preformat_network_health_template_strings(health_metrics):
     
     for key in percentage_format_keys:
         if key in health_metrics:
-            health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:.1f}%"
+            value = health_metrics[key]
+            health_metrics[f'{key}_formatted'] = f"{value:.1f}%" if value is not None else "n/a"
+
+    # Resolver shares are rounded together, so All Public + Local + Other + Unknown show 100.0%
+    from .exit_dns_health import resolver_share_tenths
+    for key, tenths in (resolver_share_tenths(health_metrics) or {}).items():
+        health_metrics[f'{key}_formatted'] = f"{tenths / 10:.1f}%"
     
     # Format uptime time series data (4+ format operations eliminated)
     # Using consistent naming pattern: {role}_uptime_{period}_mean
@@ -252,20 +269,100 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
     Extracted from calculate_network_health_metrics for readability.
     """
     try:
-        from .aroi_validation import calculate_aroi_validation_metrics
-        
+        from .aroi_validation import (
+            calculate_aroi_validation_metrics,
+            check_schema_version,
+            _log_aroi_build_summary,
+        )
+
         # Get pre-fetched validation data (attached by coordinator)
         validation_data = getattr(relay_set, 'aroi_validation_data', None)
-        
-        # Calculate validation metrics (relay AND operator level in single pass)
-        validation_metrics = calculate_aroi_validation_metrics(
-            relay_set.json.get('relays', []), 
-            validation_data,
-            calculate_operator_metrics=True
+
+        # Phase 2.2: cache AROI validation metrics across multiple
+        # _calculate_network_health_metrics() invocations within a
+        # single build. The metrics are derived from
+        # aroi_validation_data + relay aroi_domain/version/proof_type
+        # fields, neither of which changes between the
+        # uptime/bandwidth/dns-health enrichment phases. Recomputing
+        # them ~4× per build (matching the number of
+        # _calculate_network_health_metrics calls in
+        # Relays.enrich_with_api_data) wastes work and produces
+        # duplicate build-summary log lines.
+        _cached = getattr(relay_set, '_aroi_metrics_cache', None)
+        # Cache key: id of validation_data (changes only when the
+        # upstream data is replaced, never within a build).
+        _cache_key = id(validation_data) if validation_data is not None else 0
+        if _cached is not None and _cached.get('cache_key') == _cache_key:
+            # Cache hit — reuse previously-computed metrics.
+            validation_metrics = _cached['metrics']
+            schema_version = _cached['schema_version']
+            health_metrics['aroi_schema_version'] = schema_version
+            # NOTE: deliberately skip _log_aroi_build_summary on cache
+            # hits to satisfy Phase 2.3 (dedup the duplicate build log).
+        else:
+            # Cache miss — compute fresh.
+
+            # Schema-version handshake: warn once on unknown schemas;
+            # expose the version downstream so the dashboard can render
+            # a footnote. progress_logger may be a ProgressLogger
+            # instance (with .log()) or None — wrap into a plain
+            # callable so check_schema_version /
+            # _log_aroi_build_summary can stay logger-agnostic.
+            _logger_obj = getattr(relay_set, 'progress_logger', None)
+            if _logger_obj is not None and hasattr(_logger_obj, 'log'):
+                # Wrap the ProgressLogger.log(msg, increment_step=False)
+                # call in a named function instead of a lambda — Ruff E731
+                # flags the lambda assignment, and a def is just as
+                # readable while playing nicer with traceback output if
+                # the wrapped call ever raises.
+                def _progress_log(m, _logger=_logger_obj):
+                    _logger.log(m, increment_step=False)
+                log_callable = _progress_log
+            elif relay_set.progress:
+                log_callable = print
+            else:
+                log_callable = None
+            schema_version = check_schema_version(validation_data, log_callable)
+            health_metrics['aroi_schema_version'] = schema_version
+
+            # Calculate validation metrics (relay AND operator level in single pass)
+            validation_metrics = calculate_aroi_validation_metrics(
+                relay_set.json.get('relays', []),
+                validation_data,
+                calculate_operator_metrics=True
+            )
+            # Forward schema version into metrics so the build-summary log
+            # references it.
+            validation_metrics['aroi_schema_version'] = schema_version
+
+            # A.8: emit build-time summary line — only on first compute.
+            _log_aroi_build_summary(validation_metrics, log_callable)
+
+            # Pop _validation_map BEFORE caching so the cached metrics
+            # dict is the "clean" one that gets merged into health_metrics
+            # downstream (the same as before Phase 2 caching). Cache the
+            # validation_map separately for restoration on cache hits.
+            _validation_map = validation_metrics.pop('_validation_map', {}) or {}
+
+            # Cache for subsequent calls.
+            relay_set._aroi_metrics_cache = {
+                'cache_key': _cache_key,
+                'metrics': validation_metrics,
+                'schema_version': schema_version,
+                'validation_map': _validation_map,
+            }
+
+        # Store validation_map for reuse by contact pages. On the first
+        # call we populated it from the freshly-computed metrics dict
+        # above; on subsequent cache hits we restore from the cache.
+        # WITHOUT this restore step, the cache-hit path was overwriting
+        # relay_set.validation_map with {} (the .pop() default), which
+        # then made every contact-page validation lookup return "not in
+        # map" → all relays rendering as 0% valid even when upstream
+        # said 100% valid. Fixed in commit following 119687b33e.
+        relay_set.validation_map = relay_set._aroi_metrics_cache.get(
+            'validation_map', {}
         )
-        
-        # Store validation_map for reuse by contact pages (avoids rebuilding 3,000+ times)
-        relay_set.validation_map = validation_metrics.pop('_validation_map', {})
         
         # Add validation metrics to health_metrics
         health_metrics.update(validation_metrics)
@@ -313,12 +410,20 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
         # Get IPv6 status dict from earlier calculation
         operator_ipv6_status = health_metrics.pop('_temp_operator_ipv6_status', {})
         
-        # Count IPv6 support ONLY among validated operators (mutually exclusive)
-        both_ipv4_ipv6_aroi_operators = sum(1 for domain in validated_domain_set 
-                                        if domain in operator_ipv6_status and operator_ipv6_status[domain]['has_dual_stack'])
-        ipv4_only_aroi_operators = sum(1 for domain in validated_domain_set
-                                   if domain in operator_ipv6_status and not operator_ipv6_status[domain]['has_dual_stack'] and operator_ipv6_status[domain]['has_ipv4_only'])
-        
+        # Count IPv6 support among validated operators (mutually exclusive
+        # buckets). Single-pass loop over validated_domain_set to avoid
+        # walking the same set twice (item C in optimization feedback).
+        both_ipv4_ipv6_aroi_operators = 0
+        ipv4_only_aroi_operators = 0
+        for domain in validated_domain_set:
+            status = operator_ipv6_status.get(domain)
+            if not status:
+                continue
+            if status.get('has_dual_stack'):
+                both_ipv4_ipv6_aroi_operators += 1
+            elif status.get('has_ipv4_only'):
+                ipv4_only_aroi_operators += 1
+
         health_metrics['ipv4_only_aroi_operators'] = ipv4_only_aroi_operators
         health_metrics['both_ipv4_ipv6_aroi_operators'] = both_ipv4_ipv6_aroi_operators
         
@@ -340,23 +445,48 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
             health_metrics['avg_relays_per_aroi_operator'] = 0.0
                 
     except Exception as e:
-        # Graceful fallback if validation data unavailable
+        # Graceful fallback if validation data unavailable. Templates
+        # iterate over per-proof-type keys, so we must seed all of them
+        # (4 proof types * 3 stats = 12 keys) even when the metrics
+        # path errored out.
         if relay_set.progress:
             print(f"⚠️  AROI Validation: Error loading data: {e}")
-        health_metrics.update({
+        # Protect the fallback import too — the original error may have
+        # been raised from inside aroi_validation itself, in which case
+        # re-importing here would re-raise and skip the rest of the
+        # zeroed fallback. Default PROOF_TYPE_STAT_KEYS to () so the
+        # subsequent comprehension simply produces no per-proof-type
+        # entries (callers tolerate missing keys via .get() with 0).
+        try:
+            from .aroi_validation import PROOF_TYPE_STAT_KEYS
+        except Exception:
+            PROOF_TYPE_STAT_KEYS = ()
+        fallback = {
             'aroi_validated_count': 0,
             'aroi_unvalidated_count': 0,
             'aroi_no_proof_count': 0,
+            'aroi_no_domain_count': 0,
+            'aroi_no_ciissversion_count': 0,
             'relays_no_aroi': 0,
+            'relays_no_contact': 0,
+            'relays_no_aroi_info': 0,
+            'relays_missing_two_aroi': 0,
+            'relays_version_proof_mismatch': 0,
+            'relays_v3_informational': 0,
             'relays_without_aroi': total_relays_count,
             'relays_without_aroi_percentage': 100.0 if total_relays_count > 0 else 0.0,
             'aroi_validated_percentage': 0.0,
             'aroi_unvalidated_percentage': 0.0,
             'aroi_no_proof_percentage': 0.0,
+            'aroi_no_domain_percentage': 0.0,
+            'aroi_no_ciissversion_percentage': 0.0,
+            'relays_no_contact_percentage': 0.0,
+            'relays_no_aroi_info_percentage': 0.0,
+            'relays_missing_two_aroi_percentage': 0.0,
+            'relays_version_proof_mismatch_percentage': 0.0,
+            'relays_v3_informational_percentage': 0.0,
             'relays_no_aroi_percentage': 0.0,
             'aroi_validation_success_rate': 0.0,
-            'dns_rsa_success_rate': 0.0,
-            'uri_rsa_success_rate': 0.0,
             'validation_data_available': False,
             'total_relays_with_aroi': 0,
             'total_relays_with_aroi_percentage': 0.0,
@@ -377,8 +507,24 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
             'ipv4_only_aroi_operators': 0,
             'both_ipv4_ipv6_aroi_operators': 0,
             'ipv4_only_aroi_operators_percentage': 0.0,
-            'both_ipv4_ipv6_aroi_operators_percentage': 0.0
-        })
+            'both_ipv4_ipv6_aroi_operators_percentage': 0.0,
+            'aroi_schema_version': None,
+            # v2/v3 aggregates and adoption (added in A.3)
+            'v2_total': 0, 'v2_valid': 0, 'v2_success_rate': 0.0,
+            'v3_total': 0, 'v3_valid': 0, 'v3_success_rate': 0.0,
+            'ciissversion_declared': {},
+            'ciissversion_validated': {},
+            'v3_failure_categories': {},
+            'error_rollup_shared': [],
+            'error_rollup_v2_only': [],
+            'error_rollup_v3_only': [],
+        }
+        # Seed per-proof-type keys for ALL known proof types (4 today).
+        for stat_key in PROOF_TYPE_STAT_KEYS:
+            fallback[f'{stat_key}_total'] = 0
+            fallback[f'{stat_key}_valid'] = 0
+            fallback[f'{stat_key}_success_rate'] = 0.0
+        health_metrics.update(fallback)
 
 
 def _integrate_exit_dns_health(health_metrics, relay_set):
@@ -434,7 +580,7 @@ def calculate_network_health_metrics(relay_set):
         'exit_percentage': _pct(network_totals['exit_count'], total_relays_count)
     }
     
-    # OPTIMIZED: Reuse cached unique families count from _calculate_and_cache_family_statistics()
+    # OPTIMIZED: Reuse cached unique families count from categorization.calculate_and_cache_family_statistics()
     # This eliminates duplicate deduplication loops for better performance
     health_metrics['families_count'] = relay_set.json.get('family_statistics', {}).get('unique_families_count', 0)
     
@@ -495,7 +641,7 @@ def calculate_network_health_metrics(relay_set):
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
     network_total_data = exit_total_data = guard_total_data = middle_total_data = 0
-    network_total_data_by_period = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+    network_total_data_by_period = {p: 0 for p in ONIONOO_HISTORY_PERIODS}
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -1287,7 +1433,7 @@ def calculate_network_health_metrics(relay_set):
             ('hsdir',     'HSDir',     network_flag_statistics),
         ]
         
-        for period in ['1_month', '6_months', '1_year', '5_years']:
+        for period in ONIONOO_HISTORY_PERIODS:
             for role, flag_key, source in uptime_sources:
                 # Flag-based: source[flag_key][period], non-flag: source[period]
                 period_stats = (source.get(flag_key, {}).get(period, {})
@@ -1306,7 +1452,7 @@ def calculate_network_health_metrics(relay_set):
         health_metrics['uptime_percentiles'] = None
         
         # REFACTORED: Consistent fallback initialization using unified pattern
-        uptime_periods = ['1_month', '6_months', '1_year', '5_years']
+        uptime_periods = ONIONOO_HISTORY_PERIODS
         roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
         stat_types = ['mean', 'median']
         
