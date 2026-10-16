@@ -20,9 +20,18 @@ collector_consensus
 collector_descriptors
 "
 
+# True only when every name in CI_CACHE_FIXTURES is present. A details-only
+# directory must not be treated as a full substitute set.
+_ci_fixtures_complete() {
+    local dir="$1" name
+    for name in $CI_CACHE_FIXTURES; do
+        [ -f "${dir}/${name}.json" ] || return 1
+    done
+}
+
 ci_fixture_dir() {
     if [ -n "${ALLIUM_CI_FIXTURE_DIR:-}" ]; then
-        if [ -f "${ALLIUM_CI_FIXTURE_DIR}/onionoo_details.json" ]; then
+        if _ci_fixtures_complete "${ALLIUM_CI_FIXTURE_DIR}"; then
             printf '%s\n' "${ALLIUM_CI_FIXTURE_DIR}"
             return 0
         fi
@@ -30,11 +39,11 @@ ci_fixture_dir() {
     fi
     local here
     here=$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    if [ -f "${here}/../tests/fixtures/ci/onionoo_details.json" ]; then
+    if _ci_fixtures_complete "${here}/../tests/fixtures/ci"; then
         (CDPATH= cd -- "${here}/../tests/fixtures/ci" && pwd)
         return 0
     fi
-    if [ -f tests/fixtures/ci/onionoo_details.json ]; then
+    if _ci_fixtures_complete tests/fixtures/ci; then
         (CDPATH= cd -- tests/fixtures/ci && pwd)
         return 0
     fi

@@ -249,6 +249,20 @@ def test_seed_is_a_noop_unless_the_setup_job_opts_in(tmp_path):
     assert not (checkout / "allium" / "data" / "cache").exists()
 
 
+def test_seed_rejects_a_details_only_fixture_directory(tmp_path):
+    """Every declared API fixture is required, not only onionoo details."""
+    checkout = tmp_path / "allium-src"
+    (checkout / "allium" / "lib").mkdir(parents=True)
+    (checkout / "allium" / "lib" / "workers.py").write_text("# marker\n", encoding="utf-8")
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    shutil.copy(str(FIXTURE_DIR / "onionoo_details.json"), str(partial / "onionoo_details.json"))
+    completed = _bash('source "%s"; seed_ci_api_caches' % HELPER, checkout, _env(fixture_dir=partial))
+    assert completed.returncode == 1
+    assert "fixtures were not found" in completed.stdout
+    assert not (checkout / "allium" / "data" / "cache" / "onionoo_details.json").exists()
+
+
 def test_seed_fails_when_the_job_opted_in_but_the_fixtures_are_missing(tmp_path):
     checkout = tmp_path / "allium-src"
     (checkout / "allium" / "lib").mkdir(parents=True)
