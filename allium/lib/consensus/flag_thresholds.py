@@ -98,8 +98,25 @@ GUARD_TK_DEFAULT = 8 * SECONDS_PER_DAY  # 691200 seconds
 # Guard weighted fractional uptime (WFU) threshold per dir-spec: 98%
 # Per dir-spec: "WFU" parameter default is 0.98 (98%)
 # Relay must have been running at least this fraction of the time.
+# voteflags.c caps the measured median at AuthDirVoteGuardGuaranteeWFU (0.98)
+# and publishes the value it used as guard-wfu. A lower published value wins.
 # Verified: All 9 voting authorities use 0.98 (98%).
 GUARD_WFU_DEFAULT = 0.98
+
+# Diagnostic slack only: a relay that already has Guard is "near the failing
+# side" of an authority's own threshold when the gap is smaller than this.
+# These margins do not assign the Guard flag.
+#
+# WFU: one percentage point around the guard-wfu that authority published
+# (or GUARD_WFU_DEFAULT when the vote omits it).
+# Time known: one day around the published guard-tk. Authorities cap that
+# cutoff at AuthDirVoteGuardGuaranteeTimeKnown (8 days). Client GuardLifetime
+# only limits how long a client keeps a chosen guard; it is not a flag input.
+# Bandwidth: a quarter of the binding bar from guard_bandwidth_requirement,
+# so the band follows a top-25% cutoff that is easier than the 2 MB guarantee.
+GUARD_WFU_NEAR_MARGIN = 0.01
+GUARD_TK_NEAR_MARGIN = SECONDS_PER_DAY
+GUARD_BW_NEAR_FRACTION = 0.25
 
 # ============================================================================
 # HSDIR FLAG THRESHOLDS
@@ -170,6 +187,26 @@ def guard_bw_top_threshold(thresholds: Dict[str, Any]) -> Optional[float]:
     values = [thresholds[key] for key in ('guard-bw-inc-exits', 'guard-bw-exc-exits')
               if isinstance(thresholds.get(key), (int, float))]
     return min(values) if values else None
+
+
+def guard_bandwidth_requirement(guarantee: Optional[float] = None,
+                                top25: Optional[float] = None) -> Optional[float]:
+    """Lowest bandwidth (bytes/s) that still satisfies Guard's bandwidth rule.
+
+    dirauth_set_routerstatus_from_routerinfo assigns the bandwidth part of Guard
+    when credible bandwidth is at least AuthDirGuardBWGuarantee, or at least
+    MIN(guard-bw-inc-exits, guard-bw-exc-exits), the easier of the two bars. ``top25`` is
+    that MIN (see guard_bw_top_threshold). A missing or non-positive cutoff leaves
+    only the guarantee. Returns None when neither bar is set.
+
+    Relay diagnostics use this as the failing side of the bandwidth input.
+    It does not assign the Guard flag.
+    """
+    bars = []
+    for value in (guarantee, top25):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            bars.append(float(value))
+    return min(bars) if bars else None
 
 
 def low_median(values: list):

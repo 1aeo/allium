@@ -27,11 +27,17 @@ from typing import List, Optional
 # Import flag thresholds from centralized module
 from .consensus.flag_thresholds import (
     SECONDS_PER_HOUR,
+    GUARD_TK_DEFAULT,
+    GUARD_TK_NEAR_MARGIN,
+    GUARD_WFU_DEFAULT,
+    GUARD_WFU_NEAR_MARGIN,
     GUARD_BW_GUARANTEE,
+    GUARD_BW_NEAR_FRACTION,
     FAST_BW_GUARANTEE,
     BW_SOURCE_MEASURED,
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
+    guard_bandwidth_requirement,
     resolve_voting_total,
 )
 from .string_utils import (
@@ -255,7 +261,10 @@ def generate_issues_from_consensus(
         })
     
     # =========================================================================
-    # GUARD FLAG ELIGIBILITY (5 issue types) - 3 changed from info to warning
+    # GUARD FLAG ELIGIBILITY
+    # Without Guard: the requirement that failed (warning). Those texts stay.
+    # With Guard: an info note when WFU, time-known, or bandwidth is near that
+    # authority's own published threshold. This does not assign the flag.
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
@@ -352,6 +361,8 @@ def generate_issues_from_consensus(
                 'section': 'flag-guard-time-known',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
+    else:
+        issues.extend(_guard_near_threshold_notes(guard_details, use_bits))
     
     # =========================================================================
     # STABLE FLAG ISSUES (1 issue type) - changed from info to warning
@@ -930,6 +941,193 @@ def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int,
                      f"({majority} needed): at least {guarantee} (AuthDirGuardBWGuarantee){top25}."]
                     + _bandwidth_source_sentences([d for d in details if not d.get('bw_met')],
                                                   'bw_value', 'bw_source', use_bits))
+
+
+def _is_number(value) -> bool:
+    """True for int and float. bool is an int subclass and is not a measurement."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _published_positive(detail: dict, key: str, default: float) -> Optional[float]:
+    """That authority's threshold, or the dirauth default when the vote omitted it."""
+    if key not in detail or detail.get(key) is None:
+        return default
+    value = detail.get(key)
+    if _is_number(value) and value > 0:
+        return float(value)
+    return None
+
+
+def _near_threshold_entries(details: list, value_of, threshold_of, margin_of) -> list:
+    """(authority, value, threshold) within the open margin on either side of the bar."""
+    entries = []
+    for detail in details:
+        value = value_of(detail)
+        threshold = threshold_of(detail)
+        if threshold is None or not _is_number(value):
+            continue
+        margin = margin_of(threshold)
+        if not _is_number(margin) or margin <= 0:
+            continue
+        slack = value - threshold
+        if -margin < slack < margin:
+            entries.append((detail.get('authority') or '?', value, threshold))
+    return entries
+
+
+def _near_phrase(entries: list, format_value, format_threshold) -> str:
+    """Authorities that share a measurement and threshold, then any that differ.
+
+    Same shape as the stricter-authority notes: the common group, then each
+    authority whose published bar (or measured value) is different. Value text
+    uses the same formatters as the below-threshold warning, including the rule
+    that a miss does not round up onto its bar.
+    """
+    groups = []
+    grouped = {}
+    for name, value, threshold in sorted(entries, key=lambda item: item[0]):
+        rendered = (format_value(value, threshold), format_threshold(threshold))
+        slot = grouped.get(rendered)
+        if slot is None:
+            slot = [rendered[0], rendered[1], []]
+            grouped[rendered] = slot
+            groups.append(slot)
+        slot[2].append(name)
+    parts = []
+    for value_text, threshold_text, names in groups:
+        label = _authority_names([{'authority': name} for name in names])
+        parts.append(f"{label} ({value_text} vs {threshold_text})")
+    if len(parts) == 1:
+        return parts[0]
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def _near_position_clause(entries: list, requirement: str, format_value, format_threshold) -> str:
+    """'just above guard-wfu at A and just under guard-wfu at B' for one input."""
+    above = [entry for entry in entries if entry[1] >= entry[2]]
+    under = [entry for entry in entries if entry[1] < entry[2]]
+    parts = []
+    if above:
+        where = _near_phrase(above, format_value, format_threshold)
+        parts.append(f"just above {requirement} at {where}")
+    if under:
+        where = _near_phrase(under, format_value, format_threshold)
+        parts.append(f"just under {requirement} at {where}")
+    return ' and '.join(parts)
+
+
+def _guard_near_note(title: str, section: str, subject: str, requirement: str, entries: list,
+                     format_value, format_threshold, consequence: str, suggestion: str) -> dict:
+    clause = _near_position_clause(entries, requirement, format_value, format_threshold)
+    return {
+        'severity': 'info',
+        'category': 'guard',
+        'title': title,
+        'description': f"{subject} is {clause}. {consequence}",
+        'suggestion': suggestion,
+        'section': section,
+        'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+    }
+
+
+def _guard_bw_threshold(detail: dict) -> Optional[float]:
+    """Binding Guard bandwidth bar for one authority's measured-vs-threshold row."""
+    guarantee = detail.get('bw_guarantee')
+    if not _is_number(guarantee) or guarantee <= 0:
+        guarantee = GUARD_BW_GUARANTEE
+    return guard_bandwidth_requirement(guarantee, detail.get('bw_top25_threshold'))
+
+
+def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[dict]:
+    """Info notes when a relay has Guard and an input is near one authority's bar.
+
+    WFU, time-known, and bandwidth are the measured-vs-threshold values already
+    stored on each guard detail (the Per-Authority Details row). The threshold
+    is that authority's published guard-wfu, guard-tk, or bandwidth bar.
+    A missing WFU or time-known value is unpublished and is not compared. A vote
+    that omits the threshold uses AuthDirVoteGuardGuaranteeWFU (98%) and
+    AuthDirVoteGuardGuaranteeTimeKnown (8 days). Bandwidth passes at the lower of
+    AuthDirGuardBWGuarantee and the authority's top-25% cutoff. A published 0
+    stays a measurement, so it is near only when that authority's bar is within
+    the margin of 0.
+
+    Nothing here changes who is assigned the Guard flag. The below-threshold
+    warnings stay the majority shortfalls from each authority's own bar.
+    """
+    if not details:
+        return []
+    notes = []
+
+    def _bw_value(value, _threshold):
+        return _format_rate(value, use_bits, decimal_places=1)
+
+    def _bw_bar(threshold):
+        return '≥' + _format_rate(threshold, use_bits, decimal_places=1)
+
+    wfu_entries = _near_threshold_entries(
+        details,
+        lambda detail: detail.get('wfu_value'),
+        lambda detail: _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT),
+        lambda _threshold: GUARD_WFU_NEAR_MARGIN,
+    )
+    if wfu_entries:
+        notes.append(_guard_near_note(
+            'Guard: WFU near threshold',
+            'flag-guard-wfu',
+            'Weighted Fractional Uptime',
+            'guard-wfu',
+            wfu_entries,
+            lambda value, threshold: format_wfu_display(value, threshold),
+            _format_wfu_requirement,
+            'Recent downtime counts more than older downtime, so a short outage can move '
+            'WFU across that requirement and drop the Guard flag.',
+            'Keep the relay running without restarts. Each authority applies the guard-wfu '
+            'value from its own vote.',
+        ))
+
+    tk_entries = _near_threshold_entries(
+        details,
+        lambda detail: detail.get('tk_value'),
+        lambda detail: _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT),
+        lambda _threshold: GUARD_TK_NEAR_MARGIN,
+    )
+    if tk_entries:
+        notes.append(_guard_near_note(
+            'Guard: Time Known near threshold',
+            'flag-guard-time-known',
+            'Time Known',
+            'guard-tk',
+            tk_entries,
+            lambda value, threshold: format_known_duration(value, threshold=threshold),
+            _format_tk_requirement,
+            "Weighted time-known falls while the relay is unreachable, and crossing that "
+            "authority's guard-tk drops the Guard flag.",
+            'Stay reachable. Each authority applies the guard-tk value from its own vote, '
+            'capped by AuthDirVoteGuardGuaranteeTimeKnown (8 days) when its measured '
+            'cutoff would be higher.',
+        ))
+
+    bw_entries = _near_threshold_entries(
+        details,
+        lambda detail: detail.get('bw_value'),
+        _guard_bw_threshold,
+        lambda threshold: threshold * GUARD_BW_NEAR_FRACTION,
+    )
+    if bw_entries:
+        notes.append(_guard_near_note(
+            'Guard: bandwidth near threshold',
+            'flag-guard-bandwidth',
+            'Bandwidth counted for Guard',
+            'the Guard bandwidth bar',
+            bw_entries,
+            _bw_value,
+            _bw_bar,
+            "That bar is AuthDirGuardBWGuarantee, or the authority's top-25% cutoff "
+            'when the cutoff is lower. Measured bandwidth moving across it drops the Guard flag.',
+            'Keep the bandwidth each authority counts above the lower of '
+            "AuthDirGuardBWGuarantee and that authority's top-25% cutoff.",
+        ))
+    return notes
 
 
 def _format_rate(rate_bytes: int, use_bits: bool = False, decimal_places: int = 0) -> str:

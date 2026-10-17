@@ -28,6 +28,7 @@ from allium.lib.consensus.flag_thresholds import (
     sort_flags,
     credible_bandwidth,
     guard_bw_top_threshold,
+    guard_bandwidth_requirement,
     low_median,
 )
 
@@ -179,6 +180,27 @@ class TestCheckGuardEligibility:
         assert result['bw_meets_guarantee'] == False
         assert result['bw_in_top25'] == True
         assert result['bw_eligible'] == True
+
+    def test_just_above_published_wfu_still_assigns_guard(self):
+        """A relay one point-fraction above 98% is eligible. The diagnostic near-margin is not a flag rule."""
+        result = check_guard_eligibility(
+            wfu=0.981,
+            tk=GUARD_TK_DEFAULT,
+            bandwidth=GUARD_BW_GUARANTEE,
+        )
+        assert result['eligible'] is True
+        assert result['wfu_met'] is True
+
+
+class TestGuardBandwidthRequirement:
+    """The bandwidth bar Guard actually uses: the easier of the guarantee and the top-25% cutoff."""
+
+    def test_binding_bar_is_the_easier_threshold(self):
+        assert guard_bandwidth_requirement(GUARD_BW_GUARANTEE, 30_000_000) == GUARD_BW_GUARANTEE
+        assert guard_bandwidth_requirement(GUARD_BW_GUARANTEE, 1_000_000) == 1_000_000
+        assert guard_bandwidth_requirement(GUARD_BW_GUARANTEE, None) == float(GUARD_BW_GUARANTEE)
+        assert guard_bandwidth_requirement(GUARD_BW_GUARANTEE, 0) == float(GUARD_BW_GUARANTEE)
+        assert guard_bandwidth_requirement(None, None) is None
 
 
 class TestCheckHsdirEligibility:
