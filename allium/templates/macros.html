@@ -658,3 +658,17 @@
 {% macro chart_period_anchors(above='') %}
 {% for period in chart_spans %}<span id="{{ period }}" class="chart-period{{ ' chart-period-' ~ above if above }}"></span>{% endfor %}
 {% endmacro %}
+
+{# Compact directory-authority IPv6 result. Not a second address column.
+   relay.ipv6_authority_test is ok, failed, or not_tested. compact=true is the
+   IPv4-primary list mark (v6 / v6 Fail / v6 N/T); the IPv6 column uses OK / Fail / N/T. #}
+{% macro ipv6_test_mark(relay, compact=false) -%}
+{%- set test = relay.get('ipv6_authority_test') -%}
+{%- if test == 'ok' -%}
+<span class="al-status-success" title="Directory authorities included this IPv6 ORPort on a vote 'a' line.">{% if compact %}v6{% else %}OK{% endif %}</span>
+{%- elif test == 'failed' -%}
+<span class="al-status-danger" title="IPv6 ORPort published. Authorities that test IPv6 voted for this relay and omitted the 'a' line.">{% if compact %}v6 Fail{% else %}Fail{% endif %}</span>
+{%- elif test == 'not_tested' -%}
+<span class="al-status-muted" title="IPv6 ORPort published. No directory authority vote contains an IPv6 reachability test.">{% if compact %}v6 N/T{% else %}N/T{% endif %}</span>
+{%- endif -%}
+{%- endmacro %}

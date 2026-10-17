@@ -11,7 +11,11 @@ import hashlib
 import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
-from .ip_utils import determine_ipv6_support, safe_parse_ip_address as _safe_parse_ip_address
+from .ip_utils import (
+    determine_ipv6_support,
+    relay_publishes_ipv6,
+    safe_parse_ip_address as _safe_parse_ip_address,
+)
 from .network_health import calculate_network_health_metrics
 from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
@@ -867,8 +871,14 @@ class Relays:
                 if not fingerprint:
                     continue
                 
-                # Get raw consensus evaluation from fetcher
-                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count)
+                # Get raw consensus evaluation from fetcher. published_ipv6 is the
+                # descriptor address only; votes decide whether IPv6 was tested.
+                published_ipv6 = relay_publishes_ipv6(
+                    relay.get('or_addresses'),
+                    relay.get('unreachable_or_addresses'),
+                )
+                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(
+                    fingerprint, authority_count, published_ipv6=published_ipv6)
                 
                 # Calculate relay uptime from last_restarted (Onionoo data)
                 # This is the relay's self-reported uptime from its descriptor
@@ -908,6 +918,13 @@ class Relays:
                 
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
+                ipv6_state = ''
+                if formatted_consensus_evaluation.get('available'):
+                    summary = formatted_consensus_evaluation.get('reachability_summary') or {}
+                    ipv6_state = (summary.get('ipv6') or {}).get('state') or ''
+                if ipv6_state not in ('ok', 'failed', 'not_tested'):
+                    ipv6_state = ''
+                relay['ipv6_authority_test'] = ipv6_state
                 
                 # Generate full diagnostics including overload issues
                 # (overload data was merged in _reprocess_bandwidth_data)

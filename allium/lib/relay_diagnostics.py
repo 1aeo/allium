@@ -101,6 +101,23 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     return issues
 
 
+def _legacy_ipv6_was_tested(reachability: dict, auth_count: int) -> bool:
+    """True when a pre-state reachability dict says authorities tested IPv6 and missed.
+
+    A not-tested list longer than two was treated as incomplete, not as a failure,
+    so those rows stay quiet. Confirmed failures carry ipv6_state and do not use this.
+    """
+    ipv6_tested = reachability.get('ipv6_tested_count')
+    if ipv6_tested is None:
+        not_tested = reachability.get('ipv6_not_tested_authorities') or []
+        if len(not_tested) <= 2:
+            ipv6_tested = auth_count - len(not_tested)
+        else:
+            ipv6_tested = 0
+    ipv6_count = reachability.get('ipv6_reachable_count', 0)
+    return ipv6_tested > 0 and ipv6_count == 0
+
+
 def generate_issues_from_consensus(
     consensus_data: dict,
     current_flags: list = None,
@@ -208,33 +225,50 @@ def generate_issues_from_consensus(
             'section': 'flag-running-ipv4-reachability',
         })
     
-    # IPv6 reachability issues
-    # Note: ipv6_not_tested_authorities may not be reliably populated.
-    # Use ipv6_tested_count if explicitly provided, otherwise use the count of
-    # authorities that successfully tested IPv6 as minimum bound.
+    # IPv6 reachability. ipv6_state is set from vote 'a' lines:
+    # failed = an authority that tests IPv6 voted and omitted the line;
+    # not_tested = the relay published an IPv6 ORPort and no vote contains a test.
+    # A failure is never reported as not tested. Legacy aggregates without a state
+    # still ignore a long not-tested list (it was not a reliable failure signal).
     ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    ipv6_tested = reachability.get('ipv6_tested_count')  # Explicit count if available
-    if ipv6_tested is None:
-        # Fallback: calculate from not-tested list, but cap at reasonable value
-        # Most authorities (7-8 out of 9) test IPv6 in practice
-        not_tested = reachability.get('ipv6_not_tested_authorities', [])
-        # Only trust this calculation if not_tested list is small (<=2 authorities)
-        # Otherwise the data is likely incomplete and we shouldn't generate this issue
-        if len(not_tested) <= 2:
-            ipv6_tested = auth_count - len(not_tested)
-        else:
-            ipv6_tested = 0  # Don't generate issue if data is unreliable
-    
-    if ipv6_tested > 0 and ipv6_count == 0:
+    ipv6_state = reachability.get('ipv6_state')
+    not_tested = reachability.get('ipv6_not_tested_authorities') or []
+    if ipv6_state == 'not_tested':
         issues.append({
-            'severity': 'warning',
+            'severity': 'info',
             'category': 'reachability',
-            'title': 'IPv6 not reachable',
-            'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
-            'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
+            'title': 'IPv6 not tested',
+            'description': (
+                "This relay publishes an IPv6 ORPort, but no directory authority vote contains an "
+                "IPv6 reachability test. Authorities with AuthDirHasIPv6Connectivity include an 'a' line "
+                "only after they reach that address. Tor on the relay logs that an auto-discovered IPv6 "
+                "address has not been found reachable while it waits for that vote; Allium does not run "
+                "the check."
+            ),
+            'suggestion': (
+                "Confirm the ORPort is reachable on the published IPv6 address (firewall and routing). "
+                "An address in the relay descriptor is not evidence that an authority tested it."
+            ),
             'section': 'flag-running-ipv6-reachability',
-            'doc_ref': 'https://community.torproject.org/relay/setup/',
+            'doc_ref': 'https://spec.torproject.org/dir-spec/consensus-formats.html',
         })
+    elif ipv6_state == 'failed' or (ipv6_state is None and _legacy_ipv6_was_tested(reachability, auth_count)):
+        failed = reachability.get('ipv6_failed_authorities') or []
+        ipv6_tested = reachability.get('ipv6_tested_count')
+        if ipv6_tested is None:
+            ipv6_tested = auth_count - len(not_tested)
+        if ipv6_state == 'failed' and ipv6_tested <= 0:
+            ipv6_tested = len(failed)
+        if ipv6_tested > 0 and ipv6_count == 0:
+            issues.append({
+                'severity': 'warning',
+                'category': 'reachability',
+                'title': 'IPv6 not reachable',
+                'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
+                'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
+                'section': 'flag-running-ipv6-reachability',
+                'doc_ref': 'https://community.torproject.org/relay/setup/',
+            })
     
     # =========================================================================
     # FAST FLAG (1 issue type)

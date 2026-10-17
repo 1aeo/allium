@@ -101,6 +101,21 @@ def is_private_ip_address(ip_str):
         return False  # If parsing fails, assume public
 
 
+def relay_publishes_ipv6(or_addresses, unreachable_or_addresses=None):
+    """True when the relay descriptor publishes an IPv6 ORPort.
+
+    Onionoo ``or_addresses`` lists addresses the relay accepts connections on.
+    ``unreachable_or_addresses`` lists extra addresses the descriptor published
+    that authorities did not confirm. Either one means an IPv6 ORPort was
+    published. Neither field is a reachability test: directory authorities
+    record that test as an ``a`` line in a vote.
+    """
+    for addresses in (or_addresses, unreachable_or_addresses):
+        if determine_ipv6_support(addresses) in ('both', 'ipv6_only'):
+            return True
+    return False
+
+
 def determine_ipv6_support(or_addresses):
     """
     Helper function to determine IPv6 support status based on or_addresses.
