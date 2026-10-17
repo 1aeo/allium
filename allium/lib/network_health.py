@@ -545,8 +545,9 @@ def _integrate_exit_dns_health(health_metrics, relay_set):
 
 
 _OBSOLETE_OPERATOR_LIMIT = 4
-# Ignore one-off recommended_version flags (a single relay on an old version).
-_RECOMMENDED_VERSION_MIN = 10
+# A version is named in "Recommended now" only after this many relays
+# are running it with version_status recommended. Drops one-off flags.
+_MIN_RELAYS_ON_RECOMMENDED_VERSION = 10
 
 
 def _join_and(items):
@@ -599,7 +600,7 @@ def _rank_obsolete_operators(by_contact, rec_versions, total_cw, relay_set):
         ranked.append((cw, short.lower(), contact_hash, n_obs, n_all, versions, short))
     ranked.sort(key=lambda row: (-row[0], row[1]))
     recommended = sorted(
-        (ver for ver, count in rec_versions.items() if count >= _RECOMMENDED_VERSION_MIN),
+        (ver for ver, count in rec_versions.items() if count >= _MIN_RELAYS_ON_RECOMMENDED_VERSION),
         key=_version_key,
     )
     rec_suffix = f" Recommended now: {_join_and(recommended)}." if recommended else ""
