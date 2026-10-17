@@ -10,6 +10,9 @@ This directory tracks feature behavior that is already implemented in the codeba
 - `history-charts.md`
   Build-time bandwidth and uptime history charts on relay pages, and summed bandwidth on contact pages: PNG/SVG
   drawing, the chart cache, CLI options and CSS period switching.
+- `tls-pqc-scan.md`
+  Margot TLS cipher scan: CSV the scanner writes, HTML ahf.me publishes, and how
+  absence from a scan is shown.
 
 ## Purpose
 

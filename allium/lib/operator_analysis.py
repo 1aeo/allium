@@ -910,6 +910,8 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         intelligence_formatted['version_status'] = result
     
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
+    from .tls_pqc import operator_tls_summary
+    intelligence_formatted['tls_pqc'] = operator_tls_summary(members)
     # Same ranking the network-health card computed while scanning relays.
     _ops = {}
     if hasattr(relay_set, 'json'):
