@@ -214,6 +214,21 @@
                     </li>
                     {% endif %}
 
+                    {% if contact_display_data and contact_display_data.vote_agreement %}
+                    {% set vote_sum = contact_display_data.vote_agreement %}
+                    <li><strong><span title="Latest authority votes for this operator's relays. Agreement means every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. A split flag was assigned by some authorities and not others. Measurement history for each relay is on its relay page.">Authority vote agreement</span>:</strong>
+                        {{ vote_sum.agreed }} of {{ vote_sum.compared }} relay{{ 's' if vote_sum.compared != 1 else '' }} in agreement across voting authorities.
+                        {%- if vote_sum.split %} {{ vote_sum.split }} with a split vote{% if vote_sum.split_flags %} ({% for item in vote_sum.split_flags %}{{ item.flag }} {{ item.count }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}.{% endif %}
+                        {%- if vote_sum.measurement_split %} {{ vote_sum.measurement_split }} measured by some bandwidth authorities and not others.{% endif %}
+                        {% if vote_sum.examples %}
+                        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 0;">
+                        {% for example in vote_sum.examples %}
+                            <li><a href="{{ page_ctx.path_prefix }}relay/{{ example.fingerprint }}/#vote-history">{{ example.nickname }}</a> — split on {{ example.flags_display }}</li>
+                        {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </li>
+                    {% endif %}
                     <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
                         {% if contact_display_data and contact_display_data.consensus_weight_breakdown %}
                             (<span title="Consensus weight breakdown by position">{{ contact_display_data.consensus_weight_breakdown }}</span>)
@@ -656,7 +671,12 @@
 </div>
 {# The charts live in contact/<hash>/, or charts/contact/<hash>/ with --chart-layout charts: a src from the site root keeps them resolving from the vanity-domain copy of this page #}
 {% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
-{{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ chart_root ~ 'contact/' ~ value ~ '/', ext=chart_ext) }}
+{% if contact_chart_periods %}
+<p class="text-muted" style="font-size: 11px; margin-top: 12px; margin-bottom: 0;">
+Onionoo traffic: write and read throughput for this operator's relays.
+</p>
+{% endif %}
+{{ chart_history('bandwidth', contact_chart_periods, 'Onionoo traffic: operator throughput and write/read', src=page_ctx.path_prefix ~ chart_root ~ 'contact/' ~ value ~ '/', ext=chart_ext, heading='Traffic history') }}
 {% endblock %}
 
 {# AROI Validation Issues are now integrated into the 4-section relay tables #}

@@ -1171,6 +1171,7 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             _mark_ready(api_name)
             relay_count = len(cached_data.get('relay_index', {}))
             log_progress(f"loaded {relay_count} relays from collector consensus cache")
+            _record_vote_measurement_history(cached_data, log_progress)
             return cached_data
     
     # Initialized before the try so the exception handler can always
@@ -1213,6 +1214,7 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             # Try to use cache as fallback
             if cached_data:
                 log_progress("using cached collector consensus data due to invalid response")
+                _record_vote_measurement_history(cached_data, log_progress)
                 return cached_data
             return None
         
@@ -1229,6 +1231,7 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         total_time = sum(timings.values()) if timings else 0
         
         log_progress(f"successfully fetched {relay_count} relays from {vote_count} authority votes ({fetch_elapsed:.1f}s total, {total_time:.1f}s fetch)")
+        _record_vote_measurement_history(data, log_progress)
         
         return data
         
@@ -1242,9 +1245,25 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         
         if cached_data:
             log_progress(f"using cached collector consensus data due to {reason}")
+            _record_vote_measurement_history(cached_data, log_progress)
             return cached_data
         log_progress(f"no cached data available after {reason}")
         return None
+
+
+def _record_vote_measurement_history(data, log_progress):
+    """Append the latest parsed votes to the per-relay measurement history.
+
+    Uses only the vote documents already in ``data``. A failure is logged and
+    otherwise ignored so consensus pages still render.
+    """
+    try:
+        from .consensus.vote_history import update_history_from_collector
+        count = update_history_from_collector(data)
+        if count:
+            log_progress(f"vote measurement history covers {count} relays")
+    except Exception as exc:
+        log_progress(f"warning: vote measurement history was not updated: {exc}")
 
 
 def _validate_collector_cache(data):

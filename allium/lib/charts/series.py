@@ -1,4 +1,8 @@
-"""Onionoo history series for the relay and operator charts."""
+"""Onionoo history series for the relay and operator charts.
+
+write_history and read_history are traffic (bytes relayed). They are not
+authority measurements and are not a consensus weight.
+"""
 
 import functools
 from bisect import bisect_left

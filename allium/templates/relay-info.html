@@ -798,7 +798,12 @@ Platform: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
+{% if bandwidth_periods %}
+<p class="text-muted" style="font-size: 11px; margin-top: 12px; margin-bottom: 0;">
+Onionoo traffic: write and read throughput.
+</p>
+{% endif %}
+{{ chart_history('bandwidth', bandwidth_periods, 'Onionoo traffic: throughput and write/read', src=chart_src, ext=chart_ext, heading='Traffic history') }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1558,6 +1563,9 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 </div>
 
 </section>
+{% endif %}
+{% if relay.vote_history %}
+{% include "vote-history.html" %}
 {% endif %}
 
 </div>

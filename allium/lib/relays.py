@@ -922,6 +922,22 @@ class Relays:
                 
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
+
+            # Latest-vote agreement, plus the rolling Measured= series recorded
+            # from vote documents Allium already fetched. Failure here leaves
+            # the per-authority table in place.
+            try:
+                from .consensus.vote_history import attach_relay_vote_views, load_history
+                self.vote_agreement_summary = attach_relay_vote_views(
+                    self.json['relays'], load_history(), relay_index,
+                    use_bits=self.use_bits, bw_authorities=bw_authorities)
+                tracked = self.vote_agreement_summary.get('compared', 0)
+                stored = sum(1 for relay in self.json['relays'] if relay.get('vote_history'))
+                self.progress_logger.log_without_increment(
+                    f"Vote agreement: {tracked} relays compared; measurement history on {stored} relay pages")
+            except Exception as history_error:
+                self.vote_agreement_summary = None
+                print(f"Warning: Vote measurement history failed ({history_error}), continuing without it")
             
             self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             
