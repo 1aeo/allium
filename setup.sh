@@ -81,6 +81,9 @@ echo "🚀 Running first generation with progress tracking..."
 echo "🔄 Attempting to generate site (may retry on network issues)..."
 
 # Check if we're in a CI environment (GitHub Actions, GitLab CI, etc.)
+# --apis details stays the CI invocation (about 400MB). When the setup job
+# sets ALLIUM_CI_CACHE_FALLBACK, every --apis all worker still gets a seeded
+# cache and a fresh-cache timeout of at most 90s, with no extra retries.
 if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ -n "$GITLAB_CI" ]; then
     echo "🤖 CI environment detected - using details API only to reduce resource usage"
     API_MODE="--apis details"
@@ -96,39 +99,71 @@ else
     ALLIUM_PY_PATH="allium/allium.py"
 fi
 
-for attempt in 1 2 3; do
-    echo "🔄 Generation attempt $attempt of 3..."
-    echo "📁 Running from: $(pwd)"
-    echo "🔧 Using allium.py path: $ALLIUM_PY_PATH"
-    
-    if python3 "$ALLIUM_PY_PATH" --progress $API_MODE; then
-        echo "✅ Site generation completed successfully on attempt $attempt"
-        break
-    else
-        exit_code=$?
-        echo "⚠️  Attempt $attempt failed with exit code $exit_code"
-        if [ $attempt -eq 3 ]; then
-            echo "❌ All generation attempts failed"
-            echo "🔧 This might be due to:"
-            echo "   - Network connectivity issues with onionoo.torproject.org"
-            echo "   - Temporary service unavailability"
-            echo "   - System resource constraints"
-            echo ""
-            echo "💡 You can try running the generation manually later with:"
-            if [ -f "allium.py" ]; then
-                echo "   source venv/bin/activate && python3 allium.py --progress"
-            else
-                echo "   source venv/bin/activate && python3 allium/allium.py --progress"
-            fi
-            echo ""
-            echo "🔧 For low-memory environments, try: python3 $ALLIUM_PY_PATH --progress --apis details"
-            exit 1
-        else
-            echo "⏳ Waiting 10 seconds before retry..."
-            sleep 10
+# ALLIUM_CI_CACHE_FALLBACK=1 is set only by the setup end-to-end job.
+# It seeds a cache file for every API that job can fetch and generates once.
+# A non-zero allium exit still fails. Production builds leave the flag unset.
+_load_ci_cache_helpers() {
+    local helper="${ALLIUM_CI_CACHE_LIB:-}"
+    if [ -z "$helper" ]; then
+        local here
+        here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+        if [ -f "${here}/scripts/ci_cache_fallback.sh" ]; then
+            helper="${here}/scripts/ci_cache_fallback.sh"
+        elif [ -f scripts/ci_cache_fallback.sh ]; then
+            helper="scripts/ci_cache_fallback.sh"
         fi
     fi
-done
+    if [ -z "$helper" ] || [ ! -f "$helper" ]; then
+        echo "❌ ALLIUM_CI_CACHE_FALLBACK=1 but scripts/ci_cache_fallback.sh was not found"
+        exit 1
+    fi
+    # shellcheck disable=SC1090
+    source "$helper"
+}
+
+if [ "${ALLIUM_CI_CACHE_FALLBACK:-}" = "1" ]; then
+    _load_ci_cache_helpers
+    seed_ci_api_caches
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        printf 'API_MODE=%s\n' "$API_MODE" >> "$GITHUB_ENV"
+    fi
+    # One live attempt. Repeating it would wait out the fresh-cache budget again.
+    ci_generate_once "www" "$ALLIUM_PY_PATH" || exit 1
+else
+    for attempt in 1 2 3; do
+        echo "🔄 Generation attempt $attempt of 3..."
+        echo "📁 Running from: $(pwd)"
+        echo "🔧 Using allium.py path: $ALLIUM_PY_PATH"
+
+        if python3 "$ALLIUM_PY_PATH" --progress $API_MODE; then
+            echo "✅ Site generation completed successfully on attempt $attempt"
+            break
+        else
+            exit_code=$?
+            echo "⚠️  Attempt $attempt failed with exit code $exit_code"
+            if [ $attempt -eq 3 ]; then
+                echo "❌ All generation attempts failed"
+                echo "🔧 This might be due to:"
+                echo "   - Network connectivity issues with onionoo.torproject.org"
+                echo "   - Temporary service unavailability"
+                echo "   - System resource constraints"
+                echo ""
+                echo "💡 You can try running the generation manually later with:"
+                if [ -f "allium.py" ]; then
+                    echo "   source venv/bin/activate && python3 allium.py --progress"
+                else
+                    echo "   source venv/bin/activate && python3 allium/allium.py --progress"
+                fi
+                echo ""
+                echo "🔧 For low-memory environments, try: python3 $ALLIUM_PY_PATH --progress --apis details"
+                exit 1
+            else
+                echo "⏳ Waiting 10 seconds before retry..."
+                sleep 10
+            fi
+        fi
+    done
+fi
 
 echo ""
 echo "🎉 Setup complete! Your Tor metrics site is ready."

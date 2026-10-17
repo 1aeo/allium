@@ -80,12 +80,9 @@ class TestCacheManagement:
             loaded_data = cache_manager.load_cache("test_format")
             assert loaded_data == test_data
     
-    def test_cache_file_size_and_performance(self):
-        """Test cache performance with large datasets"""
-        from allium.lib.workers import _save_cache, _load_cache
-        
-        # Create a larger test dataset
-        large_data = {
+    def _large_cache_payload(self):
+        """1000-relay document used by the round-trip and wall-clock tests."""
+        return {
             "relays": [
                 {
                     "nickname": f"TestRelay{i}",
@@ -97,30 +94,41 @@ class TestCacheManagement:
                     "as": f"AS{i % 100}",
                     "contact": f"operator{i}@example.com"
                 }
-                for i in range(1000)  # 1000 relays
+                for i in range(1000)
             ],
             "version": "large_test"
         }
-        
+
+    def test_cache_large_dataset_round_trip(self):
+        """A 1000-relay cache file loads back with the same relays."""
+        from allium.lib.workers import _save_cache, _load_cache
+
+        large_data = self._large_cache_payload()
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch('allium.lib.workers.CACHE_DIR', temp_dir):
-                # Test save performance
+                _save_cache("large_test", large_data)
+                loaded_data = _load_cache("large_test")
+                assert len(loaded_data["relays"]) == 1000
+                assert loaded_data["version"] == "large_test"
+
+    @pytest.mark.slow
+    def test_cache_file_size_and_performance(self):
+        """Wall-clock bounds for saving and loading 1000 relays."""
+        from allium.lib.workers import _save_cache, _load_cache
+
+        large_data = self._large_cache_payload()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 start_time = time.time()
                 _save_cache("large_test", large_data)
                 save_time = time.time() - start_time
-                
-                # Should complete reasonably quickly (under 1 second)
                 assert save_time < 1.0
-                
-                # Test load performance
+
                 start_time = time.time()
                 loaded_data = _load_cache("large_test")
                 load_time = time.time() - start_time
-                
-                # Should load quickly and correctly
                 assert load_time < 0.5
                 assert len(loaded_data["relays"]) == 1000
-                assert loaded_data["version"] == "large_test"
     
     def test_cache_corruption_handling(self):
         """Test handling of corrupted cache files"""

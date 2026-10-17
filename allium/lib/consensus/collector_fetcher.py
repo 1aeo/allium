@@ -308,7 +308,6 @@ from .flag_thresholds import (
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
-    HSDIR_TK_DEFAULT,
     MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
     check_stable_eligibility,
@@ -1295,33 +1294,18 @@ class CollectorFetcher:
                 'sybil': is_sybil,
             })
             
-            # HSDir flag eligibility
-            # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
-            #   HSDir requires: supports_tunnelled_dir_requests (V2Dir),
-            #   Stable, Fast flags, plus WFU >= hsdir-wfu and TK >= hsdir-tk
-            hsdir_wfu = thresholds.get('hsdir-wfu', 0.98)
-            hsdir_tk = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
-            
-            hsdir_metrics_met = relay_wfu >= hsdir_wfu and relay_tk >= hsdir_tk
-            hsdir_eligible = has_stable and has_fast and has_v2dir and hsdir_metrics_met
-            if hsdir_eligible:
-                eligibility['hsdir']['eligible_count'] += 1
-            
-            # Count actual HSDir flag assignment by this authority
+            # 96h uptime is not in the vote. The HSDir vote stands in once Fast, Stable and V2Dir passed.
+            # Running and Valid are recorded so a vote that never reached that check is not
+            # later counted as an uptime pass from the relay's own uptime.
             has_hsdir_flag = 'HSDir' in auth_flags
             if has_hsdir_flag:
+                eligibility['hsdir']['eligible_count'] += 1
                 eligibility['hsdir']['assigned_count'] += 1
-            
             eligibility['hsdir']['details'].append({
-                'authority': auth_name,
-                'eligible': hsdir_eligible,
-                'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
-                'has_stable': has_stable,
-                'has_fast': has_fast,
-                'has_v2dir': has_v2dir,
-                'metrics_met': hsdir_metrics_met,
-                'wfu_threshold': hsdir_wfu,
-                'tk_threshold': hsdir_tk,
+                'assigned': has_hsdir_flag,
+                'prereqs': guard_prereqs_met,
+                'has_running': 'Running' in auth_flags,
+                'has_valid': 'Valid' in auth_flags,
             })
             
             # Simple flag tracking: Exit, MiddleOnly, BadExit
