@@ -1297,9 +1297,12 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     """
     files_written = 0
     chart_writer = getattr(relay_set, 'chart_writer', None)
-    chart_periods = chart_writer.contact(
-        contact_data.get('relays', ()), chart_writer.folder('contact', os.path.basename(dir_path), dir_path)
-    ) if chart_writer else {}
+    if chart_writer:
+        folder = chart_writer.folder('contact', os.path.basename(dir_path), dir_path)
+        contact_chart_periods, contact_uptime_periods = chart_writer.contact(
+            contact_data.get('relays', ()), folder)
+    else:
+        contact_chart_periods, contact_uptime_periods = {}, {}
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1346,7 +1349,8 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
             template_args = dict(variant_args)
             template_args['relay_subset'] = visible_relays
             template_args['contact_has_ipv6'] = has_ipv6
-            template_args['contact_chart_periods'] = chart_periods
+            template_args['contact_chart_periods'] = contact_chart_periods
+            template_args['contact_uptime_periods'] = contact_uptime_periods
             template_args['page_number'] = page_number
             template_args['pagination'] = pagination_context(
                 base_filename, page_number, total_pages

@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from allium.lib.charts.series import (
-    MBIT, active_ratio, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
+    MBIT, active_ratio, family_key, operator_throughput, operator_uptime, peer_medians, points, throughput,
+    uptime_points,
 )
 from allium.lib.uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 
@@ -119,6 +120,55 @@ def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():
     (ts, write, _read, _interval), _summed = operator_throughput([{"fingerprint": "A"}, {"fingerprint": "B"}],
                                                                  bandwidth_map, "1_year")
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(3, 100), (5, 110), (7, 110)]
+
+
+def _uptime(values, first="2026-08-30 14:00:00", interval=14400, key="1_month"):
+    return {"uptime": {key: block(values, first=first, interval=interval, factor=1 / 999.0)}}
+
+
+def test_operator_uptime_is_the_mean_of_each_relays_drawn_series():
+    """A slot is the mean of the members whose own chart has a point there, including a stopped relay's 0%."""
+    windows = uptime_windows({"relays_published": "2026-09-30 12:00:00", "relays": []})
+    uptime_map = {"A": _uptime([999] * 200), "B": _uptime([999] * 150)}
+    members = [relay("A"), relay("B", running=False, last_seen="2026-09-24 11:00:00")]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", windows)
+    drawn = [uptime_points(uptime_map[fp]["uptime"]["1_month"], "1_month", windows, member,
+                           uptime_map[fp]["uptime"]) for fp, member in zip("AB", members)]
+    assert interval == 14400 and len(ts) == 186
+    assert percent[149] == pytest.approx(100.0) and percent[150] == pytest.approx(50.0)
+    for t, value in zip(ts, percent):
+        present = [series[t] for series in drawn if t in series]
+        assert value == pytest.approx(sum(present) / len(present))
+
+
+def test_operator_uptime_fills_a_shorter_history_and_stops_where_everyone_running_has_reported():
+    # No document window, so nothing is padded and a relay's series ends where its block ends.
+    day, first = 86400, "2026-09-01 12:00:00"
+    uptime_map = {
+        "A": _uptime([999] * 10, first=first, interval=day),
+        "L": _uptime([999] * 8, first=first, interval=day),  # two slots behind: still catching up
+        "O": _uptime([0] * 3, first=first, interval=day),  # stopped well before
+        "S": _uptime([0] * 12, first=first, interval=4 * 3600, key="6_months"),  # not this period's grid
+    }
+    members = [relay("A"), relay("L"), relay("O", running=False), relay("S")]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert interval == day and len(ts) == 8  # held at L, not extended over the two slots L lacks
+    assert percent[:3] == pytest.approx([200.0 / 3] * 3)  # A and L up, O down
+    assert percent[3:] == pytest.approx([100.0] * 5)
+    # Three slots behind is not a delay: the mean runs on to A's end without L.
+    uptime_map["L"] = _uptime([999] * 7, first=first, interval=day)
+    ts, percent, _interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert len(ts) == 10 and percent[-1] == pytest.approx(100.0)
+    # B has only a 6-month history. Its days average into the 1-year slots: Sep 3 is down, Sep 5 is up.
+    # B has stopped, so the series runs on and A's later slots stand alone. No native block, no chart.
+    year = dict(first="2026-09-03 00:00:00", interval=2 * day, key="1_year")
+    uptime_map = {"A": _uptime([999] * 4, **year),
+                  "B": _uptime([0, 0, 999, 999], first="2026-09-02 12:00:00", interval=day, key="6_months")}
+    ts, percent, interval = operator_uptime([relay("A"), relay("B", running=False)], uptime_map, "1_year", {})
+    assert interval == 2 * day
+    assert [(t.day, round(v)) for t, v in zip(ts, percent)] == [(3, 50), (5, 100), (7, 100), (9, 100)]
+    assert operator_uptime([relay("B", running=False)], uptime_map, "1_year", {}) is None
+    assert operator_uptime([relay("Z")], {}, "1_month", {}) is None
 
 
 def test_family_key_is_the_effective_family_when_it_has_other_members():

@@ -143,6 +143,60 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     return _aligned({t: v for t, v in write.items() if t <= end}, read, interval) if end else None, summed
 
 
+def operator_uptime(members, uptime_map, key, windows):
+    """Members' running-flag percentages averaged per timestamp: the series an uptime chart draws.
+
+    Averages on the period's most common sampling interval. Onionoo leaves out a
+    relay's period when a shorter one holds its whole history, so a member
+    without this period is averaged in from its next shorter one, into this
+    period's slots; members on other intervals are left out. Each member's
+    series is the one its own chart draws (``uptime_points``), including the 0%
+    Onionoo counts after a history stops. A slot is the mean of the members
+    that have a value there: a relay that has no history yet is not counted as
+    down.     The series stops at the newest slot every member still reporting has
+    reached, so a member Onionoo has not rewritten yet does not look like a
+    drop in the mean. A member no longer running has stopped for good: its end
+    is not a delay. None under two points.
+    """
+    histories = []
+    for relay in members:
+        section = ((uptime_map.get(relay["fingerprint"]) or {}).get("uptime") or {})
+        for period in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:
+            block = section.get(period) or {}
+            values, step = block.get("values"), block.get("interval")
+            if values and isinstance(step, int) and step > 0:
+                histories.append((period == key, step,
+                                  uptime_points(block, period, windows, relay, section), relay))
+                break
+    own = Counter(step for native, step, _pts, _relay in histories if native)
+    if not own:
+        return None
+    interval = own.most_common(1)[0][0]
+    totals, counts, lasts = {}, {}, []
+    for native, step, pts, relay in histories:
+        if step <= 0 or interval % step:
+            continue
+        if not native:
+            pts = _slotted(pts, step, interval)
+        if not pts:
+            continue
+        for t, value in pts.items():
+            totals[t] = totals.get(t, 0.0) + value
+            counts[t] = counts.get(t, 0) + 1
+        lasts.append((max(pts), relay.get("running") is False))
+    if not lasts:
+        return None
+    newest = max(last for last, _stopped in lasts)
+    # Within two slots of the newest point: still catching up, so hold the mean back. Further behind, it has
+    # stopped updating and dropping it out of later slots is the mean of whoever is left.
+    reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
+    end = min(reporting) if reporting else newest
+    ts = sorted(t for t in totals if t <= end)
+    if len(ts) < 2:
+        return None
+    return ts, [totals[t] / counts[t] for t in ts], interval
+
+
 def family_key(relay):
     """Onionoo's sorted effective family (which includes the relay) when it has other members."""
     family = relay.get("effective_family") or ()

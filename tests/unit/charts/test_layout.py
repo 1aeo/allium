@@ -28,16 +28,21 @@ contact/{h}/bandwidth-1m.svg
 contact/{h}/bandwidth-6m.svg
 contact/{h}/index.html: href=../../contact/{h}/bandwidth-1m.svg
 contact/{h}/index.html: href=../../contact/{h}/bandwidth-6m.svg
+contact/{h}/index.html: href=../../contact/{h}/uptime-1m.svg
 contact/{h}/index.html: src=../../contact/{h}/bandwidth-1m.svg
 contact/{h}/index.html: src=../../contact/{h}/bandwidth-1m.svg
 contact/{h}/index.html: src=../../contact/{h}/bandwidth-6m.svg
 contact/{h}/index.html: src=../../contact/{h}/bandwidth-6m.svg
+contact/{h}/index.html: src=../../contact/{h}/uptime-1m.svg
+contact/{h}/uptime-1m.svg
 example.org/index.html: href=../contact/{h}/bandwidth-1m.svg
 example.org/index.html: href=../contact/{h}/bandwidth-6m.svg
+example.org/index.html: href=../contact/{h}/uptime-1m.svg
 example.org/index.html: src=../contact/{h}/bandwidth-1m.svg
 example.org/index.html: src=../contact/{h}/bandwidth-1m.svg
 example.org/index.html: src=../contact/{h}/bandwidth-6m.svg
 example.org/index.html: src=../contact/{h}/bandwidth-6m.svg
+example.org/index.html: src=../contact/{h}/uptime-1m.svg
 relay/{A}/bandwidth-1m.svg
 relay/{A}/bandwidth-6m.svg
 relay/{A}/index.html: href=bandwidth-1m.svg
@@ -159,6 +164,7 @@ def test_pages_reference_exactly_the_charts_of_their_layout(tmp_path, monkeypatc
         expected = {"%srelay/%s/bandwidth-1m.svg" % (apart, fp) for fp in FPS}
         expected |= {"%srelay/%s/%s.svg" % (apart, FPS[0], name) for name in ("uptime-1m", "bandwidth-6m")}
         expected |= {"%scontact/%s/bandwidth-%s.svg" % (apart, contact, period) for period in ("1m", "6m")}
+        expected.add("%scontact/%s/uptime-1m.svg" % (apart, contact))
         assert _charts_written(out) == {path.replace("/", os.sep) for path in expected}, layout
         assert (out / CHARTS_DIR).exists() is (layout == "charts")
 
@@ -177,10 +183,14 @@ def test_pages_reference_exactly_the_charts_of_their_layout(tmp_path, monkeypatc
             assert 'href="bandwidth-1m.svg"><img src="bandwidth-1m.svg"' in relay_html
             assert 'src="uptime-1m.svg"' in relay_html
             assert 'src="../../contact/%s/bandwidth-1m.svg"' % contact in contact_html
+            assert 'src="../../contact/%s/uptime-1m.svg"' % contact in contact_html
             assert 'src="../contact/%s/bandwidth-1m.svg"' % contact in vanity_html
+            assert 'src="../contact/%s/uptime-1m.svg"' % contact in vanity_html
         else:  # relative to the page, so the site still works from a subdirectory or file://
             chart = "../../charts/relay/%s/bandwidth-1m.svg" % FPS[0]
             assert 'href="%s"><img src="%s"' % (chart, chart) in relay_html
             assert 'src="../../charts/relay/%s/uptime-1m.svg"' % FPS[0] in relay_html
             assert 'src="../../charts/contact/%s/bandwidth-1m.svg"' % contact in contact_html
+            assert 'src="../../charts/contact/%s/uptime-1m.svg"' % contact in contact_html
             assert 'src="../charts/contact/%s/bandwidth-1m.svg"' % contact in vanity_html
+            assert 'src="../charts/contact/%s/uptime-1m.svg"' % contact in vanity_html
