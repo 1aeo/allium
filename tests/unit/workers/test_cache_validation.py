@@ -5,6 +5,8 @@ downloaded responses are not passed through the same check.
 """
 
 import json
+import os
+import time
 import urllib.error
 from unittest.mock import call, patch
 
@@ -18,6 +20,7 @@ JUNK = {
 }
 VALID = {"relays_published": "2026-10-12 14:00:00", "relays": []}
 URL = "http://example.test/details"
+REPLACEMENT_STAMP = "Tue, 13 Oct 2026 01:02:03 GMT"
 INVALID_DOCUMENT_LOG = (
     "cache file exists but is not a valid onionoo details document, treating as no cache..."
 )
@@ -147,6 +150,92 @@ def test_unexpected_error_returns_valid_cache():
             URL, workers.DETAILS_CONFIG, progress_logger=lambda message: None)
 
     assert result == VALID
+
+
+def test_fresh_invalid_bandwidth_cache_is_fetched_unconditionally():
+    """Bandwidth returns a fresh cache before requesting. Rejecting that file
+    clears its age; the download must not still send If-Modified-Since, or a
+    304 leaves bandwidth missing until the bad file ages out."""
+    workers._save_cache("onionoo_bandwidth", JUNK)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      return_value=json.dumps(VALID).encode("utf-8")) as fetch, \
+         patch.object(workers.time, "strftime", return_value=REPLACEMENT_STAMP):
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    assert fetch.call_args_list == [
+        call(URL, workers.BANDWIDTH_CONFIG.timeout_stale_cache, None, response_headers={}),
+    ]
+    assert result == VALID
+    assert workers._load_cache("onionoo_bandwidth") == VALID
+    assert workers._read_timestamp("onionoo_bandwidth") == REPLACEMENT_STAMP
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "ready"
+
+
+def test_fresh_invalid_bandwidth_cache_refetches_when_server_still_returns_304():
+    """A 304 after the file was already rejected must not skip the refetch."""
+    workers._save_cache("onionoo_bandwidth", JUNK)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    with patch.object(workers, "_fetch_url_with_total_timeout", side_effect=[
+            urllib.error.HTTPError(URL, 304, "", {}, None),
+            json.dumps(VALID).encode("utf-8"),
+         ]) as fetch, \
+         patch.object(workers.time, "strftime", return_value=REPLACEMENT_STAMP):
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    timeout = workers.BANDWIDTH_CONFIG.timeout_stale_cache
+    assert fetch.call_args_list == [
+        call(URL, timeout, None, response_headers={}),
+        call(URL, timeout, None, response_headers={}),
+    ]
+    assert result == VALID
+    assert workers._load_cache("onionoo_bandwidth") == VALID
+    assert workers._read_timestamp("onionoo_bandwidth") == REPLACEMENT_STAMP
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "ready"
+
+
+def test_fresh_invalid_bandwidth_cache_second_304_is_not_success():
+    """The retry is one shot and does not send If-Modified-Since. Another 304
+    leaves the rejected file in place and does not mark the worker ready."""
+    workers._save_cache("onionoo_bandwidth", JUNK)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    cache_path = workers._cache_manager.get_file_path("onionoo_bandwidth.json")
+    rejected_mtime = time.time() - 3600
+    os.utime(cache_path, (rejected_mtime, rejected_mtime))
+
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=urllib.error.HTTPError(URL, 304, "", {}, None)) as fetch:
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    timeout = workers.BANDWIDTH_CONFIG.timeout_stale_cache
+    assert fetch.call_args_list == [
+        call(URL, timeout, None, response_headers={}),
+        call(URL, timeout, None, response_headers={}),
+    ]
+    assert result is None
+    assert workers._load_cache("onionoo_bandwidth") == JUNK
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "stale"
+    # A 304 for a valid document refreshes the cache mtime. A rejected file
+    # must not be touched that way: it was not confirmed current.
+    assert workers.get_cache_age("onionoo_bandwidth") > 3000
+
+
+def test_fresh_valid_bandwidth_cache_does_not_fetch():
+    """A valid fresh bandwidth cache still returns before any HTTP request."""
+    workers._save_cache("onionoo_bandwidth", VALID)
+    workers._write_timestamp("onionoo_bandwidth", "Mon, 12 Oct 2026 14:00:00 GMT")
+    with patch.object(workers, "_fetch_url_with_total_timeout") as fetch:
+        result = workers.fetch_onionoo_bandwidth(
+            URL, cache_hours=12, progress_logger=lambda message: None)
+
+    fetch.assert_not_called()
+    assert result == VALID
+    assert workers._load_cache("onionoo_bandwidth") == VALID
+    assert workers._read_timestamp("onionoo_bandwidth") == "Mon, 12 Oct 2026 14:00:00 GMT"
+    assert workers.get_worker_status("onionoo_bandwidth")["status"] == "ready"
 
 
 def test_fresh_download_is_not_cache_validated():
