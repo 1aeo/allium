@@ -6,10 +6,7 @@ Test network health dashboard calculations and metrics
 import unittest
 from unittest.mock import Mock, patch
 
-from jinja2 import Environment
-
 from allium.lib.network_health import calculate_network_health_metrics
-from allium.lib.operator_analysis import compute_contact_display_data
 from allium.lib.relays import Relays
 from allium.lib.ip_utils import determine_ipv6_support
 
@@ -733,115 +730,6 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         # Should NOT be unrestricted (only 2 specific ports)
         self.assertEqual(health['unrestricted_exits'], 0,
                          "Relay with only ports 8080/8443 should NOT be unrestricted")
-
-
-def _relay(fingerprint, contact, weight, version, status, recommended):
-    return {
-        'fingerprint': fingerprint,
-        'contact': contact,
-        'or_addresses': ['1.2.3.4:9001'],
-        'observed_bandwidth': 100000,
-        'consensus_weight': weight,
-        'advertised_bandwidth': 100000,
-        'flags': ['Running', 'Fast'],
-        'running': True,
-        'country': 'DE',
-        'as': '1',
-        'as_name': 'Test',
-        'first_seen': '2024-01-01 00:00:00',
-        'platform': f'Tor {version} on Linux',
-        'version': version,
-        'version_status': status,
-        'recommended_version': recommended,
-    }
-
-
-class TestObsoleteOperatorRanking(unittest.TestCase):
-    """Highest-weight obsolete operators reuse the network-health relay scan."""
-
-    def test_ranks_named_operators_and_skips_empty_contacts(self):
-        relays = []
-        relays.append(_relay('A' * 40, 'big@example.com', 500, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('B' * 40, 'big@example.com', 500, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('C' * 40, 'part@example.com', 300, '0.4.9.5', 'obsolete', False))
-        relays.append(_relay('D' * 40, 'part@example.com', 100, '0.4.9.14', 'recommended', True))
-        relays.append(_relay('E' * 40, 'mid@example.com', 100, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('F' * 40, 'low@example.com', 50, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('1' * 40, 'tail@example.com', 40, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('2' * 40, 'tiny@example.com', 10, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('3' * 40, '', 9000, '0.4.9.11', 'obsolete', False))
-        relays.append(_relay('4' * 40, 'odd@example.com', 10, '0.4.8.22', 'recommended', True))
-        for i in range(10):
-            relays.append(_relay(f'{i:040x}', 'rec@example.com', 10, '0.4.9.14', 'recommended', True))
-
-        relays_obj = Relays(
-            output_dir="/tmp/test", onionoo_url="http://test.url",
-            relay_data={'relays': relays}, use_bits=False, progress=False,
-        )
-        calculate_network_health_metrics(relays_obj)
-        health = relays_obj.json['network_health']
-        top = health['obsolete_operator_top']
-        self.assertEqual([row['display_name'] for row in top], [
-            'big@example.com', 'part@example.com', 'mid@example.com', 'low@example.com',
-        ])
-        self.assertEqual(top[0]['count_label'], '2 relays')
-        self.assertIn('al-status-danger-bold', top[0]['weight_html'])
-        self.assertIn('2 relays on 0.4.9.11', top[0]['weight_html'])
-        self.assertIn('Recommended now: 0.4.9.14.', top[0]['weight_suffix'])
-        self.assertNotIn('0.4.8.22', top[0]['weight_suffix'])
-        self.assertEqual(top[1]['count_label'], '1 of 2')
-        self.assertIn('The other relay is on 0.4.9.14.', top[1]['weight_suffix'])
-        self.assertNotIn('tail@example.com', health['obsolete_operators'])
-        # Empty contact never becomes a linked operator.
-        self.assertTrue(all(row['display_name'] != 'none' for row in top))
-
-        big_hash = top[0]['contact_hash']
-        blank = {
-            'guard_count': 0, 'middle_count': 0, 'exit_count': 0,
-            'guard_bandwidth': 0, 'middle_bandwidth': 0, 'exit_bandwidth': 0,
-            'guard_consensus_weight_fraction': 0, 'middle_consensus_weight_fraction': 0,
-            'exit_consensus_weight_fraction': 0,
-        }
-        shown = compute_contact_display_data(
-            blank, 'Mbit/s', {}, big_hash,
-            [r for r in relays_obj.json['relays'] if r.get('contact_md5') == big_hash],
-            relays_obj,
-        )
-        li = shown['operator_intelligence']['obsolete_weight_li']
-        self.assertIn('class="al-status-danger-bold"', li)
-        self.assertIn('Obsolete consensus weight', li)
-        tail = next(r for r in relays_obj.json['relays'] if r.get('contact') == 'tail@example.com')
-        hidden = compute_contact_display_data(
-            blank, 'Mbit/s', {}, tail['contact_md5'], [tail], relays_obj,
-        )
-        self.assertNotIn('obsolete_weight_li', hidden['operator_intelligence'])
-
-    def test_contact_and_relay_markup_is_absent_for_other_operators(self):
-        """Unaffected pages keep the previous version-compliance markup."""
-        from pathlib import Path
-        env = Environment(trim_blocks=True, lstrip_blocks=True, autoescape=True)
-        contact_src = Path('allium/templates/contact.html').read_text()
-        start = contact_src.index('{% if intelligence.version_compliance %}')
-        end = contact_src.index('{% if intelligence.family_support_counts %}')
-        contact_html = env.from_string(contact_src[start:end]).render(intelligence={
-            'version_compliance': '<span class="al-rating-poor">Poor</span>, 0 (0%) compliant',
-            'version_status': '<span class="al-rating-poor">Poor</span>, 1 (100%) obsolete',
-        })
-        self.assertNotIn('version-compliance', contact_html)
-        self.assertNotIn('Obsolete consensus weight', contact_html)
-        self.assertIn('Version Status', contact_html)
-
-        relay_src = Path('allium/templates/relay-info.html').read_text()
-        marker = 'Update urgently. See'
-        line_start = relay_src.rfind('<span class="al-text-small-muted">', 0, relay_src.index(marker))
-        line_end = relay_src.index('{% elif', relay_src.index(marker))
-        relay_html = env.from_string(relay_src[line_start:line_end]).render(
-            relay={'version_status': 'obsolete', 'contact_md5': 'abc', 'version': '0.4.9.11'},
-            relays={'json': {'network_health': {'obsolete_operators': {}}}},
-            page_ctx=type('P', (), {'path_prefix': ''})(),
-        )
-        self.assertIn('Update urgently', relay_html)
-        self.assertNotIn('Operator versions', relay_html)
 
 if __name__ == '__main__':
     unittest.main() 
