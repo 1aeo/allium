@@ -52,7 +52,7 @@ def test_every_color_the_charts_name_or_cover_an_area_with_is_in_the_palette():
     charts.relay(busy, None)
     charts.contact([0, 1], None)
     drawn = [svg for svg in drawn if svg]
-    assert len(drawn) == 3
+    assert len(drawn) == 4  # relay bandwidth and uptime, plus the operator's bandwidth and uptime
     # Every color svg.py defines or a drawing call names...
     fields = [*vars(svg_module).values(), *(field for svg in drawn for op in svg.ops for field in op)]
     named = {v[1:].lower() for v in fields if isinstance(v, str) and re.fullmatch("#[0-9a-f]{6}", v, re.I)}

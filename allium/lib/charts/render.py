@@ -18,8 +18,8 @@ from .bands import RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_fo
 from .identity import chart_identity, operator_from_contact, operator_identity
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, ratio_subtitle, ratio_text, throughput_subtitle
 from .series import (
-    MBIT, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, operator_throughput, peer_medians, throughput,
-    uptime_points,
+    MBIT, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, operator_throughput, operator_uptime, peer_medians,
+    throughput, uptime_points,
 )
 from .svg import (
     AXIS, BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
@@ -116,6 +116,24 @@ def _restart_entry(restart, ts, end=None):
     if restart and ts[0] <= restart <= view_end(ts, end):
         return [("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart))]
     return []
+
+
+def _latest_restart(members):
+    """Newest ``last_restarted`` among an operator's relays, or None when none parse."""
+    stamps = (parse_onionoo_timestamp(relay.get("last_restarted")) for relay in members)
+    return max((stamp for stamp in stamps if stamp), default=None)
+
+
+def _shown_uptime_average(percent):
+    """Mean of a drawn uptime series, or 0.0 when a relay page would show no figure.
+
+    Same rule as ``_compute_uptime_percentage_and_datapoints``: under 30 slots,
+    or a mean of 1% or less, the subtitle stays blank. The chart still draws.
+    """
+    if len(percent) < 30:
+        return 0.0
+    average = sum(percent) / len(percent)
+    return average if average > 1.0 else 0.0
 
 
 def bandwidth_chart(period, series, advertised, bands, identity, restart=None, overload=None,
@@ -426,13 +444,27 @@ class ChartWriter(object):
                             common["restart"], average)
 
     def contact(self, member_indexes, directory):
-        """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""
+        """Write ``bandwidth-<period>`` and ``uptime-<period>`` charts for an operator's members.
+
+        Bandwidth sums the members. Uptime averages the running-flag series each member's own chart draws
+        (``operator_uptime``), and its restart line is the newest ``last_restarted`` among the members, including
+        one with no uptime history. Returns ``({period: height}, {period: height})``, bandwidth first, drawn
+        periods only. Relays without contact info share one hash, but they are not an operator; nor are relays
+        whose contact is exactly "none", which the contact page treats alike.
+        """
         members = [self.relays[i] for i in member_indexes]
-        # Relays without contact info share one hash, but they are not an operator; nor are relays whose contact is
-        # exactly "none", which the contact page treats alike.
         if not any((relay.get("contact") or "").strip() and relay["contact"] != "none" for relay in members):
-            return {}
-        return self._charts(directory, "bandwidth", self._contact_bandwidth, members, operator_identity(members))
+            return {}, {}
+        identity = operator_identity(members)
+        return (self._charts(directory, "bandwidth", self._contact_bandwidth, members, identity),
+                self._charts(directory, "uptime", self._contact_uptime, members, identity, _latest_restart(members)))
+
+    def _contact_uptime(self, members, identity, restart, key, period):
+        series = operator_uptime(members, self.uptime, key, self.uptime_windows)
+        if not series:
+            return None
+        ts, percent, interval = series
+        return uptime_chart(period, ts, percent, interval, identity, restart, _shown_uptime_average(percent))
 
     def _contact_bandwidth(self, members, identity, key, period):
         series, summed = operator_throughput(members, self.bandwidth, key, self._since(period))

@@ -427,7 +427,7 @@ def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp
     charts = writer(members, {"A": history([100] * 30), "B": history([300] * 30), "C": history([50] * 30),
                               "N": history([50] * 30), "E": history([50] * 30)})
     # Two Guards outnumber the one Exit with history, but the Exit carries three times their traffic.
-    assert list(charts.contact([2, 5, 1, 4], str(tmp_path))) == ["1m"]
+    assert [list(drawn) for drawn in charts.contact([2, 5, 1, 4], str(tmp_path))] == [["1m"], []]
     lines = texts(tmp_path / "bandwidth-1m.svg")
     assert lines[0] == "example.com  ·  4 relays" and "This operator" in lines
     # D has no history, so its advertised bandwidth stays out of the sum too.
@@ -440,11 +440,36 @@ def test_operator_chart_sums_members_and_uses_the_role_carrying_most_traffic(tmp
         assert "Write / read · last 30 days  ·  vs Exit band" in texts(tmp_path / "bandwidth-1m.svg")
     # Relays without contact info share one hash, but they are not an operator; nor are those whose contact is
     # exactly "none", which the contact page treats alike (" none " is a name there).
-    assert charts.contact([3], str(tmp_path)) == {}
+    assert charts.contact([3], str(tmp_path)) == ({}, {})
     charts = writer([relay("N", contact="none"), relay("O", contact="none")], {"N": history([50] * 30)})
-    assert charts.contact([0, 1], str(tmp_path)) == {}
+    assert charts.contact([0, 1], str(tmp_path)) == ({}, {})
     charts = writer([relay("N", contact=" none ")], {"N": history([50] * 30)})
-    assert list(charts.contact([0], str(tmp_path))) == ["1m"]
+    assert [list(drawn) for drawn in charts.contact([0], str(tmp_path))] == [["1m"], []]
+
+
+def test_operator_uptime_chart_uses_the_relay_chart_and_the_newest_restart(tmp_path):
+    """An operator's uptime charts are the relay uptime chart: same title, axis, legend and average, over the
+    mean of the members' series. The restart line is the newest last_restarted of any member, even one with
+    no uptime history; an earlier restart is not labelled."""
+    members = [relay("A", last_restarted="2026-09-04 08:00:00"),
+               relay("B", last_restarted="2026-09-12 08:00:00"),
+               relay("C", last_restarted="2026-09-20 08:00:00")]  # no uptime of its own
+    charts = writer(members, {fp: history([100] * 30) for fp in "ABC"}, {"A": [999] * 180, "B": [0] * 180})
+    bandwidth, uptime = charts.contact([0, 1, 2], str(tmp_path))
+    assert list(bandwidth) == ["1m"] and list(uptime) == ["1m"]
+    lines = texts(tmp_path / "uptime-1m.svg")
+    assert lines[0] == "example.com  ·  3 relays"
+    assert "Uptime · last 30 days" in lines and "Uptime (%)" in lines and "Running flag" in lines
+    assert "Average 50.0%  ·  Onionoo Running flag" in lines
+    assert "Last restarted  Sep 20" in lines and "Last restarted  Sep 12" not in lines
+    # Under 30 slots the relay page shows no figure, so the operator chart doesn't either.
+    short = writer([relay("A")], {"A": history([100] * 30)}, {"A": [999] * 10}, uptime_first="2026-09-29 14:00:00")
+    assert "1m" in short.contact([0], str(tmp_path))[1]
+    assert not any(text.startswith("Average") for text in texts(tmp_path / "uptime-1m.svg"))
+    # A restart from before the window is off the axis, as on a relay chart.
+    early = writer([relay("A", last_restarted="2026-08-01 08:00:00")], {"A": history([100] * 30)}, {"A": [999] * 180})
+    early.contact([0], str(tmp_path))
+    assert not any(text.startswith("Last restarted") for text in texts(tmp_path / "uptime-1m.svg"))
 
 
 def test_a_line_breaks_where_a_slot_is_missing():
@@ -549,7 +574,8 @@ def test_chart_layout_charts_writes_them_apart_from_the_pages(tmp_path, image_fo
     assert charts.relay(relay("B"), charts.folder("relay", "B", None)) == ({}, {})
     assert not (out / "charts" / "relay" / "B").exists()
     charts.contact([0, 1], charts.folder("contact", "h" * 32, None))
-    assert os.listdir(out / "charts" / "contact" / ("h" * 32)) == ["bandwidth-1m." + image_format]
+    assert sorted(os.listdir(out / "charts" / "contact" / ("h" * 32))) == [
+        "bandwidth-1m." + image_format, "uptime-1m." + image_format]
     # Beside the pages (the default) a chart's folder is its page's own.
     assert writer([], {}).folder("relay", "A", str(page)) == str(page)
 
