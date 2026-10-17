@@ -4,10 +4,12 @@ This directory contains **proposals and enhancement plans** for features that ar
 
 > Looking for behavior that is already shipped? See `docs/features/implemented/`.
 
+Status of the eight-item shortlist (heat map, achievement wheel, improvement guidance, authority dashboard, peer cohorts, bridges, smart suggestions, failure prediction) is in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md). That file matches the current generator. The milestone text below is the original proposal.
+
 ## 🚀 Status
 
 These features represent the **roadmap** for future development. They are:
-- ❌ **Not yet implemented** in code
+- ❌ **Mostly not implemented** in code. Shipped and partial items on the eight-item shortlist are called out in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md)
 - 📋 **Proposed** with varying levels of design detail
 - 🎯 **Prioritized** by milestone and timeline
 - 💡 **Open for community input** and contributions
@@ -22,7 +24,7 @@ These features represent the **roadmap** for future development. They are:
 **Priority**: Critical Foundation
 
 **Features**:
-- Geographic heat map dashboard
+- Geographic heat map dashboard — still open as an Allium page ([TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md)). Country and relay pages already link to RouteFluxMap; optional exports are [routefluxmap-enhancements.md](routefluxmap-enhancements.md). The milestone-1 D3 sketch assumes a browser library this repo does not use.
 - Platform diversity visualization
 - AROI achievement wheel
 - Network authority donut charts
@@ -96,6 +98,7 @@ These features represent the **roadmap** for future development. They are:
 - [consensus-weight-metrics-proposal.md](consensus-weight-metrics-proposal.md) - Enhanced consensus weight tracking
 
 ### Advanced Features
+- [routefluxmap-enhancements.md](routefluxmap-enhancements.md) - Optional RouteFluxMap data exports (country rarity, validated operators, AS links). Separate from the open Allium world map in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md).
 - [visualization-dashboard-proposal.md](visualization-dashboard-proposal.md) - Interactive visualization system
 - [actionable-improvement-guidance.md](actionable-improvement-guidance.md) - Operator recommendations
 - [multi-api-implementation-plan.md](multi-api-implementation-plan.md) - Additional API integrations
@@ -120,14 +123,14 @@ These features represent the **roadmap** for future development. They are:
 ## 🎯 Implementation Priorities
 
 ### High Priority (Next 6 Months)
-1. ✨ Interactive visualizations (Milestone 1)
-2. 📊 Historical bandwidth metrics
-3. 🔍 Operator comparison metrics
+1. Geographic heat map and AROI achievement wheel (Milestone 1). Build-time history charts are already documented in `../implemented/history-charts.md`.
+2. Additional historical bandwidth metrics in [onionoo_historical_bandwidth_metrics_proposal.md](onionoo_historical_bandwidth_metrics_proposal.md). Relay and contact pages already plot Onionoo bandwidth history.
+3. Operator comparison by similar relay count. Network percentiles and role/family chart medians already exist. See [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md).
 
 ### Medium Priority (6-12 Months)
-4. 🏛️ Advanced authority monitoring (Milestone 2)
-5. 📈 Intelligent network health (Milestone 3)
-6. 🔗 Enhanced smart context links
+4. Remaining directory-authority ideas (Milestone 2). `misc/authorities.html` and `allium/lib/consensus/` already cover votes, TCP latency, bandwidth-scanner status, and flag thresholds.
+5. Predictive relay failure detection (Milestone 3). The network health dashboard itself is generated.
+6. Suggestions panel on top of existing `smart_context` lines.
 
 ### Long-Term (12+ Months)
 7. 🤖 AI/ML analytics (Milestone 4)
@@ -183,10 +186,11 @@ Each proposal should include:
 
 ## 🔗 Related Documentation
 
-- **[Implemented Features](../implemented/)** - What's already built
-- **[Main Features README](../README.md)** - Features overview
-- **[Development Guide](../../development/README.md)** - Contributing code
-- **[Architecture](../../architecture/README.md)** - System design
+- **[Implemented Features](../implemented/)** - Behavior docs that match the code
+- **[Shortlist status](./TOP_10_PRIORITIZED_FEATURES.md)** - Shipped, partial, and open items from the eight-item list
+- **[Current capabilities](../../reference/current-capabilities.md)** - Generator output and AROI categories
+- **[Architecture overview](../../architecture/overview.md)** - System design
+- **[Testing](../../development/testing.md)** - How to run tests
 
 ---
 
@@ -203,13 +207,11 @@ Each proposal should include:
 
 ## ⚠️ Important Notes
 
-- **Not Implemented**: Features here do NOT exist in current code
+- **Not a guarantee of absence**: Many proposals here are not in the generator. Shipped and partial items on the eight-item shortlist are recorded in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md). Implemented behavior docs live in `docs/features/implemented/`.
 - **Subject to Change**: Proposals may be modified based on feedback
 - **No Timeline Guarantee**: Timelines are estimates, not commitments
 - **Community Driven**: All proposals welcome community input
 
 ---
 
-**Last Updated**: 2025-11-23  
-**Status**: Roadmap for future development  
-**Verification**: These features do NOT exist in generated output
+**Status**: Proposal catalog. Confirm shortlist items in [TOP_10_PRIORITIZED_FEATURES.md](./TOP_10_PRIORITIZED_FEATURES.md) before treating them as unimplemented.

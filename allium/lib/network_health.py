@@ -5,6 +5,7 @@ Network health dashboard metrics calculation and template string pre-formatting.
 Extracted from relays.py for better modularity.
 """
 
+import html
 import statistics
 
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
@@ -167,7 +168,9 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_resolver_google_percentage', 'exit_dns_health_resolver_cloudflare_percentage',
         'exit_dns_health_resolver_quad9_percentage', 'exit_dns_health_resolver_opendns_percentage',
         'exit_dns_health_resolver_ffmuc_percentage', 'exit_dns_health_resolver_public_percentage',
-        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_other_percentage',
+        'exit_dns_health_resolver_local_percentage', 'exit_dns_health_resolver_local_24_percentage',
+        'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
+        'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
         'exit_dns_health_resolver_unknown_percentage',
     ]
 
@@ -182,6 +185,11 @@ def preformat_network_health_template_strings(health_metrics):
         if key in health_metrics:
             value = health_metrics[key]
             health_metrics[f'{key}_formatted'] = f"{value:.1f}%" if value is not None else "n/a"
+
+    # Resolver shares are rounded together, so All Public + Local + Other + Unknown show 100.0%
+    from .exit_dns_health import resolver_share_tenths
+    for key, tenths in (resolver_share_tenths(health_metrics) or {}).items():
+        health_metrics[f'{key}_formatted'] = f"{tenths / 10:.1f}%"
     
     # Format uptime time series data (4+ format operations eliminated)
     # Using consistent naming pattern: {role}_uptime_{period}_mean
@@ -536,6 +544,110 @@ def _integrate_exit_dns_health(health_metrics, relay_set):
         health_metrics.update(calculate_exit_dns_health_metrics(None))
 
 
+_OBSOLETE_OPERATOR_LIMIT = 4
+# A version is named in "Recommended now" only after this many relays
+# are running it with version_status recommended. Drops one-off flags.
+_MIN_RELAYS_ON_RECOMMENDED_VERSION = 10
+
+
+def _join_and(items):
+    items = [item for item in items if item]
+    if len(items) <= 1:
+        return items[0] if items else ''
+    if len(items) == 2:
+        return f'{items[0]} and {items[1]}'
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _version_key(version):
+    key = []
+    for part in str(version).replace('-', '.').split('.'):
+        key.append((0, int(part)) if part.isdigit() else (1, part))
+    return key
+
+
+def _non_obsolete_versions(relays, indices):
+    counts = {}
+    for idx in indices:
+        relay = relays[idx]
+        if (relay.get('version_status') or '').lower() == 'obsolete':
+            continue
+        ver = relay.get('version')
+        if ver:
+            counts[ver] = counts.get(ver, 0) + 1
+    ordered = sorted(counts, key=lambda ver: (-counts[ver], _version_key(ver)))
+    return _join_and(ordered)
+
+
+def _rank_obsolete_operators(by_contact, rec_versions, total_cw, relay_set):
+    """Top operators by consensus weight on version_status=obsolete relays.
+
+    Section 6.5 of Dejaeghere et al. 2026: consensus weight estimates relay
+    utility in the average case. Relays with an empty contact are omitted.
+    """
+    contacts = (relay_set.json.get('sorted') or {}).get('contact') or {}
+    relays = relay_set.json.get('relays') or []
+    ranked = []
+    for contact_hash, (cw, n_obs, versions) in by_contact.items():
+        group = contacts.get(contact_hash) or {}
+        if not (group.get('contact') or '').strip() or cw <= 0 or n_obs <= 0:
+            continue
+        display = ((group.get('display') or {}).get('display_name') or '').strip()
+        if not display or display == 'none':
+            continue
+        n_all = (group.get('display') or {}).get('total_relays') or n_obs
+        short = display.split(' (', 1)[0]
+        ranked.append((cw, short.lower(), contact_hash, n_obs, n_all, versions, short))
+    ranked.sort(key=lambda row: (-row[0], row[1]))
+    recommended = sorted(
+        (ver for ver, count in rec_versions.items() if count >= _MIN_RELAYS_ON_RECOMMENDED_VERSION),
+        key=_version_key,
+    )
+    rec_suffix = f" Recommended now: {_join_and(recommended)}." if recommended else ""
+    top = []
+    by_hash = {}
+    for cw, _sort_name, contact_hash, n_obs, n_all, versions, name in ranked[:_OBSOLETE_OPERATOR_LIMIT]:
+        pct = f"{(cw / total_cw * 100) if total_cw else 0:.2f}%"
+        ver_text = _join_and(sorted(versions, key=lambda ver: (-versions[ver], _version_key(ver))))
+        if n_obs == n_all:
+            noun = "relay" if n_obs == 1 else "relays"
+            detail = f"{pct} from {n_obs} {noun} on {ver_text}"
+            count_label = f"{n_obs} {noun}"
+            suffix = rec_suffix
+        else:
+            detail = f"{pct} from {n_obs} of {n_all} relays on {ver_text}"
+            count_label = f"{n_obs} of {n_all}"
+            other = _non_obsolete_versions(relays, (contacts.get(contact_hash) or {}).get('relays') or [])
+            other_n = n_all - n_obs
+            if not other:
+                suffix = ""
+            elif other_n == 1:
+                suffix = f" The other relay is on {other}."
+            else:
+                suffix = f" The other {other_n} relays are on {other}."
+        weight_html = f'<span class="al-status-danger-bold">{html.escape(detail)}</span>'
+        row = {
+            'contact_hash': contact_hash,
+            'display_name': name,
+            'weight_pct': pct,
+            'count_label': count_label,
+            'title': detail,
+            'weight_html': weight_html,
+            'weight_suffix': suffix,
+            'weight_li': (
+                '\n                        <li><strong><span title="Consensus weight of this '
+                'operator&#39;s relays whose Tor version directory authorities mark obsolete. '
+                'Average-case estimate of relay utility (Dejaeghere et al. 2026, section 6.5). '
+                'These relays are still in the consensus.">Obsolete consensus weight</span>:</strong> '
+                f'{weight_html}{html.escape(suffix)}</li>'
+            ),
+            'relay_plain': f"{name}: {count_label} on {ver_text}, {pct} of consensus weight.",
+        }
+        top.append(row)
+        by_hash[contact_hash] = row
+    return top, by_hash
+
+
 def calculate_network_health_metrics(relay_set):
     """
     ULTRA-OPTIMIZED: Calculate network health metrics in single pass with maximum reuse.
@@ -651,6 +763,9 @@ def calculate_network_health_metrics(relay_set):
     platform_counts = {}
     recommended_version_count = not_recommended_count = 0
     experimental_count = obsolete_count = outdated_count = 0
+    # contact_md5 -> [obsolete consensus weight, obsolete relay count, {version: count}]
+    _obsolete_by_contact = {}
+    _recommended_versions = {}
     total_consensus_weight = 0
     observed_advertised_diff_sum = observed_advertised_count = 0
     observed_advertised_diff_values = []
@@ -839,14 +954,26 @@ def calculate_network_health_metrics(relay_set):
             obsolete_count += 1
         elif version_status in ['unrecommended', 'old']:
             outdated_count += 1
+        _ver = relay.get('version') or ''
+        if recommended is True and version_status == 'recommended' and _ver:
+            _recommended_versions[_ver] = _recommended_versions.get(_ver, 0) + 1
         
         # Happy Family Key Migration tracking (version-based)
-        relay_version = relay.get('version', '')
-        is_family_ready = _is_happy_family_ready(relay_version)
+        is_family_ready = _is_happy_family_ready(_ver)
         
         # Bandwidth calculations
         bandwidth = relay.get('observed_bandwidth', 0)
-        consensus_weight = relay.get('consensus_weight', 0)
+        consensus_weight = relay.get('consensus_weight', 0) or 0
+        if version_status == 'obsolete':
+            _ch = relay.get('contact_md5')
+            if _ch:
+                _slot = _obsolete_by_contact.get(_ch)
+                if _slot is None:
+                    _obsolete_by_contact[_ch] = _slot = [0, 0, {}]
+                _slot[0] += consensus_weight
+                _slot[1] += 1
+                if _ver:
+                    _slot[2][_ver] = _slot[2].get(_ver, 0) + 1
         total_bandwidth += bandwidth
         advertised_bandwidth = relay.get('advertised_bandwidth', 0)
         total_consensus_weight += consensus_weight
@@ -1298,6 +1425,11 @@ def calculate_network_health_metrics(relay_set):
         'obsolete_percentage': _pct(obsolete_count, total_relays_count),
         'outdated_percentage': _pct(outdated_count, total_relays_count)
     })
+    health_metrics['obsolete_operator_top'], health_metrics['obsolete_operators'] = (
+        _rank_obsolete_operators(
+            _obsolete_by_contact, _recommended_versions, total_consensus_weight, relay_set
+        )
+    )
     
     # Bandwidth utilization metrics - calculate mean and median for Obs to Adv Diff
     avg_obs_adv_diff_bytes = (
@@ -1399,9 +1531,11 @@ def calculate_network_health_metrics(relay_set):
         network_middle_statistics = relay_set._consolidated_uptime_results.get('network_middle_statistics', {})
         network_other_statistics = relay_set._consolidated_uptime_results.get('network_other_statistics', {})
         
-        # Use 1-month network mean for overall uptime as requested
-        if network_statistics.get('1_month', {}).get('mean') is not None:
-            health_metrics['overall_uptime'] = network_statistics['1_month']['mean']
+        # Use 1-month network mean for overall uptime as requested.
+        # A period with fewer than 3 samples is stored as None, not {}.
+        month_stats = network_statistics.get('1_month') or {}
+        if month_stats.get('mean') is not None:
+            health_metrics['overall_uptime'] = month_stats['mean']
         elif hasattr(relay_set, 'network_uptime_percentiles') and relay_set.network_uptime_percentiles:
             health_metrics['overall_uptime'] = relay_set.network_uptime_percentiles['average']
         else:

@@ -48,7 +48,13 @@ from .operator_analysis import (
     generate_contact_rankings,
 )
 from .stability_utils import compute_group_overload_summary
-from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
+from .time_utils import (
+    format_collector_span,
+    format_collector_time,
+    format_time_ago,
+    format_timestamp,
+    format_timestamp_ago,
+)
 from .search_discovery import MAX_HEAD_CHARS
 from .seo import canonical_url_for_output, clean_href, rewrite_internal_links
 from .worker_pool import fork_map
@@ -187,6 +193,8 @@ ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_data_volume'] = format_data_volume_with_unit
 ENV.filters['format_time_ago'] = format_time_ago
+ENV.filters['collector_time'] = format_collector_time
+ENV.filters['collector_span'] = format_collector_span
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
 # Overload section filters for millisecond timestamps (Onionoo overload fields)
@@ -254,6 +262,7 @@ def _cached_relay_row_head(macro, relay, show_validation_icon, validation_icon_t
 
 ENV.globals['relay_row_cache'] = _cached_relay_row_head
 ENV.globals['chart_ext'] = 'svg'  # allium.py sets the --chart-format
+ENV.globals['chart_root'] = ''  # 'charts/' with --chart-layout charts (allium.py)
 ENV.globals['chart_spans'] = PERIOD_SPAN  # '1m' -> 'last 30 days', as in the chart titles
 
 # ============================================================================
@@ -844,6 +853,7 @@ def get_directory_authorities_data(relay_set):
             # Check if this authority voted - O(1) lookups
             voted = False
             relay_count = 0
+            vote_time = None
             vote_tuple = (
                 votes_by_fingerprint.get(auth_fingerprint) or
                 votes_by_prefix.get(auth_fp_prefix) or
@@ -852,6 +862,10 @@ def get_directory_authorities_data(relay_set):
             if vote_tuple:
                 voted = True
                 relay_count = vote_tuple[1]
+                vote_body = vote_tuple[0] if isinstance(vote_tuple[0], dict) else {}
+                vote_time = (vote_body.get('vote_time')
+                             or vote_body.get('valid_after')
+                             or vote_body.get('published'))
             
             # Check if this authority is a bandwidth authority - O(1) lookups
             is_bw = (
@@ -874,6 +888,7 @@ def get_directory_authorities_data(relay_set):
                 'is_bw_authority': is_bw,
                 'relay_count': relay_count,
                 'max_consensus_method': auth_max_method,
+                'vote_time': vote_time,
             }
     
     # Perform latency checks on authorities
@@ -1282,7 +1297,9 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     """
     files_written = 0
     chart_writer = getattr(relay_set, 'chart_writer', None)
-    chart_periods = chart_writer.contact(contact_data.get('relays', ()), dir_path) if chart_writer else {}
+    chart_periods = chart_writer.contact(
+        contact_data.get('relays', ()), chart_writer.folder('contact', os.path.basename(dir_path), dir_path)
+    ) if chart_writer else {}
 
     aroi_domain = contact_data.get('aroi_domain')
     has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
@@ -1852,10 +1869,12 @@ class _RelayPageRenderer:
                                 self.family_key_to_fps)
 
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2),
-        # with the relay's history charts beside it
+        # with the relay's history charts beside it or under charts/relay/FINGERPRINT/
         relay_dir = os.path.join(self.output_path, relay["fingerprint"])
         os.makedirs(relay_dir, exist_ok=True)
-        bandwidth_periods, uptime_periods = self.chart_writer.relay(relay, relay_dir) if self.chart_writer else ({}, {})
+        bandwidth_periods, uptime_periods = self.chart_writer.relay(
+            relay, self.chart_writer.folder('relay', relay["fingerprint"], relay_dir)
+        ) if self.chart_writer else ({}, {})
 
         rendered = self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,

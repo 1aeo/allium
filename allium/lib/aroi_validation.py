@@ -719,7 +719,20 @@ def _categorize_by_missing_fields(aroi_fields: Dict, has_contact: bool) -> str:
     return 'no_aroi'
 
 
-def _deduplicate_fingerprint_not_found_error(error: str) -> str:
+def _normalize_error_message(error: object) -> str:
+    """Return a safe display string for an optional validator error.
+
+    JSON null is a present key, so dict.get's default does not apply.
+    A non-empty string is returned unchanged. None, an empty string, and
+    any other non-string become 'Unknown error' before re.findall or
+    str.lower.
+    """
+    if isinstance(error, str) and error.strip():
+        return error
+    return 'Unknown error'
+
+
+def _deduplicate_fingerprint_not_found_error(error: object) -> str:
     """
     Deduplicate repeated "Fingerprint not found in URL" messages.
 
@@ -731,6 +744,8 @@ def _deduplicate_fingerprint_not_found_error(error: str) -> str:
         "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, "
         "https://www.prsv.ch/.../rsa-fingerprint.txt"
     """
+    error = _normalize_error_message(error)
+
     # Pattern to match "Fingerprint not found in URL" segments separated by
     # semicolons
     pattern = r'Fingerprint not found in ([^;]+)'
@@ -755,7 +770,7 @@ _URI_FALLBACK_ERROR_SPLIT_RE = re.compile(r'; (?=URI-[A-Za-z0-9-]+: )')
 _URI_CONNECTION_ERROR_LABEL = ("URI: Connection error", 'uri')
 
 
-def _simplify_error_message(error: str) -> tuple:
+def _simplify_error_message(error: object) -> tuple:
     """
     Simplify a verbose error message into a short protocol-prefixed label.
 
@@ -770,6 +785,9 @@ def _simplify_error_message(error: str) -> tuple:
         Tuple of (simplified_message, proof_type), where proof_type is
         'dns', 'uri', or 'other'.
     """
+    # Normalize before the URI-fallback split. JSON null is not a str,
+    # and re.split / str.lower would raise TypeError.
+    error = _normalize_error_message(error)
     attempts = _URI_FALLBACK_ERROR_SPLIT_RE.split(error, maxsplit=1)
     if len(attempts) > 1:
         primary = _simplify_error_message(attempts[0])
@@ -1364,7 +1382,7 @@ def calculate_aroi_validation_metrics(
                     if result.get('valid', False):
                         domain_has_valid_relay[aroi_domain] = True
                     else:
-                        error = result.get('error', 'Unknown error')
+                        error = _normalize_error_message(result.get('error'))
                         # Only track actual validation failures, not missing
                         # AROI fields. Relays with "Missing AROI fields"
                         # should not have aroi_domain set, but keep the
@@ -1797,7 +1815,7 @@ def get_contact_validation_status(
             # Validation failed -> categorize by error_category (A.4) with
             # fallback to substring heuristic (older cached pre-schema-v2
             # responses don't have error_category).
-            error = val_result.get('error', 'Unknown error')
+            error = _normalize_error_message(val_result.get('error'))
             error = _deduplicate_fingerprint_not_found_error(error)
             error_category = val_result.get('error_category')
 

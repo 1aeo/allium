@@ -50,6 +50,15 @@ from .page_writer import (
     _load_precomputed,
 )
 
+# Case-only: each value lowercased equals its key. gotor reports Go's lowercase OS names.
+PLATFORM_SPELLINGS = {
+    name.lower(): name for name in (
+        "Linux", "FreeBSD", "OpenBSD", "NetBSD", "DragonFly", "Darwin",
+        "Windows", "SunOS", "ElectroBSD", "Linux-libre",
+    )
+}
+
+
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
@@ -203,6 +212,7 @@ class Relays:
         unnecessary classification which could affect sorting
 
         e.g. "Tor 0.3.4.9 on Linux" -> "Linux"
+             "Tor 0.4.9.11 (gotor) on linux" -> "Linux"
         
         Also preserve the original platform information as platform_raw for display
         """
@@ -224,6 +234,22 @@ class Relays:
                 except (IndexError, AttributeError):
                     # Fallback: use the original platform string
                     relay["platform"] = relay["platform_raw"]
+
+        # One spelling per platform name: gotor reports Go's lowercase name ("linux")
+        spellings = {}
+        for relay in self.json["relays"]:
+            if relay.get("platform"):
+                counts = spellings.setdefault(relay["platform"].lower(), {})
+                counts[relay["platform"]] = counts.get(relay["platform"], 0) + 1
+        canonical = {}
+        for folded, counts in spellings.items():
+            # Not in the table: prefer a spelling that is not all lowercase (C Tor's style),
+            # then the one most relays report, then the first in sorted order
+            canonical[folded] = PLATFORM_SPELLINGS.get(folded) or min(
+                counts, key=lambda s: (s == s.lower(), -counts[s], s))
+        for relay in self.json["relays"]:
+            if relay.get("platform"):
+                relay["platform"] = canonical[relay["platform"].lower()]
 
     def _filter_and_fix_relays(self):
         """Filter relays by downtime and fix missing bandwidth - single efficient pass"""

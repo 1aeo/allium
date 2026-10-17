@@ -657,6 +657,8 @@ Platform: unknown
 {# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
+{# The charts are beside this page, or under charts/relay/<fingerprint>/ with --chart-layout charts #}
+{% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'relay/' ~ relay['fingerprint'] ~ '/' if chart_root else '' %}
 {% if bandwidth_periods %}{{ chart_period_anchors('bandwidth') }}{% endif %}
 <section id="bandwidth" class="section-box relay-section">
 {# Backward-compatible anchors from old dt/dd layout #}
@@ -796,7 +798,7 @@ Platform: unknown
     </div>
     {% endif %}
 </div>
-{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', ext=chart_ext) }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1039,7 +1041,7 @@ Platform: unknown
 </div>
 {% endif %}
 
-{{ chart_history('uptime', uptime_periods, 'Uptime', ext=chart_ext) }}
+{{ chart_history('uptime', uptime_periods, 'Uptime', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
@@ -1260,7 +1262,7 @@ Platform: unknown
             <span class="al-status-success">{{ relay['version_status']|capitalize|escape }}</span>
         {% elif relay['version_status'] == 'obsolete' -%}
             <span class="al-status-danger-bold">{{ relay['version_status']|capitalize|escape }}</span>
-            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>{% set _op = (relays.json.network_health.get('obsolete_operators') or {}).get(relay['contact_md5']) %}{% if _op %}<span class="al-text-small-muted"> — {{ _op.relay_plain|e }} <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/#version-compliance">Operator versions</a></span>{% endif %}{{ '' }}
         {% elif relay['version_status'] == 'experimental' -%}
             <span class="al-status-warning">{{ relay['version_status']|capitalize|escape }}</span>
         {% else -%}
@@ -1332,13 +1334,13 @@ Platform: unknown
             {% endif %}
             {# Upstream resolver. None: the report has no resolver data; {}: no queries seen from this exit yet #}
             {% if relay.get('exit_dns_health_resolver_queries') is not none %}
-            {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'other': 'Other', 'unknown': 'Unknown'} %}
+            {% set resolver_names = {'google': 'Google', 'cloudflare': 'Cloudflare', 'quad9': 'Quad9', 'opendns': 'OpenDNS', 'ffmuc': 'Freifunk München', 'local': 'Local', 'local_24': 'Local /24', 'local_22': 'Local /22', 'local_as': 'Local AS', 'local_operator': 'Local operator', 'other': 'Other', 'unknown': 'Unknown'} %}
             {% set resolver_total = relay.exit_dns_health_resolver_queries.values()|sum %}
-            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local: the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
+            <dt title="The resolver this exit relay's DNS lookups reach the validator's authoritative DNS from, estimated from sampled queries over recent scans (3.5-day half-life). Local /24: same IPv4 /24 or IPv6 /64 as the exit, including its own address. Local /22: same IPv4 /22 or IPv6 /48. Local AS: same origin AS, outside those prefixes. Local operator: run by the same operator in another network. Local (older reports): the exit's own address or network. Other: any other resolver. Unknown: its network could not be looked up.">Upstream Resolver</dt>
             <dd>
                 {% if relay.exit_dns_health_resolver_primary %}
                     {{ resolver_names.get(relay.exit_dns_health_resolver_primary, relay.exit_dns_health_resolver_primary) }}
-                    {% if relay.exit_dns_health_resolver_public %}<span class="al-text-small-muted">(public resolver)</span>{% elif relay.exit_dns_health_resolver_primary == 'local' %}<span class="al-text-small-muted">(exit's own network)</span>{% endif %}
+                    {% if relay.exit_dns_health_resolver_public %}<span class="al-text-small-muted">(public resolver)</span>{% elif relay.exit_dns_health_resolver_primary in ('local', 'local_24', 'local_22', 'local_as') %}<span class="al-text-small-muted">(exit's own network)</span>{% elif relay.exit_dns_health_resolver_primary == 'local_operator' %}<span class="al-text-small-muted">(same operator, other network)</span>{% endif %}
                 {% else %}
                     <span class="al-status-muted" title="Too few sampled queries from this exit so far to name a primary resolver.">Not enough data</span>
                 {% endif %}
@@ -1484,8 +1486,6 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>
     <th title="Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
     <th title="Stable Uptime: Relay's uptime | Authority's threshold">Stable Uptime (Relay|T)</th>
-    <th title="HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
-    <th title="HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
     <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
     <th id="col-cons-wt" title="Each vote's input to the consensus weight. When 3 or more authorities measured the relay, the consensus weight is the median of their measurements (M); relay-reported values (R) then don't count and are grayed out. Otherwise it is the median of the relay-reported values, capped at maxunmeasuredbw.">Cons Wt (Authority)</th>
 </tr>
@@ -1530,8 +1530,6 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span class="{% if vote.stable_uptime_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span class="al-status-muted">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu >= 0.98 %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span class="{% if vote.hsdir_tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-cons-wt">{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
 </tr>

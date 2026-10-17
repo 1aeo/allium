@@ -1,6 +1,7 @@
 """Search-index schema contract consumed by allium-deploy's Pages Function."""
 
 import json
+import os
 import re
 from typing import Any, Dict
 
@@ -133,10 +134,11 @@ def test_lookup_platforms_name_the_platform_pages(tmp_path):
     write_pages_by_key(relay_set, 'platform')
     index = _generate_index(tmp_path, relay_set.json, 'search-index.json', use_parallel=False)
 
-    # "linux" (one relay) would match the same searches as "Linux" (two)
+    # gotor's lowercase "linux" is filed under "Linux"
     assert index['lookups']['platforms'] == ['FreeBSD', 'Linux', 'Linux-libre', 'Windows']
     for platform in index['lookups']['platforms']:
         assert (tmp_path / 'platform' / platform / 'index.html').is_file(), platform
+    assert 'linux' not in os.listdir(tmp_path / 'platform')
     assert tuple(map(int, index['meta']['version'].split('.'))) >= (1, 7)
 
 

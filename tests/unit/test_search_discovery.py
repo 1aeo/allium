@@ -131,6 +131,33 @@ def test_noindex_is_preserved_across_multiple_robots_tags(temp_dir):
     assert locations == ["https://metrics.1aeo.com/top500"]
 
 
+def test_root_relative_base_does_not_publish_a_sitemap(temp_dir):
+    """A subdirectory prefix is not an absolute sitemap origin.
+
+    Sitemap loc values must be absolute public URLs. ``/tor-metrics`` still
+    prefixes canonical links, but it must not start a public sitemap.
+    """
+    for filename in ("robots.txt", "sitemap.xml"):
+        with open(os.path.join(temp_dir, filename), "w", encoding="utf-8") as handle:
+            handle.write("stale production content")
+    with open(os.path.join(temp_dir, "index.html"), "w", encoding="utf-8") as handle:
+        handle.write(
+            "<!doctype html><html><head>"
+            '<link rel="canonical" href="/tor-metrics/">'
+            "</head><body></body></html>"
+        )
+
+    assert generate_search_discovery(temp_dir, "/tor-metrics") == {
+        "generated": False,
+        "url_count": 0,
+        "sitemap_count": 0,
+        "html_count": 0,
+        "noindex_count": 0,
+    }
+    assert not os.path.exists(os.path.join(temp_dir, "robots.txt"))
+    assert not os.path.exists(os.path.join(temp_dir, "sitemap.xml"))
+
+
 def test_local_build_skips_public_discovery_files(temp_dir):
     for filename in ("robots.txt", "sitemap.xml", "sitemap-1.xml"):
         with open(os.path.join(temp_dir, filename), "w", encoding="utf-8") as handle:

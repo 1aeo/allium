@@ -202,6 +202,14 @@ jobs:
   setup-script-validation:
     name: "Setup Script End-to-End Test"
     runs-on: ubuntu-latest
+    env:
+      CI: true
+      GITHUB_ACTIONS: true
+      # Opt-in for this job only. Production builds do not set it, so they
+      # still hit the network and never install the committed fixtures.
+      ALLIUM_CI_CACHE_FALLBACK: "1"
+      ALLIUM_CI_FIXTURE_DIR: /tmp/allium-setup-test/ci-fixtures
+      ALLIUM_CI_CACHE_LIB: /tmp/allium-setup-test/ci_cache_fallback.sh
     strategy:
       matrix:
         python-version: ["3.8", "3.13"]  # Test on minimum and latest supported versions
@@ -213,9 +221,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
         
     - name: Test fresh environment setup
-      env:
-        CI: true
-        GITHUB_ACTIONS: true
       run: |
         # Create a temporary directory to simulate fresh environment
         mkdir -p /tmp/allium-setup-test
@@ -249,29 +254,42 @@ jobs:
         
         # Make sure the script is executable
         chmod +x setup.sh
-        
-        # Run setup script with timeout to prevent hanging
-        timeout 900 bash setup.sh
-        setup_exit_code=$?
-        
+
+        # Helper and fixtures come from this commit. setup.sh then clones the
+        # default branch; ALLIUM_CI_FIXTURE_DIR points at this download so the
+        # seed works before the fixtures are on the default branch.
+        echo "📥 Downloading CI cache helper and API fixtures..."
+        curl -fsSL --connect-timeout 30 --max-time 60 \
+          "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/ci_cache_fallback.sh" \
+          -o "$ALLIUM_CI_CACHE_LIB"
+        # shellcheck disable=SC1090
+        source "$ALLIUM_CI_CACHE_LIB"
+        download_ci_fixtures "$ALLIUM_CI_FIXTURE_DIR" "${{ github.repository }}" "${{ github.sha }}"
+        grep -q 'seed_ci_api_caches' "$ALLIUM_CI_CACHE_LIB"
+
+        # 900s is only a hang backstop around clone, pip, and generation.
+        # Each seeded API uses its fresh-cache budget (at most 90s, no retries)
+        # and then the fixture. Do not raise this backstop to hide a slow API.
+        # GitHub's default shell has errexit, so a failing timeout would
+        # end the step before the next line could read $?.
+        if timeout 900 bash setup.sh; then
+          setup_exit_code=0
+        else
+          setup_exit_code=$?
+        fi
+
         if [ $setup_exit_code -eq 0 ]; then
           echo "✅ Setup script completed successfully"
         elif [ $setup_exit_code -eq 124 ]; then
-          echo "❌ Setup script timed out after 15 minutes"
-          echo "🔧 This might be due to network issues or slow API responses"
+          echo "❌ Setup script hit the 15 minute hang backstop"
+          echo "   A slow API should have fallen back to its CI cache before this."
           exit 1
         else
-          echo "⚠️  Setup script exited with code $setup_exit_code"
-          echo "🔧 This might be due to network issues or temporary service unavailability"
-          echo "💡 In CI environments, onionoo API issues are common and usually resolve on retry"
-          # Don't fail the entire test for network issues in CI
-          echo "ℹ️  Continuing with validation to check what was generated..."
+          echo "❌ Setup script exited with code $setup_exit_code"
+          exit 1
         fi
         
     - name: Validate setup results
-      env:
-        CI: true
-        GITHUB_ACTIONS: true
       run: |
         cd /tmp/allium-setup-test/allium
         
@@ -281,40 +299,15 @@ jobs:
         ls -la
         
         # Activate the virtual environment
+        test -d venv || { echo "❌ venv was not created"; exit 1; }
         source venv/bin/activate
         
         # Check that key files exist in the correct subdirectory
         test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; ls -la allium/; exit 1; }
         test -f "config/requirements.txt" || { echo "❌ config/requirements.txt not found"; exit 1; }
-        
-        # Check if www directory and content were created (should be at root level)
-        if [ -d "www" ]; then
-          echo "✅ www directory created"
-          
-          if [ -f "www/index.html" ]; then
-            echo "✅ index.html generated"
-            
-            # Verify generated HTML is valid (basic check)
-            if grep -q "<html" www/index.html; then
-              echo "✅ Generated HTML appears valid"
-            else
-              echo "⚠️  Generated HTML might be incomplete"
-              echo "📋 First few lines of index.html:"
-              head -10 www/index.html || echo "Could not read index.html"
-              echo "ℹ️  This might be due to API issues during generation"
-            fi
-          else
-            echo "⚠️  index.html not generated - this might be due to API connectivity issues"
-            echo "📋 Contents of www directory:"
-            ls -la www/ || echo "Could not list www directory"
-            echo "ℹ️  In CI environments, this is often due to temporary onionoo API unavailability"
-          fi
-        else
-          echo "⚠️  www directory not created - checking if setup script failed early"
-          echo "📋 Current directory contents:"
-          ls -la . || echo "Could not list current directory"
-          echo "ℹ️  This could indicate a more serious issue with the setup process"
-        fi
+        test -f "www/index.html" || { echo "❌ www/index.html was not generated"; ls -la www/ || true; exit 1; }
+        grep -q '<html' www/index.html || { echo "❌ www/index.html is not HTML"; exit 1; }
+        echo "✅ index.html generated"
         
         # Check that Python can import required modules
         python3 -c "import jinja2; print('✅ Jinja2 import successful')" || {
@@ -326,9 +319,6 @@ jobs:
         echo "✅ Setup script validation completed successfully"
         
     - name: Test regeneration
-      env:
-        CI: true
-        GITHUB_ACTIONS: true
       run: |
         cd /tmp/allium-setup-test/allium
         
@@ -337,53 +327,30 @@ jobs:
         
         # Make sure we're in the right directory with the allium.py script
         cd allium
-        
-        echo "🔄 Testing data regeneration..."
+        # shellcheck disable=SC1090
+        source "$ALLIUM_CI_CACHE_LIB"
+        if [ -z "${API_MODE:-}" ]; then
+          echo "❌ API_MODE was not passed from setup.sh"
+          exit 1
+        fi
+
+        echo "🔄 Testing data regeneration (${API_MODE})..."
         echo "📁 Current directory: $(pwd)"
         echo "📋 Files in current directory:"
         ls -la
-        
-        # Test that regeneration works with retry logic for network issues
-        # Try up to 3 times to handle temporary network issues common in CI
-        # Use 'details' API only to reduce memory usage and improve reliability in CI
-        regeneration_success=false
-        for attempt in 1 2 3; do
-          echo "🔄 Attempt $attempt of 3..."
-          if timeout 300 python3 allium.py --progress --apis details --out ../test-www; then
-            echo "✅ Regeneration test completed successfully on attempt $attempt"
-            echo "📁 Generated files:"
-            ls -la ../test-www/ || echo "No test-www directory found"
-            regeneration_success=true
-            break
-          else
-            exit_code=$?
-            echo "⚠️  Attempt $attempt failed with exit code $exit_code"
-            if [ $attempt -eq 3 ]; then
-              echo "⚠️  All regeneration attempts failed"
-              echo "🔧 This might be due to:"
-              echo "   - Network connectivity issues with onionoo.torproject.org"
-              echo "   - Temporary service unavailability"
-              echo "   - Timeout in CI environment"
-              echo "   - Memory constraints (trying details-only API)"
-              echo "📋 Debug info:"
-              echo "   Working directory: $(pwd)"
-              echo "   Python version: $(python3 --version)"
-              echo "   Available memory: $(free -h || echo 'N/A')"
-              echo "ℹ️  In CI environments, API failures are common and usually not a code issue"
-            else
-              echo "⏳ Waiting 10 seconds before retry..."
-              sleep 10
-            fi
-          fi
-        done
-        
-        # Don't fail the entire CI run for network issues - just report the result
-        if [ "$regeneration_success" = true ]; then
-          echo "✅ Regeneration test passed"
-        else
-          echo "⚠️  Regeneration test could not complete due to external factors"
-          echo "ℹ️  This is likely due to temporary API unavailability and not a code issue"
+
+        # One live attempt. Seeded caches are fresh, so a slow API falls back
+        # inside allium instead of retrying for several minutes. A non-zero
+        # exit is a real failure. Exit 0 with no page uses the fixtures once.
+        # timeout(1) cannot see a shell function, so run it in a child shell.
+        if ! timeout 300 bash -c 'source "$ALLIUM_CI_CACHE_LIB"; ci_generate_once ../test-www allium.py'; then
+          echo "❌ Regeneration did not produce test-www/index.html"
+          echo "   Working directory: $(pwd)"
+          echo "   Python version: $(python3 --version)"
+          exit 1
         fi
+        test -f ../test-www/index.html
+        echo "✅ Regeneration test passed"
         
   template-security-audit:
     name: "Template Security & Quality Audit"

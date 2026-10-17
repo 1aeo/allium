@@ -84,6 +84,22 @@ def _tooling_active():
         monitoring.get_tool(tool_id) is not None for tool_id in range(6))
 
 
+def _browser_normalized_base_url(url):
+    """Return url after the normalizations a browser applies to an href.
+
+    WHATWG parsers delete TAB, CR, and LF, and treat backslash as a slash.
+    The result is used only to decide whether a root-relative --base-url is
+    safe. The stored value is not rewritten.
+    """
+    return (
+        url.replace('\t', '')
+        .replace('\r', '')
+        .replace('\n', '')
+        .replace('\\', '/')
+        .strip()
+    )
+
+
 def validate_url_arguments(args):
     """
     Validate that all URL arguments use http:// or https:// scheme.
@@ -92,8 +108,10 @@ def validate_url_arguments(args):
     Uses urllib.parse.urlsplit for robust scheme parsing rather than string
     prefix matching, which could be bypassed with schemes like "httpx://".
     
-    --base-url is special: it accepts empty strings (the default), root-relative
-    paths (starting with '/'), and http/https URLs for vanity URL generation.
+    --base-url is special: it accepts empty strings (the default, site-root
+    output), root-relative subdirectory prefixes (for example "/tor-metrics"),
+    and http/https URLs. A bare "/" is rejected. Vanity links are built as
+    "{base}/{domain}/", so "/" becomes a scheme-relative "//domain/" URL.
     
     Args:
         args: argparse namespace with URL arguments
@@ -117,8 +135,26 @@ def validate_url_arguments(args):
         # to http/https URLs; all other URL arguments require a full URL.
         # Reject scheme-relative URLs like "//evil.example/..." which would
         # inherit the page's protocol and redirect to an attacker-controlled host.
-        if attr == 'base_url' and url.startswith('/') and not url.startswith('//'):
-            continue
+        if attr == 'base_url':
+            # "/" looks like "site root", but vanity links are "{base}/{domain}/"
+            # and a bare slash becomes scheme-relative "//domain/". Browsers
+            # also delete TAB/CR/LF and treat "\" as "/", so "/\\" and
+            # "/\t/host" are the same class of bug. Subdirectory prefixes such
+            # as "/tor-metrics" stay valid, including a trailing slash.
+            browser_url = _browser_normalized_base_url(url)
+            if browser_url == '/':
+                print("❌ Error: --base-url cannot be '/'")
+                print("   Vanity links are built as {base}/{domain}/, so '/' becomes //domain/.")
+                print("   Omit --base-url for site-root output, or use a subdirectory")
+                print("   (for example /tor-metrics) or an absolute http(s) URL.")
+                sys.exit(1)
+            if (
+                url.startswith('/')
+                and not url.startswith('//')
+                and browser_url.startswith('/')
+                and not browser_url.startswith('//')
+            ):
+                continue
         scheme = urllib.parse.urlsplit(url).scheme.lower()
         if scheme not in ('http', 'https'):
             print(f"❌ Error: {flag_name} must use http:// or https:// scheme")
@@ -144,7 +180,9 @@ if __name__ == "__main__":
         default="",
         help=(
             'public base URL for vanity, canonical, Open Graph, and sitemap '
-            'URLs (default: "" for root-relative local output)'
+            'URLs. Default "" is site-root output. A subdirectory such as '
+            '/tor-metrics or an absolute http(s) URL is also accepted. '
+            'A bare "/" is rejected'
         ),
         required=False,
     )
@@ -283,6 +321,13 @@ if __name__ == "__main__":
         default="64",
         help="PNG chart colors: 64 (default, a fixed palette: about a third of the size, looks the same) or full",
     )
+    parser.add_argument(
+        "--chart-layout",
+        choices=("beside", "charts"),
+        default="beside",
+        help="where history charts go: beside (default, next to their relay or contact page) or charts "
+             "(charts/relay/<fingerprint>/ and charts/contact/<hash>/, to serve them apart from the pages)",
+    )
     args = parser.parse_args()
 
     # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
@@ -384,14 +429,23 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # History charts are written next to the relay and contact pages. Their
-    # peer medians need every relay, so build the writer before forking.
+    # History charts are written next to the relay and contact pages, or with
+    # --chart-layout charts under charts/. Every build removes the charts/
+    # tree first, as the page writer does relay/ and contact/ (and the charts
+    # beside the pages with them), so a build never keeps the charts of an
+    # earlier build in the other layout. Their peer medians need every relay,
+    # so build the writer before forking.
+    from lib.charts.render import CHARTS_DIR, clear_chart_tree
+    clear_chart_tree(args.output_dir)
     if args.charts and (getattr(RELAY_SET, "bandwidth_data", None) or getattr(RELAY_SET, "uptime_data", None)):
         from lib.charts.render import ChartWriter
         from lib.page_writer import ENV
+        apart = args.chart_layout == "charts"
         RELAY_SET.chart_writer = ChartWriter(RELAY_SET, args.chart_format, scale=args.chart_scale,
-                                             colors=args.chart_colors)
+                                             colors=args.chart_colors,
+                                             root=os.path.join(args.output_dir, CHARTS_DIR) if apart else None)
         ENV.globals["chart_ext"] = args.chart_format
+        ENV.globals["chart_root"] = CHARTS_DIR + "/" if apart else ""
 
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid

@@ -1,4 +1,4 @@
-"""Relay and operator history charts, written as PNG (or SVG) next to their HTML pages."""
+"""Relay and operator history charts, written as PNG (or SVG) next to their HTML pages or under charts/."""
 
 import errno
 import hashlib
@@ -29,7 +29,31 @@ from .svg import (
 WIDTH, LEFT = 1080, 138
 PLOT_WIDTH = WIDTH - LEFT - 24
 CREDIT = "Produced by 1aeo at 1aeo.com"  # every chart's source, bottom right
+# --chart-layout charts writes <out>/charts/relay/<fingerprint>/ and <out>/charts/contact/<hash>/, apart from the pages
+CHARTS_DIR = "charts"
 logger = logging.getLogger(__name__)
+
+
+def clear_chart_tree(output_dir):
+    """Delete ``<out>/charts/relay`` and ``<out>/charts/contact``, then ``<out>/charts`` when that empties it.
+
+    Call it on every build before any page is written. With relay/ and contact/, which the page writer rebuilds
+    (and the charts beside the pages with them), it leaves only the charts this build writes, in its own layout:
+    a build that writes them beside the pages, or none, drops the tree an earlier --chart-layout charts build left.
+    Anything else in charts/ stays. A tree it cannot remove stops the build, as relay/ and contact/ do, and so
+    does a charts/ that is a symbolic link: deleting through it would reach outside the output directory.
+    """
+    root = os.path.join(output_dir, CHARTS_DIR)
+    if os.path.islink(root):
+        raise OSError(f"{root} is a symbolic link; refusing to delete chart trees through it")
+    for kind in ("relay", "contact"):
+        path = os.path.join(root, kind)
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    try:
+        os.rmdir(root)
+    except OSError:  # missing, or holds something allium did not write
+        pass
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -226,7 +250,7 @@ def _overload_text(relay):
 
 
 class ChartWriter(object):
-    """Writes relay and operator charts next to their pages.
+    """Writes relay and operator charts next to their pages, or under ``root``.
 
     Built once in the parent process (the peer medians need every relay),
     then shared with the forked page workers.
@@ -243,11 +267,12 @@ class ChartWriter(object):
 
     _copy_warned = False
 
-    def __init__(self, relay_set, image_format="png", cache_dir=None, scale=2, colors="64"):
+    def __init__(self, relay_set, image_format="png", cache_dir=None, scale=2, colors="64", root=None):
         from ..operator_analysis import history_maps
         from ..workers import CACHE_DIR
         self.ext, self.raster, self.started = image_format, None, time.time()
         self.scale, self.colors = scale, colors
+        self.root = root  # <out>/charts with --chart-layout charts; None writes beside the pages
         self.cache_root = self.cache = cache_dir or os.path.join(CACHE_DIR, "charts")
         if image_format == "png":
             from . import raster  # cairocffi and numpy (zlib-ng if installed)
@@ -274,6 +299,11 @@ class ChartWriter(object):
         """Start of a period's bandwidth window, None when undated."""
         return self.published - WINDOW[period] if self.published else None
 
+    def folder(self, kind, name, beside):
+        """The folder for the charts of relay or contact ``name`` (``kind`` "relay" or "contact"): ``beside``, the
+        page's own, or ``<root>/<kind>/<name>`` with --chart-layout charts."""
+        return os.path.join(self.root, kind, name) if self.root else beside
+
     def _save(self, directory, name, draw, *args):
         """Write ``name`` plus the format's extension and return its height, which the page reserves for the
         image, or 0 when nothing was written: no drawable history, or a malformed one, skips the chart instead
@@ -286,6 +316,7 @@ class ChartWriter(object):
             return 0
         if not svg:
             return 0
+        os.makedirs(directory, exist_ok=True)  # a charts/ folder only for a relay or operator with a chart
         if not self.raster:
             with open(path, "wb") as handle:
                 handle.write(text)

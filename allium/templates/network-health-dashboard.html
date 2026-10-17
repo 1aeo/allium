@@ -741,6 +741,20 @@ Network Health Dashboard
                         <span class="metric-label">Outdated</span>
                     </div>
                 </div>
+                {% if relays.json.network_health.obsolete_operator_top %}
+                <div class="obsolete-operators">
+                    <div class="obsolete-operators-label" title="Operators with the most consensus weight on relays directory authorities mark obsolete. Consensus weight estimates relay utility (Dejaeghere et al. 2026, section 6.5). Relays with no contact are omitted.">Top {{ relays.json.network_health.obsolete_operator_top|length }} obsolete operators</div>
+                    <div class="metric-grid">
+                        {% for op in relays.json.network_health.obsolete_operator_top %}
+                        <a class="metric-item" href="{{ page_ctx.path_prefix }}contact/{{ op.contact_hash }}/#version-compliance" title="{{ op.title|e }}">
+                            <span class="metric-value">{{ op.weight_pct }}</span>
+                            <span class="metric-label">{{ op.display_name|e }}</span>
+                            <span class="metric-subtext">{{ op.count_label }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         
@@ -789,12 +803,18 @@ Network Health Dashboard
                 </div>
                 
                 <!-- Row 2: Consensus Method + DAs Support Max Method -->
+                {% set cm = relays.collector_consensus_data.consensus_method_info if relays.collector_consensus_data else none %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Current consensus-method from the consensus document (dir-spec §3.4.1). Must advance to minimum method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} for family-ids to appear in microdescriptors.">
                         <span class="metric-value {% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method_max and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_max %}al-status-success-bold{% elif relays.json.network_health.hf_consensus_method %}al-status-danger-bold{% else %}al-status-muted{% endif %}">
                             {{ relays.json.network_health.hf_consensus_method|default('N/A', true) }}
                         </span>
                         <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} ≥{{ relays.json.network_health.hf_consensus_method_max }}{% endif %}</span>
+                        {% if cm and cm.consensus_valid_after %}
+                        <div class="al-text-small-muted metric-subtext">{{ cm.consensus_valid_after|collector_time }}</div>
+                        {% elif cm and cm.method_inferred %}
+                        <div class="al-text-small-muted metric-subtext">inferred from votes</div>
+                        {% endif %}
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
                         <span class="metric-value {% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}al-status-success{% elif relays.json.network_health.hf_max_method_support > 0 %}al-status-warning{% else %}al-status-danger{% endif %}">
@@ -803,6 +823,9 @@ Network Health Dashboard
                         <span class="metric-label">DAs Support Method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} (Need {{ relays.json.network_health.hf_method_threshold }} for Majority)</span>
                     </div>
                 </div>
+                {% if cm and cm.latest_vote_time %}
+                <div class="al-text-small-muted metric-subtext" style="text-align: center;">Vote files {{ cm.oldest_vote_time|collector_span(cm.latest_vote_time) }} (method support and consensus params)</div>
+                {% endif %}
                 
                 <!-- Row 3: Consensus Parameters (hidden when data unavailable, auto-populates when authorities vote on them) -->
                 {% if relays.json.network_health.hf_use_family_ids is not none or relays.json.network_health.hf_use_family_lists is not none %}
@@ -835,6 +858,10 @@ Network Health Dashboard
                 {% endif %}
                 
                 <!-- Row 4: Family-cert adoption from server descriptors -->
+                {% set desc_ts = relays.collector_descriptors_data.source_latest_file_ts if relays.collector_descriptors_data else none %}
+                {% if desc_ts %}
+                <div class="al-text-small-muted metric-subtext" style="text-align: center;">Server descriptors through {{ desc_ts|collector_time }} (newest CollecTor file)</div>
+                {% endif %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key (Proposal 321). Source: CollecTor server descriptors, last 18 hourly files. Tracking {{ "{:,}".format(relays.json.network_health.hf_family_cert_seen_total) }} relays.">
                         <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_family_cert_count_formatted }}</span>
@@ -1028,6 +1055,28 @@ Network Health Dashboard
                     Upstream resolvers: estimated share of exit DNS lookups{% if _nh.exit_dns_health_resolver_weighted %}, weighted by exit probability{% elif _nh.exit_dns_health_resolver_weighted is sameas false %}, unweighted{% endif %}.
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
+                        <span class="metric-label">Exits Covered</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services. Every lookup is in exactly one of All Public, Local, Other and Unknown.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
+                        <span class="metric-label">All Public</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups resolved by the exit's own network or operator: local /24 + /22 + AS + operator (older reports: one local bucket, the exit's own address or origin AS).">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
+                        <span class="metric-label">Local</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
+                        <span class="metric-label">Other</span>
+                    </div>
+                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
+                        <span class="metric-label">Unknown</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
                     <div class="metric-item" title="Share of exit DNS lookups sent via Google Public DNS.">
                         <span class="metric-value">{{ _nh.exit_dns_health_resolver_google_percentage_formatted }}</span>
                         <span class="metric-label">Google</span>
@@ -1049,28 +1098,26 @@ Network Health Dashboard
                         <span class="metric-label">Freifunk München</span>
                     </div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
-                    <div class="metric-item" title="Share of exit DNS lookups sent via any of the five public resolver services.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_public_percentage_formatted }}</span>
-                        <span class="metric-label">All Public</span>
+                {% if _nh.exit_dns_health_resolver_local_24_percentage is not none or _nh.exit_dns_health_resolver_local_22_percentage is not none or _nh.exit_dns_health_resolver_local_as_percentage is not none or _nh.exit_dns_health_resolver_local_operator_percentage is not none %}
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="metric-item" title="Resolver in the same IPv4 /24 or IPv6 /64 as the exit, including the exit's own address.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_24_percentage_formatted }}</span>
+                        <span class="metric-label">Local /24</span>
                     </div>
-                    <div class="metric-item" title="Share of exit DNS lookups resolved from the exit's own address or its network (same origin AS): the operator's or hoster's resolver.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_percentage_formatted }}</span>
-                        <span class="metric-label">Local</span>
+                    <div class="metric-item" title="Same IPv4 /22 or IPv6 /48 as the exit, but not the same /24 or /64.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_22_percentage_formatted }}</span>
+                        <span class="metric-label">Local /22</span>
                     </div>
-                    <div class="metric-item" title="Share of exit DNS lookups sent via any other resolver.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_other_percentage_formatted }}</span>
-                        <span class="metric-label">Other</span>
+                    <div class="metric-item" title="Same origin AS as the exit, outside its IPv4 /22 or IPv6 /48.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_as_percentage_formatted }}</span>
+                        <span class="metric-label">Local AS</span>
                     </div>
-                    <div class="metric-item" title="Share of exit DNS lookups whose resolver network could not be looked up.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_unknown_percentage_formatted }}</span>
-                        <span class="metric-label">Unknown</span>
-                    </div>
-                    <div class="metric-item" title="Exits with DNS success and enough sampled queries to count toward these shares, out of all exits with DNS success. {{ _nh.exit_dns_health_resolver_exits_labelled_formatted }} have enough to name a primary resolver; {{ _nh.exit_dns_health_resolver_exits_using_public_formatted }} of those use a public one.">
-                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_exits_covered_formatted }} / {{ _nh.exit_dns_health_resolver_exits_total_formatted }}</span>
-                        <span class="metric-label">Exits Covered</span>
+                    <div class="metric-item" title="Run by the same operator as the exit, but outside the exit's prefix and origin AS.">
+                        <span class="metric-value">{{ _nh.exit_dns_health_resolver_local_operator_percentage_formatted }}</span>
+                        <span class="metric-label">Local operator</span>
                     </div>
                 </div>
+                {% endif %}
                 {% else %}
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">Upstream resolvers: not available.</div>
                 {% endif %}
