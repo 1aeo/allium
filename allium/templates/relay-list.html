@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, ipv6_test_mark %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     Tor Relays
@@ -127,6 +127,7 @@
 		{# PERF: Use pre-computed IP address from _preprocess_template_data() #}
 		<td class="visible-md visible-lg">
 		    <a href="https://bgp.tools/prefix/{{ relay['ip_address']|escape }}">{{ relay['ip_address']|escape }}</a>
+		    {{ ipv6_test_mark(relay, compact=true) }}
 		</td>
 		{% if relay['as'] -%}
 		    {% if key != 'as' -%}

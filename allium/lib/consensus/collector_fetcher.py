@@ -444,7 +444,8 @@ class CollectorFetcher:
         
         return result
     
-    def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT) -> dict:
+    def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT,
+                                       published_ipv6: bool = False) -> dict:
         """
         Get consensus evaluation for a single relay.
         O(1) lookup after index is built.
@@ -452,6 +453,10 @@ class CollectorFetcher:
         Args:
             fingerprint: Relay fingerprint (40 hex chars)
             authority_count: Total number of authorities (for consensus calculation)
+            published_ipv6: True when the relay descriptor publishes an IPv6 ORPort
+                (Onionoo or_addresses or unreachable_or_addresses). An address there
+                is not a reachability test; votes decide tested-ok, tested-failed,
+                and not-tested.
         
         Returns:
             dict: Consensus evaluation information for the relay
@@ -477,10 +482,10 @@ class CollectorFetcher:
             'vote_count': vote_count,
             'total_authorities': authority_count,
             'majority_required': majority_required,
-            'authority_votes': self._format_authority_votes(relay),
+            'authority_votes': self._format_authority_votes(relay, published_ipv6=published_ipv6),
             'flag_eligibility': self._analyze_flag_eligibility(relay),
             'bandwidth': self._format_bandwidth(relay),
-            'reachability': self._format_reachability(relay),
+            'reachability': self._format_reachability(relay, published_ipv6=published_ipv6),
         }
     
     def _fetch_url(self, url: str) -> str:
@@ -645,6 +650,11 @@ class CollectorFetcher:
             'params': {},  # Voted consensus params (from header)
             'published': None,  # Vote header published time (UTC)
             'valid_after': None,  # Consensus period this vote is for (UTC)
+            # True once any relay in this vote has an 'a' line. That line is how
+            # an authority with AuthDirHasIPv6Connectivity reports an IPv6 ORPort
+            # it reached (dir-spec consensus-formats). No 'a' line anywhere means
+            # this authority did not test IPv6.
+            'tests_ipv6': False,
         }
         
         lines = content.split('\n')
@@ -701,9 +711,13 @@ class CollectorFetcher:
                     # Bandwidth line
                     current_relay.update(self._parse_w_line(line))
                 elif line.startswith('a '):
-                    # IPv6 address line
+                    # IPv6 ORPort the authority found reachable. dir-spec: authorities
+                    # include only the first advertised IPv6 address, and only if it
+                    # is reachable. Presence of any 'a' line marks this authority as
+                    # an IPv6 tester (AuthDirHasIPv6Connectivity).
                     current_relay['ipv6_address'] = line[2:]
                     current_relay['ipv6_reachable'] = True
+                    vote['tests_ipv6'] = True
                 elif line.startswith('stats '):
                     # Stats line: stats wfu=X.XX tk=XXXX mtbf=XXXX
                     current_relay.update(self._parse_stats_line(line))
@@ -877,10 +891,15 @@ class CollectorFetcher:
         """
         self.relay_index = {}
         self.flag_thresholds = {}  # Extract thresholds in same loop
+        # Recomputed from the votes just indexed. An authority tests IPv6 when its
+        # vote includes any 'a' line (AuthDirHasIPv6Connectivity).
+        self.ipv6_testing_authorities = set()
         
         for auth_name, vote_data in sorted(self.votes.items()):
             if not vote_data:
                 continue
+            if vote_data.get('tests_ipv6'):
+                self.ipv6_testing_authorities.add(auth_name)
             
             # Extract flag thresholds (previously in separate _extract_flag_thresholds method)
             if 'flag_thresholds' in vote_data:
@@ -1095,19 +1114,33 @@ class CollectorFetcher:
             self.flag_thresholds.get(auth_name, {}).get('ignoring-advertised-bws') == 1,
             unpublished='Fast' in vote_info.get('flags', []) or auth_name not in self.measuring_authorities)
 
-    def _format_authority_votes(self, relay: dict) -> List[dict]:
+    def _format_authority_votes(self, relay: dict, published_ipv6: bool = False) -> List[dict]:
         """
         Format per-authority vote information for display.
         Only includes voting authorities (9) - excludes non-voting authorities like Serge.
         """
         authority_votes = []
         relay_votes = relay.get('votes', {})
+        # An 'a' line proves the relay published an IPv6 ORPort even when Onionoo
+        # has not been passed in. Omitting the line is a failed test only then.
+        relay_has_ipv6 = published_ipv6 or any(
+            vote.get('ipv6_reachable') for vote in relay_votes.values())
         
         for auth_name in get_voting_authority_names():  # Only voting authorities (9)
             vote_info = relay_votes.get(auth_name, {})
             
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
+            tests_ipv6 = auth_name in self.ipv6_testing_authorities
+            if not voted:
+                ipv6_reachable = None
+            elif vote_info.get('ipv6_reachable'):
+                ipv6_reachable = True
+            elif relay_has_ipv6 and tests_ipv6:
+                # Tester voted and left out the 'a' line: the IPv6 ORPort was not reachable.
+                ipv6_reachable = False
+            else:
+                ipv6_reachable = None
             
             authority_votes.append({
                 'authority': auth_name,
@@ -1122,7 +1155,8 @@ class CollectorFetcher:
                 'tk_display': self._format_time_known(vote_info.get('tk')),
                 'mtbf': vote_info.get('mtbf'),
                 'ipv4_reachable': voted,  # If voted, authority could reach relay
-                'ipv6_reachable': vote_info.get('ipv6_reachable'),
+                'ipv6_reachable': ipv6_reachable,
+                'tests_ipv6': tests_ipv6,
                 'ipv6_address': vote_info.get('ipv6_address'),
                 'is_bw_authority': auth_name in self.bw_authorities,
                 'descriptor_published': vote_info.get('descriptor_published'),  # Timestamp of relay's descriptor
@@ -1361,33 +1395,61 @@ class CollectorFetcher:
             'bw_auth_not_measured_names': sorted(self.bw_authorities - measured.keys()),
         }
     
-    def _format_reachability(self, relay: dict) -> dict:
+    def _format_reachability(self, relay: dict, published_ipv6: bool = False) -> dict:
         """
-        Format reachability information across authorities.
-        Only includes voting authorities (9) - reachability is only tested by voters.
+        Reachability across voting authorities.
+
+        IPv4: the relay is in an authority's vote only when that authority reached
+        the IPv4 ORPort. IPv6: dir-spec includes an ``a`` line only when an
+        authority with AuthDirHasIPv6Connectivity reached the IPv6 ORPort.
+        A published descriptor address is not that test.
+
+        ipv6_state:
+        - ok: at least one ``a`` line
+        - failed: the relay published an IPv6 ORPort and an IPv6-testing authority
+          voted without an ``a`` line
+        - not_tested: the relay published an IPv6 ORPort and no vote contains a test
+        - absent: no IPv6 ORPort to report
         """
         votes = relay.get('votes', {})
         
         ipv4_reachable = []
         ipv6_reachable = []
+        ipv6_failed = []
         ipv6_not_tested = []
         
         for auth_name in get_voting_authority_names():  # Only voting authorities (9)
-            vote = votes.get(auth_name, {})
+            vote = votes.get(auth_name) or {}
             
             if vote:
                 ipv4_reachable.append(auth_name)
                 if vote.get('ipv6_reachable'):
                     ipv6_reachable.append(auth_name)
-                elif auth_name not in self.ipv6_testing_authorities:
+                elif auth_name in self.ipv6_testing_authorities:
+                    ipv6_failed.append(auth_name)
+                else:
                     ipv6_not_tested.append(auth_name)
+
+        # Failure requires a tester's vote that omitted the 'a' line. Publishing
+        # an address, by itself, is not_tested — never a hidden failure.
+        if ipv6_reachable:
+            ipv6_state = 'ok'
+        elif ipv6_failed and published_ipv6:
+            ipv6_state = 'failed'
+        elif published_ipv6:
+            ipv6_state = 'not_tested'
+        else:
+            ipv6_state = 'absent'
         
         return {
             'ipv4_reachable_count': len(ipv4_reachable),
             'ipv4_reachable_authorities': ipv4_reachable,
             'ipv6_reachable_count': len(ipv6_reachable),
             'ipv6_reachable_authorities': ipv6_reachable,
+            'ipv6_failed_authorities': ipv6_failed,
             'ipv6_not_tested_authorities': ipv6_not_tested,
+            'ipv6_state': ipv6_state,
+            'published_ipv6': bool(published_ipv6),
             'total_authorities': get_voting_authority_count(),  # Use voting authorities (9) for consensus
         }
 

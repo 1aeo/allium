@@ -329,7 +329,9 @@ Platform: unknown
             <dd>
                 {% if diag and diag.reachability_summary -%}
                     <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span class="{% if diag.reachability_summary.ipv4.status_class == 'success' %}al-status-success{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
-                    {% if diag.reachability_summary.ipv6.total > 0 -%}
+                    {% if diag.reachability_summary.ipv6.state == 'not_tested' -%}
+                        | <span title="This relay publishes an IPv6 ORPort. No directory authority vote contains an IPv6 reachability test ('a' line). Allium does not connect to the relay.">v6: <span class="al-status-muted">Not tested</span></span>
+                    {% elif diag.reachability_summary.ipv6.total > 0 -%}
                         | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span class="{% if diag.reachability_summary.ipv6.status_class == 'success' %}al-status-success{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}al-status-muted{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
                     {% endif -%}
                     <span title="Reachability tested by Directory Authorities.">(Directory Auths)</span>
@@ -500,8 +502,13 @@ Platform: unknown
     <dd>
         <span class="al-status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
     </dd>
-    {# IPv6: Use ipv6.total > 0 check (same as Health Status line 212) - no new loop needed #}
-    {% if reach.ipv6.total > 0 %}
+    {% if reach.ipv6.state == 'not_tested' %}
+    <dt>IPv6</dt>
+    <dd>
+        <span class="al-status-muted" title="No directory authority vote contains an IPv6 reachability test. A published ORPort is not a test. Allium does not connect to the relay.">Not tested</span>
+        <span class="al-status-note">{% if relay.get('ipv6_display_address') %}Published {{ relay['ipv6_display_address']|escape }}. {% endif %}No authority with AuthDirHasIPv6Connectivity published an 'a' line for this relay. Tor on the relay logs that an auto-discovered IPv6 address has not been found reachable while it waits for that vote.</span>
+    </dd>
+    {% elif reach.ipv6.total > 0 %}
     <dt>IPv6</dt>
     <dd>
         <span class="al-status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
@@ -1444,7 +1451,7 @@ Platform: unknown
 {# Consensus Evaluation Section - Per-Authority Details only #}
 {% if diag and diag.available and diag.authority_table %}
 
-{% set has_ipv6 = diag.reachability_summary.ipv6.total > 0 if diag.reachability_summary else false %}
+{% set has_ipv6 = diag.reachability_summary.ipv6.show_ipv6 if diag.reachability_summary else false %}
 
 <section class="section-box relay-section">
 <h3 id="consensus-evaluation">
@@ -1478,7 +1485,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
-    {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
+    {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | Yes = authority reached the IPv6 ORPort | No = authority tests IPv6 and omitted the 'a' line | N/T = authority does not test IPv6">v6</th>{% endif %}
     <th id="col-flags" title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
     <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
     <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
@@ -1511,7 +1518,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
     <td>{% if vote.ipv4_reachable %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     {% if has_ipv6 %}
-    <td>{% if vote.ipv6_reachable == true %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_reachable == false %}<span class="al-status-danger">No</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.ipv6_cell == 'yes' %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_cell == 'no' %}<span class="al-status-danger">No</span>{% elif vote.ipv6_cell == 'not_tested' %}<span class="al-status-muted" title="This authority's vote has no 'a' line for any relay, so it did not test IPv6.">N/T</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     {% endif %}
     <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
@@ -1539,7 +1546,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 </div>
 
 <p style="font-size: 10px; color: #666; margin-top: 5px;">
-— = not tested/available • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known • Bandwidth source: (M) bandwidth-scanner measurement, (R) relay-reported, (U) unmeasured, counted as 0
+N/T = this authority does not test IPv6 • — = not in this vote • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known • Bandwidth source: (M) bandwidth-scanner measurement, (R) relay-reported, (U) unmeasured, counted as 0
 </p>
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
