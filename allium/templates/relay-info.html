@@ -300,8 +300,8 @@ Platform: unknown
         <div class="health-row">
             <dt title="Relay stability: overload status and uptime."><a href="#uptime" class="anchor-link">Stability</a></dt>
             <dd>
-                <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" class="al-link-plain">
-                    <span style="color: {{ relay['stability_color'] }};">{{ relay['stability_text'] }}</span>
+                <a href="#overload" title="{{ relay.get('stability_tooltip', 'Overload signals were not evaluated')|escape }}" class="al-link-plain">
+                    <span style="color: {{ relay.get('stability_color', '#6c757d') }};">{{ relay.get('stability_text', 'Incomplete') }}</span>
                 </a>
                 <span class="al-status-muted"> | </span>
                 {% if relay.get('uptime_display') -%}
@@ -425,8 +425,12 @@ Platform: unknown
 </div>
 {% endif %}
 {% else %}
-{# No issues found - show green box if we have diagnostics data #}
-{% if relay.diagnostics or diag %}
+{# No diagnostic issues. An incomplete overload evaluation is not a clean bill of health. #}
+{% if relay.get('overload', {}).get('headline') == 'incomplete' %}
+<div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #6c757d;">
+    <span class="al-status-note"><strong>Overload status incomplete.</strong> {{ relay.get('stability_tooltip', '')|escape }} <a href="#overload">Overload details</a></span>
+</div>
+{% elif relay.diagnostics or diag %}
 <div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <span class="al-status-success"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
 </div>
@@ -914,132 +918,128 @@ Platform: unknown
 </div>
 
 {# ---- Overload Status Subsection (anchor target for Health Status Stability row) ---- #}
-{# Health Status "Stability" row links here via <a href="#overload"> (line 194) #}
+{# Health Status "Stability" row links here via <a href="#overload"> #}
 <span id="overload"></span>
+{% set ov = relay.get('overload') or {} %}
+{% set ov_general = ov.get('general') or {} %}
+{% set ov_fd = ov.get('fd') or {} %}
+{% set ov_rate = ov.get('rate') or {} %}
+{% set ov_headline = ov.get('headline', 'incomplete') %}
 
-{% set is_overloaded = relay.get('stability_is_overloaded', false) %}
-{% set general_ts = relay.get('overload_general_timestamp') %}
-{% set ratelimits = relay.get('overload_ratelimits') %}
-{% set fd_exhausted = relay.get('overload_fd_exhausted') %}
-
-{% set stability_tooltip = relay.get('stability_tooltip', '') %}
-
-{% if not is_overloaded %}
-{# Not overloaded: compact single line #}
-<div id="overload-general" style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+{% if ov_headline == 'overloaded' %}
+<div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+    <div style="margin-bottom: 8px;">
+        <strong style="color: #856404; font-size: 15px;">[Warning] OVERLOADED</strong>
+        <span style="color: #856404; font-size: 13px;"> — {{ relay.get('stability_tooltip', '')|escape }}</span>
+    </div>
+{% elif ov_headline == 'clear' %}
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <strong class="al-status-success">Overload Status:</strong>
     <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
-    {% if 'Last general overload' in stability_tooltip %}
-    <span style="color: #155724; font-size: 12px;"> ({{ stability_tooltip }})</span>
+    {% if ov.get('historical_note') %}
+    <span style="color: #155724; font-size: 12px;"> ({{ ov.historical_note|escape }})</span>
     {% endif %}
-</div>
-
 {% else %}
-{# Overloaded: expanded detail view with all 3 fields + recommendations #}
-<div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
-    <div style="margin-bottom: 12px;">
-        <strong style="color: #856404; font-size: 15px;">[Warning] OVERLOADED</strong>
-        <span style="color: #856404; font-size: 13px;"> — {{ stability_tooltip }}</span>
-    </div>
-    
-    <div class="row">
-        {# Left: General Overload + File Descriptors #}
+<div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #6c757d;">
+    <strong class="al-status-note">Overload status:</strong>
+    <span class="al-status-note">Incomplete — not every signal could be evaluated.</span>
+    {% if relay.get('stability_tooltip') %}
+    <span style="color: #6c757d; font-size: 12px;"> ({{ relay.get('stability_tooltip')|escape }})</span>
+    {% endif %}
+{% endif %}
+    {% if ov.get('sources_line') %}
+    <p style="font-size: 11px; color: #6c757d; margin: 8px 0 0 0;">{{ ov.sources_line|escape }}</p>
+    {% endif %}
+    {% if ov.get('show_time_note') %}
+    <p style="font-size: 11px; color: #6c757d; margin: 4px 0 0 0;">Reported timestamps use hour precision, so the displayed minute is not an exact incident time.</p>
+    {% endif %}
+
+    <div class="row" style="margin-top: 12px;">
         <div class="col-md-6">
             <h5 id="overload-general" style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
             <dl>
                 <dt>Status</dt>
-                <dd>
-                    {% if general_ts %}
-                        <span class="al-status-danger-bold">Reported</span>
-                    {% else %}
-                        <span class="al-status-success">Not Reported</span>
-                    {% endif %}
-                </dd>
-                {% if general_ts %}
+                <dd><span class="{{ ov_general.get('status_class', 'al-status-note') }}">{{ ov_general.get('status_label', 'Overload signals were not evaluated') }}</span></dd>
+                {% if ov_general.get('when') %}
                 <dt>When</dt>
-                <dd>{{ general_ts|format_timestamp }} UTC ({{ general_ts|format_timestamp_ago }})</dd>
+                <dd>{{ ov_general.when|escape }} UTC{% if ov_general.get('age_label') %} <span class="al-status-muted">({{ ov_general.age_label|escape }})</span>{% endif %}</dd>
                 {% endif %}
             </dl>
             <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
-                OOM killer, onionskin queue saturation, or TCP port exhaustion.
-                Flag remains 72h after last event (Tor spec 328).
+                The general-overload flag does not say which trigger fired. Possible paths are Tor’s internal memory handling, dropped ntor handshakes, and TCP port exhaustion.
+                Allium treats a valid report as eligible for 72 hours; that cutoff is not proof the relay recovered then.
             </p>
-            
+
             <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
-                    {% if fd_exhausted %}
-                        <span class="al-status-danger-bold">Reported</span>
-                        {% if fd_exhausted.get('timestamp') %}
-                         — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
-                        {% endif %}
-                    {% else %}
-                        <span class="al-status-success">Not Reported</span>
+                    <span class="{{ ov_fd.get('status_class', 'al-status-note') }}">{{ ov_fd.get('status_label', 'Overload signals were not evaluated') }}</span>
+                    {% if ov_fd.get('when') %}
+                    — {{ ov_fd.when|escape }} UTC{% if ov_fd.get('age_label') %} <span class="al-status-muted">({{ ov_fd.age_label|escape }})</span>{% endif %}
                     {% endif %}
                 </dd>
             </dl>
         </div>
-        
-        {# Right: Rate Limits + Recommendations #}
+
         <div class="col-md-6">
             <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
-            {% if ratelimits %}
             <dl>
+                <dt>Status</dt>
+                <dd><span class="{{ ov_rate.get('status_class', 'al-status-note') }}">{{ ov_rate.get('status_label', 'Overload signals were not evaluated') }}</span></dd>
                 <dt id="overload-rate-config">Rate Limit</dt>
-                <dd>
-                    {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
-                    {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
-                </dd>
+                <dd>{{ ov_rate.get('rate_display', '—') }}</dd>
                 <dt>Burst Limit</dt>
-                <dd>
-                    {# BandwidthBurst is a token-bucket size (bytes), not a rate #}
-                    {{ ratelimits.get('burst-limit', 0)|format_data_volume }}
-                </dd>
-                <dt id="overload-write">Write Limit Hit</dt>
-                <dd>
-                    {% if ratelimits.get('write-count', 0) > 0 %}
-                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
-                    {% else %}
-                        <span class="al-status-success">0 times</span>
-                    {% endif %}
-                </dd>
-                <dt id="overload-read">Read Limit Hit</dt>
-                <dd>
-                    {% if ratelimits.get('read-count', 0) > 0 %}
-                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
-                    {% else %}
-                        <span class="al-status-success">0 times</span>
-                    {% endif %}
-                </dd>
-                {% if ratelimits.get('timestamp') %}
-                <dt>Last Reported</dt>
-                <dd>{{ ratelimits['timestamp']|format_timestamp_ago }}</dd>
+                <dd>{{ ov_rate.get('burst_display', '—') }}</dd>
+                <dt id="overload-write">Write counter</dt>
+                <dd><span class="{{ ov_rate.get('write_class', 'al-status-muted') }}">{{ ov_rate.get('write_display', '—') }}</span></dd>
+                <dt id="overload-read">Read counter</dt>
+                <dd><span class="{{ ov_rate.get('read_class', 'al-status-muted') }}">{{ ov_rate.get('read_display', '—') }}</span></dd>
+                {% if ov_rate.get('when') %}
+                <dt>Reported</dt>
+                <dd>{{ ov_rate.when|escape }} UTC{% if ov_rate.get('age_label') %} <span class="al-status-muted">({{ ov_rate.age_label|escape }})</span>{% endif %}</dd>
                 {% endif %}
             </dl>
-            {% else %}
-            <p class="al-status-muted">No rate limit data from /bandwidth endpoint.</p>
+            {% if ov_rate.get('show_counts') %}
+            <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
+                Read and write counters increment at most once per minute per direction. They are not a count of blocked connections, the duration of throttling, or necessarily the number of events in the last 24 hours.
+                Rate is BandwidthRate and follows this site’s bits/bytes setting. Burst is BandwidthBurst, already a byte quantity. RelayBandwidthRate and RelayBandwidthBurst are extra torrc caps, not the names of these values.
+                A hit stays eligible for 24 hours.
+            </p>
             {% endif %}
-            
-            <h5 style="font-size: 13px; font-weight: bold;">Recommendations</h5>
-            <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
-                {% if general_ts %}
-                <li>Check CPU/memory: <code>htop</code></li>
-                <li>Review <code>MaxMemInQueues</code> in torrc</li>
-                {% endif %}
-                {% if ratelimits and (ratelimits.get('write-count', 0) > 0 or ratelimits.get('read-count', 0) > 0) %}
-                <li>Consider increasing <code>RelayBandwidthRate</code></li>
-                <li>Check if ISP is throttling traffic</li>
-                {% endif %}
-                {% if fd_exhausted %}
-                <li>Increase FD limit: <code>ulimit -n 65535</code></li>
-                <li>systemd: <code>LimitNOFILE=65535</code> in [Service]</li>
-                {% endif %}
-            </ul>
         </div>
     </div>
+
+    {% if ov.get('guidance') %}
+    <h5 style="font-size: 13px; font-weight: bold;">What to check</h5>
+    <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
+        {% for item in ov.guidance %}
+        <li style="margin-bottom: 8px;">
+            <strong>{{ item.title }}</strong>
+            <div>{{ item.checks }}</div>
+            <div><span class="al-status-muted">MetricsPort:</span> <code>{{ item.metric }}</code> — {{ item.metric_meaning }}</div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <details style="margin-top: 10px; font-size: 12px;">
+        <summary>About these reports and MetricsPort</summary>
+        <p style="margin: 8px 0;">
+            Allium’s eligibility windows are applied to the reported timestamps: 72 hours for general overload and file-descriptor exhaustion, 24 hours for a rate-limit hit.
+            A report at the cutoff is historical. An older report can remain visible after Onionoo or Allium’s cache still has it. The cutoff does not prove the relay recovered at that moment.
+            Allium caches the bandwidth document for 12 hours by default. The snapshot time is when Onionoo published that document. It is not the relay’s event time, and it is not necessarily the extra-info publication time. Cache age is how old Allium’s copy is.
+        </p>
+        <p style="margin: 8px 0;">
+            MetricsPort counters are cumulative. Compare samples, and account for process restarts. A nonzero total alone does not show ongoing activity. Gauges describe current values. An unavailable metric is unknown, not zero. Allium does not have this relay’s MetricsPort readings and does not invent them.
+        </p>
+        <p style="margin: 8px 0;">
+            The port below is an example for an endpoint you have already configured. MetricsPort must be enabled with restricted access and must not be exposed publicly.
+            Setup stays in <a href="https://support.torproject.org/relays/performance/overloaded/">the Tor overload troubleshooting guide</a>.
+        </p>
+        <pre style="font-size: 12px;">curl http://127.0.0.1:9035/metrics</pre>
+    </details>
 </div>
-{% endif %}
 
 {{ chart_history('uptime', uptime_periods, 'Uptime', src=chart_src, ext=chart_ext) }}
 </section>

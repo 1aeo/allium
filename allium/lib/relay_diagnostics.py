@@ -16,13 +16,14 @@ Issue Severities:
 - warning: Issues that should be addressed
 - info: Informational notes (shown in Notes section)
 
-Per Tor spec proposal 328, overload status remains for 72 hours after
-the last detected overload event.
+Overload diagnostics use the same signal states as the stability cell.
+General overload and file-descriptor exhaustion stay eligible for 72 hours,
+and a rate-limit hit stays eligible for 24 hours. A report at the cutoff is
+historical. See stability_utils for the window rules.
 """
 
 import html as _html
 from collections import Counter
-from datetime import datetime, timezone
 from typing import List, Optional
 
 # Import flag thresholds from centralized module
@@ -550,172 +551,196 @@ def generate_issues_from_consensus(
     return issues
 
 
-def _check_overload_issues(relay: dict, use_bits: bool = False, 
-                           now_timestamp: float = None) -> List[dict]:
+def _check_overload_issues(relay: dict, use_bits: bool = False,
+                           now_timestamp: float = None, facts: dict = None) -> List[dict]:
     """
-    Check for overload-related issues from Onionoo overload fields.
-    
-    Implements 6 issue types from 7 scenarios (guidance doc section 3.2):
-    1. General Overload Active (overload_general_timestamp < 72h) - error
-    2. Recent Overload Reported (72h-7d ago) - info
-    3. File Descriptor Exhaustion (overload_fd_exhausted) - error
-    4. Write Bandwidth Limit Hit (overload_ratelimits.write-count > 0) - warning
-    5. Read Bandwidth Limit Hit (overload_ratelimits.read-count > 0) - warning
-    6. Rate Limit Configuration (context info) - info
-    
-    Args:
-        relay: Relay dict with overload_* fields
-        use_bits: Whether to format bandwidth in bits
-        now_timestamp: Current Unix timestamp (avoids repeated time.time() calls)
-    
-    Returns:
-        List of overload issue dicts
+    Overload issues from the shared signal evaluation.
+
+    Issue types and severities:
+    1. General Overload Active (eligible general timestamp) - error
+    2. Recent Overload Reported (historical general report within 7 days) - info
+    3. File Descriptor Exhaustion (eligible FD timestamp) - error
+    4. Write Bandwidth Limit Hit (eligible rate record, positive write count) - warning
+    5. Read Bandwidth Limit Hit (eligible rate record, positive read count) - warning
+    6. Rate Limit Configuration (context for an eligible hit) - info
+
+    Pass ``facts`` from the generation's ``compute_relay_stability`` call so
+    this does not evaluate the signals again. Expired, invalid, empty, and
+    zero-hit records do not produce an overload issue.
     """
+    if not facts:
+        facts = evaluate_overload(relay, now_timestamp)
     issues = []
-    # Shared fact evaluation (stability_utils.evaluate_overload); presentation
-    # policy below is specific to the diagnostics page — see evaluate_overload
-    # docstring for how it differs from compute_relay_stability.
-    facts = evaluate_overload(relay, now_timestamp)
-
-    # =========================================================================
-    # SCENARIO 1 & 2: General Overload (overload_general_timestamp)
-    # Per Tor spec proposal 328: 72-hour threshold
-    # =========================================================================
-    if facts['general_ts']:
-        if facts['general_active']:
-            # Scenario 1: Active overload (within 72 hours)
-            issues.append({
-                'severity': 'error',
-                'category': 'overload',
-                'title': 'General Overload Active',
-                'description': f"Relay reported general overload at {facts['general_date']} UTC. "
-                              'This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion.',
-                'suggestion': 'Check CPU/memory with htop. Review logs for "out of memory" or "onionskins" warnings. '
-                             'Consider increasing MaxMemInQueues in torrc. Verify TCP ports available.',
-                'section': 'overload-general',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
-            })
-        elif facts['general_age_hours'] < 168:  # Within 7 days
-            # Scenario 2: Recent overload (stale but notable)
-            # This caller only reports stale overloads within 7 days
-            # (the stability cell reports them no matter how old)
-            issues.append({
-                'severity': 'info',
-                'category': 'overload',
-                'title': 'Recent Overload Reported',
-                'description': f"Relay reported overload {facts['general_days_ago']} days ago (no longer active per 72h threshold).",
-                'suggestion': 'Monitor for recurring issues. Check system resources periodically.',
-                'section': 'overload-general',
-            })
-
-    # =========================================================================
-    # SCENARIO 3: File Descriptor Exhaustion (overload_fd_exhausted)
-    # This caller requires a dict (the stability cell accepts any truthy value)
-    # =========================================================================
-    if isinstance(facts['fd_exhausted'], dict):
-        issues.append(_create_fd_exhaustion_issue(facts['fd_timestamp']))
-
-    # =========================================================================
-    # SCENARIOS 4, 5, 6: Rate Limit Issues (overload_ratelimits)
-    # =========================================================================
-    if facts['ratelimits']:
-        rate_limit = facts['rate_limit']
-        burst_limit = facts['burst_limit']
-        write_count = facts['write_count']
-        read_count = facts['read_count']
-
-        # Format rate using BandwidthFormatter
-        rate_str = _format_rate(rate_limit, use_bits)
-        
-        # Scenario 4: Write Bandwidth Limit Hit
-        if write_count > 0:
-            issues.append({
-                'severity': 'warning',
-                'category': 'overload',
-                'title': 'Write Bandwidth Limit Hit',
-                'description': f'Write rate limit ({rate_str}) was hit {write_count:,} times. '
-                              'Relay is throttling outbound traffic.',
-                'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
-                             'if your connection has more upload capacity.',
-                'section': 'overload-write',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
-        
-        # Scenario 5: Read Bandwidth Limit Hit
-        if read_count > 0:
-            issues.append({
-                'severity': 'warning',
-                'category': 'overload',
-                'title': 'Read Bandwidth Limit Hit',
-                'description': f'Read rate limit ({rate_str}) was hit {read_count:,} times. '
-                              'Relay is throttling inbound traffic.',
-                'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
-                             'if your connection has more download capacity.',
-                'section': 'overload-read',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
-        
-        # Scenario 6: Rate Limit Configuration (info context)
-        if rate_limit > 0 and (write_count > 0 or read_count > 0):
-            burst_str = _format_volume(burst_limit)
-            issues.append({
-                'severity': 'info',
-                'category': 'overload',
-                'title': 'Rate Limit Configuration',
-                'description': f'Configured limits: Rate={rate_str}, Burst={burst_str}. '
-                              f'Limits hit: Write={write_count:,}, Read={read_count:,}.',
-                'suggestion': 'These are your configured torrc limits. Adjust RelayBandwidthRate '
-                             'and RelayBandwidthBurst to match your actual network capacity.',
-                'section': 'overload-rate-config',
-            })
-    
+    issues.extend(_general_overload_issues(facts))
+    fd_issue = _fd_overload_issue(facts)
+    if fd_issue:
+        issues.append(fd_issue)
+    issues.extend(_rate_overload_issues(facts, use_bits))
     return issues
 
 
-def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
-    """
-    Create a File Descriptor Exhaustion issue dict.
-    
-    DRY helper to avoid duplicate issue creation code.
-    
-    Args:
-        timestamp_ms: Optional timestamp in milliseconds when FD exhaustion occurred
-    
-    Returns:
-        Issue dict with severity, category, title, description, suggestion, doc_ref
-    """
-    if timestamp_ms:
-        ts_str = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
-        description = (f'Relay ran out of file descriptors at {ts_str} UTC. '
-                      'This severely impacts connections and performance.')
-    else:
-        description = ('Relay reported running out of file descriptors. '
-                      'This severely impacts connections and performance.')
-    
+def _general_overload_issues(facts: dict) -> List[dict]:
+    """General-overload diagnostics. The title and severities stay as reviewed."""
+    general = facts.get('general') or {}
+    when = general.get('when')
+    if general.get('state') == 'eligible' and when:
+        return [{
+            'severity': 'error',
+            'category': 'overload',
+            'title': 'General Overload Active',
+            'description': (
+                f"Relay reported general overload at {when} UTC. Reported timestamps "
+                'use hour precision, so the displayed minute is not an exact incident time. '
+                'The flag does not identify which trigger fired. Investigation paths are '
+                "Tor's internal OOM handling, dropped ntor onionskins, and TCP port exhaustion."
+            ),
+            'suggestion': (
+                'Check CPU and memory with htop, Tor logs, host memory headroom, and the '
+                'effective MaxMemInQueues. Compare MetricsPort samples of '
+                'tor_relay_load_oom_bytes_total (bytes freed by Tor\'s internal OOM handling, '
+                'by subsys), tor_relay_load_onionskins_total for ntor and ntor_v3 dropped '
+                'versus processed, and tor_relay_load_tcp_exhaustion_total. Kernel OOM logs '
+                'are a separate mechanism. Counters are cumulative. See '
+                '<a href="https://support.torproject.org/relays/performance/overloaded/">'
+                'the Tor overload troubleshooting guide</a>.'
+            ),
+            'section': 'overload-general',
+            'doc_ref': 'https://support.torproject.org/relays/performance/overloaded/',
+        }]
+    if general.get('note_recent'):
+        days = general.get('days_ago')
+        return [{
+            'severity': 'info',
+            'category': 'overload',
+            'title': 'Recent Overload Reported',
+            'description': (
+                f"Relay reported general overload {days} days ago, outside the 72-hour "
+                'eligibility window. The report can remain available after that window; '
+                'the cutoff is not proof the relay recovered then.'
+            ),
+            'suggestion': 'Monitor for a new report. Check system resources if it recurs.',
+            'section': 'overload-general',
+            'doc_ref': 'https://support.torproject.org/relays/performance/overloaded/',
+        }]
+    return []
+
+
+def _fd_overload_issue(facts: dict) -> Optional[dict]:
+    """FD exhaustion issue only for a timestamp inside the 72-hour window."""
+    fd_signal = facts.get('fd') or {}
+    if fd_signal.get('state') != 'eligible' or not fd_signal.get('when'):
+        return None
+    when = fd_signal['when']
     return {
         'severity': 'error',
         'category': 'overload',
         'title': 'File Descriptor Exhaustion',
-        'description': description,
-        'suggestion': ('Increase file descriptor limits: '
-                      'For systemd: add "LimitNOFILE=65535" to [Service] section. '
-                      'For shell: ulimit -n 65535. '
-                      'Persistent: edit /etc/security/limits.conf.'),
+        'description': (
+            f'Relay reported file-descriptor exhaustion at {when} UTC. Reported timestamps '
+            'use hour precision, so the displayed minute is not an exact incident time.'
+        ),
+        'suggestion': (
+            'Review socket-open errors, current FD usage, and the running process limit '
+            '(/proc/&lt;pid&gt;/limits on Linux). On systemd, inspect the Tor unit\'s '
+            'LimitNOFILE. A shell ulimit does not change that service. After checking '
+            'headroom, adjust the unit limit if the process is short of descriptors. '
+            'MetricsPort: tor_relay_load_socket_total{state="opened"} is the current socket '
+            'gauge; the unlabeled tor_relay_load_socket_total sample is Tor\'s maximum socket '
+            'value, not an exhaustion event counter.'
+        ),
         'section': 'overload-fd',
-        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
+        'doc_ref': 'https://support.torproject.org/relays/performance/overloaded/',
     }
 
 
-def _format_volume(volume_bytes: int) -> str:
-    """Format a data volume (e.g. BandwidthBurst token-bucket size).
+def _count_text(state, value) -> str:
+    if state == 'ok' and value is not None:
+        return f'{value:,}'
+    return 'unknown'
 
-    Per proposal 328 / dir-spec, overload_ratelimits burst-limit is a
-    quantity of bytes, not a rate - no '/s' suffix.
-    """
-    if not volume_bytes:
-        return "unknown"
+
+def _config_rate_text(value, use_bits: bool) -> str:
+    if value is None:
+        return 'unavailable'
+    if value == 0:
+        return '0 bit/s' if use_bits else '0 B/s'
+    return _format_rate(value, use_bits)
+
+
+def _config_burst_text(value) -> str:
+    if value is None:
+        return 'unavailable'
     from .bandwidth_formatter import format_data_volume_with_unit
-    return format_data_volume_with_unit(volume_bytes)
+    try:
+        return format_data_volume_with_unit(value)
+    except (TypeError, ValueError, OverflowError, ArithmeticError):
+        return 'unavailable'
+
+
+def _rate_overload_issues(facts: dict, use_bits: bool) -> List[dict]:
+    """Write, read, and configuration issues for one eligible rate-limit hit."""
+    rate = facts.get('rate') or {}
+    if rate.get('state') != 'eligible':
+        return []
+    rate_str = _config_rate_text(rate.get('rate_value'), use_bits)
+    count_note = (
+        'This counter increments at most once per minute while BandwidthRate/BandwidthBurst '
+        'is exhausted. It is not a count of blocked connections, the duration of throttling, '
+        'or necessarily the number of events in the last 24 hours.'
+    )
+    suggestion = (
+        'Inspect BandwidthRate and BandwidthBurst, any RelayBandwidthRate or '
+        'RelayBandwidthBurst cap, the intended bandwidth budget, and uplink headroom. '
+        'A rate-limit report is not evidence of ISP throttling. After checking that '
+        'evidence, review whether the configured limits should change. MetricsPort: '
+        'tor_relay_load_global_rate_limit_reached_total for side="read" and side="write".'
+    )
+    issues = []
+    write_value = rate.get('write_value')
+    read_value = rate.get('read_value')
+    if rate.get('write_state') == 'ok' and write_value and write_value > 0:
+        issues.append({
+            'severity': 'warning',
+            'category': 'overload',
+            'title': 'Write Bandwidth Limit Hit',
+            'description': (
+                f'Write rate-limit counter is {write_value:,} (configured rate {rate_str}). '
+                + count_note
+            ),
+            'suggestion': suggestion,
+            'section': 'overload-write',
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
+        })
+    if rate.get('read_state') == 'ok' and read_value and read_value > 0:
+        issues.append({
+            'severity': 'warning',
+            'category': 'overload',
+            'title': 'Read Bandwidth Limit Hit',
+            'description': (
+                f'Read rate-limit counter is {read_value:,} (configured rate {rate_str}). '
+                + count_note
+            ),
+            'suggestion': suggestion,
+            'section': 'overload-read',
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
+        })
+    write_text = _count_text(rate.get('write_state'), write_value)
+    read_text = _count_text(rate.get('read_state'), read_value)
+    issues.append({
+        'severity': 'info',
+        'category': 'overload',
+        'title': 'Rate Limit Configuration',
+        'description': (
+            f"Configured limits: Rate={rate_str}, Burst={_config_burst_text(rate.get('burst_value'))}. "
+            f'Counters: Write={write_text}, Read={read_text}. '
+            'These values are BandwidthRate and BandwidthBurst from the extra-info descriptor. '
+            'RelayBandwidthRate and RelayBandwidthBurst are additional torrc caps, not the names '
+            'of these values. Burst is a quantity of bytes.'
+        ),
+        'suggestion': suggestion,
+        'section': 'overload-rate-config',
+    })
+    return issues
 
 
 def _authority_names(details: list) -> str:

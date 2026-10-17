@@ -404,11 +404,13 @@ def test_overload_legend_and_spike_callout(tmp_path):
                               bands_for_role("Guard"), "relay")
         (x, _y, width, _height), = [op[1:5] for op in svg.ops if op[0] == "rect" and op[5] == CALLOUT_BG]
         assert LEFT <= x and x + width <= LEFT + PLOT_WIDTH
-    # A newer rate-limit report where no limit was hit does not count toward the verdict, nor its time.
-    quiet = dict(OVERLOADED["overload_ratelimits"], **{"write-count": 0, "timestamp": OVERLOADED[
-        "overload_ratelimits"]["timestamp"] + 86400000})
-    busy = relay("A", overload_ratelimits=quiet, overload_fd_exhausted={"timestamp": quiet["timestamp"] - 2 * 86400000},
-                 stability_is_overloaded=True)
+    # The caption prints the evaluation's eligible timestamp, not a newer raw
+    # rate-limit record on the relay (that record is a zero-hit report).
+    quiet_at = OVERLOADED["overload_ratelimits"]["timestamp"] + 86400000
+    fd_at = quiet_at - 2 * 86400000
+    busy = relay("A", overload_ratelimits=dict(OVERLOADED["overload_ratelimits"], **{
+        "write-count": 0, "timestamp": quiet_at}), overload_fd_exhausted={"timestamp": fd_at},
+                 stability_is_overloaded=True, overload={"latest_eligible_ms": fd_at})
     charts.relay(busy, str(tmp_path))
     assert "currently overloaded · last report Sep 28, 22:00 UTC" in texts(tmp_path / "bandwidth-1m.svg")
 
