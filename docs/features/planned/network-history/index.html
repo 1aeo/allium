@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Network history chart layouts | 1AEO Tor Metrics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="../../../../allium/static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../../../allium/static/css/allium-base.css">
+    <link rel="stylesheet" href="../../../../allium/static/css/network-health.css">
+    <style>
+.mock-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 8px 16px;
+    background: #1e1e1e;
+    color: #e6e6e6;
+    font-size: 13px;
+}
+.mock-bar a { color: #9a9a9a; text-decoration: none; font-weight: 600; }
+.mock-bar a:hover, .mock-bar a:focus { color: #00ff7f; }
+.mock-bar a.on { color: #00ff7f; }
+.mock-bar .mock-tag {
+    color: #ffb454;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+.history-jump { display: inline-block; margin-top: 3px; font-size: 1.15rem; font-weight: 600; }
+.network-history { margin-bottom: 7px; }
+.network-history:hover { transform: none; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+.history-lead { margin: 0 0 8px; color: var(--nh-text-label); font-size: 14px; }
+.history-periods { margin: 0 0 4px; }
+.history-periods a {
+    display: inline-block;
+    margin: 0 6px 6px 0;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--nh-bg-metric);
+    color: var(--color-link);
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.history-periods a[href="#1m"] { color: var(--aeo-green-hover); }
+.chart-period:target ~ .history-periods a[href="#1m"] { color: var(--color-link); }
+.chart-period[id="1m"]:target ~ .history-periods a[href="#1m"],
+.chart-period[id="6m"]:target ~ .history-periods a[href="#6m"],
+.chart-period[id="1y"]:target ~ .history-periods a[href="#1y"],
+.chart-period[id="5y"]:target ~ .history-periods a[href="#5y"] { color: var(--aeo-green-hover); }
+.history-note { margin: 8px 0 0; color: var(--nh-text-label-secondary); font-size: 12px; }
+.history-grid { display: block; }
+body.layout-c .history-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+.history-grid > * { min-width: 0; }
+body.layout-a .network-health-ribbon,
+body.layout-c .network-health-ribbon { display: flex; flex-direction: column; }
+body.layout-a .network-history,
+body.layout-c .network-history { order: 5; }
+body.layout-a .ribbon-footer,
+body.layout-c .ribbon-footer { order: 6; }
+#network-history, #network-bandwidth, #network-uptime { scroll-margin-top: 56px; }
+@media (max-width: 1100px) {
+    body.layout-c .history-grid { grid-template-columns: 1fr; }
+}
+.reco { max-width: 1100px; margin: 0 auto 28px; }
+.reco h1 { font-size: 28px; margin: 8px 0 10px; color: var(--color-text-heading); }
+.reco .verdict { font-size: 18px; margin: 0 0 18px; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.choice {
+    border: 1px solid var(--color-border-card);
+    border-radius: 6px;
+    padding: 10px;
+    background: #fff;
+}
+.choice.preferred { border-top: 3px solid var(--aeo-green-hover); }
+.choice h2 { font-size: 16px; margin: 0 0 8px; }
+.choice p { font-size: 13px; color: var(--color-text-dark); margin: 8px 0; }
+.choice .open-layout { font-weight: 700; }
+.wire { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--nh-text-value); }
+.wire-row, .wire-charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.wire-card, .wire-rest, .wire-chart, .wire-foot {
+    background: var(--nh-bg-metric);
+    border-radius: 3px;
+    padding: 6px;
+    text-align: center;
+}
+.wire-rest { grid-column: 1 / -1; color: var(--nh-text-label); }
+.wire-chart {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+.wire-chart span { color: #00cc66; letter-spacing: 0.08em; }
+.wire-foot { color: var(--nh-text-footer); }
+.layout-a-wire .wire-chart, .layout-b-wire .wire-chart { grid-column: 1 / -1; min-height: 46px; }
+.layout-b-wire .wire { display: flex; }
+.layout-b-wire .wire-row:first-child { order: 1; }
+.layout-b-wire .wire-charts { order: 2; }
+.layout-b-wire .wire-row:not(:first-child) { order: 3; }
+.layout-b-wire .wire-foot { order: 4; }
+.layout-c-wire .wire-charts { grid-template-columns: 1fr 1fr; }
+.layout-c-wire .wire-chart.uptime { min-height: 48px; }
+.notes { max-width: 1100px; margin: 18px auto 0; font-size: 14px; }
+.notes h2 { font-size: 18px; }
+@media (max-width: 800px) {
+    .choices { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body class="layout-index">
+    <div class="mock-bar"><span class="mock-tag">Design mockup</span><a class="on" href="index.html">Recommendation</a><a class="" href="layout-a.html">A · Bottom, stacked</a><a class="" href="layout-b.html">B · Under the first row</a><a class="" href="layout-c.html">C · Bottom, side by side</a></div>
+    <nav class="aeo-cross-nav">
+        <div class="aeo-nav-container">
+            <a href="https://www.1aeo.com" class="aeo-nav-brand"><span>1AEO</span></a>
+            <div class="aeo-nav-links">
+                <a href="https://www.1aeo.com">Home</a>
+                <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        
+    <div class="reco">
+        <h1>Network history charts</h1>
+        <p class="verdict">Put both charts at the bottom of Network Health, stacked, each at the width of the relay chart.</p>
+        <div class="choices">
+            <div class="choice preferred">
+                <h2>A · Bottom, stacked</h2>
+                <div class="wire layout-a-wire">
+            <div class="wire-row">
+                <div class="wire-card">Relay counts</div>
+                <div class="wire-card">Bandwidth<br>history link</div>
+                <div class="wire-card">Uptime<br>history link</div>
+            </div>
+            <div class="wire-row"><div class="wire-rest">Operators · Geography · Providers</div></div>
+            <div class="wire-row"><div class="wire-rest">Utilization · Versions · Operating systems</div></div>
+            <div class="wire-row"><div class="wire-rest">Families · Exit policy · Exit DNS</div></div><div class="wire-charts"><div class="wire-chart">Bandwidth<br><span>1M  6M  1Y  5Y</span></div><div class="wire-chart uptime">Uptime<br><span>1M  6M  1Y  5Y</span></div></div><div class="wire-foot">Last updated</div></div>
+                <p>After the last row of cards and before Last updated. Bandwidth, then uptime. The history links on the Bandwidth Capacity and Relay Uptime cards jump here.</p>
+                <p>This is the preferred placement. The charts stay 1080px wide, which is the width they are drawn at, inside the 1400px ribbon.</p>
+                <a class="open-layout" href="layout-a.html">Open layout A</a>
+            </div>
+            <div class="choice">
+                <h2>B · Under the first row</h2>
+                <div class="wire layout-b-wire">
+            <div class="wire-row">
+                <div class="wire-card">Relay counts</div>
+                <div class="wire-card">Bandwidth<br>history link</div>
+                <div class="wire-card">Uptime<br>history link</div>
+            </div><div class="wire-charts"><div class="wire-chart">Bandwidth<br><span>1M  6M  1Y  5Y</span></div><div class="wire-chart uptime">Uptime<br><span>1M  6M  1Y  5Y</span></div></div>
+            <div class="wire-row"><div class="wire-rest">Operators · Geography · Providers</div></div>
+            <div class="wire-row"><div class="wire-rest">Utilization · Versions · Operating systems</div></div>
+            <div class="wire-row"><div class="wire-rest">Families · Exit policy · Exit DNS</div></div><div class="wire-foot">Last updated</div></div>
+                <p>The same stack, moved up to sit directly under Relay Counts, Bandwidth Capacity, and Relay Uptime.</p>
+                <p>The charts stay next to the numbers they extend. Operators, geography, versions, families, and DNS then start below two tall chart panels.</p>
+                <a class="open-layout" href="layout-b.html">Open layout B</a>
+            </div>
+            <div class="choice">
+                <h2>C · Bottom, side by side</h2>
+                <div class="wire layout-c-wire">
+            <div class="wire-row">
+                <div class="wire-card">Relay counts</div>
+                <div class="wire-card">Bandwidth<br>history link</div>
+                <div class="wire-card">Uptime<br>history link</div>
+            </div>
+            <div class="wire-row"><div class="wire-rest">Operators · Geography · Providers</div></div>
+            <div class="wire-row"><div class="wire-rest">Utilization · Versions · Operating systems</div></div>
+            <div class="wire-row"><div class="wire-rest">Families · Exit policy · Exit DNS</div></div><div class="wire-charts"><div class="wire-chart">Bandwidth<br><span>1M  6M  1Y  5Y</span></div><div class="wire-chart uptime">Uptime<br><span>1M  6M  1Y  5Y</span></div></div><div class="wire-foot">Last updated</div></div>
+                <p>The same bottom position as A, with bandwidth and uptime in one row and one shared period control.</p>
+                <p>At the ribbon's 1400px each chart is about 680px wide, so the 11px axis type shrinks to about 7px. The bandwidth chart is also much taller than uptime. Below 1100px the columns stack, so the pair only sits side by side on a wide window.</p>
+                <a class="open-layout" href="layout-c.html">Open layout C</a>
+            </div>
+        </div>
+        <div class="notes">
+            <h2>How the charts behave</h2>
+            <p>Open a layout and use the 1M / 6M / 1Y / 5Y links, or a chart's own thumbnails. The switcher is the relay page's CSS, with no JavaScript. A period link changes both charts. A thumbnail changes one.</p>
+            <p>The series are illustrative. Throughput is the sum of relay write and read in Gbit/s, with the sum of advertised capacity as the dashed line. Uptime is the mean Running flag. Periods match a relay page: 1 month, 6 months, 1 year, 5 years.</p>
+            <p>The charts are not drawn inside the Bandwidth Capacity or Relay Uptime cards. Those cards are a third of the ribbon, narrower than layout C, and they are already the tallest cards in the first row.</p>
+        </div>
+    </div>
+    </div>
+</body>
+</html>

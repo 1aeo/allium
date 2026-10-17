@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Network Health — history side by side | 1AEO Tor Metrics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="../../../../allium/static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../../../allium/static/css/allium-base.css">
+    <link rel="stylesheet" href="../../../../allium/static/css/network-health.css">
+    <style>
+.mock-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 8px 16px;
+    background: #1e1e1e;
+    color: #e6e6e6;
+    font-size: 13px;
+}
+.mock-bar a { color: #9a9a9a; text-decoration: none; font-weight: 600; }
+.mock-bar a:hover, .mock-bar a:focus { color: #00ff7f; }
+.mock-bar a.on { color: #00ff7f; }
+.mock-bar .mock-tag {
+    color: #ffb454;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+.history-jump { display: inline-block; margin-top: 3px; font-size: 1.15rem; font-weight: 600; }
+.network-history { margin-bottom: 7px; }
+.network-history:hover { transform: none; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+.history-lead { margin: 0 0 8px; color: var(--nh-text-label); font-size: 14px; }
+.history-periods { margin: 0 0 4px; }
+.history-periods a {
+    display: inline-block;
+    margin: 0 6px 6px 0;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--nh-bg-metric);
+    color: var(--color-link);
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.history-periods a[href="#1m"] { color: var(--aeo-green-hover); }
+.chart-period:target ~ .history-periods a[href="#1m"] { color: var(--color-link); }
+.chart-period[id="1m"]:target ~ .history-periods a[href="#1m"],
+.chart-period[id="6m"]:target ~ .history-periods a[href="#6m"],
+.chart-period[id="1y"]:target ~ .history-periods a[href="#1y"],
+.chart-period[id="5y"]:target ~ .history-periods a[href="#5y"] { color: var(--aeo-green-hover); }
+.history-note { margin: 8px 0 0; color: var(--nh-text-label-secondary); font-size: 12px; }
+.history-grid { display: block; }
+body.layout-c .history-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+.history-grid > * { min-width: 0; }
+body.layout-a .network-health-ribbon,
+body.layout-c .network-health-ribbon { display: flex; flex-direction: column; }
+body.layout-a .network-history,
+body.layout-c .network-history { order: 5; }
+body.layout-a .ribbon-footer,
+body.layout-c .ribbon-footer { order: 6; }
+#network-history, #network-bandwidth, #network-uptime { scroll-margin-top: 56px; }
+@media (max-width: 1100px) {
+    body.layout-c .history-grid { grid-template-columns: 1fr; }
+}
+.reco { max-width: 1100px; margin: 0 auto 28px; }
+.reco h1 { font-size: 28px; margin: 8px 0 10px; color: var(--color-text-heading); }
+.reco .verdict { font-size: 18px; margin: 0 0 18px; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.choice {
+    border: 1px solid var(--color-border-card);
+    border-radius: 6px;
+    padding: 10px;
+    background: #fff;
+}
+.choice.preferred { border-top: 3px solid var(--aeo-green-hover); }
+.choice h2 { font-size: 16px; margin: 0 0 8px; }
+.choice p { font-size: 13px; color: var(--color-text-dark); margin: 8px 0; }
+.choice .open-layout { font-weight: 700; }
+.wire { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--nh-text-value); }
+.wire-row, .wire-charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.wire-card, .wire-rest, .wire-chart, .wire-foot {
+    background: var(--nh-bg-metric);
+    border-radius: 3px;
+    padding: 6px;
+    text-align: center;
+}
+.wire-rest { grid-column: 1 / -1; color: var(--nh-text-label); }
+.wire-chart {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+.wire-chart span { color: #00cc66; letter-spacing: 0.08em; }
+.wire-foot { color: var(--nh-text-footer); }
+.layout-a-wire .wire-chart, .layout-b-wire .wire-chart { grid-column: 1 / -1; min-height: 46px; }
+.layout-b-wire .wire { display: flex; }
+.layout-b-wire .wire-row:first-child { order: 1; }
+.layout-b-wire .wire-charts { order: 2; }
+.layout-b-wire .wire-row:not(:first-child) { order: 3; }
+.layout-b-wire .wire-foot { order: 4; }
+.layout-c-wire .wire-charts { grid-template-columns: 1fr 1fr; }
+.layout-c-wire .wire-chart.uptime { min-height: 48px; }
+.notes { max-width: 1100px; margin: 18px auto 0; font-size: 14px; }
+.notes h2 { font-size: 18px; }
+@media (max-width: 800px) {
+    .choices { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body class="layout-c">
+    <div class="mock-bar"><span class="mock-tag">Design mockup</span><a class="" href="index.html">Recommendation</a><a class="" href="layout-a.html">A · Bottom, stacked</a><a class="" href="layout-b.html">B · Under the first row</a><a class="on" href="layout-c.html">C · Bottom, side by side</a></div>
+    <nav class="aeo-cross-nav">
+        <div class="aeo-nav-container">
+            <a href="https://www.1aeo.com" class="aeo-nav-brand"><span>1AEO</span></a>
+            <div class="aeo-nav-links">
+                <a href="https://www.1aeo.com">Home</a>
+                <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        
+        <div class="aroi-center-text aroi-subsection">
+            <h1>Tor Network Health Dashboard</h1>
+            <p class="lead"><strong>Real-time Overview Metrics</strong></p>
+        </div>
+        
+<nav class="navbar navbar-default" style="margin-bottom: 20px;">
+    <div class="container-fluid">
+        <ul class="nav navbar-nav">
+            <li class="active"><a href="layout-a.html">Network Health</a></li>
+            <li><a href="layout-a.html">Operator Champions</a></li>
+            <li><a href="layout-a.html">By Operator / Contact</a></li>
+            <li><a href="layout-a.html">By Family</a></li>
+            <li><a href="layout-a.html">By Network</a></li>
+            <li><a href="layout-a.html">By Country</a></li>
+            <li><a href="layout-a.html">By Platform</a></li>
+        </ul>
+    </div>
+</nav>
+        <div class="network-health-ribbon">
+            <div class="ribbon-row">
+        <div class="ribbon-card">
+            <div class="card-header" id="relay-counts">
+                <h4><a href="#relay-counts" class="al-link-plain">📊 Relay Counts</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">8,946</span><span class="metric-label">Total Relays</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">2,104 (23.5%)</span><span class="metric-label">Exit</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">3,812 (42.6%)</span><span class="metric-label">Guard</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">4,221 (47.2%)</span><span class="metric-label">Middle</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">891 (10.0%)</span><span class="metric-label">Exit + Guard</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">7,640 (85.4%)</span><span class="metric-label">Fast</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">6,102 (68.2%)</span><span class="metric-label">Stable</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">7,201 (80.5%)</span><span class="metric-label">Measured</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">412 (4.6%)</span><span class="metric-label">Offline</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">9 (0.1%)</span><span class="metric-label">Directory Authorities</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">6,440 (72.0%)</span><span class="metric-label">V2Dir</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">5,880 (65.7%)</span><span class="metric-label">HSDir</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">5,102 (57.0%)</span><span class="metric-label">Relays with IPv4 &amp;amp; IPv6</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">3,844 (43.0%)</span><span class="metric-label">Only IPv4</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">12 (0.1%)</span><span class="metric-label">BadExit</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">86 (1.0%)</span><span class="metric-label">StaleDesc</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">34 (0.4%)</span><span class="metric-label">Sybil</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">219 (2.4%)</span><span class="metric-label">Overloaded</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">18 (0.2%)</span><span class="metric-label">New 1d</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">410 (4.6%)</span><span class="metric-label">New 1mo</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1,902 (21.3%)</span><span class="metric-label">New 6mo</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">3,240 (36.2%)</span><span class="metric-label">New 1y</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">2y 4mo | 1y 7mo</span><span class="metric-label">Age (Mean | Median)</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="bandwidth-capacity">
+                <h4><a href="#bandwidth-capacity" class="al-link-plain">⚡ Bandwidth Capacity Availability</a></h4>
+                <a class="history-jump" href="#network-bandwidth">Bandwidth history</a>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">812 Gbit/s</span><span class="metric-label">Total Capacity</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">6.8 EiB</span><span class="metric-label">Total Data Transferred (5yr history)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1.9 EiB</span><span class="metric-label">Exit Total Data</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">3.1 EiB</span><span class="metric-label">Guard Total Data</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1.8 EiB</span><span class="metric-label">Middle Total Data</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">214 Gbit/s</span><span class="metric-label">Exit Capacity</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">401 Gbit/s</span><span class="metric-label">Guard Capacity</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">197 Gbit/s</span><span class="metric-label">Middle Capacity</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">102 | 41 Mbit/s</span><span class="metric-label">Exit Mean | Median</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">105 | 38 Mbit/s</span><span class="metric-label">Guard Mean | Median</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">47 | 12 Mbit/s</span><span class="metric-label">Middle Mean | Median</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">11 | 9 Mbit/s</span><span class="metric-label">Obs to Adv Diff (Mean | Median)</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">7,201 (80.5%)</span><span class="metric-label">Capacity Measured</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="relay-uptime">
+                <h4><a href="#relay-uptime" class="al-link-plain">⏰ Relay Uptime</a></h4>
+                <a class="history-jump" href="#network-uptime">Uptime history</a>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">98.1%</span><span class="metric-label">Overall Uptime (1mo Mean)</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">97.4% | 99.1%</span><span class="metric-label">Exit 1mo (Mean | Median)</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.6% | 99.4%</span><span class="metric-label">Guard 1mo (Mean | Median)</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.0% | 99.2%</span><span class="metric-label">Middle 1mo (Mean | Median)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">99.8% | 100%</span><span class="metric-label">Authority 1mo (Mean | Median)</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.4% | 99.3%</span><span class="metric-label">V2Dir 1mo (Mean | Median)</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.7% | 99.5%</span><span class="metric-label">HSDir 1mo (Mean | Median)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">97.4% | 96.8% | 96.1% | 95.2%</span><span class="metric-label">Exit: 1mo | 6mo | 1y | 5y (Mean)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.6% | 98.1% | 97.6% | 96.4%</span><span class="metric-label">Guard: 1mo | 6mo | 1y | 5y (Mean)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">98.0% | 97.5% | 97.0% | 95.8%</span><span class="metric-label">Middle: 1mo | 6mo | 1y | 5y (Mean)</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">99.8% | 99.6% | 99.4% | 99.1%</span><span class="metric-label">Authority: 1mo | 6mo | 1y | 5y (Mean)</span></div></div>
+            </div>
+        </div></div>
+
+    <section class="ribbon-card network-history" id="network-history">
+        <span id="1m" class="chart-period"></span><span id="6m" class="chart-period"></span><span id="1y" class="chart-period"></span><span id="5y" class="chart-period"></span>
+        <div class="card-header">
+            <h4><a href="#network-history" class="al-link-plain">Network History</a></h4>
+        </div>
+        <p class="history-lead">Sum of relay throughput, and the mean running-flag uptime, for the same
+            1 month, 6 months, 1 year, and 5 years as a relay page. A thumbnail changes that chart.
+            A period link changes both.</p>
+        <p class="history-periods"><a href="#1m">1M</a><a href="#6m">6M</a><a href="#1y">1Y</a><a href="#5y">5Y</a></p>
+        <div class="history-grid">
+            
+        <div class="history-chart" id="network-bandwidth">
+            <h5 class="subsection-header">Bandwidth</h5>
+            <div class="chart-history">
+                <a id="bandwidth-6m" class="chart-hero chart-on-6m" href="charts/bandwidth-6m.svg"><img src="charts/bandwidth-6m.svg" width="1080" height="744" alt="Network throughput and write/read, last 6 months"></a><a id="bandwidth-1y" class="chart-hero chart-on-1y" href="charts/bandwidth-1y.svg"><img src="charts/bandwidth-1y.svg" width="1080" height="744" alt="Network throughput and write/read, last year"></a><a id="bandwidth-5y" class="chart-hero chart-on-5y" href="charts/bandwidth-5y.svg"><img src="charts/bandwidth-5y.svg" width="1080" height="744" alt="Network throughput and write/read, last 5 years"></a><a id="bandwidth-1m" class="chart-hero chart-on-1m" href="charts/bandwidth-1m.svg"><img src="charts/bandwidth-1m.svg" width="1080" height="724" alt="Network throughput and write/read, last 30 days"></a>
+                <div class="chart-sparks"><a class="chart-spark chart-on-1m chart-spark-default" href="#bandwidth-1m" aria-label="1M: show the last 30 days"><img src="charts/bandwidth-1m.svg" width="1080" height="724" alt="">1M</a><a class="chart-spark chart-on-6m" href="#bandwidth-6m" aria-label="6M: show the last 6 months"><img src="charts/bandwidth-6m.svg" width="1080" height="744" alt="">6M</a><a class="chart-spark chart-on-1y" href="#bandwidth-1y" aria-label="1Y: show the last year"><img src="charts/bandwidth-1y.svg" width="1080" height="744" alt="">1Y</a><a class="chart-spark chart-on-5y" href="#bandwidth-5y" aria-label="5Y: show the last 5 years"><img src="charts/bandwidth-5y.svg" width="1080" height="744" alt="">5Y</a></div>
+            </div>
+        </div>
+            
+        <div class="history-chart" id="network-uptime">
+            <h5 class="subsection-header">Uptime</h5>
+            <div class="chart-history">
+                <a id="uptime-6m" class="chart-hero chart-on-6m" href="charts/uptime-6m.svg"><img src="charts/uptime-6m.svg" width="1080" height="442" alt="Network mean uptime, last 6 months"></a><a id="uptime-1y" class="chart-hero chart-on-1y" href="charts/uptime-1y.svg"><img src="charts/uptime-1y.svg" width="1080" height="442" alt="Network mean uptime, last year"></a><a id="uptime-5y" class="chart-hero chart-on-5y" href="charts/uptime-5y.svg"><img src="charts/uptime-5y.svg" width="1080" height="442" alt="Network mean uptime, last 5 years"></a><a id="uptime-1m" class="chart-hero chart-on-1m" href="charts/uptime-1m.svg"><img src="charts/uptime-1m.svg" width="1080" height="422" alt="Network mean uptime, last 30 days"></a>
+                <div class="chart-sparks"><a class="chart-spark chart-on-1m chart-spark-default" href="#uptime-1m" aria-label="1M: show the last 30 days"><img src="charts/uptime-1m.svg" width="1080" height="422" alt="">1M</a><a class="chart-spark chart-on-6m" href="#uptime-6m" aria-label="6M: show the last 6 months"><img src="charts/uptime-6m.svg" width="1080" height="442" alt="">6M</a><a class="chart-spark chart-on-1y" href="#uptime-1y" aria-label="1Y: show the last year"><img src="charts/uptime-1y.svg" width="1080" height="442" alt="">1Y</a><a class="chart-spark chart-on-5y" href="#uptime-5y" aria-label="5Y: show the last 5 years"><img src="charts/uptime-5y.svg" width="1080" height="442" alt="">5Y</a></div>
+            </div>
+        </div>
+        </div>
+        <p class="history-note">Sample series for the mockup, drawn with the relay chart renderer.
+            Throughput is Gbit/s: green write, blue read, dashed orange advertised capacity.
+            Uptime is the mean of relays' Running flags, the same kind of figure as Overall Uptime above.
+            The lower write/read panel is that relay chart at its real height. A network sum would not be
+            graded against one role's percentile bands.</p>
+    </section>
+<div class="ribbon-row">
+        <div class="ribbon-card">
+            <div class="card-header" id="operator-participation">
+                <h4><a href="#operator-participation" class="al-link-plain">👥 Operator Participation</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">1,842 domains | 6,210 relays (69.4%)</span><span class="metric-label">Unique AROI Operators | AROI Relays (% of network)</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1,204</span><span class="metric-label">Validated AROI Operators</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">638</span><span class="metric-label">Failed Validation</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">4,880</span><span class="metric-label">Validated AROI Relays</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1,330</span><span class="metric-label">Invalid AROI</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">2,736</span><span class="metric-label">No AROI</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="geographic-participation">
+                <h4><a href="#geographic-participation" class="al-link-plain">🌍 Geographic Participation</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">DE 18.4% · US 14.1% · NL 9.6%</span><span class="metric-label">Top 3 Countries by Consensus Weight</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">41.2%</span><span class="metric-label">EU Consensus Weight</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">58.8%</span><span class="metric-label">Non-EU</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">6.4%</span><span class="metric-label">Rare Countries</span></div></div><div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">22.8%</span><span class="metric-label">Five Eyes</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">61.5%</span><span class="metric-label">Fourteen Eyes</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="provider-participation">
+                <h4><a href="#provider-participation" class="al-link-plain">🏢 Provider Participation</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">Hetzner 11.2% · OVH 8.4% · Frantech 4.1%</span><span class="metric-label">Top 3 Networks by Consensus Weight</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">11.2%</span><span class="metric-label">Top AS</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">31.6%</span><span class="metric-label">Top 5 AS</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">48.9%</span><span class="metric-label">Top 10 AS</span></div></div>
+            </div>
+        </div></div>
+<div class="ribbon-row">
+        <div class="ribbon-card">
+            <div class="card-header" id="bandwidth-utilization">
+                <h4><a href="#bandwidth-utilization" class="al-link-plain">📈 Bandwidth Utilization</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">46%</span><span class="metric-label">Network Observed / Advertised</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">52%</span><span class="metric-label">Exit Utilization</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">49%</span><span class="metric-label">Guard Utilization</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">38%</span><span class="metric-label">Middle Utilization</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="version-compliance">
+                <h4><a href="#version-compliance" class="al-link-plain">🔄 Version Compliance</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">94.2%</span><span class="metric-label">Recommended or Newer</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">8,430</span><span class="metric-label">Recommended</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">412</span><span class="metric-label">Obsolete</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">104</span><span class="metric-label">Experimental</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="operating-systems">
+                <h4><a href="#operating-systems" class="al-link-plain">💻 Unique Operating Systems</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">Linux 96.1%</span><span class="metric-label">Share of Relays</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">8,598</span><span class="metric-label">Linux</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">214</span><span class="metric-label">BSD</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">134</span><span class="metric-label">Other</span></div></div>
+            </div>
+        </div></div>
+<div class="ribbon-row">
+        <div class="ribbon-card">
+            <div class="card-header" id="happy-families">
+                <h4><a href="#happy-families" class="al-link-plain">🔑 Happy Families Key Migration</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">72%</span><span class="metric-label">Family-cert Adoption</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">9 / 9</span><span class="metric-label">DA Readiness</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">64%</span><span class="metric-label">AROI Operators</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">81%</span><span class="metric-label">Relay Versions</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="exit-policies">
+                <h4><a href="#exit-policies" class="al-link-plain">🚪 Exit Policies</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">1,640</span><span class="metric-label">Default Exit Policy</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1,640</span><span class="metric-label">Default</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">402</span><span class="metric-label">Reduced</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">62</span><span class="metric-label">Custom</span></div></div>
+            </div>
+        </div>
+        <div class="ribbon-card">
+            <div class="card-header" id="exit-dns-health">
+                <h4><a href="#exit-dns-health" class="al-link-plain">🔍 Exit DNS Health</a></h4>
+                
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Sample figure for the layout mockup"><span class="metric-value">97.6%</span><span class="metric-label">DNS Success</span></div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">97.6%</span><span class="metric-label">Success</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">1.8%</span><span class="metric-label">Timeout</span></div><div class="metric-item" title="Sample figure for the layout mockup"><span class="metric-value">0.6%</span><span class="metric-label">Wrong Answer</span></div></div>
+            </div>
+        </div></div>
+
+    <div class="ribbon-footer">
+        <p class="last-updated">Last updated: 2026-10-16 18:30 UTC</p>
+    </div>
+        </div>
+    </div>
+</body>
+</html>
