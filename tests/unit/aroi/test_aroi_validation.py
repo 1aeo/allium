@@ -784,7 +784,7 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(msg, "URI: Server unreachable")
 
     def test_error_simplification_aroivalidator_wordings(self):
-        """aroivalidator's v3 404, content-mismatch, timeout and name-resolution wordings."""
+        """aroivalidator 404, content-mismatch, timeout, and name-resolution wordings."""
         rsa = "/.well-known/tor-relay/rsa-fingerprint.txt"
         fam = "/.well-known/tor-relay/ed25519-family-id.txt"
         cached = ". Used domain cache after 3 attempts."
@@ -809,9 +809,25 @@ class TestAROIValidation(unittest.TestCase):
              f"found at www.d.example at URL: https://www.d.example{fam}",
              "URI: Proof file not found (404)"),
             ("URI-RSA: Fingerprint not found at d.example",
-             "URI: Fingerprint not in proof"),
+             "URI: Fingerprint not in proof file"),
             (f"Fingerprint not found in https://d.example{rsa}",
-             "URI: Fingerprint not in proof"),
+             "URI: Fingerprint not in proof file"),
+            ("URI-FamilyID: family_id not found at d.example",
+             "URI: Family ID not in proof file"),
+            ("URI-FamilyID: family_id not found at gutter.duckdns.org",
+             "URI: Family ID not in proof file"),
+            (f"URI-RSA: HTTP error 404 for gutter.duckdns.org at URL: "
+             f"https://gutter.duckdns.org{rsa}",
+             "URI: Fingerprint file not found (404)"),
+            (f"URI-FamilyID: HTTP error 404 for gutter.duckdns.org at URL: "
+             f"https://gutter.duckdns.org{fam}",
+             "URI: Proof file not found (404)"),
+            (f"URI-FamilyID: proof file not found at gutter.duckdns.org at "
+             f"URL: https://gutter.duckdns.org{fam}",
+             "URI: Proof file not found (404)"),
+            (f"URI-RSA: HTTP error connection timed out after 5s for URL: "
+             f"https://gutter.duckdns.org{rsa}",
+             "URI: Connection timeout"),
             (timed, "URI: Connection timeout"),
             (timed + cached, "URI: Connection timeout"),
             (named, "URI: Domain resolution failed"),
@@ -840,6 +856,14 @@ class TestAROIValidation(unittest.TestCase):
         for error, expected in cases:
             self.assertEqual(
                 _simplify_error_message(error), (expected, 'uri'), error)
+
+        dns_error = (
+            "DNS-RSA: TXT record has invalid proof content. Expected "
+            "'we-run-this-tor-relay', found: v=spf1 at gutter.duckdns.org")
+        self.assertEqual(
+            _simplify_error_message(dns_error),
+            ("DNS: TXT record error", 'dns'),
+            dns_error)
 
     def test_error_categorization(self):
         """Test that errors are categorized into DNS and URI correctly."""

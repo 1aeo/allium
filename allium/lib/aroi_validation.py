@@ -803,7 +803,9 @@ def _simplify_error_message(error: object) -> tuple:
         return ("DNS: Domain not found (NXDOMAIN)", 'dns')
     if 'servfail' in e:
         return ("DNS: Server failure (SERVFAIL)", 'dns')
-    if 'txt record' in e or ('txt' in e and 'dns' in e):
+    # A proof URL contains ".txt", and a domain such as duckdns.org contains
+    # "dns". Match the DNS TXT wording itself, not those two substrings.
+    if 'txt record' in e:
         return (
             "DNS: TXT record not found",
             'dns') if 'not found' in e or 'missing' in e else (
@@ -827,7 +829,10 @@ def _simplify_error_message(error: object) -> tuple:
 
     # aroivalidator wording: "Fingerprint not found at <domain>"
     if 'fingerprint not found at' in e:
-        return ("URI: Fingerprint not in proof", 'uri')
+        return ("URI: Fingerprint not in proof file", 'uri')
+    # aroivalidator wording: "family_id not found at <domain>"
+    if 'family_id not found at' in e:
+        return ("URI: Family ID not in proof file", 'uri')
     # aroivalidator wording: "proof file not found"
     if 'proof file not found' in e:
         return ("URI: Proof file not found (404)", 'uri')
@@ -863,7 +868,7 @@ def _simplify_error_message(error: object) -> tuple:
                 "URI: Fingerprint mismatch",
                 'uri')
         if 'not found' in e:
-            return ("URI: Fingerprint not in proof", 'uri')
+            return ("URI: Fingerprint not in proof file", 'uri')
 
     # Generic HTTP errors
     if 'failed to fetch' in e or (
