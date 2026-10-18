@@ -778,6 +778,8 @@ def _simplify_error_message(error: object) -> tuple:
     the label names the primary failure: a 404 on the operator's own host
     stays a 404 when www.<domain> then fails TLS. A primary failure with
     no specific label (a redirect) is labelled from the whole message.
+    A timeout or name-resolution failure of the www-fallback alone never
+    names the message.
 
     Returns:
         Tuple of (simplified_message, proof_type), where proof_type is
@@ -793,13 +795,17 @@ def _simplify_error_message(error: object) -> tuple:
             return primary
 
     e = error.lower()
+    # The www-fallback host often does not resolve or times out.
+    primary_e = attempts[0].lower()
 
     # DNS-specific errors (check first as they're more specific)
     if 'nxdomain' in e or 'no such domain' in e:
         return ("DNS: Domain not found (NXDOMAIN)", 'dns')
     if 'servfail' in e:
         return ("DNS: Server failure (SERVFAIL)", 'dns')
-    if 'txt record' in e or ('txt' in e and 'dns' in e):
+    # A proof URL contains ".txt", and a domain such as duckdns.org contains
+    # "dns". Match the DNS TXT wording itself, not those two substrings.
+    if 'txt record' in e:
         return (
             "DNS: TXT record not found",
             'dns') if 'not found' in e or 'missing' in e else (
@@ -821,6 +827,16 @@ def _simplify_error_message(error: object) -> tuple:
     if 'http ssl error' in e:
         return ("URI: SSL/TLS handshake failed", 'uri')
 
+    # aroivalidator wording: "Fingerprint not found at <domain>"
+    if 'fingerprint not found at' in e:
+        return ("URI: Fingerprint not in proof file", 'uri')
+    # aroivalidator wording: "family_id not found at <domain>"
+    if 'family_id not found at' in e:
+        return ("URI: Family ID not in proof file", 'uri')
+    # aroivalidator wording: "proof file not found"
+    if 'proof file not found' in e:
+        return ("URI: Proof file not found (404)", 'uri')
+
     # HTTP errors (check after DNS patterns)
     if '404' in error or (
             'not found' in e and 'dns' not in e and 'txt' not in e):
@@ -833,11 +849,14 @@ def _simplify_error_message(error: object) -> tuple:
         return ("URI: Access forbidden (403)", 'uri')
     if 'connection refused' in e or 'refused' in e:
         return ("URI: Connection refused", 'uri')
-    if 'timeout' in e:
+    # aroivalidator wording: "connection timed out" (primary attempt only)
+    if 'timeout' in e or 'timed out' in primary_e:
         return ("URI: Connection timeout", 'uri')
     if 'max retries exceeded' in e:
         return ("URI: Server unreachable", 'uri')
-    if 'name or service not known' in e or 'nameresolutionerror' in e:
+    # aroivalidator wording: "name resolution failed" (primary attempt only)
+    if ('name or service not known' in e or 'nameresolutionerror' in e
+            or 'name resolution failed' in primary_e):
         return ("URI: Domain resolution failed", 'uri')
 
     # Fingerprint errors
@@ -849,7 +868,7 @@ def _simplify_error_message(error: object) -> tuple:
                 "URI: Fingerprint mismatch",
                 'uri')
         if 'not found' in e:
-            return ("URI: Fingerprint not in proof", 'uri')
+            return ("URI: Fingerprint not in proof file", 'uri')
 
     # Generic HTTP errors
     if 'failed to fetch' in e or (
