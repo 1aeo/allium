@@ -843,5 +843,40 @@ class TestObsoleteOperatorRanking(unittest.TestCase):
         self.assertIn('Update urgently', relay_html)
         self.assertNotIn('Operator versions', relay_html)
 
+    def test_dashboard_header_names_consensus_weight(self):
+        """The version-compliance list is ranked by obsolete consensus weight."""
+        from pathlib import Path
+        env = Environment(trim_blocks=True, lstrip_blocks=True, autoescape=True)
+        src = Path('allium/templates/network-health-dashboard.html').read_text()
+        start = src.index('{% if relays.json.network_health.obsolete_operator_top %}')
+        end = src.index('{% endif %}', start) + len('{% endif %}')
+        operators = [
+            {
+                'contact_hash': f'hash{i}',
+                'weight_pct': pct,
+                'display_name': name,
+                'count_label': count,
+                'title': f'{pct} from {count}',
+            }
+            for i, (pct, name, count) in enumerate((
+                ('1.75%', 'relayon.org', '83 relays'),
+                ('0.93%', 'KeFF NOC', '39 relays'),
+                ('0.58%', 'abuse@datalix.de', '10 relays'),
+                ('0.37%', 'nos-oignons.net', '20 of 54'),
+            ))
+        ]
+        html = env.from_string(src[start:end]).render(
+            relays={'json': {'network_health': {'obsolete_operator_top': operators}}},
+            page_ctx=type('P', (), {'path_prefix': ''})(),
+        )
+        self.assertIn(
+            'Top 4 obsolete operators<br>by consensus weight',
+            html,
+        )
+        self.assertLess(
+            html.index('obsolete operators'),
+            html.index('by consensus weight'),
+        )
+
 if __name__ == '__main__':
     unittest.main() 

@@ -66,6 +66,7 @@
     font-size: 1.2rem;
     color: var(--nh-text-label);
     font-weight: 600;
+    line-height: 1.25;
     margin: 2px 0 5px;
 }
 .obsolete-operators a.metric-item { display: block; text-decoration: none; color: inherit; }
