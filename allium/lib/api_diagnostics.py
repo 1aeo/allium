@@ -26,6 +26,7 @@ from .workers import (
     AROI_CACHE_MAX_AGE_HOURS,
     COLLECTOR_CACHE_MAX_AGE_HOURS,
     DESCRIPTORS_CACHE_MAX_AGE_HOURS,
+    TLS_PQC_CACHE_MAX_AGE_HOURS,
 )
 
 
@@ -129,6 +130,25 @@ API_METADATA = {
             "Contact Page Validation Status",
         ],
     },
+    "tls_pqc": {
+        "display_name": "Margot TLS PQC Scan",
+        "short_name": "TLS PQC",
+        "owner": "Tor Network Health (Margot, published by ahf)",
+        "url_arg": "tls_pqc_url",
+        "default_url": "https://ahf.me/tor-tls-pqc/",
+        "url_note": "latest dated scan",
+        "expected_frequency": "irregular (published scan dates)",
+        "cache_max_age_hours": TLS_PQC_CACHE_MAX_AGE_HOURS,
+        "cache_max_age_display": f"{TLS_PQC_CACHE_MAX_AGE_HOURS}h",
+        "relay_set_attr": "tls_pqc_data",
+        "count_field": "relays",
+        "count_label": "fingerprints in scan",
+        "affected_sections": [
+            "PQC TLS on Relay Pages",
+            "Contact Page PQC Summary",
+            "Network Health PQC Card",
+        ],
+    },
     "collector_consensus": {
         "display_name": "CollecTor Consensus API",
         "short_name": "Consensus",
@@ -213,7 +233,13 @@ SECTION_DEPENDENCIES = [
         "apis": [
             "onionoo_details", "onionoo_uptime", "onionoo_bandwidth",
             "aroi_validation", "collector_consensus", "collector_descriptors",
+            "tls_pqc",
         ],
+        "link": "network-health.html",
+    },
+    {
+        "section": "PQC TLS Readiness",
+        "apis": ["onionoo_details", "tls_pqc"],
         "link": "network-health.html",
     },
     {
@@ -231,7 +257,7 @@ SECTION_DEPENDENCIES = [
         "section": "Contact / Operator Pages",
         "apis": [
             "onionoo_details", "onionoo_uptime", "onionoo_bandwidth",
-            "aroi_validation", "collector_descriptors",
+            "aroi_validation", "collector_descriptors", "tls_pqc",
         ],
         "link": "",
         "link_label": "(contact detail pages)",

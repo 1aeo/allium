@@ -125,6 +125,7 @@ def validate_url_arguments(args):
         ('onionoo_bandwidth_url', '--onionoo-bandwidth-url'),
         ('aroi_url', '--aroi-url'),
         ('exit_dns_health_url', '--exit-dns-health-url'),
+        ('tls_pqc_url', '--tls-pqc-url'),
         ('base_url', '--base-url'),
     ]
     for attr, flag_name in url_fields:
@@ -252,6 +253,19 @@ if __name__ == "__main__":
         help=(
             "Exit DNS Health API HTTP URL (default "
             '"https://exitdnshealth.1aeo.com/latest.json")'
+        ),
+        required=False,
+    )
+    parser.add_argument(
+        "--tls-pqc-url",
+        dest="tls_pqc_url",
+        type=str,
+        default="https://ahf.me/tor-tls-pqc/",
+        help=(
+            "Margot TLS cipher scan index, a dated scan page, or a "
+            "cipher_suites.csv URL (default "
+            '"https://ahf.me/tor-tls-pqc/"). The index selects the latest '
+            "dated scan. ahf.me publishes HTML; the scanner writes CSV"
         ),
         required=False,
     )

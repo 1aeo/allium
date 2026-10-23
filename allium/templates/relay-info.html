@@ -386,6 +386,28 @@ Platform: unknown
                 {% endif -%}
             </dd>
         </div>
+
+        {# PQC TLS from the latest Margot scan. A missing fingerprint is not a failure. #}
+        <div class="health-row">
+            <dt title="Key-exchange group negotiated in the latest Margot TLS scan. Onionoo does not publish this, and the Tor version string does not either."><a href="#tls-pqc" class="anchor-link">PQC TLS</a></dt>
+            <dd>
+                {% if relay.tls_pqc_status -%}
+                    {% if relay.tls_pqc_status == 'saw' -%}
+                        <span class="al-status-success-bold">{{ relay.tls_pqc_answer|e }}</span>
+                    {% elif relay.tls_pqc_status == 'other' -%}
+                        <span class="al-status-note">{{ relay.tls_pqc_answer|e }}</span>
+                        {% if relay.tls_pqc_group %} ({{ relay.tls_pqc_group|e }}){% endif %}
+                    {% else -%}
+                        <span>{{ relay.tls_pqc_answer|e }}</span>
+                    {% endif -%}
+                    {% if relay.tls_pqc_scan_time %}
+                        <span class="al-text-small-muted"> · scan {{ relay.tls_pqc_scan_time|e }}</span>
+                    {% endif %}
+                {% else -%}
+                    <span class="al-status-muted">TLS scan unavailable</span>
+                {% endif -%}
+            </dd>
+        </div>
     </dl>
 </div>
 
@@ -1270,6 +1292,39 @@ Platform: unknown
         {% endif -%}
     </dd>
     {% endif %}
+
+    <dt id="tls-pqc" title="Key-exchange group from the latest Margot tls-ciphers scan. A fingerprint that is absent was not in that scan. An empty group means the scan recorded no handshake. Neither one is inferred from the Tor version."><a href="#tls-pqc" class="anchor-link">PQC TLS</a></dt>
+    <dd>
+        {% if relay.tls_pqc_status -%}
+            {% if relay.tls_pqc_status == 'saw' -%}
+                <span class="al-status-success-bold">{{ relay.tls_pqc_answer|e }}</span>
+            {% elif relay.tls_pqc_status == 'other' -%}
+                <span class="al-status-note">{{ relay.tls_pqc_answer|e }}</span>
+            {% else -%}
+                <span>{{ relay.tls_pqc_answer|e }}</span>
+            {% endif -%}
+            {% if relay.tls_pqc_scan_time %}
+                <span class="al-text-small-muted"> — scan {{ relay.tls_pqc_scan_time|e }}</span>
+            {% endif %}
+            {% if relay.tls_pqc_scan_url %}
+                <span class="al-text-small-muted"> — <a href="{{ relay.tls_pqc_scan_url|e }}">scan results</a></span>
+            {% endif %}
+            {% if relay.tls_pqc_group or relay.tls_pqc_cipher %}
+            <div class="al-text-small-muted">
+                {% if relay.tls_pqc_group %}Group {{ relay.tls_pqc_group|e }}{% endif %}
+                {% if relay.tls_pqc_group and relay.tls_pqc_cipher %} · {% endif %}
+                {% if relay.tls_pqc_cipher %}Cipher {{ relay.tls_pqc_cipher|e }}{% endif %}
+            </div>
+            {% endif %}
+            {% if relay.tls_pqc_status == 'other' %}
+            <div class="al-text-small-muted">Tor 0.4.8.17 and later can negotiate X25519MLKEM768 when that build uses OpenSSL 3.5.0 or later. LibreSSL 4.3.0 implements ML-KEM-768; current Tor does not use the LibreSSL group (<a href="https://gitlab.torproject.org/tpo/core/tor/-/issues/41300">tpo/core/tor#41300</a>).</div>
+            {% elif relay.tls_pqc_status == 'no_group' %}
+            <div class="al-text-small-muted">This fingerprint is in the scan. The scanner recorded no key-exchange group.</div>
+            {% endif %}
+        {% else -%}
+            <span class="al-status-muted">TLS scan unavailable</span>
+        {% endif -%}
+    </dd>
 </dl>
 </section>
 

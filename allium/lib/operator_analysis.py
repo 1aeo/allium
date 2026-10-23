@@ -11,6 +11,7 @@ import statistics
 
 from .bandwidth_utils import build_bandwidth_map
 from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES, ONIONOO_HISTORY_PERIODS
+from .tls_pqc import GUIDANCE_TEXT, LIBRESSL_ISSUE_URL
 from .uptime_utils import build_uptime_map
 
 
@@ -780,6 +781,11 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         'obsolete': 'obsolete', 'new in series': 'new_in_series',
         'unrecommended': 'unrecommended'
     }
+    pqc_saw = pqc_other = pqc_no_group = pqc_absent = 0
+    pqc_saw_w = pqc_obs_w = pqc_all_w = 0
+    pqc_scan_time = ""
+    pqc_other_relays = []
+    pqc_absent_relays = []
     for relay in members:
         # Version compliance
         rec = relay.get('recommended_version')
@@ -803,6 +809,34 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         if fst not in family_support_counts:
             fst = 'none'
         family_support_counts[fst] += 1
+        pqc_status = relay.get('tls_pqc_status')
+        if pqc_status:
+            if not pqc_scan_time:
+                pqc_scan_time = relay.get('tls_pqc_scan_time') or ""
+            cw = relay.get('consensus_weight') or 0
+            if not isinstance(cw, (int, float)) or isinstance(cw, bool):
+                cw = 0
+            pqc_all_w += cw
+            entry = {
+                "nickname": relay.get("nickname") or relay.get("fingerprint") or "",
+                "fingerprint": relay.get("fingerprint") or "",
+                "group": relay.get("tls_pqc_group") or "",
+            }
+            if pqc_status == 'saw':
+                pqc_saw += 1
+                pqc_saw_w += cw
+                pqc_obs_w += cw
+            elif pqc_status == 'other':
+                pqc_other += 1
+                pqc_obs_w += cw
+                if len(pqc_other_relays) < 12:
+                    pqc_other_relays.append(entry)
+            elif pqc_status == 'no_group':
+                pqc_no_group += 1
+            elif pqc_status == 'not_in_scan':
+                pqc_absent += 1
+                if len(pqc_absent_relays) < 12:
+                    pqc_absent_relays.append(entry)
     
     # Format version compliance display (only show non-zero values for not compliant and unknown)
     # Add status indicators based on compliance ratio
@@ -910,6 +944,28 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         intelligence_formatted['version_status'] = result
     
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
+    pqc_observed = pqc_saw + pqc_other
+    if pqc_saw or pqc_other or pqc_no_group or pqc_absent:
+        intelligence_formatted['tls_pqc'] = {
+            "available": True,
+            "scan_time": pqc_scan_time,
+            "saw": pqc_saw,
+            "other": pqc_other,
+            "no_group": pqc_no_group,
+            "not_in_scan": pqc_absent,
+            "observed": pqc_observed,
+            "observed_percent": round(100.0 * pqc_saw / pqc_observed, 1) if pqc_observed else None,
+            "weight_observed_percent": round(100.0 * pqc_saw_w / pqc_obs_w, 1) if pqc_obs_w else None,
+            "weight_share_percent": round(100.0 * pqc_saw_w / pqc_all_w, 1) if pqc_all_w else None,
+            "other_relays": pqc_other_relays,
+            "other_more": pqc_other - len(pqc_other_relays),
+            "absent_relays": pqc_absent_relays,
+            "absent_more": pqc_absent - len(pqc_absent_relays),
+            "guidance_text": GUIDANCE_TEXT if pqc_other else "",
+            "guidance_url": LIBRESSL_ISSUE_URL if pqc_other else "",
+        }
+    else:
+        intelligence_formatted['tls_pqc'] = {"available": False}
     # Same ranking the network-health card computed while scanning relays.
     _ops = {}
     if hasattr(relay_set, 'json'):

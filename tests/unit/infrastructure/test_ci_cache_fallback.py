@@ -98,6 +98,7 @@ def test_fixtures_pass_the_cache_validators():
         assert document["relays"] == []
     assert workers._validate_aroi_response(_load("aroi_validation"))
     assert workers._validate_exit_dns_health_response(_load("exit_dns_health"))
+    assert workers._validate_tls_pqc_document(_load("tls_pqc"))
     collector = _load("collector_consensus")
     collector["fetched_at"] = _now_stamp()
     assert workers._validate_collector_cache(collector)
@@ -133,6 +134,7 @@ def test_fresh_cache_timeout_returns_that_apis_fixture(config, tmp_path):
     ("onionoo_bandwidth", workers.fetch_onionoo_bandwidth),
     ("aroi_validation", workers.fetch_aroi_validation),
     ("exit_dns_health", workers.fetch_exit_dns_health),
+    ("tls_pqc", workers.fetch_tls_pqc),
 ])
 def test_fresh_cache_short_circuit_does_not_hit_the_network(api_name, fetch, tmp_path):
     """These workers return a fresh cache before opening a socket."""
