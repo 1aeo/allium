@@ -468,8 +468,13 @@ def test_operator_uptime_chart_uses_the_relay_chart_and_the_newest_restart(tmp_p
     named = writer([messy, odd], {"A": history([100] * 30)}, {"A": [999] * 180})
     named.contact([0, 1], str(tmp_path))
     label = next(line for line in texts(tmp_path / "uptime-1m.svg") if line.startswith("Last restarted"))
-    assert label == "Last restarted  Sep 20  ·  line break WWWWWWW…" and "\n" not in label
+    assert label == "Last restarted  Sep 20  ·  line break WWWWWWW…"
+    assert "\n" not in label
     assert text_width("Mean running flag", 11.5) + text_width(label, 11.5) < PLOT_WIDTH
+    # The non-string nickname is the newest restart, so the legend path evaluates it and keeps the date alone.
+    newest_odd = relay("B", nickname=["not", "a", "string"], last_restarted="2026-09-25 08:00:00")
+    writer([messy, newest_odd], {"A": history([100] * 30)}, {"A": [999] * 180}).contact([0, 1], str(tmp_path))
+    assert "Last restarted  Sep 25" in texts(tmp_path / "uptime-1m.svg")
     # Under 30 slots the relay page shows no figure, so the operator chart doesn't either.
     short = writer([relay("A")], {"A": history([100] * 30)}, {"A": [999] * 10}, uptime_first="2026-09-29 14:00:00")
     assert "1m" in short.contact([0], str(tmp_path))[1]
