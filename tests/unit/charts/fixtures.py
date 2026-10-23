@@ -21,9 +21,12 @@ DAY = 86400
 T0 = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)  # every history's first point
 PUBLISHED = "2026-09-30 12:00:00"
 SPIKE = [100] * 10 + [400] + [100] * 10  # against a flat read of 100: write/read 4.00 on Sep 11, off the scale
-OVERLOADED = dict(stability_is_overloaded=True, overload_ratelimits={  # last report Sep 29, 22:00 UTC
-    "timestamp": int(datetime(2026, 9, 29, 22, tzinfo=timezone.utc).timestamp() * 1000),
-    "write-count": 3, "read-count": 0})
+_OVERLOAD_STAMP = int(datetime(2026, 9, 29, 22, tzinfo=timezone.utc).timestamp() * 1000)
+# The caption uses the precomputed eligible timestamp. Chart drawing does not
+# re-read raw Onionoo fields with a later clock.
+OVERLOADED = dict(stability_is_overloaded=True, overload={"latest_eligible_ms": _OVERLOAD_STAMP},
+                  overload_ratelimits={  # last report Sep 29, 22:00 UTC
+                      "timestamp": _OVERLOAD_STAMP, "write-count": 3, "read-count": 0})
 
 
 def block(values, first="2026-09-01 12:00:00", interval=DAY, factor=1000.0):

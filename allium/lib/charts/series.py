@@ -21,6 +21,8 @@ MBIT = 8e-6  # bytes/s -> Mbit/s
 # (the band census's cut): quieter days leave the relay's write/read strip and the family and peer medians.
 MIN_ACTIVE_KBYTES = 50
 MIN_ACTIVE_MBIT = MIN_ACTIVE_KBYTES * 1000 * MBIT
+# p2 and p98 of a handful of relays are not a census. The live network is thousands.
+MIN_NETWORK_CENSUS = 30
 # Fewest family members counted (see active_ratio) for a family median: the median includes the relay
 # itself, so with two members it is the mean of this relay and the other, and moves half as far as this relay.
 MIN_FAMILY = 3
@@ -74,10 +76,41 @@ def _aligned(write, read, interval):
     return (ts, [write[t] for t in ts], [read[t] for t in ts], interval) if len(ts) >= 2 else None
 
 
+def _mapping(value):
+    """A dict, or ``{}`` when a history field is missing or not an object."""
+    return value if isinstance(value, dict) else {}
+
+
 def _blocks(bandwidth_row, key):
-    """The write and read history blocks of one Onionoo period, ``{}`` when missing."""
-    return (((bandwidth_row or {}).get("write_history") or {}).get(key) or {},
-            ((bandwidth_row or {}).get("read_history") or {}).get(key) or {})
+    """The write and read history blocks of one Onionoo period, ``{}`` when missing or malformed."""
+    row = _mapping(bandwidth_row)
+    return (_mapping(_mapping(row.get("write_history")).get(key)),
+            _mapping(_mapping(row.get("read_history")).get(key)))
+
+
+def _percentiles(values, quantiles):
+    """Linear percentiles, the same index as ``numpy.percentile``: ``(n - 1) * quantile / 100``."""
+    values, last = sorted(values), len(values) - 1
+    out = []
+    for quantile in quantiles:
+        rank = last * quantile / 100.0
+        lo = int(rank)
+        frac = rank - lo
+        out.append(values[lo] if not frac else values[lo] * (1.0 - frac) + values[min(lo + 1, last)] * frac)
+    return out
+
+
+def _census_ratio(write, read):
+    """``sum(write) / sum(read)`` on the shared timestamps, or None under the relay chart's census cut.
+
+    At least three points, and a mean of write and read of at least 50 KB/s.
+    """
+    both = write.keys() & read.keys()
+    if len(both) < 3:
+        return None
+    total_w, total_r = sum(write[t] for t in both), sum(read[t] for t in both)
+    if total_r and total_w + total_r >= 2 * MIN_ACTIVE_MBIT * len(both):
+        return total_w / total_r
 
 
 def active_ratio(write, read):
@@ -121,7 +154,7 @@ def _reported_end(lasts, interval):
     return min(reporting, default=newest)
 
 
-def operator_throughput(members, bandwidth_map, key, since=None):
+def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=True, ratios=None):
     """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
     members summed (their write plus read over the window, in Mbit/s per slot).
 
@@ -129,35 +162,59 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     relay's period when a shorter one holds its whole history, so a member
     without this period is summed from its next shorter one, averaged into this
     period's slots; members on other intervals are left out. Members' histories
-    reach the newest slot at different times, so the sum stops at the newest slot
+    reach the newest slot at different times, so with ``until_slowest`` the sum stops at the newest slot
     every member still reporting has reached, not on a partial sum. A member no
     longer running has stopped for good: its end is a real drop, not a delay.
+    The network chart passes ``until_slowest=False``: one relay a slot behind must not hide the rest.
+    ``ratios``, when a list, collects each member's own-period census ratio from that same parse
+    (``network_ratio_bands``).
     """
     histories = []
     for relay in members:
         for k in _periods_from(key):
             write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), k)
-            if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
-                histories.append((k == key, int(write.get("interval") or 0), write, read, relay))
-                break
+            if not (write.get("values") and read.get("values") and write.get("interval") == read.get("interval")):
+                continue
+            try:
+                step = int(write.get("interval") or 0)
+            except (TypeError, ValueError):
+                continue  # try the next shorter period; a bad block must not drop the other members
+            if step <= 0:
+                continue  # not a slot size; a shorter history of this relay may still be
+            histories.append((k == key, step, write, read, relay))
+            break
     own = Counter(step for native, step, *_rest in histories if native)
     if not own:
         return None, []
     interval = own.most_common(1)[0][0]
     write, read, summed, lasts = Counter(), Counter(), [], []
-    for _native, step, w, r, relay in histories:
-        if not step or interval % step:
+    for native, step, wblock, rblock, relay in histories:
+        on_grid = step and interval % step == 0
+        if not on_grid and not (ratios is not None and native):
+            continue  # off this period's grid, and not a census member
+        try:
+            wpts, rpts = (points(block, MBIT, since) for block in (wblock, rblock))
+        except Exception:  # noqa: BLE001 -- one malformed history must not drop the whole sum
             continue
-        w, r = (_slotted(points(block, MBIT, since), step, interval) for block in (w, r))
+        if ratios is not None and native:
+            ratio = _census_ratio(wpts, rpts)
+            if ratio is not None:
+                ratios.append(ratio)
+        if not on_grid:
+            continue
+        if step != interval:  # a shorter history averaged into this period's slots
+            wpts, rpts = (_slotted(pts, step, interval) for pts in (wpts, rpts))
         # As on a member's own chart, only days with both directions: a one-sided day would skew write/read.
-        both = w.keys() & r.keys()
+        both = wpts.keys() & rpts.keys()
         if both:
-            write.update({t: w[t] for t in both})
-            read.update({t: r[t] for t in both})
-            summed.append((relay, sum(w[t] + r[t] for t in both)))
-            lasts.append((max(w.keys() | r.keys()), relay.get("running") is False))
-    end = _reported_end(lasts, interval)
-    return _aligned({t: v for t, v in write.items() if end and t <= end}, read, interval) if end else None, summed
+            write.update({t: wpts[t] for t in both})
+            read.update({t: rpts[t] for t in both})
+            summed.append((relay, sum(wpts[t] + rpts[t] for t in both)))
+            lasts.append((max(wpts.keys() | rpts.keys()), relay.get("running") is False))
+    if until_slowest:
+        end = _reported_end(lasts, interval)
+        write = {t: value for t, value in write.items() if end and t <= end}
+    return _aligned(write, read, interval), summed
 
 
 def operator_uptime(members, uptime_map, key, windows):
@@ -199,6 +256,83 @@ def operator_uptime(members, uptime_map, key, windows):
     end = _reported_end(lasts, interval)
     ts = sorted(t for t in bins if end is not None and t <= end)
     return (ts, [bins[t][0] / bins[t][1] for t in ts], interval) if len(ts) >= 2 else None
+
+
+def network_ratio_bands(ratios):
+    """p10/p90 and p2/p98 of census ratios from ``operator_throughput``, or None below ``MIN_NETWORK_CENSUS``.
+
+    ``typical_lo``/``typical_hi`` and ``invest_lo``/``invest_hi`` are what ``bandwidth_chart`` paints.
+    ``peers`` is read when a ratio subtitle mentions the peer median; the network chart draws none.
+    """
+    if len(ratios) < MIN_NETWORK_CENSUS:
+        return None
+    p2, p10, p90, p98 = _percentiles(ratios, (2, 10, 90, 98))
+    return {"role": "network", "peers": "relays", "n": len(ratios), "typical_lo": p10, "typical_hi": p90,
+            "invest_lo": p2, "invest_hi": p98}
+
+
+def uptime_section(uptime_map, fingerprint):
+    """The Onionoo uptime object for one relay, or ``{}``."""
+    row = _mapping(uptime_map).get(fingerprint)
+    return _mapping(_mapping(row).get("uptime"))
+
+
+def network_uptime(relays, uptime_map, key, windows):
+    """Mean running-flag percent at each timestamp of one Onionoo period.
+
+    A relay counts only when it has that period's block (a new relay has no 5-year history, so it does not
+    pull the early average) and that block uses the period's most common sampling interval. A timestamp
+    almost nobody shares at the end, such as one relay's padded trailing slot, is left out. Early slots stay:
+    a long period starts with fewer relays because younger relays have no history yet. Returns
+    ``(ts, percents, interval, average, counts)`` or None under two timestamps. ``counts`` is how many
+    relays were averaged at each timestamp. ``average`` is the mean of the drawn points, the figure
+    ``uptime_chart`` prints, or 0.0 under the same rule as a relay chart: fewer than 30 slots, or 1% or
+    less, and the chart states no average.
+    """
+    intervals, rows = Counter(), []
+    for relay in relays:
+        section = uptime_section(uptime_map, relay["fingerprint"])
+        block = _mapping(section.get(key))
+        values = block.get("values")
+        # A list of nulls or strings has a length but no samples, so it must not cast the interval vote.
+        if not isinstance(values, (list, tuple)) or len(values) < 2 or not any(
+                isinstance(value, (int, float)) for value in values):
+            continue
+        try:
+            step = int(block.get("interval") or 0)
+        except (TypeError, ValueError):
+            continue  # a block that is not Onionoo's; it must not become the period's interval
+        if step <= 0 or block.get("interval") != step:
+            continue  # int(1.5) is 1; a fraction must not vote as a one-second sample
+        intervals[step] += 1
+        rows.append((step, relay, section, block))
+    if not intervals:
+        return None
+    interval = intervals.most_common(1)[0][0]
+    totals, counts = {}, {}
+    for step, relay, section, block in rows:
+        if step != interval:
+            continue
+        try:
+            drawn = uptime_points(block, key, windows, relay, section)
+        except Exception:  # noqa: BLE001 -- one malformed history must not drop the network chart
+            continue
+        for stamp, value in drawn.items():
+            totals[stamp] = totals.get(stamp, 0.0) + value
+            counts[stamp] = counts.get(stamp, 0) + 1
+    busiest = max(counts.values(), default=0)
+    ts = sorted(totals)
+    # Only the trailing edge: a padded slot after the history, not the early years of a long period.
+    while len(ts) > 2 and counts[ts[-1]] * 10 < busiest:
+        ts.pop()
+    if len(ts) < 2:
+        return None
+    percent = [totals[stamp] / counts[stamp] for stamp in ts]
+    average = sum(percent) / len(percent)
+    # _compute_uptime_percentage_and_datapoints: a relay chart shows no average under 30 slots or at 1% or less.
+    if len(percent) < 30 or average <= 1.0:
+        average = 0.0
+    return ts, percent, interval, average, [counts[stamp] for stamp in ts]
 
 
 def family_key(relay):
