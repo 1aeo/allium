@@ -1,96 +1,56 @@
 """
-Tor TLS post-quantum readiness from the Network Health Margot scanner.
+Tor TLS post-quantum readiness from the Margot ``tls-ciphers`` scan.
 
-Margot's ``tls-ciphers`` command (branch ``ahf/tls-ciphers-scanner``) probes
-each relay and writes ``cipher_suites.csv``:
-
-    nickname;rsa_id;ed25519_id;weight_status;weight;connected;address;cipher_suite;key_exchange_group
-
-The ``weight`` value already contains a semicolon (``measured;100``), which is
-why the header has nine columns and the success format string has eight
-placeholders. A relay whose handshake did not complete is still a row, with
-``connected`` false and empty cipher and group fields.
-
-Alexander Færøy publishes the runs at https://ahf.me/tor-tls-pqc/<date>/.
-Those pages are HTML tables (nickname, fingerprint, cipher suite, group).
-Checked copies (2026-02-26, 2026-03-01, 2026-06-18) have no JSON or CSV
-sibling. This module parses the CSV when a URL serves one, and otherwise
-parses that HTML table. The published date in the page URL is the scan time;
-the HTML does not include a clock time.
-
-A fingerprint that is absent from the scan is "not in this scan". That is a
-different state from a row whose group is empty, and from a row that
-negotiated a group other than X25519MLKEM768. Onionoo does not publish the
-negotiated group, and a Tor version of 0.4.8.17 or later is not evidence:
-that version negotiates X25519MLKEM768 only when it is built against OpenSSL
-3.5.0 or later. LibreSSL 4.3.0 implements the group, and current Tor does
-not use it (tpo/core/tor#41300).
+The command writes ``cipher_suites.csv`` (semicolon-separated; the weight
+column itself contains a semicolon). ahf.me publishes HTML tables only, at
+``/tor-tls-pqc/<date>/``. This module parses whichever of those a URL returns.
+The date in the URL is the scan time. A missing fingerprint is "not in this
+scan". A Tor version string is not evidence of X25519MLKEM768.
 """
 
 import csv
 import io
 import re
-from collections import Counter
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 PQC_GROUP = "X25519MLKEM768"
 SCHEMA_VERSION = 1
 
-ANSWER_SAW = "Saw X25519MLKEM768"
-ANSWER_OTHER = "Did not see X25519MLKEM768"
-ANSWER_NO_GROUP = "No negotiated group"
-ANSWER_NOT_IN_SCAN = "not in this scan"
-
 STATUS_SAW = "saw"
 STATUS_OTHER = "other"
 STATUS_NO_GROUP = "no_group"
 STATUS_NOT_IN_SCAN = "not_in_scan"
+ANSWERS = {
+    STATUS_SAW: "Saw X25519MLKEM768",
+    STATUS_OTHER: "Did not see X25519MLKEM768",
+    STATUS_NO_GROUP: "No negotiated group",
+    STATUS_NOT_IN_SCAN: "not in this scan",
+}
 
 DEFAULT_INDEX_URL = "https://ahf.me/tor-tls-pqc/"
-FORUM_URL = (
-    "https://forum.torproject.org/t/"
-    "tor-relays-post-quantum-cryptography-in-tors-tls-layer-help-needed/21288"
-)
-MARGOT_URL = "https://gitlab.torproject.org/tpo/network-health/margot"
-MARGOT_BRANCH_URL = (
-    "https://gitlab.torproject.org/ahf/margot/-/tree/ahf/tls-ciphers-scanner"
-)
 LIBRESSL_ISSUE_URL = "https://gitlab.torproject.org/tpo/core/tor/-/issues/41300"
-
 GUIDANCE_TEXT = (
     "Tor 0.4.8.17 and later can negotiate X25519MLKEM768 when that build uses "
     "OpenSSL 3.5.0 or later. LibreSSL 4.3.0 implements ML-KEM-768; current Tor "
     "does not use the LibreSSL group."
 )
 
-HTML_ARTIFACT_NOTE = (
-    "Margot's tls-ciphers command writes cipher_suites.csv "
-    "(nickname;rsa_id;ed25519_id;weight_status;weight;connected;address;"
-    "cipher_suite;key_exchange_group). The scans published at ahf.me are HTML "
-    "tables of nickname, fingerprint, cipher suite, and key-exchange group, "
-    "with no JSON or CSV sibling."
-)
-CSV_ARTIFACT_NOTE = (
-    "Parsed from the semicolon-separated cipher_suites.csv written by "
-    "Margot's tls-ciphers command."
-)
-
-_CSV_HEADER_MARKERS = ("rsa_id", "key_exchange_group")
 _FP_RE = re.compile(r"^[A-F0-9]{40}$")
 _DATE_RE = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 _HREF_RE = re.compile(r"""href\s*=\s*(["'])?(?P<href>[^"'>\s]+)""", re.I)
-_TITLE_DATE_RE = re.compile(
-    r"<title[^>]*>\s*(20\d{2}-\d{2}-\d{2})", re.I)
-_H1_DATE_RE = re.compile(r"<h1[^>]*>\s*(20\d{2}-\d{2}-\d{2})", re.I)
+_HEAD_DATE_RE = re.compile(
+    r"<(?:title|h1)[^>]*>\s*(20\d{2}-\d{2}-\d{2})", re.I)
 _EMPTY_TOKENS = frozenset(("", "N/A"))
-_OPERATOR_LIST_LIMIT = 12
-
-_ROLE_FLAGS = (
-    ("guard", "Guard"),
-    ("exit", "Exit"),
-    ("authority", "Authority"),
-)
+_HEADER_ALIASES = {
+    "nickname": "nickname",
+    "fingerprint": "fingerprint",
+    "rsaid": "fingerprint",
+    "ciphersuite": "cipher",
+    "group": "group",
+    "keyexchangegroup": "group",
+    "connected": "connected",
+}
 
 
 def normalize_fingerprint(value):
@@ -123,27 +83,8 @@ def _scan_time_from_url(url):
 
 
 def _scan_time_from_html(text):
-    head = text[:4000]
-    for pattern in (_TITLE_DATE_RE, _H1_DATE_RE):
-        match = pattern.search(head)
-        if match:
-            return match.group(1)
-    return ""
-
-
-def _percent(part, whole):
-    if not whole:
-        return None
-    return round((100.0 * part) / float(whole), 1)
-
-
-def _consensus_weight(relay):
-    value = relay.get("consensus_weight")
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return 0
-    if value < 0:
-        return 0
-    return int(value)
+    match = _HEAD_DATE_RE.search(text[:4000])
+    return match.group(1) if match else ""
 
 
 class _TableCollector(HTMLParser):
@@ -198,11 +139,9 @@ class _TableCollector(HTMLParser):
 def _header_map(row):
     mapping = {}
     for index, cell in enumerate(row):
-        key = _header_key(cell)
-        if key in ("nickname", "fingerprint", "ciphersuite", "group", "keyexchangegroup"):
-            mapping[key] = index
-    if "group" not in mapping and "keyexchangegroup" in mapping:
-        mapping["group"] = mapping["keyexchangegroup"]
+        name = _HEADER_ALIASES.get(_header_key(cell))
+        if name and name not in mapping:
+            mapping[name] = index
     return mapping
 
 
@@ -252,19 +191,12 @@ def _remember_row(relays, fingerprint, nickname, cipher, group, connected):
 
 
 def _document(relays, url, artifact, scan_time):
-    if artifact == "csv":
-        note = CSV_ARTIFACT_NOTE
-    else:
-        note = HTML_ARTIFACT_NOTE
-    if not scan_time:
-        scan_time = "unknown"
     return {
         "schema": SCHEMA_VERSION,
         "artifact": artifact,
         "source_url": url or "",
         "index_url": "",
-        "scan_time": scan_time,
-        "artifact_note": note,
+        "scan_time": scan_time or "unknown",
         "relays": relays,
     }
 
@@ -277,14 +209,9 @@ def validate_tls_pqc_document(data):
         return False
     if data.get("artifact") not in ("html", "csv"):
         return False
-    scan_time = data.get("scan_time")
-    source_url = data.get("source_url")
-    note = data.get("artifact_note")
-    if not isinstance(scan_time, str) or not scan_time:
+    if not isinstance(data.get("scan_time"), str) or not data.get("scan_time"):
         return False
-    if not isinstance(source_url, str) or not source_url:
-        return False
-    if not isinstance(note, str) or not note:
+    if not isinstance(data.get("source_url"), str) or not data.get("source_url"):
         return False
     relays = data.get("relays")
     if not isinstance(relays, dict):
@@ -300,9 +227,6 @@ def validate_tls_pqc_document(data):
             return False
         if "connected" in row and not isinstance(row.get("connected"), bool):
             return False
-        nickname = row.get("nickname", "")
-        if nickname is not None and not isinstance(nickname, str):
-            return False
     return True
 
 
@@ -310,7 +234,7 @@ def _looks_like_csv(text):
     for line in text.lstrip("\ufeff").splitlines():
         if line.strip():
             folded = line.lower().replace(" ", "")
-            return all(marker in folded for marker in _CSV_HEADER_MARKERS)
+            return "rsa_id" in folded and "key_exchange_group" in folded
     return False
 
 
@@ -334,43 +258,25 @@ def parse_csv_scan(text, url):
     except StopIteration:
         raise ValueError("TLS PQC CSV is empty")
     mapping = _header_map(header)
-    fingerprint_index = mapping.get("fingerprint")
-    if fingerprint_index is None:
-        for index, cell in enumerate(header):
-            if _header_key(cell) in ("rsaid", "rsa_id", "fingerprint"):
-                fingerprint_index = index
-                break
-    group_index = mapping.get("group")
-    if fingerprint_index is None or group_index is None:
+    if "fingerprint" not in mapping or "group" not in mapping:
         raise ValueError("TLS PQC CSV header has no fingerprint and group columns")
-    cipher_index = mapping.get("ciphersuite")
-    nickname_index = mapping.get("nickname")
-    connected_index = None
-    for index, cell in enumerate(header):
-        if _header_key(cell) == "connected":
-            connected_index = index
-            break
     relays = {}
+    connected_index = mapping.get("connected")
     for row in reader:
         if not any(cell.strip() for cell in row):
             continue
-        fingerprint = normalize_fingerprint(_cell(row, fingerprint_index))
+        fingerprint = normalize_fingerprint(_cell(row, mapping["fingerprint"]))
         if not fingerprint:
             continue
         connected = None
-        if connected_index is not None and connected_index < len(row):
-            flag = row[connected_index].strip().lower()
-            if flag in ("true", "1", "yes"):
-                connected = True
-            elif flag in ("false", "0", "no"):
-                connected = False
+        flag = _cell(row, connected_index).lower()
+        if flag in ("true", "1", "yes"):
+            connected = True
+        elif flag in ("false", "0", "no"):
+            connected = False
         _remember_row(
-            relays,
-            fingerprint,
-            _cell(row, nickname_index),
-            _cell(row, cipher_index),
-            _cell(row, group_index),
-            connected,
+            relays, fingerprint, _cell(row, mapping.get("nickname")),
+            _cell(row, mapping.get("cipher")), _cell(row, mapping["group"]), connected,
         )
     return _document(relays, url, "csv", _scan_time_from_url(url))
 
@@ -394,12 +300,8 @@ def parse_html_scan(text, url):
         if not fingerprint:
             continue
         _remember_row(
-            relays,
-            fingerprint,
-            _cell(row, mapping.get("nickname")),
-            _cell(row, mapping.get("ciphersuite")),
-            _cell(row, mapping.get("group")),
-            None,
+            relays, fingerprint, _cell(row, mapping.get("nickname")),
+            _cell(row, mapping.get("cipher")), _cell(row, mapping.get("group")), None,
         )
     scan_time = _scan_time_from_url(url) or _scan_time_from_html(text)
     return _document(relays, url, "html", scan_time)
@@ -485,16 +387,6 @@ def classify_scan_row(row):
     return STATUS_OTHER, group, cipher
 
 
-def answer_for(status):
-    if status == STATUS_SAW:
-        return ANSWER_SAW
-    if status == STATUS_OTHER:
-        return ANSWER_OTHER
-    if status == STATUS_NO_GROUP:
-        return ANSWER_NO_GROUP
-    return ANSWER_NOT_IN_SCAN
-
-
 def _lookup_row(document, fingerprint):
     relays = document.get("relays") or {}
     normalized = normalize_fingerprint(fingerprint or "")
@@ -516,206 +408,10 @@ def attach_tls_pqc_to_relays(relays, document):
     for relay in relays:
         status, group, cipher = classify_scan_row(
             _lookup_row(document, relay.get("fingerprint")))
-        if status == STATUS_SAW:
-            saw = True
-        elif status == STATUS_OTHER:
-            saw = False
-        else:
-            saw = None
         relay["tls_pqc_status"] = status
-        relay["tls_pqc_answer"] = answer_for(status)
+        relay["tls_pqc_answer"] = ANSWERS[status]
         relay["tls_pqc_group"] = group
         relay["tls_pqc_cipher"] = cipher
-        relay["tls_pqc_saw_x25519mlkem768"] = saw
         relay["tls_pqc_scan_time"] = scan_time
         relay["tls_pqc_scan_url"] = scan_url
-        relay["tls_pqc_in_scan"] = status != STATUS_NOT_IN_SCAN
     return True
-
-
-def _empty_counts():
-    return {
-        STATUS_SAW: 0,
-        STATUS_OTHER: 0,
-        STATUS_NO_GROUP: 0,
-        STATUS_NOT_IN_SCAN: 0,
-    }
-
-
-def _role_metrics(prefix, counts):
-    observed = counts[STATUS_SAW] + counts[STATUS_OTHER]
-    total = observed + counts[STATUS_NO_GROUP] + counts[STATUS_NOT_IN_SCAN]
-    return {
-        "tls_pqc_%s_saw" % prefix: counts[STATUS_SAW],
-        "tls_pqc_%s_other" % prefix: counts[STATUS_OTHER],
-        "tls_pqc_%s_no_group" % prefix: counts[STATUS_NO_GROUP],
-        "tls_pqc_%s_not_in_scan" % prefix: counts[STATUS_NOT_IN_SCAN],
-        "tls_pqc_%s_observed" % prefix: observed,
-        "tls_pqc_%s_total" % prefix: total,
-    }
-
-
-def empty_network_metrics():
-    """Dashboard keys for a run with no usable scan. Counts are zero, not a percentage."""
-    metrics = {
-        "tls_pqc_available": False,
-        "tls_pqc_scan_time": "",
-        "tls_pqc_scan_url": "",
-        "tls_pqc_index_url": "",
-        "tls_pqc_artifact": "",
-        "tls_pqc_artifact_note": "",
-        "tls_pqc_saw": 0,
-        "tls_pqc_other": 0,
-        "tls_pqc_no_group": 0,
-        "tls_pqc_not_in_scan": 0,
-        "tls_pqc_observed": 0,
-        "tls_pqc_in_scan": 0,
-        "tls_pqc_consensus": 0,
-        "tls_pqc_scan_rows": 0,
-        "tls_pqc_observed_percentage": None,
-        "tls_pqc_weight_saw_percentage": None,
-        "tls_pqc_weight_other_percentage": None,
-        "tls_pqc_weight_no_group_percentage": None,
-        "tls_pqc_weight_not_in_scan_percentage": None,
-        "tls_pqc_groups": [],
-    }
-    for prefix, _flag in _ROLE_FLAGS:
-        metrics.update(_role_metrics(prefix, _empty_counts()))
-    return metrics
-
-
-def network_tls_metrics(relays, document):
-    """Join the scan to the current consensus. Authority totals come from that join.
-
-    Relays with the Authority flag are the denominator. The numerator is how
-    many of those fingerprints the scan recorded as X25519MLKEM768. Authorities
-    absent from the scan stay in ``tls_pqc_authority_not_in_scan``.
-    """
-    metrics = empty_network_metrics()
-    if not validate_tls_pqc_document(document):
-        return metrics
-    counts = _empty_counts()
-    weights = _empty_counts()
-    roles = {prefix: _empty_counts() for prefix, _flag in _ROLE_FLAGS}
-    groups = Counter()
-    for relay in relays or []:
-        status, group, _cipher = classify_scan_row(
-            _lookup_row(document, relay.get("fingerprint")))
-        counts[status] += 1
-        weights[status] += _consensus_weight(relay)
-        flags = relay.get("flags") or []
-        for prefix, flag in _ROLE_FLAGS:
-            if flag in flags:
-                roles[prefix][status] += 1
-        if status == STATUS_SAW:
-            groups[PQC_GROUP] += 1
-        elif status == STATUS_OTHER and group:
-            groups[group] += 1
-    observed = counts[STATUS_SAW] + counts[STATUS_OTHER]
-    in_scan = observed + counts[STATUS_NO_GROUP]
-    consensus = in_scan + counts[STATUS_NOT_IN_SCAN]
-    total_weight = sum(weights.values())
-    metrics.update({
-        "tls_pqc_available": True,
-        "tls_pqc_scan_time": document.get("scan_time") or "",
-        "tls_pqc_scan_url": document.get("source_url") or "",
-        "tls_pqc_index_url": document.get("index_url") or "",
-        "tls_pqc_artifact": document.get("artifact") or "",
-        "tls_pqc_artifact_note": document.get("artifact_note") or "",
-        "tls_pqc_saw": counts[STATUS_SAW],
-        "tls_pqc_other": counts[STATUS_OTHER],
-        "tls_pqc_no_group": counts[STATUS_NO_GROUP],
-        "tls_pqc_not_in_scan": counts[STATUS_NOT_IN_SCAN],
-        "tls_pqc_observed": observed,
-        "tls_pqc_in_scan": in_scan,
-        "tls_pqc_consensus": consensus,
-        "tls_pqc_scan_rows": len(document.get("relays") or {}),
-        "tls_pqc_observed_percentage": _percent(counts[STATUS_SAW], observed),
-        "tls_pqc_weight_saw_percentage": _percent(weights[STATUS_SAW], total_weight),
-        "tls_pqc_weight_other_percentage": _percent(weights[STATUS_OTHER], total_weight),
-        "tls_pqc_weight_no_group_percentage": _percent(weights[STATUS_NO_GROUP], total_weight),
-        "tls_pqc_weight_not_in_scan_percentage": _percent(
-            weights[STATUS_NOT_IN_SCAN], total_weight),
-        "tls_pqc_groups": [
-            {"name": name, "count": count} for name, count in groups.most_common()
-        ],
-    })
-    for prefix, _flag in _ROLE_FLAGS:
-        metrics.update(_role_metrics(prefix, roles[prefix]))
-    return metrics
-
-
-def _operator_entry(relay):
-    return {
-        "nickname": relay.get("nickname") or relay.get("fingerprint") or "",
-        "fingerprint": relay.get("fingerprint") or "",
-        "group": relay.get("tls_pqc_group") or "",
-        "cipher": relay.get("tls_pqc_cipher") or "",
-    }
-
-
-def _cap_entries(relays):
-    ordered = sorted(
-        relays,
-        key=lambda relay: (
-            (relay.get("nickname") or "").lower(),
-            relay.get("fingerprint") or "",
-        ),
-    )
-    shown = [_operator_entry(relay) for relay in ordered[:_OPERATOR_LIST_LIMIT]]
-    return shown, max(0, len(ordered) - len(shown))
-
-
-def operator_tls_summary(members):
-    """Per-operator counts from relay fields set by ``attach_tls_pqc_to_relays``.
-
-    Relays with no scan fields are left out of the counts. They are not
-    reported as "not in this scan": that phrase is only for a fingerprint the
-    loaded scan did not contain.
-    """
-    tagged = [relay for relay in members or [] if relay.get("tls_pqc_status")]
-    if not tagged:
-        return {"available": False}
-    buckets = {
-        STATUS_SAW: [],
-        STATUS_OTHER: [],
-        STATUS_NO_GROUP: [],
-        STATUS_NOT_IN_SCAN: [],
-    }
-    weights = _empty_counts()
-    for relay in tagged:
-        status = relay.get("tls_pqc_status")
-        if status not in buckets:
-            continue
-        buckets[status].append(relay)
-        weights[status] += _consensus_weight(relay)
-    observed_weight = weights[STATUS_SAW] + weights[STATUS_OTHER]
-    total_weight = observed_weight + weights[STATUS_NO_GROUP] + weights[STATUS_NOT_IN_SCAN]
-    observed = len(buckets[STATUS_SAW]) + len(buckets[STATUS_OTHER])
-    other_relays, other_more = _cap_entries(buckets[STATUS_OTHER])
-    no_group_relays, no_group_more = _cap_entries(buckets[STATUS_NO_GROUP])
-    absent_relays, absent_more = _cap_entries(buckets[STATUS_NOT_IN_SCAN])
-    saw = len(buckets[STATUS_SAW])
-    other = len(buckets[STATUS_OTHER])
-    return {
-        "available": True,
-        "scan_time": tagged[0].get("tls_pqc_scan_time") or "",
-        "scan_url": tagged[0].get("tls_pqc_scan_url") or "",
-        "saw": saw,
-        "other": other,
-        "no_group": len(buckets[STATUS_NO_GROUP]),
-        "not_in_scan": len(buckets[STATUS_NOT_IN_SCAN]),
-        "observed": observed,
-        "total": len(tagged),
-        "observed_percent": _percent(saw, observed),
-        "weight_observed_percent": _percent(weights[STATUS_SAW], observed_weight),
-        "weight_share_percent": _percent(weights[STATUS_SAW], total_weight),
-        "other_relays": other_relays,
-        "other_more": other_more,
-        "no_group_relays": no_group_relays,
-        "no_group_more": no_group_more,
-        "absent_relays": absent_relays,
-        "absent_more": absent_more,
-        "guidance_text": GUIDANCE_TEXT if other else "",
-        "guidance_url": LIBRESSL_ISSUE_URL if other else "",
-    }

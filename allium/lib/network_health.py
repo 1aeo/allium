@@ -116,14 +116,7 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_not_ready_relays', 'hf_total_validated_operators',
         'hf_family_cert_count', 'hf_family_no_cert_count',
         # EXIT DNS HEALTH metrics
-        'tls_pqc_saw', 'tls_pqc_other', 'tls_pqc_no_group', 'tls_pqc_not_in_scan',
-        'tls_pqc_observed', 'tls_pqc_in_scan', 'tls_pqc_consensus', 'tls_pqc_scan_rows',
-        'tls_pqc_guard_saw', 'tls_pqc_guard_other', 'tls_pqc_guard_no_group',
-        'tls_pqc_guard_not_in_scan', 'tls_pqc_guard_observed', 'tls_pqc_guard_total',
-        'tls_pqc_exit_saw', 'tls_pqc_exit_other', 'tls_pqc_exit_no_group',
-        'tls_pqc_exit_not_in_scan', 'tls_pqc_exit_observed', 'tls_pqc_exit_total',
-        'tls_pqc_authority_saw', 'tls_pqc_authority_other', 'tls_pqc_authority_no_group',
-        'tls_pqc_authority_not_in_scan', 'tls_pqc_authority_observed', 'tls_pqc_authority_total',
+        'tls_pqc_saw', 'tls_pqc_other', 'tls_pqc_not_in_scan',
         'exit_dns_health_tested', 'exit_dns_health_success', 'exit_dns_health_fail',
         'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
         'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
@@ -180,9 +173,7 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
         'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
         'exit_dns_health_resolver_unknown_percentage',
-        'tls_pqc_observed_percentage', 'tls_pqc_weight_saw_percentage',
-        'tls_pqc_weight_other_percentage', 'tls_pqc_weight_no_group_percentage',
-        'tls_pqc_weight_not_in_scan_percentage',
+        'tls_pqc_weight_saw_percentage',
     ]
 
     # Add 1_month period formatting keys (used directly in templates) 
@@ -539,22 +530,6 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
         health_metrics.update(fallback)
 
 
-def _integrate_tls_pqc(health_metrics, relay_set):
-    """Join the Margot TLS scan to relays currently in the consensus.
-
-    Directory-authority counts are that join. A fingerprint the scan does not
-    contain is counted as not in this scan, which is not a failed handshake.
-    """
-    try:
-        from .tls_pqc import network_tls_metrics
-        health_metrics.update(network_tls_metrics(
-            relay_set.json.get('relays') or [],
-            getattr(relay_set, 'tls_pqc_data', None)))
-    except Exception:
-        from .tls_pqc import empty_network_metrics
-        health_metrics.update(empty_network_metrics())
-
-
 def _integrate_exit_dns_health(health_metrics, relay_set):
     """Integrate Exit DNS Health metrics into health dashboard.
 
@@ -844,6 +819,10 @@ def calculate_network_health_metrics(relay_set):
     family_cert_count = 0       # relays with family-cert in descriptors
     family_no_cert_count = 0    # relays seen in descriptors but no family-cert
     operator_desc_counts = {}   # aroi_domain -> {'cert': N, 'seen': N}
+    # Margot TLS scan, counted in this same pass. Status is attached beforehand.
+    pqc_saw = pqc_other = pqc_absent = pqc_authority_saw = 0
+    pqc_weight_saw = 0
+    pqc_scan_time = pqc_scan_url = ""
     
     # SINGLE LOOP - calculate everything at once
     for relay in relay_set.json['relays']:
@@ -1004,6 +983,20 @@ def calculate_network_health_metrics(relay_set):
         total_bandwidth += bandwidth
         advertised_bandwidth = relay.get('advertised_bandwidth', 0)
         total_consensus_weight += consensus_weight
+        pqc_status = relay.get('tls_pqc_status')
+        if pqc_status:
+            if not pqc_scan_time:
+                pqc_scan_time = relay.get('tls_pqc_scan_time') or ""
+                pqc_scan_url = relay.get('tls_pqc_scan_url') or ""
+            if pqc_status == 'saw':
+                pqc_saw += 1
+                pqc_weight_saw += consensus_weight
+                if is_authority:
+                    pqc_authority_saw += 1
+            elif pqc_status == 'other':
+                pqc_other += 1
+            elif pqc_status == 'not_in_scan':
+                pqc_absent += 1
         
         if bandwidth > 0 and advertised_bandwidth > 0:
             diff = abs(bandwidth - advertised_bandwidth)
@@ -1450,7 +1443,16 @@ def calculate_network_health_metrics(relay_set):
         'not_recommended_percentage': _pct(not_recommended_count, total_relays_count),
         'experimental_percentage': _pct(experimental_count, total_relays_count),
         'obsolete_percentage': _pct(obsolete_count, total_relays_count),
-        'outdated_percentage': _pct(outdated_count, total_relays_count)
+        'outdated_percentage': _pct(outdated_count, total_relays_count),
+        # Authority denominator is authorities_count from this same loop.
+        'tls_pqc_available': bool(pqc_scan_time),
+        'tls_pqc_scan_time': pqc_scan_time,
+        'tls_pqc_scan_url': pqc_scan_url,
+        'tls_pqc_saw': pqc_saw,
+        'tls_pqc_other': pqc_other,
+        'tls_pqc_not_in_scan': pqc_absent,
+        'tls_pqc_authority_saw': pqc_authority_saw,
+        'tls_pqc_weight_saw_percentage': _pct(pqc_weight_saw, total_consensus_weight),
     })
     health_metrics['obsolete_operator_top'], health_metrics['obsolete_operators'] = (
         _rank_obsolete_operators(
@@ -1683,9 +1685,6 @@ def calculate_network_health_metrics(relay_set):
 
     # === EXIT DNS HEALTH METRICS ===
     _integrate_exit_dns_health(health_metrics, relay_set)
-
-    # === TLS PQC (Margot scanner; not inferred from the Tor version string) ===
-    _integrate_tls_pqc(health_metrics, relay_set)
 
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
     # DA readiness, family-cert counts, and operator_desc_counts were all

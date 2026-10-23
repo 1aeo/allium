@@ -162,6 +162,13 @@ class Relays:
                 or collector_consensus_data.get('votes')
             )
 
+        # TLS scan fields must exist before the health loop counts them.
+        if tls_pqc_data and self.json.get('relays'):
+            try:
+                self._attach_tls_pqc_data()
+            except Exception as e:
+                print(f"Warning: TLS PQC scan processing failed ({e}), continuing without PQC data")
+
         # Steps 8-10: Uptime processing → regenerate leaderboards + health
         if uptime_data:
             self._reprocess_uptime_data()
@@ -188,14 +195,6 @@ class Relays:
         # Step 13.5: Set per-relay family support type and cache descriptor sets
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
-
-        # TLS PQC scan (before precompute: contact pages read the per-relay fields).
-        # A missing fingerprint is "not in this scan", which is not a failed relay.
-        if tls_pqc_data and self.json.get('relays'):
-            try:
-                self._attach_tls_pqc_data()
-            except Exception as e:
-                print(f"Warning: TLS PQC scan processing failed ({e}), continuing without PQC data")
 
         # Step 14: Exit DNS Health enrichment (before precompute since contact pages read relay fields)
         if exit_dns_health_data and self.json.get('relays'):

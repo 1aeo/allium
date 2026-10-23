@@ -808,7 +808,7 @@ Network Health Dashboard
                         <span class="metric-label">not in this scan</span>
                     </div>
                     <div class="metric-item" title="Directory authorities in this consensus. Both numbers join the Authority flag to this scan.">
-                        <span class="metric-value">{% if pqc.tls_pqc_authority_total %}{{ pqc.tls_pqc_authority_saw }} of {{ pqc.tls_pqc_authority_total }}{% else %}0{% endif %}</span>
+                        <span class="metric-value">{% if pqc.authorities_count %}{{ pqc.tls_pqc_authority_saw }} of {{ pqc.authorities_count }}{% else %}0{% endif %}</span>
                         <span class="metric-label">Authorities</span>
                     </div>
                     <div class="metric-item" title="Relays whose scan negotiated a different key-exchange group.">

@@ -6,20 +6,22 @@ from unittest.mock import patch
 
 import pytest
 
+from types import SimpleNamespace
+
 from allium.lib import workers
+from allium.lib.operator_analysis import compute_contact_display_data
 from allium.lib.page_context import StandardTemplateContexts
 from allium.lib.page_writer import write_misc, write_pages_by_key, write_relay_info
 from allium.lib.relays import Relays
 from allium.lib.tls_pqc import (
-    ANSWER_NOT_IN_SCAN,
-    ANSWER_OTHER,
-    ANSWER_SAW,
+    ANSWERS,
     PQC_GROUP,
+    STATUS_NOT_IN_SCAN,
+    STATUS_OTHER,
+    STATUS_SAW,
     attach_tls_pqc_to_relays,
     latest_scan_url,
     load_tls_pqc_scan,
-    network_tls_metrics,
-    operator_tls_summary,
     parse_csv_scan,
     parse_html_scan,
     parse_scan_payload,
@@ -42,6 +44,18 @@ SCAN_URL = "https://ahf.me/tor-tls-pqc/2026-06-18/"
 
 def _read(name):
     return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def _health(relays, document):
+    relay_set = Relays(
+        output_dir="/tmp/tls-pqc-test",
+        onionoo_url="https://onionoo.example.invalid/details",
+        relay_data={"version": "8.0", "relays_published": PUBLISHED, "relays": relays},
+        filter_downtime_days=7,
+        mp_workers=0,
+    )
+    relay_set.enrich_with_api_data(tls_pqc_data=document)
+    return relay_set.json["network_health"]
 
 
 def _relay(fingerprint, nickname, flags, weight, version="0.4.8.17"):
@@ -73,8 +87,6 @@ def test_html_fixture_matches_the_published_table():
     assert validate_tls_pqc_document(document)
     assert document["artifact"] == "html"
     assert document["scan_time"] == "2026-06-18"
-    assert "HTML tables" in document["artifact_note"]
-    assert "cipher_suites.csv" in document["artifact_note"]
     assert document["relays"][SAW]["key_exchange_group"] == PQC_GROUP
     assert document["relays"][SAW]["cipher_suite"] == "TLS13_AES_256_GCM_SHA384"
     assert document["relays"][SAW]["nickname"] == "lisdex"
@@ -96,7 +108,6 @@ def test_csv_fixture_is_the_margot_scanner_file():
     document = parse_csv_scan(_read("cipher_suites.csv"), SCAN_URL + "cipher_suites.csv")
     assert document["artifact"] == "csv"
     assert document["scan_time"] == "2026-06-18"
-    assert "tls-ciphers" in document["artifact_note"]
     relays = document["relays"]
     assert relays[SAW]["key_exchange_group"] == PQC_GROUP
     assert relays[SAW]["connected"] is True
@@ -159,45 +170,26 @@ def test_missing_fingerprint_is_not_in_this_scan_and_version_is_ignored():
     ]
     assert attach_tls_pqc_to_relays(relays, document) is True
     by_fp = {relay["fingerprint"]: relay for relay in relays}
-    assert by_fp[SAW]["tls_pqc_answer"] == ANSWER_SAW
-    assert by_fp[SAW]["tls_pqc_saw_x25519mlkem768"] is True
+    assert by_fp[SAW]["tls_pqc_status"] == STATUS_SAW
+    assert by_fp[SAW]["tls_pqc_answer"] == ANSWERS[STATUS_SAW]
     # 0.4.8.17 negotiated X25519. The version string does not override the scan.
-    assert by_fp[OTHER]["tls_pqc_answer"] == ANSWER_OTHER
+    assert by_fp[OTHER]["tls_pqc_status"] == STATUS_OTHER
     assert by_fp[OTHER]["tls_pqc_group"] == "X25519"
-    assert by_fp[OTHER]["tls_pqc_saw_x25519mlkem768"] is False
     assert by_fp[EMPTY]["tls_pqc_status"] == "no_group"
-    assert by_fp[EMPTY]["tls_pqc_saw_x25519mlkem768"] is None
-    assert by_fp[EMPTY]["tls_pqc_in_scan"] is True
     # A new Tor version that the scan did not list is still absent.
-    assert by_fp[ABSENT]["tls_pqc_answer"] == ANSWER_NOT_IN_SCAN
-    assert by_fp[ABSENT]["tls_pqc_saw_x25519mlkem768"] is None
-    assert by_fp[ABSENT]["tls_pqc_in_scan"] is False
+    assert by_fp[ABSENT]["tls_pqc_answer"] == ANSWERS[STATUS_NOT_IN_SCAN]
     assert by_fp[ABSENT]["version"] == "0.4.9.3"
 
-    metrics = network_tls_metrics(relays, document)
+    metrics = _health(relays, document)
     assert metrics["tls_pqc_available"] is True
     assert metrics["tls_pqc_saw"] == 2
     assert metrics["tls_pqc_other"] == 2
-    assert metrics["tls_pqc_no_group"] == 1
     assert metrics["tls_pqc_not_in_scan"] == 1
-    assert metrics["tls_pqc_observed"] == 4
-    assert metrics["tls_pqc_observed_percentage"] == 50.0
-    # 1 of 3 directory authorities, from the Authority flag joined to the scan.
-    assert metrics["tls_pqc_authority_total"] == 3
+    # 1 of 3 directory authorities, the same authority_count this loop already keeps.
+    assert metrics["authorities_count"] == 3
     assert metrics["tls_pqc_authority_saw"] == 1
-    assert metrics["tls_pqc_authority_other"] == 1
-    assert metrics["tls_pqc_authority_not_in_scan"] == 1
-    assert metrics["tls_pqc_guard_saw"] == 1
-    assert metrics["tls_pqc_guard_observed"] == 2
-    assert metrics["tls_pqc_exit_saw"] == 0
-    assert metrics["tls_pqc_exit_other"] == 1
-    # Weights: saw 100+40, other 50+5, no_group 25, absent 10. Total 230.
-    assert metrics["tls_pqc_weight_saw_percentage"] == 60.9
-    assert metrics["tls_pqc_weight_not_in_scan_percentage"] == 4.3
-    names = [group["name"] for group in metrics["tls_pqc_groups"]]
-    assert names[0] == PQC_GROUP
-    assert "X25519" in names
-    assert "secp256r1" in names
+    # Weights: saw 100+40 of 230.
+    assert round(metrics["tls_pqc_weight_saw_percentage"], 1) == 60.9
 
     # A different authority set changes the denominator. Nothing is fixed at 9.
     four = [
@@ -207,11 +199,11 @@ def test_missing_fingerprint_is_not_in_this_scan_and_version_is_ignored():
         _relay("4" * 40, "a4", ["Authority"], 1),
     ]
     scan = parse_csv_scan(_read("cipher_suites.csv"), SCAN_URL + "cipher_suites.csv")
-    joined = network_tls_metrics(four, scan)
-    assert joined["tls_pqc_authority_total"] == 4
+    joined = _health(four, scan)
+    assert joined["authorities_count"] == 4
     assert joined["tls_pqc_authority_saw"] == 0
-    assert joined["tls_pqc_authority_not_in_scan"] == 1
-    assert (joined["tls_pqc_authority_saw"], joined["tls_pqc_authority_total"]) != (5, 9)
+    assert joined["tls_pqc_not_in_scan"] == 1
+    assert (joined["tls_pqc_authority_saw"], joined["authorities_count"]) != (5, 9)
 
 
 def test_operator_summary_separates_other_groups_from_absence():
@@ -222,7 +214,15 @@ def test_operator_summary_separates_other_groups_from_absence():
         _relay(ABSENT, "missing", ["Running"], 20),
     ]
     attach_tls_pqc_to_relays(members, document)
-    summary = operator_tls_summary(members)
+    blank = {key: 0 for key in (
+        "guard_count", "middle_count", "exit_count",
+        "guard_bandwidth", "middle_bandwidth", "exit_bandwidth",
+        "guard_consensus_weight_fraction", "middle_consensus_weight_fraction",
+        "exit_consensus_weight_fraction",
+    )}
+    summary = compute_contact_display_data(
+        blank, "MB/s", None, "h", members, SimpleNamespace(json={}),
+    )["operator_intelligence"]["tls_pqc"]
     assert summary["available"] is True
     assert summary["saw"] == 1
     assert summary["observed"] == 2
@@ -234,7 +234,10 @@ def test_operator_summary_separates_other_groups_from_absence():
     assert "LibreSSL" in summary["guidance_text"]
     assert summary["guidance_url"].endswith("/issues/41300")
     assert summary["weight_observed_percent"] == 80.0
-    assert operator_tls_summary([{"nickname": "untagged"}]) == {"available": False}
+    untagged = compute_contact_display_data(
+        blank, "MB/s", None, "h", [{"nickname": "untagged"}], SimpleNamespace(json={}),
+    )["operator_intelligence"]["tls_pqc"]
+    assert untagged == {"available": False}
 
 
 def test_dashboard_template_does_not_hardcode_directory_authority_counts():
@@ -246,7 +249,7 @@ def test_dashboard_template_does_not_hardcode_directory_authority_counts():
     assert "5 of 9" not in card
     assert "5/9" not in card
     assert "tls_pqc_authority_saw" in card
-    assert "tls_pqc_authority_total" in card
+    assert "authorities_count" in card
     assert "tls_pqc_weight_saw_percentage_formatted" in card
     assert "not in this scan" in card
     assert "tls_pqc_groups" not in card
@@ -296,8 +299,8 @@ def test_pages_show_the_scan_result_and_absence(tmp_path):
     relay_set.enrich_with_api_data(tls_pqc_data=document)
     health = relay_set.json["network_health"]
     assert health["tls_pqc_authority_saw"] == 0
-    assert health["tls_pqc_authority_total"] == 1
-    assert health["tls_pqc_authority_not_in_scan"] == 1
+    assert health["authorities_count"] == 1
+    assert health["tls_pqc_not_in_scan"] == 1
     assert health["tls_pqc_saw"] == 1
     assert health["tls_pqc_other"] == 1
 
@@ -311,20 +314,20 @@ def test_pages_show_the_scan_result_and_absence(tmp_path):
     assert "not in this scan" in dashboard
     assert "5 of 9" not in dashboard
     assert "2026-06-18" in dashboard
-    assert ANSWER_SAW in dashboard or "X25519MLKEM768" in dashboard
+    assert ANSWERS[STATUS_SAW] in dashboard or "X25519MLKEM768" in dashboard
 
     write_relay_info(relay_set)
     saw_page = (tmp_path / "relay" / SAW / "index.html").read_text(encoding="utf-8")
     other_page = (tmp_path / "relay" / OTHER / "index.html").read_text(encoding="utf-8")
     absent_page = (tmp_path / "relay" / ABSENT / "index.html").read_text(encoding="utf-8")
-    assert ANSWER_SAW in saw_page
+    assert ANSWERS[STATUS_SAW] in saw_page
     assert "scan 2026-06-18" in saw_page
-    assert ANSWER_OTHER in other_page
+    assert ANSWERS[STATUS_OTHER] in other_page
     assert "X25519" in other_page
     assert "OpenSSL 3.5.0" in other_page
-    assert ANSWER_NOT_IN_SCAN in absent_page
+    assert ANSWERS[STATUS_NOT_IN_SCAN] in absent_page
     assert "0.4.9.3" in absent_page
-    assert ANSWER_SAW not in absent_page
+    assert ANSWERS[STATUS_SAW] not in absent_page
 
     write_pages_by_key(relay_set, "contact")
     contact_pages = list((tmp_path / "contact").rglob("index.html"))
