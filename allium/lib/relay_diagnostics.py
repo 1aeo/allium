@@ -983,7 +983,7 @@ def _near_phrase(entries: list, format_value, format_bar) -> str:
             groups[rendered] = names = []
             order.append(rendered)
         names.append(name)
-    parts = [f"{_join_names(groups[rendered])} ({rendered[0]} vs {rendered[1]})" for rendered in order]
+    parts = [f"{_join_names(groups[rendered])} ({rendered[0]}, need {rendered[1]})" for rendered in order]
     return parts[0] if len(parts) == 1 else _join_names(parts)
 
 
@@ -1029,29 +1029,40 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
     def rate(value, _threshold):
         return _format_rate(value, use_bits, decimal_places=1)
 
-    # (rows, title, section, subject, requirement name, value formatter, bar formatter, consequence, suggestion)
+    # The Notes box shows title and description only. Say which input, which
+    # authorities, the published bar, and the one thing that can cross it.
+    wfu_text = ('Recent downtime weighs more than older downtime. Avoid restarts '
+                'while it is this close; a short outage can drop the Guard flag.')
+    tk_text = ('This is weighted time, so the day count is shorter than calendar uptime, '
+               'and it falls while the relay is unreachable. Stay reachable so it can move clear of the bar.')
+    bw_text = ("The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
+               'top 25%. A dip in the bandwidth it counts can drop the Guard flag.')
+    # (rows, title, section, subject, value formatter, bar formatter, description tail, suggestion)
     specs = (
-        (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime', 'guard-wfu',
+        (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
          lambda value, threshold: format_wfu_display(value, threshold), _format_wfu_requirement,
-         'Recent downtime counts more than older downtime, so a short outage can move '
-         'WFU across that requirement and drop the Guard flag.', _WFU_MEASURED_SUGGESTION),
-        (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known', 'guard-tk',
+         wfu_text,
+         'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
+         'Restart=always, and watch for OOM kills until each authority has more room above '
+         'its own guard-wfu.'),
+        (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
          lambda value, threshold: format_known_duration(value, threshold=threshold), _format_tk_requirement,
-         "Weighted time-known falls while the relay is unreachable, and crossing that "
-         "authority's guard-tk drops the Guard flag.", _TK_MEASURED_SUGGESTION),
+         tk_text,
+         'Weighted time-known falls while the relay is unreachable and resets if the identity '
+         'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
+         'a few weeks of continuous uptime. Stay up with the same key.'),
         (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
-         'Bandwidth counted for Guard', 'the Guard bandwidth bar', rate,
-         lambda threshold: '≥' + rate(threshold, None),
-         "That bar is AuthDirGuardBWGuarantee, or the authority's top-25% cutoff "
-         'when the cutoff is lower. Measured bandwidth moving across it drops the Guard flag.',
-         'Keep the bandwidth each authority counts above the lower of AuthDirGuardBWGuarantee '
-         "and that authority's top-25% cutoff."),
+         'Bandwidth counted for Guard', rate, lambda threshold: '≥' + rate(threshold, None),
+         bw_text,
+         'The bandwidth that counts is that authority\'s measurement when it has one, otherwise '
+         'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
+         "default) and that authority's top 25%."),
     )
     notes = []
-    for entries, title, section, subject, requirement, format_value, format_bar, consequence, suggestion in specs:
+    for entries, title, section, subject, format_value, format_bar, consequence, suggestion in specs:
         if not entries:
             continue
-        clause = _near_clause(entries, requirement, format_value, format_bar)
+        clause = _near_clause(entries, 'the Guard bar', format_value, format_bar)
         notes.append({
             'severity': 'info', 'category': 'guard', 'title': title, 'section': section,
             'description': f"{subject} is {clause}. {consequence}", 'suggestion': suggestion,

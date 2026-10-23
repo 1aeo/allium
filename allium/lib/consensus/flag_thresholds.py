@@ -103,20 +103,23 @@ GUARD_TK_DEFAULT = 8 * SECONDS_PER_DAY  # 691200 seconds
 # Verified: All 9 voting authorities use 0.98 (98%).
 GUARD_WFU_DEFAULT = 0.98
 
-# Diagnostic slack only: a relay that already has Guard is "near the failing
-# side" of an authority's own threshold when the gap is smaller than this.
-# These margins do not assign the Guard flag.
+# Diagnostic slack only. A relay that already has Guard is near an authority's
+# own bar when the gap is smaller than this. These margins do not assign Guard.
 #
-# WFU: one percentage point around the guard-wfu that authority published
-# (or GUARD_WFU_DEFAULT when the vote omits it).
+# WFU: half a percentage point around the published guard-wfu (or
+# GUARD_WFU_DEFAULT when the vote omits it). A full point would note every
+# relay from the bar up to the next whole percent. Half a point is the room a
+# short, heavily weighted outage can erase.
 # Time known: one day around the published guard-tk. Authorities cap that
-# cutoff at AuthDirVoteGuardGuaranteeTimeKnown (8 days). Client GuardLifetime
-# only limits how long a client keeps a chosen guard; it is not a flag input.
-# Bandwidth: a quarter of the binding bar from guard_bandwidth_requirement,
-# so the band follows a top-25% cutoff that is easier than the 2 MB guarantee.
-GUARD_WFU_NEAR_MARGIN = 0.01
+# cutoff at AuthDirVoteGuardGuaranteeTimeKnown (8 weighted days, roughly a few
+# weeks of continuous uptime). Client GuardLifetime only limits how long a
+# client keeps a chosen guard; it is not a flag input.
+# Bandwidth: a tenth of the easier bar from guard_bandwidth_requirement, so the
+# band follows a top-25% cutoff below the 2 MB guarantee. A quarter of that bar
+# treated relays with real headroom as close.
+GUARD_WFU_NEAR_MARGIN = 0.005
 GUARD_TK_NEAR_MARGIN = SECONDS_PER_DAY
-GUARD_BW_NEAR_FRACTION = 0.25
+GUARD_BW_NEAR_FRACTION = 0.10
 
 # ============================================================================
 # HSDIR FLAG THRESHOLDS

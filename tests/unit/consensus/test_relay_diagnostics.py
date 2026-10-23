@@ -1266,21 +1266,21 @@ class TestFastFlagIssue:
 
 _HOLDING_GUARD = ['Guard', 'Stable', 'Fast', 'V2Dir', 'HSDir', 'Running', 'Valid']
 _WFU_CONSEQUENCE = (
-    'Recent downtime counts more than older downtime, so a short outage can move '
-    'WFU across that requirement and drop the Guard flag.'
+    'Recent downtime weighs more than older downtime. Avoid restarts '
+    'while it is this close; a short outage can drop the Guard flag.'
 )
 _WFU_NEAR = (
-    'Weighted Fractional Uptime is just above guard-wfu at '
-    'bastet and dizum (95.4% vs ≥95%), maatuska (98.4% vs ≥98%) and moria1 (99.4% vs ≥99%). '
+    'Weighted Fractional Uptime is just above the Guard bar at '
+    'bastet and dizum (95.2%, need ≥95%), maatuska (98.2%, need ≥98%) and moria1 (99.2%, need ≥99%). '
     + _WFU_CONSEQUENCE
 )
 _TK_CONSEQUENCE = (
-    "Weighted time-known falls while the relay is unreachable, and crossing that "
-    "authority's guard-tk drops the Guard flag."
+    'This is weighted time, so the day count is shorter than calendar uptime, '
+    'and it falls while the relay is unreachable. Stay reachable so it can move clear of the bar.'
 )
 _BW_CONSEQUENCE = (
-    "That bar is AuthDirGuardBWGuarantee, or the authority's top-25% cutoff "
-    'when the cutoff is lower. Measured bandwidth moving across it drops the Guard flag.'
+    "The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
+    'top 25%. A dip in the bandwidth it counts can drop the Guard flag.'
 )
 
 
@@ -1336,11 +1336,12 @@ class TestGuardNearThreshold:
         details = [
             _guard_detail('bastet', 0.95 + wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.95),
             _guard_detail('dizum', 0.95 + wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.95),
-            # Vote omitted guard-wfu: the 98% dirauth default applies, and 98.4% is near it.
+            # Vote omitted guard-wfu: the 98% dirauth default applies, and this value is inside half a point.
             _guard_detail('maatuska', GUARD_WFU_DEFAULT + wfu_slack, comfortable_tk, comfortable_bw,
                           publish_wfu=False),
-            _guard_detail('moria1', 0.99 + wfu_slack, tk_near, 1_100_000, wfu_threshold=0.99,
-                          top25=1_000_000),
+            _guard_detail('moria1', 0.99 + wfu_slack, tk_near,
+                          1_000_000 + int(1_000_000 * GUARD_BW_NEAR_FRACTION * 0.6),
+                          wfu_threshold=0.99, top25=1_000_000),
             _guard_detail('longclaw', 0.995, 40 * SECONDS_PER_DAY, comfortable_bw),
             _guard_detail('faravahar', 0.999, 40 * SECONDS_PER_DAY, None),
         ]
@@ -1360,20 +1361,20 @@ class TestGuardNearThreshold:
         assert 'faravahar' not in by_title['Guard: WFU near threshold']['description']
         assert by_title['Guard: Time Known near threshold']['section'] == 'flag-guard-time-known'
         assert by_title['Guard: Time Known near threshold']['description'] == (
-            'Time Known is just above guard-tk at moria1 (8.4 days vs ≥8 days). '
+            'Time Known is just above the Guard bar at moria1 (8.4 days, need ≥8 days). '
             + _TK_CONSEQUENCE
         )
         bandwidth = by_title['Guard: bandwidth near threshold']
         assert bandwidth['section'] == 'flag-guard-bandwidth'
         assert bandwidth['description'] == (
-            'Bandwidth counted for Guard is just above the Guard bandwidth bar at '
-            'moria1 (1.1 MB/s vs ≥1.0 MB/s). ' + _BW_CONSEQUENCE
+            'Bandwidth counted for Guard is just above the Guard bar at '
+            'moria1 (1.1 MB/s, need ≥1.0 MB/s). ' + _BW_CONSEQUENCE
         )
         assert '2.1 MB/s' not in bandwidth['description']
 
         bits = _issues_with_guard_details(details, _HOLDING_GUARD, use_bits=True)
         bits_bw = next(issue for issue in bits if issue['title'] == 'Guard: bandwidth near threshold')
-        assert 'moria1 (8.8 Mbit/s vs ≥8.0 Mbit/s)' in bits_bw['description']
+        assert 'moria1 (8.5 Mbit/s, need ≥8.0 Mbit/s)' in bits_bw['description']
 
     def test_comfortably_above_every_published_threshold_has_no_note(self):
         """98.4% WFU and 2.2 MB/s stay quiet when the authority published a lower bar."""
@@ -1414,8 +1415,8 @@ class TestGuardNearThreshold:
         assert [issue['title'] for issue in notes] == ['Guard: WFU near threshold']
         assert notes[0]['severity'] == 'info'
         assert notes[0]['description'] == (
-            'Weighted Fractional Uptime is just above guard-wfu at bastet (95.4% vs ≥95%) '
-            'and just under guard-wfu at moria1 (98.6% vs ≥99%). ' + _WFU_CONSEQUENCE
+            'Weighted Fractional Uptime is just above the Guard bar at bastet (95.2%, need ≥95%) '
+            'and just under the Guard bar at moria1 (98.8%, need ≥99%). ' + _WFU_CONSEQUENCE
         )
 
     def test_guard_already_lost_keeps_majority_failure_text(self):
