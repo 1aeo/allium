@@ -122,6 +122,23 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)][-2:] == [(5, 160), (7, 110)]
 
 
+def test_operator_throughput_falls_through_a_non_positive_interval():
+    # A zero or negative block is not a slot size. It must not hide this relay's shorter history.
+    short = {"1_month": block([10, 10])}
+    bandwidth_map = {
+        "A": history([100, 100], key="6_months"),
+        "Z": {"write_history": {"6_months": block([1, 2], interval=0), **short},
+              "read_history": {"6_months": block([1, 2], interval=0), **short}},
+        "N": {"write_history": {"6_months": block([1, 2], interval=-DAY), "1_month": block([5, 5])},
+              "read_history": {"6_months": block([1, 2], interval=-DAY), "1_month": block([5, 5])}},
+    }
+    (ts, write, _read, interval), summed = operator_throughput(
+        [{"fingerprint": fp} for fp in "AZN"], bandwidth_map, "6_months")
+    assert [relay["fingerprint"] for relay, _traffic in summed] == list("AZN")
+    assert ts == [T0, T0 + timedelta(days=1)] and interval == DAY
+    assert [round(v / MBIT) for v in write] == [115000, 115000]
+
+
 def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():
     # B's first day (Sep 3 noon) is half of the 2-day slot centred on Sep 3: that slot sums A alone.
     bandwidth_map = {"A": history([100] * 3, key="1_year", interval=2 * DAY, first="2026-09-03 00:00:00"),

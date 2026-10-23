@@ -160,6 +160,8 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
                 step = int(write.get("interval") or 0)
             except (TypeError, ValueError):
                 continue  # try the next shorter period; a bad block must not drop the other members
+            if step <= 0:
+                continue  # not a slot size; a shorter history of this relay may still be
             histories.append((k == key, step, write, read, relay))
             break
     own = Counter(step for native, step, *_rest in histories if native)
