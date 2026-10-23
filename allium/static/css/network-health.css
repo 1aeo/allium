@@ -181,6 +181,7 @@
     --chart-box: 1094px;
     --chart-gap: 12px;
     width: min(calc(var(--chart-box) * 2 + var(--chart-gap) + 36px), 100%);
+    min-width: 0;  /* a flex item's default min-width is the chart's 1080px, which scrolls a phone sideways */
     margin-bottom: 7px;
 }
 .network-history:hover { transform: none; }

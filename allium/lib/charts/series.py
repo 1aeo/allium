@@ -148,9 +148,14 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
     for relay in members:
         for k in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:  # this period, then shorter ones
             write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), k)
-            if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
-                histories.append((k == key, int(write.get("interval") or 0), write, read, relay))
-                break
+            if not (write.get("values") and read.get("values") and write.get("interval") == read.get("interval")):
+                continue
+            try:
+                step = int(write.get("interval") or 0)
+            except (TypeError, ValueError):
+                continue  # try the next shorter period; a bad block must not drop the other members
+            histories.append((k == key, step, write, read, relay))
+            break
     own = Counter(step for native, step, *_rest in histories if native)
     if not own:
         return None, []
@@ -160,7 +165,10 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
         on_grid = step and interval % step == 0
         if not on_grid and not (ratios is not None and native):
             continue  # off this period's grid, and not a census member
-        wpts, rpts = (points(block, MBIT, since) for block in (wblock, rblock))
+        try:
+            wpts, rpts = (points(block, MBIT, since) for block in (wblock, rblock))
+        except Exception:  # noqa: BLE001 -- one malformed history must not drop the whole sum
+            continue
         if ratios is not None and native:
             ratio = _census_ratio(wpts, rpts)
             if ratio is not None:
@@ -222,7 +230,12 @@ def network_uptime(relays, uptime_map, key, windows):
         block = section.get(key) or {}
         if len(block.get("values") or ()) < 2:
             continue
-        step = int(block.get("interval") or 0)
+        try:
+            step = int(block.get("interval") or 0)
+        except (TypeError, ValueError):
+            continue  # a block that is not Onionoo's; it must not become the period's interval
+        if step <= 0:
+            continue
         intervals[step] += 1
         rows.append((step, relay, section, block))
     if not intervals:
@@ -232,7 +245,11 @@ def network_uptime(relays, uptime_map, key, windows):
     for step, relay, section, block in rows:
         if step != interval:
             continue
-        for stamp, value in uptime_points(block, key, windows, relay, section).items():
+        try:
+            drawn = uptime_points(block, key, windows, relay, section)
+        except Exception:  # noqa: BLE001 -- one malformed history must not drop the network chart
+            continue
+        for stamp, value in drawn.items():
             totals[stamp] = totals.get(stamp, 0.0) + value
             counts[stamp] = counts.get(stamp, 0) + 1
     busiest = max(counts.values(), default=0)

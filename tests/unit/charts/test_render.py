@@ -12,7 +12,9 @@ from allium.lib.charts.bands import CATALOG, bands_for_role, census_footnote
 from allium.lib.charts.render import (
     CHARTS_DIR, CREDIT, LEFT, PLOT_WIDTH, WIDTH, bandwidth_chart, clear_chart_tree, uptime_chart,
 )
-from allium.lib.charts.svg import BLUE, CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
+from allium.lib.charts.svg import (
+    BLUE, CALLOUT_BG, GREEN, MUTED, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width,
+)
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -675,3 +677,38 @@ def test_a_symlinked_chart_tree_stops_the_build_and_is_not_followed(tmp_path):
     with pytest.raises(OSError, match="symbolic link"):
         clear_chart_tree(str(out))
     assert (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").read_bytes() == b"keep"
+
+
+def test_a_symlinked_network_directory_is_not_followed(tmp_path):
+    """charts/network as a symbolic link is refused; rmtree must not delete the link's target."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "secret").write_text("keep")
+    out = tmp_path / "out"
+    (out / "charts").mkdir(parents=True)
+    (out / "charts" / "network").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(OSError, match="symbolic link"):
+        clear_chart_tree(str(out))
+    assert (elsewhere / "secret").read_text() == "keep"
+
+
+def test_a_file_where_the_network_charts_go_is_removed(tmp_path):
+    """A file named network blocks the chart directory; the build removes that file and nothing else."""
+    (tmp_path / "network").write_text("block")
+    (tmp_path / "keep.txt").write_text("keep")
+    clear_chart_tree(str(tmp_path))
+    assert not (tmp_path / "network").exists()
+    assert (tmp_path / "keep.txt").read_text() == "keep"
+
+
+def test_gbit_spike_callout_sits_on_the_scaled_write_line():
+    """A Gbit/s axis must anchor the spike marker on the scaled write, not the raw Mbit/s value."""
+    ts = [T0 + timedelta(days=i) for i in range(6)]
+    bands = {"role": "network", "peers": "relays", "n": 100, "typical_lo": 0.9, "typical_hi": 1.2,
+             "invest_lo": 0.5, "invest_hi": 2.0}
+    svg = bandwidth_chart(
+        "1m", (ts, [1000, 1000, 1000, 20000, 1000, 1000], [1000] * 6, DAY), 30000, bands, "Tor network",
+        unit="Gbit/s", subject="Whole network", operator=True, footnote="100 relays")
+    leaders = [op for op in svg.ops if op[0] == "line" and op[5] == MUTED and op[6] == 1]
+    assert leaders
+    assert 0 < leaders[0][2] < svg.height

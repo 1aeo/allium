@@ -57,8 +57,10 @@ def clear_chart_tree(output_dir):
     _refuse_symlink(root)
     for kind in ("relay", "contact", "network"):
         path = os.path.join(root, kind)
-        if os.path.exists(path):
-            shutil.rmtree(path)
+        if not os.path.lexists(path):
+            continue
+        _refuse_symlink(path)  # rmtree would follow a linked directory out of the output tree
+        shutil.rmtree(path)
     try:
         os.rmdir(root)
     except OSError:  # missing, or holds something allium did not write
@@ -67,6 +69,8 @@ def clear_chart_tree(output_dir):
     _refuse_symlink(beside)
     if os.path.isdir(beside):
         shutil.rmtree(beside)
+    elif os.path.isfile(beside):  # a stray file would make the chart directory unwritable
+        os.remove(beside)
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -106,12 +110,13 @@ def _footer(svg, panel, period, interval, footnote=""):
     return y + 12
 
 
-def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval):
+def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval, value_scale=1.0):
     """Label the highest of the ``high`` write/read rows (above the role's p98), with its neighbouring slots
     (``interval`` apart), on the throughput lines; ``yhi`` is the top of the write/read strip's scale.
 
     The label sits right of the peak (left when it would not fit, else over it, inside the plot) in the band the
-    y range keeps free under the legend, whose bottom is ``clear_of``.
+    y range keeps free under the legend, whose bottom is ``clear_of``. ``value_scale`` turns the row's Mbit/s
+    into the panel's units (1000 on a Gbit/s axis). 1 leaves a relay chart's coordinates unchanged.
     """
     peak, step = max(high, key=lambda row: row[3]), timedelta(seconds=interval or SECONDS_PER_DAY)
     by_time = {row[0]: row for row in high}
@@ -121,7 +126,8 @@ def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval):
         " / ".join(ratio_text(row[3], yhi, bands["invest_hi"]) for row in run),
         "off the {:.2f} scale".format(yhi) if peak[3] > yhi else "beyond the {} p98".format(bands["role"]),
     )
-    x, y = panel.x(peak[0]), panel.y(peak[1])
+    written = peak[1] if value_scale == 1.0 else peak[1] / value_scale
+    x, y = panel.x(peak[0]), panel.y(written)
     width = text_width(label, 11.5, bold=True) + 14
     right = panel.left + panel.width
     box_x = x + 19 if x + 19 + width <= right else x - 19 - width if x - 19 - width >= panel.left else \
@@ -191,7 +197,7 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
     y += 8 + legend(svg, LEFT + 8, y + 8, [entries + restarted] + ([[("marker", RED, None, overload)]] if overload else []))
     ylo, yhi = RATIO_SCALE_LO, ratio_strip_data_hi(bands) if bands else RATIO_SCALE_HI
     if high:
-        _spike_callout(svg, top, high, yhi, y, period, bands, interval)
+        _spike_callout(svg, top, high, yhi, y, period, bands, interval, 1000.0 if unit == "Gbit/s" else 1.0)
 
     y = _header(svg, "", "Write / read · " + span + role, ratio_sub, top.top + top.height + 8)
     who = subject or ("This operator" if operator else "This relay")
@@ -274,13 +280,14 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average, coun
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
     restarted = _restart_entry(restart, ts)
     y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
+    show_counts = bool(counts) and len(counts) == len(ts)
     panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105, interval=interval)
     panel.yaxis(range(0, 101, 20), "Uptime (%)")
-    panel.xaxis(period, labels=not counts)
+    panel.xaxis(period, labels=not show_counts)
     if restarted:
         panel.vline(restart, PURPLE, 1.4, DASHDOT)
     panel.series(percent, GREEN, 2.2)
-    if not counts:
+    if not show_counts:
         return svg.finish(_footer(svg, panel, period, interval))
     lo, hi = min(counts), max(counts)
     counted = "{:,} relays".format(lo) if lo == hi else "{:,}–{:,} relays".format(lo, hi)

@@ -82,7 +82,11 @@ def test_operator_throughput_sums_members_on_the_common_interval():
         "B": history([10, 20], [10, None]),
         "C": history([5, 5], interval=2 * DAY),  # outvoted interval
     }
-    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D")]
+    bandwidth_map["Z"] = {"write_history": {"1_month": {"values": [1, 2], "interval": "nope", "factor": 1000,
+                                                       "first": "2026-09-01 12:00:00"}},
+                          "read_history": {"1_month": {"values": [1, 2], "interval": "nope", "factor": 1000,
+                                                      "first": "2026-09-01 12:00:00"}}}
+    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D", "Z")]
     (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
     # Each with the traffic it carried on the days summed (write plus read): B only on day 1.
     assert [(r["fingerprint"], round(traffic / MBIT)) for r, traffic in summed] == [("A", 6000), ("B", 20000)]
@@ -158,6 +162,17 @@ def test_network_uptime_averages_the_relays_that_have_the_period():
     quiet = {"A": {"uptime": {"1_month": block([0] * 30, interval=14400, factor=1 / 999.0)}}}
     _ts, percent, _interval, average, counts = network_uptime([relay("A")], quiet, "1_month", {})
     assert percent == [pytest.approx(0.0)] * 30 and average == 0.0 and counts == [1] * 30
+    # A zero interval, or one that is not a number, must not become the period's sampling interval,
+    # and must not drop the relays that do have one.
+    bad = {"uptime": {"1_month": {"first": "2026-09-01 12:00:00", "interval": "nope", "factor": 1 / 999.0,
+                                  "values": [1, 2, 3]}}}
+    zero = {"uptime": {"1_month": block([0, 0], interval=0, factor=1 / 999.0)}}
+    relays = [relay("good"), relay("bad"), relay("zero")]
+    uptime_map = {"good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+                  "bad": bad, "zero": zero}
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
 
 
 def test_network_ratio_bands_uses_the_relay_census_cut():
