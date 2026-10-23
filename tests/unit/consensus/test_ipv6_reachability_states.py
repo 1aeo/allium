@@ -689,6 +689,19 @@ class TestIpv6ReachabilityStates:
         assert source == BW_SOURCE_UNMEASURED
         assert value == 0
 
+    def test_non_dict_flag_thresholds_do_not_abort(self):
+        fetcher = CollectorFetcher()
+        fetcher.flag_thresholds = {'moria1': None, 'Moria1': {'ignoring-advertised-bws': 1}}
+        fetcher.relay_index = {
+            LONE_FP: {'fingerprint': LONE_FP, 'votes': {
+                'moria1': {'flags': ['Running'], 'bandwidth': 50, 'measured': None},
+            }},
+        }
+        raw = fetcher.get_relay_consensus_evaluation(LONE_FP, authority_count=9)
+        assert raw.get('error') is None
+        assert fetcher._authority_thresholds('moria1').get('ignoring-advertised-bws') == 1
+        fetcher._credible_bandwidth('moria1', {'measured': None, 'bandwidth': 50, 'flags': []})
+
 
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):
     """Rendered relay pages: Not tested is its own label, and 0/N stays a failure."""

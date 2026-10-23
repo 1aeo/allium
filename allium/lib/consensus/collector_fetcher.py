@@ -1146,6 +1146,18 @@ class CollectorFetcher:
                     found.add(auth_name)
         return found
 
+    def _authority_thresholds(self, auth_name) -> dict:
+        """Flag thresholds for one authority. A non-dict container or entry is empty."""
+        all_thresholds = self.flag_thresholds if isinstance(self.flag_thresholds, dict) else {}
+        direct = all_thresholds.get(auth_name)
+        if isinstance(direct, dict):
+            return direct
+        key = _authority_key(auth_name)
+        for name, entry in all_thresholds.items():
+            if name != auth_name and _authority_key(name) == key and isinstance(entry, dict):
+                return entry
+        return {}
+
     def _credible_bandwidth(self, auth_name: str, vote_info: dict) -> tuple:
         """Bandwidth (bytes/s, source) this authority judges Fast and Guard by.
 
@@ -1161,7 +1173,7 @@ class CollectorFetcher:
             or _authority_key(auth_name) not in self.measuring_authorities)
         return credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),
-            self.flag_thresholds.get(auth_name, {}).get('ignoring-advertised-bws') == 1,
+            self._authority_thresholds(auth_name).get('ignoring-advertised-bws') == 1,
             unpublished=unpublished)
 
     def _format_authority_votes(self, relay: dict, published_ipv6: bool = False) -> List[dict]:
@@ -1196,7 +1208,7 @@ class CollectorFetcher:
             tk = vote_info.get('tk') if voted else None
             # Same text the relay page builds, against this authority's own bars,
             # so a miss cannot show as 98.0% or 8.0 days here and 97.999% there.
-            thresholds = self.flag_thresholds.get(auth_name, {})
+            thresholds = self._authority_thresholds(auth_name)
             wfu_bar = parse_wfu_threshold(thresholds.get('guard-wfu')) or GUARD_WFU_DEFAULT
             tk_bar = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
             authority_votes.append({
@@ -1258,9 +1270,8 @@ class CollectorFetcher:
         
         thresholds_by_auth = self.flag_thresholds if isinstance(self.flag_thresholds, dict) else {}
         votes = _votes_by_name(relay)
-        for auth_name, thresholds in thresholds_by_auth.items():
-            if not isinstance(thresholds, dict):
-                thresholds = {}
+        for auth_name in thresholds_by_auth:
+            thresholds = self._authority_thresholds(auth_name)
             vote_info = votes.get(_authority_key(auth_name)) or {}
             if not vote_info:
                 continue
