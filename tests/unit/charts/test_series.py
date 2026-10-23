@@ -112,14 +112,37 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     assert [r["fingerprint"] for r, _traffic in summed] == list("ABLO") and interval == 2 * DAY
     # Sep 7 would sum A and B without L: the sum stops at Sep 5 instead of ending on a false drop.
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
-    # The network chart keeps that slot: one member a step behind must not hide the other members.
+    # The network chart also leaves Sep 7 off: 2 of the 3 relays that reported Sep 5 is under 9/10.
     (open_ts, open_write, _read, _interval), _summed = operator_throughput(
         members, bandwidth_map, "1_year", until_slowest=False)
-    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(open_ts, open_write)][-1] == (7, 110)
+    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(open_ts, open_write)][-1] == (5, 160)
     # If L is no longer running, it will not catch up: the drop on Sep 7 is real.
     members[2]["running"] = False
     (ts, write, _read, interval), summed = operator_throughput(members, bandwidth_map, "1_year")
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)][-2:] == [(5, 160), (7, 110)]
+
+
+def test_network_sum_drops_only_an_incomplete_trailing_slot():
+    """One relay behind must not hide the newest slot, and a slot missing more than a tenth must not be summed.
+
+    A lower count that continues is relays that left: those slots stay, so the drop stays on the chart.
+    """
+    members = [{"fingerprint": str(i)} for i in range(12)]
+
+    def summed_days(behind, trail):
+        bandwidth = {str(i): history([10] * (2 + trail)) for i in range(12 - behind)}
+        for i in range(12 - behind, 12):
+            bandwidth[str(i)] = history([10, 10])
+        (ts, write, _read, _interval), _summed = operator_throughput(
+            members, bandwidth, "1_month", until_slowest=False)
+        return [t.day for t in ts], [round(v / MBIT) for v in write]
+
+    # 11/12 on the last day: kept. The operator cut would have stopped at the one relay still behind.
+    assert summed_days(1, 1) == ([1, 2, 3], [120000, 120000, 110000])
+    # 8/12 on the last day: the unfinished Onionoo slot, left off. The two full days stay.
+    assert summed_days(4, 1) == ([1, 2], [120000, 120000])
+    # The same 8 relays are still there the day after: both thinner days stay.
+    assert summed_days(4, 2) == ([1, 2, 3, 4], [120000, 120000, 80000, 80000])
 
 
 def test_operator_throughput_falls_through_a_non_positive_interval():
