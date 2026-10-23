@@ -1695,17 +1695,15 @@ def apply_prior_ipv6_testers(fetcher, collector_data):
 
 
 def ipv6_testers_from_collector(collector_data):
-    """Testers named on a fetch result, including an older cache's relay index."""
+    """Testers recorded on one fetch result, including its relay index.
+
+    The saved set is the answer for that document. A later page build must not
+    drop a carried tester because the wall clock moved; the age check runs only
+    when a new fetch decides whether to carry the name forward.
+    """
     if not isinstance(collector_data, dict):
         return set()
     saved = _authority_keys(collector_data.get('ipv6_testing_authorities'))
-    last_seen = collector_data.get('ipv6_tester_last_seen')
-    if isinstance(last_seen, dict) and last_seen:
-        origin = collector_data.get('fetched_at')
-        saved = {
-            name for name in saved
-            if _tester_seen_current(last_seen.get(name) or origin)
-        }
     return saved | _collect_ipv6_testers(
         collector_data.get('relay_index'), collector_data.get('votes'))
 

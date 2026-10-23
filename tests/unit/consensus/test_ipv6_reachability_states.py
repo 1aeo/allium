@@ -656,13 +656,16 @@ class TestIpv6ReachabilityStates:
         assert fetcher.ipv6_testing_authorities == {'moria1'}
         assert fetcher.ipv6_tester_last_seen['moria1'] == recent_stamp
 
-        fetcher.prior_ipv6_tester_last_seen = {'moria1': '2020-01-01T00:00:00+00:00'}
-        fetcher._build_relay_index()
-        assert 'moria1' not in fetcher.ipv6_testing_authorities
-        assert ipv6_testers_from_collector({
+        saved = {
             'ipv6_testing_authorities': ['moria1'],
             'ipv6_tester_last_seen': {'moria1': '2020-01-01T00:00:00+00:00'},
-        }) == set()
+        }
+        # The saved document still names moria1. Age applies on the next fetch only.
+        assert ipv6_testers_from_collector(saved) == {'moria1'}
+        fetcher.prior_ipv6_testing_authorities = ipv6_testers_from_collector(saved)
+        fetcher.prior_ipv6_tester_last_seen = saved['ipv6_tester_last_seen']
+        fetcher._build_relay_index()
+        assert 'moria1' not in fetcher.ipv6_testing_authorities
 
     def test_uppercase_bandwidth_authority_matches_its_measurement(self):
         from allium.lib.consensus.flag_thresholds import BW_SOURCE_UNMEASURED
