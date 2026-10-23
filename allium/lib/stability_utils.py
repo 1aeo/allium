@@ -49,6 +49,14 @@ STALE_NOTE_MS = STALE_NOTE_HOURS * _MS_PER_HOUR
 BANDWIDTH_AVAILABILITY_KEY = '_bandwidth_overload_availability'
 
 OVERLOAD_GUIDE_URL = 'https://support.torproject.org/relays/performance/overloaded/'
+HOUR_PRECISION_NOTE = (
+    'Reported timestamps use hour precision, so the displayed minute is not an exact incident time.'
+)
+RATE_COUNTER_NOTE = (
+    'Read and write counters increment at most once per minute per direction. They are not a count '
+    'of blocked connections, the duration of throttling, or necessarily the number of events in the '
+    'last 24 hours.'
+)
 
 _STATE_CLASS = {
     'eligible': 'al-status-danger-bold',
@@ -158,6 +166,19 @@ _GUIDANCE = (
         ),
     },
 )
+_GUIDANCE_BY_ID = {item['id']: item for item in _GUIDANCE}
+
+
+def guidance_text(item_ids):
+    """Practical checks and MetricsPort meaning for these investigation ids.
+
+    Diagnostics reuse this so metric names are not copied into a second list.
+    """
+    parts = []
+    for item_id in item_ids:
+        item = _GUIDANCE_BY_ID[item_id]
+        parts.append(f"{item['checks']} MetricsPort: {item['metric']}. {item['metric_meaning']}")
+    return ' '.join(parts)
 
 
 def _now_ms(now_timestamp):
@@ -220,42 +241,31 @@ def _age_label(age_ms):
     return f'{days} {unit} ago'
 
 
+def _time_facts(state, ms=None, age_ms=None, when=None, days_ago=None, note_recent=False):
+    return {
+        'state': state, 'ms': ms, 'age_ms': age_ms, 'when': when,
+        'days_ago': days_ago, 'note_recent': note_recent,
+    }
+
+
 def _classify_timestamp(value, present, now_ms, window_ms):
     """Return state eligible, historical, absent, or invalid for one timestamp."""
-    empty = {'state': 'absent', 'ms': None, 'age_ms': None, 'when': None, 'days_ago': None,
-             'note_recent': False}
     if not present:
-        return empty
+        return _time_facts('absent')
     ms = _valid_timestamp_ms(value)
     if ms is None:
-        empty['state'] = 'invalid'
-        return empty
+        return _time_facts('invalid')
     age = now_ms - ms
     if age < 0:
-        empty['state'] = 'invalid'
-        return empty
+        return _time_facts('invalid')
     try:
         when = _format_when(ms)
     except (OverflowError, OSError, ValueError, TypeError):
-        empty['state'] = 'invalid'
-        return empty
-    days_ago = int(age // _MS_PER_DAY)
+        return _time_facts('invalid')
     if age < window_ms:
-        state = 'eligible'
-        days_ago_out = None
-        note_recent = False
-    else:
-        state = 'historical'
-        days_ago_out = days_ago
-        note_recent = age < STALE_NOTE_MS
-    return {
-        'state': state,
-        'ms': ms,
-        'age_ms': age,
-        'when': when,
-        'days_ago': days_ago_out,
-        'note_recent': note_recent,
-    }
+        return _time_facts('eligible', ms, age, when)
+    return _time_facts(
+        'historical', ms, age, when, int(age // _MS_PER_DAY), age < STALE_NOTE_MS)
 
 
 def _blank_signal():
@@ -308,74 +318,75 @@ def _closed_bandwidth_signal(availability):
     return _finish_signal(signal, 'no_record', _NO_RECORD_LABEL)
 
 
-def _classify_general(relay, now_ms):
-    present = isinstance(relay, dict) and 'overload_general_timestamp' in relay
-    value = relay.get('overload_general_timestamp') if present else None
-    classified = _classify_timestamp(value, present, now_ms, GENERAL_WINDOW_MS)
+def _from_classified(classified, historical_label):
+    """Eligible and historical keep the timestamp. Anything else is invalid."""
     if classified['state'] == 'eligible':
         return _timestamp_signal(classified, 'eligible', _REPORTED_LABEL)
     if classified['state'] == 'historical':
-        return _timestamp_signal(classified, 'historical', _HISTORICAL_LABEL['general'])
-    if classified['state'] == 'invalid':
-        return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
-    return _finish_signal(_blank_signal(), 'absent', _ABSENT_LABEL['general'])
+        return _timestamp_signal(classified, 'historical', historical_label)
+    return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
+
+
+def _classify_general(relay, now_ms):
+    present = isinstance(relay, dict) and 'overload_general_timestamp' in relay
+    if not present:
+        return _finish_signal(_blank_signal(), 'absent', _ABSENT_LABEL['general'])
+    classified = _classify_timestamp(
+        relay.get('overload_general_timestamp'), True, now_ms, GENERAL_WINDOW_MS)
+    if classified['state'] == 'absent':
+        return _finish_signal(_blank_signal(), 'absent', _ABSENT_LABEL['general'])
+    return _from_classified(classified, _HISTORICAL_LABEL['general'])
+
+
+def _finite_number(value, integral=False):
+    """Non-negative finite number, or None when the value cannot be used."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float):
+        if not math.isfinite(value) or value < 0 or (integral and not value.is_integer()):
+            return None
+        return int(value) if integral else value
+    if value < 0:
+        return None
+    return value
 
 
 def _parse_count(record, key):
     """Return ('ok', int), ('missing', None), or ('invalid', None)."""
     if key not in record:
         return 'missing', None
-    value = record[key]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return 'invalid', None
-    if isinstance(value, float):
-        if not math.isfinite(value) or not value.is_integer() or value < 0:
-            return 'invalid', None
-        return 'ok', int(value)
-    if value < 0:
-        return 'invalid', None
-    return 'ok', value
+    value = _finite_number(record[key], integral=True)
+    return ('ok', value) if value is not None else ('invalid', None)
 
 
 def _parse_config(record, key):
     """Non-negative finite number, or None when the setting is missing or unusable."""
     if key not in record:
         return None
-    value = record[key]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if isinstance(value, float) and (not math.isfinite(value) or value < 0):
-        return None
-    if isinstance(value, int) and value < 0:
-        return None
-    return value
+    return _finite_number(record[key])
 
 
-def _rate_payload(raw, now_ms):
-    ts_present = 'timestamp' in raw
+def _copy_time(signal, classified):
+    if classified['state'] in ('eligible', 'historical'):
+        signal.update({key: classified[key] for key in (
+            'ms', 'age_ms', 'when', 'days_ago', 'note_recent')})
+
+
+def _rate_signal(raw, now_ms):
+    present = 'timestamp' in raw
     classified = _classify_timestamp(
-        raw.get('timestamp') if ts_present else None, ts_present, now_ms, RATE_WINDOW_MS)
-    write_state, write_value = _parse_count(raw, 'write-count')
-    read_state, read_value = _parse_count(raw, 'read-count')
+        raw.get('timestamp') if present else None, present, now_ms, RATE_WINDOW_MS)
     signal = _blank_signal()
-    signal.update({
-        'write_state': write_state,
-        'write_value': write_value,
-        'read_state': read_state,
-        'read_value': read_value,
-        'rate_value': _parse_config(raw, 'rate-limit'),
-        'burst_value': _parse_config(raw, 'burst-limit'),
-    })
-    usable_time = classified['state'] in ('eligible', 'historical')
-    if usable_time:
-        signal.update({
-            'ms': classified['ms'],
-            'age_ms': classified['age_ms'],
-            'when': classified['when'],
-            'days_ago': classified['days_ago'],
-            'note_recent': classified['note_recent'],
-        })
-    return signal, classified, write_state, write_value, read_state, read_value
+    for key, source in (('write', 'write-count'), ('read', 'read-count')):
+        signal[f'{key}_state'], signal[f'{key}_value'] = _parse_count(raw, source)
+    signal['rate_value'] = _parse_config(raw, 'rate-limit')
+    signal['burst_value'] = _parse_config(raw, 'burst-limit')
+    _copy_time(signal, classified)
+    return signal, classified
+
+
+def _positive(signal, key):
+    return signal.get(f'{key}_state') == 'ok' and signal.get(f'{key}_value', 0) > 0
 
 
 def _classify_rate(relay, availability, now_ms):
@@ -386,38 +397,40 @@ def _classify_rate(relay, availability, now_ms):
     raw = relay.get('overload_ratelimits')
     if not isinstance(raw, dict):
         return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
-    signal, classified, write_state, write_value, read_state, read_value = _rate_payload(raw, now_ms)
+    signal, classified = _rate_signal(raw, now_ms)
     if classified['state'] in ('absent', 'invalid'):
         return _finish_signal(signal, 'invalid', _INVALID_LABEL)
     if classified['state'] == 'historical':
         return _finish_signal(signal, 'historical', _HISTORICAL_LABEL['rate'])
-    hit = ((write_state == 'ok' and write_value > 0) or (read_state == 'ok' and read_value > 0))
-    if hit:
+    if _positive(signal, 'write') or _positive(signal, 'read'):
         return _finish_signal(signal, 'eligible', _REPORTED_LABEL)
     both_zero = (
-        write_state == 'ok' and read_state == 'ok' and write_value == 0 and read_value == 0
+        signal['write_state'] == 'ok' and signal['read_state'] == 'ok'
+        and signal['write_value'] == 0 and signal['read_value'] == 0
     )
-    if both_zero:
-        return _finish_signal(signal, 'zero', _ZERO_LABEL)
-    return _finish_signal(signal, 'invalid', _INVALID_LABEL)
+    label, state = (_ZERO_LABEL, 'zero') if both_zero else (_INVALID_LABEL, 'invalid')
+    return _finish_signal(signal, state, label)
 
 
-def _classify_fd(relay, availability, now_ms):
+def _classify_record(relay, availability, key, window_ms, absent_label, historical_label, now_ms):
+    """Shared path for the two /bandwidth overload objects."""
     if availability != 'loaded':
         return _closed_bandwidth_signal(availability)
-    if 'overload_fd_exhausted' not in relay:
-        return _finish_signal(_blank_signal(), 'absent', _ABSENT_LABEL['fd'])
-    raw = relay.get('overload_fd_exhausted')
+    if key not in relay:
+        return _finish_signal(_blank_signal(), 'absent', absent_label)
+    raw = relay.get(key)
     if not isinstance(raw, dict):
         return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
     present = 'timestamp' in raw
     classified = _classify_timestamp(
-        raw.get('timestamp') if present else None, present, now_ms, FD_WINDOW_MS)
-    if classified['state'] == 'eligible':
-        return _timestamp_signal(classified, 'eligible', _REPORTED_LABEL)
-    if classified['state'] == 'historical':
-        return _timestamp_signal(classified, 'historical', _HISTORICAL_LABEL['fd'])
-    return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
+        raw.get('timestamp') if present else None, present, now_ms, window_ms)
+    return _from_classified(classified, historical_label)
+
+
+def _classify_fd(relay, availability, now_ms):
+    return _classify_record(
+        relay, availability, 'overload_fd_exhausted', FD_WINDOW_MS,
+        _ABSENT_LABEL['fd'], _HISTORICAL_LABEL['fd'], now_ms)
 
 
 def _headline(general, rate, fd):
@@ -473,6 +486,8 @@ def evaluate_overload(relay, now_timestamp=None):
         'rate': rate,
         'fd': fd,
         'show_time_note': any(signal.get('when') for signal in (general, rate, fd)),
+        'hour_note': HOUR_PRECISION_NOTE,
+        'rate_count_note': RATE_COUNTER_NOTE,
         'guide_url': OVERLOAD_GUIDE_URL,
     }
 
@@ -531,10 +546,9 @@ def _attach_rate_display(rate, formatter):
     confirmed_zero = rate['state'] == 'zero'
     rate['rate_display'] = _format_rate_display(rate.get('rate_value'), formatter, 2)
     rate['burst_display'] = _format_burst_display(rate.get('burst_value'))
-    rate['write_display'], rate['write_class'] = _count_display(
-        rate.get('write_state'), rate.get('write_value'), active, confirmed_zero)
-    rate['read_display'], rate['read_class'] = _count_display(
-        rate.get('read_state'), rate.get('read_value'), active, confirmed_zero)
+    for key in ('write', 'read'):
+        rate[f'{key}_display'], rate[f'{key}_class'] = _count_display(
+            rate.get(f'{key}_state'), rate.get(f'{key}_value'), active, confirmed_zero)
 
 
 def _guidance_for(facts):
@@ -573,23 +587,17 @@ def _incomplete_notes(facts):
     return notes or ['Overload signals could not all be evaluated']
 
 
-def _direction_text(state, value):
-    if state == 'ok' and value is not None:
-        return f'{value:,}'
-    return 'unknown'
-
-
-def _overloaded_tooltip(facts, formatter):
+def _overloaded_tooltip(facts):
+    """Uses the displays attached by ``_attach_rate_display``."""
     reasons = []
     general = facts['general']
     if general['state'] == 'eligible' and general.get('when'):
         reasons.append(f"General overload at {general['when']} UTC")
     rate = facts['rate']
     if rate['state'] == 'eligible':
-        limit = _format_rate_display(rate.get('rate_value'), formatter, 0)
-        write = _direction_text(rate.get('write_state'), rate.get('write_value'))
-        read = _direction_text(rate.get('read_state'), rate.get('read_value'))
-        reasons.append(f'Rate limits hit W:{write} R:{read} (limit: {limit})')
+        reasons.append(
+            f"Rate limits hit W:{rate['write_display']} R:{rate['read_display']} "
+            f"(limit: {rate['rate_display']})")
     fd_signal = facts['fd']
     if fd_signal['state'] == 'eligible' and fd_signal.get('when'):
         reasons.append(f"FD exhaustion (last: {fd_signal['when']})")
@@ -605,34 +613,36 @@ def _with_utc(value):
     return text + ' UTC'
 
 
+def _snapshot_part(name, published, cache_label):
+    text = _with_utc(published)
+    if not text:
+        return None
+    part = f'{name} snapshot {text}'
+    if cache_label:
+        part += f' ({cache_label})'
+    return part
+
+
 def sources_line(source_meta):
     """One line separating evaluation time, document snapshots, and cache age."""
     if not source_meta:
         return ''
     parts = []
-    evaluated = source_meta.get('evaluated_label')
-    if evaluated:
-        parts.append(f'Evaluated {evaluated}')
-    details = _with_utc(source_meta.get('details_published'))
-    if details:
-        text = f'/details snapshot {details}'
-        if source_meta.get('details_cache_label'):
-            text += f" ({source_meta['details_cache_label']})"
-        parts.append(text)
-    if source_meta.get('bandwidth_loaded'):
-        bandwidth = _with_utc(source_meta.get('bandwidth_published'))
-        if bandwidth:
-            text = f'/bandwidth snapshot {bandwidth}'
-            if source_meta.get('bandwidth_cache_label'):
-                text += f" ({source_meta['bandwidth_cache_label']})"
-            parts.append(text)
-        else:
+    if source_meta.get('evaluated_label'):
+        parts.append(f"Evaluated {source_meta['evaluated_label']}")
+    for name, published_key, cache_key in (
+        ('/details', 'details_published', 'details_cache_label'),
+        ('/bandwidth', 'bandwidth_published', 'bandwidth_cache_label'),
+    ):
+        if name == '/bandwidth' and not source_meta.get('bandwidth_loaded'):
+            parts.append('/bandwidth not loaded for this generation')
+            continue
+        part = _snapshot_part(name, source_meta.get(published_key), source_meta.get(cache_key))
+        if part:
+            parts.append(part)
+        elif name == '/bandwidth':
             parts.append('/bandwidth document loaded without a snapshot time')
-    else:
-        parts.append('/bandwidth not loaded for this generation')
-    if not parts:
-        return ''
-    return '. '.join(parts) + '.'
+    return ('. '.join(parts) + '.') if parts else ''
 
 
 def _attach_display(facts, formatter, source_meta):
@@ -644,14 +654,14 @@ def _attach_display(facts, formatter, source_meta):
     return facts
 
 
-def _stability_fields(facts, formatter):
+def _stability_fields(facts):
     headline = facts['headline']
     if headline == 'overloaded':
         return {
             'stability_is_overloaded': True,
             'stability_text': 'Overloaded',
             'stability_color': '#dc3545',
-            'stability_tooltip': _overloaded_tooltip(facts, formatter),
+            'stability_tooltip': _overloaded_tooltip(facts),
         }
     if headline == 'incomplete':
         return {
@@ -682,7 +692,7 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None,
     """
     facts = evaluate_overload(relay, now_timestamp)
     _attach_display(facts, bandwidth_formatter, source_meta)
-    status = _stability_fields(facts, bandwidth_formatter)
+    status = _stability_fields(facts)
     status['overload'] = facts
     return status
 

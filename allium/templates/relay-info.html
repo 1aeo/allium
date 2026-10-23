@@ -925,6 +925,12 @@ Platform: unknown
 {% set ov_fd = ov.get('fd') or {} %}
 {% set ov_rate = ov.get('rate') or {} %}
 {% set ov_headline = ov.get('headline', 'incomplete') %}
+{% macro ov_status(signal) -%}
+<span class="{{ signal.get('status_class', 'al-status-note') }}">{{ signal.get('status_label', 'Overload signals were not evaluated') }}</span>
+{%- endmacro %}
+{% macro ov_when(signal, label='When') -%}
+{% if signal.get('when') %}<dt>{{ label }}</dt><dd>{{ signal.when|escape }} UTC{% if signal.get('age_label') %} <span class="al-status-muted">({{ signal.age_label|escape }})</span>{% endif %}</dd>{% endif %}
+{%- endmacro %}
 
 {% if ov_headline == 'overloaded' %}
 <div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
@@ -953,7 +959,7 @@ Platform: unknown
     <p style="font-size: 11px; color: #6c757d; margin: 8px 0 0 0;">{{ ov.sources_line|escape }}</p>
     {% endif %}
     {% if ov.get('show_time_note') %}
-    <p style="font-size: 11px; color: #6c757d; margin: 4px 0 0 0;">Reported timestamps use hour precision, so the displayed minute is not an exact incident time.</p>
+    <p style="font-size: 11px; color: #6c757d; margin: 4px 0 0 0;">{{ ov.hour_note }}</p>
     {% endif %}
 
     <div class="row" style="margin-top: 12px;">
@@ -961,11 +967,8 @@ Platform: unknown
             <h5 id="overload-general" style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
             <dl>
                 <dt>Status</dt>
-                <dd><span class="{{ ov_general.get('status_class', 'al-status-note') }}">{{ ov_general.get('status_label', 'Overload signals were not evaluated') }}</span></dd>
-                {% if ov_general.get('when') %}
-                <dt>When</dt>
-                <dd>{{ ov_general.when|escape }} UTC{% if ov_general.get('age_label') %} <span class="al-status-muted">({{ ov_general.age_label|escape }})</span>{% endif %}</dd>
-                {% endif %}
+                <dd>{{ ov_status(ov_general) }}</dd>
+                {{ ov_when(ov_general) }}
             </dl>
             {% if ov_general.get('state') in ('eligible', 'historical') %}
             <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
@@ -977,12 +980,8 @@ Platform: unknown
             <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
-                <dd>
-                    <span class="{{ ov_fd.get('status_class', 'al-status-note') }}">{{ ov_fd.get('status_label', 'Overload signals were not evaluated') }}</span>
-                    {% if ov_fd.get('when') %}
-                    — {{ ov_fd.when|escape }} UTC{% if ov_fd.get('age_label') %} <span class="al-status-muted">({{ ov_fd.age_label|escape }})</span>{% endif %}
-                    {% endif %}
-                </dd>
+                <dd>{{ ov_status(ov_fd) }}</dd>
+                {{ ov_when(ov_fd) }}
             </dl>
         </div>
 
@@ -990,7 +989,7 @@ Platform: unknown
             <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
-                <dd><span class="{{ ov_rate.get('status_class', 'al-status-note') }}">{{ ov_rate.get('status_label', 'Overload signals were not evaluated') }}</span></dd>
+                <dd>{{ ov_status(ov_rate) }}</dd>
                 <dt id="overload-rate-config">Rate Limit</dt>
                 <dd>{{ ov_rate.get('rate_display', '—') }}</dd>
                 <dt>Burst Limit</dt>
@@ -999,14 +998,11 @@ Platform: unknown
                 <dd><span class="{{ ov_rate.get('write_class', 'al-status-muted') }}">{{ ov_rate.get('write_display', '—') }}</span></dd>
                 <dt id="overload-read">Read counter</dt>
                 <dd><span class="{{ ov_rate.get('read_class', 'al-status-muted') }}">{{ ov_rate.get('read_display', '—') }}</span></dd>
-                {% if ov_rate.get('when') %}
-                <dt>Reported</dt>
-                <dd>{{ ov_rate.when|escape }} UTC{% if ov_rate.get('age_label') %} <span class="al-status-muted">({{ ov_rate.age_label|escape }})</span>{% endif %}</dd>
-                {% endif %}
+                {{ ov_when(ov_rate, 'Reported') }}
             </dl>
             {% if ov_rate.get('show_counts') %}
             <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
-                Read and write counters increment at most once per minute per direction. They are not a count of blocked connections, the duration of throttling, or necessarily the number of events in the last 24 hours.
+                {{ ov.rate_count_note }}
                 Rate is BandwidthRate and follows this site’s bits/bytes setting. Burst is BandwidthBurst, already a byte quantity. RelayBandwidthRate and RelayBandwidthBurst are extra torrc caps, not the names of these values.
                 A hit stays eligible for 24 hours.
             </p>

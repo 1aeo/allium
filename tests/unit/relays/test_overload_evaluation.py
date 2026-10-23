@@ -313,7 +313,7 @@ def test_preserved_operator_strings_and_removed_claims():
     template = Path('allium/templates/relay-info.html').read_text(encoding='utf-8')
     macros = Path('allium/templates/macros.html').read_text(encoding='utf-8')
     guidance = Path('allium/lib/stability_utils.py').read_text(encoding='utf-8')
-    assert "title': 'General Overload Active'" in diagnostics
+    assert "'General Overload Active'" in diagnostics
     assert '[Warning] OVERLOADED' in template
     assert 'currently flagged as overloaded' in macros
     for text in (diagnostics, template, guidance):
@@ -562,8 +562,10 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
 
     assert 'File Descriptor Exhaustion' in pages['fd']
     assert 'LimitNOFILE' in pages['fd']
-    assert 'tor_relay_load_socket_total{state="opened"}' in pages['fd']
+    assert 'tor_relay_load_socket_total' in pages['fd']
+    assert 'opened' in pages['fd']
     assert 'state="max"' not in pages['fd']
+    assert 'state=&#34;max&#34;' not in pages['fd']
     assert 'href="#overload-fd"' in pages['fd']
 
     assert 'unknown' in pages['partial']

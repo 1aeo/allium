@@ -1023,15 +1023,18 @@ class Relays:
                         issue for issue in existing.get('issues') or []
                         if issue.get('category') == 'overload'
                     ]
-                consensus_issues = generate_issues_from_consensus(
+                # Store consensus first, then put the overload issues back with
+                # the same helper a later evaluation uses, so the two passes
+                # cannot each append a copy.
+                relay['diagnostics'] = {'issues': generate_issues_from_consensus(
                     raw_consensus_evaluation,
                     current_flags=current_flags,
                     observed_bandwidth=observed_bandwidth,
                     version=version,
                     recommended_version=recommended_version,
                     use_bits=self.use_bits,
-                )
-                relay['diagnostics'] = {'issues': consensus_issues + overload_issues}
+                )}
+                _store_overload_diagnostics(relay, overload_issues)
                 
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1

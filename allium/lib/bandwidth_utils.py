@@ -453,23 +453,17 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         total_data = {p: write_total.get(p, 0) + read_total.get(p, 0)
                       for p in ONIONOO_HISTORY_PERIODS}
         
+        fields = overload_fields(bandwidth_relay)
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,
             'total_data': total_data,
             'flag_data': flag_data,
-            # Preserve key presence. .get() cannot tell a missing overload
-            # field from an explicit null, and a later truthiness check would
-            # also drop an empty or malformed object.
-            'overload_ratelimits': (
-                bandwidth_relay['overload_ratelimits']
-                if 'overload_ratelimits' in bandwidth_relay else None
-            ),
-            'overload_ratelimits_present': 'overload_ratelimits' in bandwidth_relay,
-            'overload_fd_exhausted': (
-                bandwidth_relay['overload_fd_exhausted']
-                if 'overload_fd_exhausted' in bandwidth_relay else None
-            ),
-            'overload_fd_exhausted_present': 'overload_fd_exhausted' in bandwidth_relay,
+            # Presence is recorded separately from the value so an explicit
+            # null or empty object is not treated as a missing field.
+            'overload_ratelimits': fields['ratelimits'],
+            'overload_ratelimits_present': fields['ratelimits_present'],
+            'overload_fd_exhausted': fields['fd'],
+            'overload_fd_exhausted_present': fields['fd_present'],
         }
     
     # Calculate network flag statistics
@@ -504,6 +498,21 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
     }
 
 
+def overload_fields(row):
+    """Presence and value of the two /bandwidth overload objects on one row."""
+    def field(key):
+        present = isinstance(row, dict) and key in row
+        return present, (row[key] if present else None)
+    rate_present, rate = field('overload_ratelimits')
+    fd_present, fd = field('overload_fd_exhausted')
+    return {
+        'ratelimits_present': rate_present,
+        'ratelimits': rate,
+        'fd_present': fd_present,
+        'fd': fd,
+    }
+
+
 def bandwidth_overload_index(bandwidth_data):
     """Map fingerprint to overload-field presence for a loaded bandwidth document.
 
@@ -518,15 +527,22 @@ def bandwidth_overload_index(bandwidth_data):
         if not isinstance(row, dict):
             continue
         fingerprint = row.get('fingerprint')
-        if not fingerprint or not isinstance(fingerprint, str):
-            continue
-        index[fingerprint] = {
-            'ratelimits_present': 'overload_ratelimits' in row,
-            'ratelimits': row['overload_ratelimits'] if 'overload_ratelimits' in row else None,
-            'fd_present': 'overload_fd_exhausted' in row,
-            'fd': row['overload_fd_exhausted'] if 'overload_fd_exhausted' in row else None,
-        }
+        if fingerprint and isinstance(fingerprint, str):
+            index[fingerprint] = overload_fields(row)
     return index
+
+
+def _assign_bandwidth_overload(relay, availability, fields=None):
+    from .stability_utils import BANDWIDTH_AVAILABILITY_KEY
+    relay[BANDWIDTH_AVAILABILITY_KEY] = availability
+    for present_key, value_key, relay_key in (
+        ('ratelimits_present', 'ratelimits', 'overload_ratelimits'),
+        ('fd_present', 'fd', 'overload_fd_exhausted'),
+    ):
+        if fields and fields[present_key]:
+            relay[relay_key] = fields[value_key]
+        else:
+            relay.pop(relay_key, None)
 
 
 def apply_bandwidth_overload_fields(relays, bandwidth_data):
@@ -537,29 +553,13 @@ def apply_bandwidth_overload_fields(relays, bandwidth_data):
     ``no_record``, or ``unavailable``. Malformed values are copied through so
     evaluation can tell them from a field that was not in the document.
     """
-    from .stability_utils import BANDWIDTH_AVAILABILITY_KEY
-
     index = bandwidth_overload_index(bandwidth_data)
     for relay in relays or []:
         if not isinstance(relay, dict):
             continue
         if index is None:
-            relay.pop('overload_ratelimits', None)
-            relay.pop('overload_fd_exhausted', None)
-            relay[BANDWIDTH_AVAILABILITY_KEY] = 'unavailable'
-            continue
-        row = index.get(relay.get('fingerprint'))
-        if row is None:
-            relay.pop('overload_ratelimits', None)
-            relay.pop('overload_fd_exhausted', None)
-            relay[BANDWIDTH_AVAILABILITY_KEY] = 'no_record'
-            continue
-        relay[BANDWIDTH_AVAILABILITY_KEY] = 'loaded'
-        if row['ratelimits_present']:
-            relay['overload_ratelimits'] = row['ratelimits']
+            _assign_bandwidth_overload(relay, 'unavailable')
         else:
-            relay.pop('overload_ratelimits', None)
-        if row['fd_present']:
-            relay['overload_fd_exhausted'] = row['fd']
-        else:
-            relay.pop('overload_fd_exhausted', None)
+            fields = index.get(relay.get('fingerprint'))
+            _assign_bandwidth_overload(
+                relay, 'loaded' if fields else 'no_record', fields)
