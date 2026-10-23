@@ -86,7 +86,8 @@ def test_operator_throughput_sums_members_on_the_common_interval():
                                                        "first": "2026-09-01 12:00:00"}},
                           "read_history": {"1_month": {"values": [1, 2], "interval": "nope", "factor": 1000,
                                                       "first": "2026-09-01 12:00:00"}}}
-    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D", "Z")]
+    bandwidth_map["shape"] = {"write_history": "not-a-history", "read_history": {"1_month": [1, 2]}}
+    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D", "Z", "shape")]
     (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
     # Each with the traffic it carried on the days summed (write plus read): B only on day 1.
     assert [(r["fingerprint"], round(traffic / MBIT)) for r, traffic in summed] == [("A", 6000), ("B", 20000)]
@@ -180,7 +181,10 @@ def test_network_uptime_averages_the_relays_that_have_the_period():
     zero = {"uptime": {"1_month": block([0, 0], interval=0, factor=1 / 999.0)}}
     relays = [relay("good"), relay("bad"), relay("zero")]
     uptime_map = {"good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
-                  "bad": bad, "zero": zero}
+                  "bad": bad, "zero": zero,
+                  "shape": {"uptime": {"1_month": {"values": 5, "interval": 14400}}},
+                  "text": {"uptime": "not-an-object"}}
+    relays.extend((relay("shape"), relay("text")))
     ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
     assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
     assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]

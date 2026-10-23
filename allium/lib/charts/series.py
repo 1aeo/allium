@@ -76,10 +76,16 @@ def _aligned(write, read, interval):
     return (ts, [write[t] for t in ts], [read[t] for t in ts], interval) if len(ts) >= 2 else None
 
 
+def _mapping(value):
+    """A dict, or ``{}`` when a history field is missing or not an object."""
+    return value if isinstance(value, dict) else {}
+
+
 def _blocks(bandwidth_row, key):
-    """The write and read history blocks of one Onionoo period, ``{}`` when missing."""
-    return (((bandwidth_row or {}).get("write_history") or {}).get(key) or {},
-            ((bandwidth_row or {}).get("read_history") or {}).get(key) or {})
+    """The write and read history blocks of one Onionoo period, ``{}`` when missing or malformed."""
+    row = _mapping(bandwidth_row)
+    return (_mapping(_mapping(row.get("write_history")).get(key)),
+            _mapping(_mapping(row.get("read_history")).get(key)))
 
 
 def _percentiles(values, quantiles):
@@ -210,7 +216,8 @@ def network_ratio_bands(ratios):
 
 def uptime_section(uptime_map, fingerprint):
     """The Onionoo uptime object for one relay, or ``{}``."""
-    return ((uptime_map or {}).get(fingerprint) or {}).get("uptime") or {}
+    row = _mapping(uptime_map).get(fingerprint)
+    return _mapping(_mapping(row).get("uptime"))
 
 
 def network_uptime(relays, uptime_map, key, windows):
@@ -228,8 +235,9 @@ def network_uptime(relays, uptime_map, key, windows):
     intervals, rows = Counter(), []
     for relay in relays:
         section = uptime_section(uptime_map, relay["fingerprint"])
-        block = section.get(key) or {}
-        if len(block.get("values") or ()) < 2:
+        block = _mapping(section.get(key))
+        values = block.get("values")
+        if not isinstance(values, (list, tuple)) or len(values) < 2:
             continue
         try:
             step = int(block.get("interval") or 0)
