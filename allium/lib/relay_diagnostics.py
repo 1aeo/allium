@@ -1002,10 +1002,11 @@ def _format_near_wfu(value, threshold) -> str:
     shown = format_wfu_display(value, threshold)
     if not (threshold <= value < threshold + GUARD_WFU_NEAR_MARGIN):
         return shown
-    edge = format_percentage_from_fraction(threshold + GUARD_WFU_NEAR_MARGIN, 1)
-    if shown == edge:
-        return format_percentage_from_fraction(value, 2)
-    return shown
+    edge = threshold + GUARD_WFU_NEAR_MARGIN
+    if shown != format_percentage_from_fraction(edge, 1):
+        return shown
+    # Two decimals can still print 98.50%, the excluded edge of a 98.5% window.
+    return format_keeping_below(value * 100, edge * 100, start=2) + '%'
 
 
 def _format_near_tk(value, threshold) -> str:
@@ -1014,10 +1015,11 @@ def _format_near_tk(value, threshold) -> str:
     margin = _tk_near_margin(threshold)
     if not (threshold <= value < threshold + margin) or value < SECONDS_PER_DAY:
         return shown
-    edge = format_days(threshold + margin, decimals=1, suffix=' days')
-    if shown == edge:
-        return format_days(value, decimals=2, suffix=' days', threshold=threshold)
-    return shown
+    edge = threshold + margin
+    if shown != format_days(edge, decimals=1, suffix=' days'):
+        return shown
+    # Two decimals can still print 9.00 days, the excluded edge of a 9-day window.
+    return format_keeping_below(value / SECONDS_PER_DAY, edge / SECONDS_PER_DAY, start=2) + ' days'
 
 
 def _near_phrase(entries: list, format_value, format_bar) -> str:
@@ -1091,7 +1093,7 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
         if bar:
             _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
 
-    def rate(value, threshold):
+    def rate(value, threshold) -> str:
         return _format_near_rate(value, threshold, use_bits)
 
     # The Notes box shows title and description only. Say which input, which
@@ -1103,26 +1105,30 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
     bw_text = ("The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
                'top 25%. A dip in the bandwidth it counts can drop the Guard flag.')
     # (rows, title, section, subject, value formatter, bar formatter, description tail, suggestion)
+    wfu_suggestion = (
+        'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
+        'Restart=always, and watch for OOM kills until each authority has more room above '
+        'its own guard-wfu.'
+    )
+    tk_suggestion = (
+        'Weighted time-known falls while the relay is unreachable and resets if the identity '
+        'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
+        'a few weeks of continuous uptime. Stay up with the same key.'
+    )
+    bw_suggestion = (
+        "The bandwidth that counts is that authority's measurement when it has one, otherwise "
+        'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
+        "default) and that authority's top 25%."
+    )
+    def bar_text(threshold) -> str:
+        return '≥' + _format_rate(threshold, use_bits, decimal_places=1)
     specs = (
         (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
-         _format_near_wfu, _format_wfu_requirement,
-         wfu_text,
-         'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
-         'Restart=always, and watch for OOM kills until each authority has more room above '
-         'its own guard-wfu.'),
+         _format_near_wfu, _format_wfu_requirement, wfu_text, wfu_suggestion),
         (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
-         _format_near_tk, _format_tk_requirement,
-         tk_text,
-         'Weighted time-known falls while the relay is unreachable and resets if the identity '
-         'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
-         'a few weeks of continuous uptime. Stay up with the same key.'),
+         _format_near_tk, _format_tk_requirement, tk_text, tk_suggestion),
         (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
-         'Bandwidth counted for Guard', rate,
-         lambda threshold: '≥' + _format_rate(threshold, use_bits, decimal_places=1),
-         bw_text,
-         'The bandwidth that counts is that authority\'s measurement when it has one, otherwise '
-         'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
-         "default) and that authority's top 25%."),
+         'Bandwidth counted for Guard', rate, bar_text, bw_text, bw_suggestion),
     )
     notes = []
     for entries, title, section, subject, format_value, format_bar, consequence, suggestion in specs:

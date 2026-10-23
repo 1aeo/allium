@@ -1512,6 +1512,16 @@ class TestGuardNearThreshold:
         assert '8.96 days' in by_title['Guard: Time Known near threshold']
         assert '9.0 days' not in by_title['Guard: Time Known near threshold']
 
+        # Two decimals still land on the excluded edge: 98.50% and 9.00 days.
+        closer = _guard_detail('bastet', 0.98496, 8.9996 * SECONDS_PER_DAY, 20_000_000)
+        closer_issues = _issues_with_guard_details([closer], _HOLDING_GUARD)
+        closer_by = {issue['title']: issue['description']
+                     for issue in closer_issues if 'near threshold' in issue['title']}
+        assert '98.496%' in closer_by['Guard: WFU near threshold']
+        assert '98.50%' not in closer_by['Guard: WFU near threshold']
+        assert '8.9996 days' in closer_by['Guard: Time Known near threshold']
+        assert '9.00 days' not in closer_by['Guard: Time Known near threshold']
+
     def test_bandwidth_just_under_does_not_round_onto_the_bar(self):
         """2.06 MB/s is under the 2.097 MB/s guarantee but one decimal prints 2.1 MB/s."""
         detail = _guard_detail('moria1', 0.999, 30 * SECONDS_PER_DAY, 2_060_000, top25=50_000_000)
@@ -1520,3 +1530,15 @@ class TestGuardNearThreshold:
         assert len(notes) == 1
         assert '2.06 MB/s, need ≥2.1 MB/s' in notes[0]['description']
         assert '2.1 MB/s, need ≥2.1 MB/s' not in notes[0]['description']
+
+    def test_bandwidth_miss_stays_below_the_bar_in_bytes_and_bits(self):
+        """Two decimals still print 1,999,900 bytes/s as equal to a 2,000,000 bar."""
+        detail = _guard_detail('bastet', 0.99, 30 * SECONDS_PER_DAY, 1_999_900, top25=2_000_000)
+        expected = {
+            False: 'bastet (1.9999 MB/s, need ≥2.0 MB/s)',
+            True: 'bastet (15.999 Mbit/s, need ≥16.0 Mbit/s)',
+        }
+        for use_bits, text in expected.items():
+            issues = _issues_with_guard_details([detail], _HOLDING_GUARD, use_bits=use_bits)
+            bandwidth = next(issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold')
+            assert text in bandwidth['description']
