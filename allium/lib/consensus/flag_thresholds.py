@@ -178,6 +178,26 @@ def low_median(values: list):
     return ordered[(len(ordered) - 1) // 2] if ordered else None
 
 
+def voting_majority(total: int) -> int:
+    """How many authorities must agree: more than half, as dirvote.c uses ``flag_counts > n/2``."""
+    return (int(total) // 2) + 1
+
+
+def resolve_voting_total(total):
+    """(authorities, majority) for one relay. Majority is always more than half.
+
+    A missing or non-positive total uses the voting-authority registry, the same
+    fallback the flag rows and the warnings share.
+    """
+    if not isinstance(total, int) or total <= 0:
+        try:
+            from .collector_fetcher import get_voting_authority_count
+            total = get_voting_authority_count()
+        except ImportError:
+            total = 9
+    return total, voting_majority(total)
+
+
 def parse_wfu_threshold(value: Any) -> Optional[float]:
     """
     Parse WFU (Weighted Fractional Uptime) threshold value.
@@ -238,12 +258,10 @@ def check_guard_eligibility(
     Returns:
         Dict with eligibility details
     """
-    wfu = wfu or 0
-    tk = tk or 0
+    # None is unpublished. 0 is a real measurement and fails a positive threshold.
+    wfu_met = wfu is not None and wfu >= wfu_threshold
+    tk_met = tk is not None and tk >= tk_threshold
     bandwidth = bandwidth or 0
-    
-    wfu_met = wfu >= wfu_threshold
-    tk_met = tk >= tk_threshold
     bw_meets_guarantee = bandwidth >= GUARD_BW_GUARANTEE
     bw_in_top25 = bandwidth >= bw_top25_threshold if bw_top25_threshold > 0 else False
     bw_eligible = bw_meets_guarantee or bw_in_top25

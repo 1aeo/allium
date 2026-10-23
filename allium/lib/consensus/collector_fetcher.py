@@ -304,16 +304,18 @@ DEFAULT_AUTHORITY_COUNT = _FALLBACK_VOTING_AUTHORITY_COUNT  # 9 voting authoriti
 AUTHORITY_NAMES = _FALLBACK_VOTING_AUTHORITY_NAMES  # Backward compat for voting authorities
 
 # Import flag threshold constants from centralized module (DRY)
+from ..string_utils import format_known_duration, format_wfu_display
 from .flag_thresholds import (
-    SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
+    GUARD_WFU_DEFAULT,
     MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
     check_stable_eligibility,
     credible_bandwidth,
     guard_bw_top_threshold,
     low_median,
+    parse_wfu_threshold,
 )
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
@@ -1109,6 +1111,13 @@ class CollectorFetcher:
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
             
+            wfu = vote_info.get('wfu') if voted else None
+            tk = vote_info.get('tk') if voted else None
+            # Same text the relay page builds, against this authority's own bars,
+            # so a miss cannot show as 98.0% or 8.0 days here and 97.999% there.
+            thresholds = self.flag_thresholds.get(auth_name, {})
+            wfu_bar = parse_wfu_threshold(thresholds.get('guard-wfu')) or GUARD_WFU_DEFAULT
+            tk_bar = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
             authority_votes.append({
                 'authority': auth_name,
                 'fingerprint': AUTHORITIES_BY_NAME.get(auth_name, ''),  # Use pre-computed lookup
@@ -1116,10 +1125,11 @@ class CollectorFetcher:
                 'flags': flags,
                 'bandwidth': vote_info.get('bandwidth'),
                 'measured': vote_info.get('measured'),
-                'wfu': vote_info.get('wfu'),
-                'wfu_display': f"{vote_info.get('wfu', 0) * 100:.1f}%" if vote_info.get('wfu') else 'N/A',
-                'tk': vote_info.get('tk'),
-                'tk_display': self._format_time_known(vote_info.get('tk')),
+                # 0.0 is a real measurement (no uptime credit). Only a missing stats value is N/A.
+                'wfu': wfu,
+                'wfu_display': self._format_wfu(wfu, wfu_bar),
+                'tk': tk,
+                'tk_display': self._format_time_known(tk, tk_bar),
                 'mtbf': vote_info.get('mtbf'),
                 'ipv4_reachable': voted,  # If voted, authority could reach relay
                 'ipv6_reachable': vote_info.get('ipv6_reachable'),
@@ -1130,20 +1140,13 @@ class CollectorFetcher:
         
         return authority_votes
     
-    def _format_time_known(self, seconds: Optional[int]) -> str:
-        """Format time known in human-readable format."""
-        if seconds is None:
-            return 'N/A'
-        
-        days = seconds / SECONDS_PER_DAY
-        if days >= 1:
-            return f"{days:.1f} days"
-        
-        hours = seconds / 3600
-        if hours >= 1:
-            return f"{hours:.1f} hours"
-        
-        return f"{seconds} seconds"
+    def _format_wfu(self, wfu: Optional[float], threshold: Optional[float] = None) -> str:
+        """Percent text. A miss does not round up onto this authority's guard-wfu."""
+        return format_wfu_display(wfu, threshold=threshold)
+
+    def _format_time_known(self, seconds: Optional[int], threshold: Optional[float] = None) -> str:
+        """Days, hours, or seconds. A miss does not round up onto ``threshold``."""
+        return format_known_duration(seconds, threshold=threshold)
     
     def _analyze_flag_eligibility(self, relay: dict) -> dict:
         """
@@ -1184,8 +1187,12 @@ class CollectorFetcher:
             guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
             guard_bw_top25_threshold = guard_bw_top_threshold(thresholds)
             
-            relay_wfu = vote_info.get('wfu', 0)
-            relay_tk = vote_info.get('tk', 0)
+            # Missing stats stay None. A published 0 is that authority's measurement
+            # (rep_hist_get_weighted_fractional_uptime returns 0 with no history).
+            relay_wfu = vote_info.get('wfu')
+            relay_tk = vote_info.get('tk')
+            wfu_met = relay_wfu is not None and relay_wfu >= guard_wfu_threshold
+            tk_met = relay_tk is not None and relay_tk >= guard_tk_threshold
             relay_bw, relay_bw_source = self._credible_bandwidth(auth_name, vote_info)
             
             # Guard flag prerequisites: must have Fast, Stable, and V2Dir flags from this authority
@@ -1202,12 +1209,7 @@ class CollectorFetcher:
             else:
                 guard_bw_eligible = relay_bw >= AUTH_DIR_GUARD_BW_GUARANTEE or (
                     guard_bw_top25_threshold is not None and relay_bw >= guard_bw_top25_threshold)
-                guard_eligible = (
-                    guard_prereqs_met and
-                    relay_wfu >= guard_wfu_threshold and
-                    relay_tk >= guard_tk_threshold and
-                    guard_bw_eligible
-                )
+                guard_eligible = guard_prereqs_met and wfu_met and tk_met and guard_bw_eligible
             
             if guard_eligible:
                 eligibility['guard']['eligible_count'] += 1
@@ -1228,11 +1230,11 @@ class CollectorFetcher:
                 # WFU requirement
                 'wfu_threshold': guard_wfu_threshold,
                 'wfu_value': relay_wfu,
-                'wfu_met': relay_wfu >= guard_wfu_threshold,
+                'wfu_met': wfu_met,
                 # TK requirement
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
-                'tk_met': relay_tk >= guard_tk_threshold,
+                'tk_met': tk_met,
                 # BW requirement (bytes/s; bw_value None: not in the vote, so bw_met is its Guard vote)
                 'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,
                 'bw_top25_threshold': guard_bw_top25_threshold,

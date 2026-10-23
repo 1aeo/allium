@@ -33,6 +33,20 @@ GUARD_BW_GUARANTEE = 2_097_000  # AuthDirGuardBWGuarantee "2 MB", compared as 20
 GUARD_WFU_DEFAULT = 0.98
 GUARD_TK_DEFAULT = 691200  # 8 days
 
+# Alphabetical voting authorities. The old warning read the first of these.
+_VOTING_AUTHORITIES = [
+    'bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+    'longclaw', 'maatuska', 'moria1', 'tor26',
+]
+
+
+def _guard_details(wfu_met, tk_met, bw_met=True):
+    """Per-authority Guard details. wfu_met and tk_met are nine booleans."""
+    return [
+        {'authority': name, 'wfu_met': wfu, 'tk_met': tk, 'bw_met': bw_met}
+        for name, wfu, tk in zip(_VOTING_AUTHORITIES, wfu_met, tk_met)
+    ]
+
 
 class TestGenerateRelayIssues:
     """Tests for generate_relay_issues() main entry point."""
@@ -162,12 +176,15 @@ class TestConsensusIssues:
         assert bw_issues[0]['severity'] == 'warning'
     
     def test_guard_wfu_below(self):
-        """Test Guard WFU below threshold (warning severity)."""
+        """Guard WFU warns from the authority count, at warning severity."""
+        # Two authorities meet their own guard-wfu; seven do not. Majority is 5.
         consensus_data = {
             'in_consensus': True,
-            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],  # WFU below 98%
+            'authority_votes': [{'authority': 'bastet', 'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
+            'flag_eligibility': {
+                'guard': {'details': _guard_details([True, True] + [False] * 7, [True] * 9)},
+            },
         }
         
         issues = generate_issues_from_consensus(
@@ -177,16 +194,23 @@ class TestConsensusIssues:
         )
         
         wfu_issues = [i for i in issues if 'Guard' in i['title'] and 'WFU' in i['title']]
-        assert len(wfu_issues) >= 1
+        assert len(wfu_issues) == 1
         assert wfu_issues[0]['severity'] == 'warning'
+        assert wfu_issues[0]['section'] == 'flag-guard-wfu'
+        assert wfu_issues[0]['description'] == (
+            '2/9 authorities meet guard-wfu (5 needed). '
+            'dizum, faravahar, gabelmoo, longclaw, maatuska, moria1 and tor26 do not meet it.')
+        assert [i for i in issues if 'Time Known' in i['title']] == []
     
     def test_guard_tk_below_is_warning(self):
-        """Test Guard Time Known below threshold is WARNING (changed from info)."""
+        """Guard Time Known warns from the authority count, at warning severity."""
         consensus_data = {
             'in_consensus': True,
-            'authority_votes': [{'wfu': 0.99, 'tk': 3 * SECONDS_PER_DAY}],  # TK below 8 days
+            'authority_votes': [{'authority': 'bastet', 'wfu': 0.99, 'tk': 3 * SECONDS_PER_DAY}],
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
+            'flag_eligibility': {
+                'guard': {'details': _guard_details([True] * 9, [True, True] + [False] * 7)},
+            },
         }
         
         issues = generate_issues_from_consensus(
@@ -196,9 +220,255 @@ class TestConsensusIssues:
         )
         
         tk_issues = [i for i in issues if 'Guard' in i['title'] and 'Time Known' in i['title']]
-        assert len(tk_issues) >= 1
-        assert tk_issues[0]['severity'] == 'warning'  # Changed from 'info'
-    
+        assert len(tk_issues) == 1
+        assert tk_issues[0]['severity'] == 'warning'
+        assert tk_issues[0]['section'] == 'flag-guard-time-known'
+        assert tk_issues[0]['description'] == (
+            '2/9 authorities meet guard-tk (5 needed). '
+            'dizum, faravahar, gabelmoo, longclaw, maatuska, moria1 and tor26 do not meet it.')
+        assert [i for i in issues if 'WFU' in i['title']] == []
+
+    def test_guard_wfu_and_tk_ignore_a_single_failing_vote(self):
+        """A first vote of 0.0 does not warn when a majority of authorities meet."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [
+                {'authority': 'bastet', 'wfu': 0.0, 'tk': 6},
+                {'authority': 'dannenberg', 'wfu': 0.982, 'tk': 14 * SECONDS_PER_DAY},
+            ],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {
+                'guard': {'details': _guard_details([False] + [True] * 8, [False] + [True] * 8)},
+            },
+        }
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable', 'Fast'],
+            observed_bandwidth=3_000_000,
+        )
+        assert [i['title'] for i in issues if i['category'] == 'guard'] == []
+
+    def test_guard_wfu_warns_when_first_vote_passes_and_majority_fails(self):
+        """A passing first vote does not hide a majority that misses guard-wfu."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'authority': 'bastet', 'wfu': 0.997499, 'tk': 30 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {
+                'guard': {'details': _guard_details([True, False, False, True] + [False] * 5, [True] * 9)},
+            },
+        }
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable', 'Fast'],
+            observed_bandwidth=3_000_000,
+        )
+        wfu_issues = [i for i in issues if 'WFU' in i['title']]
+        assert len(wfu_issues) == 1
+        assert wfu_issues[0]['description'].startswith('2/9 authorities meet guard-wfu (5 needed).')
+        assert '99.7%' not in wfu_issues[0]['description']
+        assert '0.0%' not in wfu_issues[0]['description']
+
+    def test_guard_has_flag_skips_wfu_and_tk_warnings(self):
+        """A relay that already has Guard gets neither uptime warning."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.0, 'tk': 0}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {
+                'guard': {'details': _guard_details([False] * 9, [False] * 9)},
+            },
+        }
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Guard', 'Stable', 'Fast'],
+            observed_bandwidth=3_000_000,
+        )
+        assert [i for i in issues if 'WFU' in i['title'] or 'Time Known' in i['title']] == []
+
+    def test_guard_wfu_without_details_does_not_use_the_first_vote(self):
+        """Missing per-authority details do not fall back to one vote's WFU or time-known."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.0, 'tk': 0}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable', 'Fast'],
+            observed_bandwidth=3_000_000,
+        )
+        assert [i for i in issues if 'WFU' in i['title'] or 'Time Known' in i['title']] == []
+
+    def test_wfu_zero_is_history_and_missing_is_unpublished(self):
+        """0% beside days of time-known is recorded downtime. A missing value is not called 0%."""
+        details = []
+        for name, wfu, met in (
+            ('bastet', 0.0, False),
+            ('dannenberg', 0.99, True),
+            ('dizum', 0.99, True),
+            ('faravahar', 0.90, False),
+            ('gabelmoo', 0.91, False),
+            ('longclaw', 0.92, False),
+            ('maatuska', 0.93, False),
+            ('moria1', None, False),
+            ('tor26', 0.94, False),
+        ):
+            details.append({
+                'authority': name, 'wfu_met': met, 'tk_met': True, 'bw_met': True,
+                'wfu_threshold': 0.98, 'wfu_value': wfu, 'tk_threshold': GUARD_TK_DEFAULT,
+                'tk_value': 20 * SECONDS_PER_DAY,
+            })
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': [{'wfu': 0.0, 'tk': 20 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': details}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        wfu = next(i for i in issues if 'WFU' in i['title'])
+        assert wfu['description'] == (
+            '2/9 authorities meet guard-wfu (≥98%; 5 needed). '
+            'bastet measured 0% (no uptime credit). '
+            'moria1 published no WFU. '
+            'faravahar, gabelmoo, longclaw, maatuska and tor26 measured 90.0%–94.0%.')
+        assert 'no uptime history' not in wfu['description']
+        assert 'Minimize restarts' in wfu['suggestion']
+        assert 'moria1 measured 0%' not in wfu['description']
+        history_only = [{
+            'authority': name, 'wfu_met': False, 'tk_met': True, 'bw_met': True,
+            'wfu_value': 0.0, 'wfu_threshold': 0.98,
+        } for name in _VOTING_AUTHORITIES]
+        history = generate_issues_from_consensus({
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.0, 'tk': 20 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': history_only}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        history_issue = next(i for i in history if 'WFU' in i['title'])
+        assert 'no uptime history for this relay' in history_issue['description']
+        assert 'no uptime credit' in history_issue['suggestion']
+        short_track = [{
+            'authority': 'bastet', 'wfu_met': False, 'tk_met': False, 'bw_met': True,
+            'wfu_value': 0.0, 'wfu_threshold': 0.98, 'tk_value': 6, 'tk_threshold': GUARD_TK_DEFAULT,
+        }]
+        short = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 1,
+            'authority_votes': [{'wfu': 0.0, 'tk': 6}],
+            'reachability': {'ipv4_reachable_count': 1},
+            'flag_eligibility': {'guard': {'details': short_track}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        short_text = next(i for i in short if 'WFU' in i['title'])['description']
+        assert 'measured 0% (no uptime history for this relay).' in short_text
+        assert 'no uptime credit).' not in short_text
+
+    def test_warning_uses_the_relay_total_not_the_registry(self):
+        """Eight voters on the page stay 4/8 in the warning, even if the registry says 9."""
+        details = [
+            {'authority': f'a{i}', 'wfu_met': i < 4, 'tk_met': True, 'bw_met': True, 'wfu_threshold': 0.98}
+            for i in range(8)
+        ]
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 8,
+            'authority_votes': [],
+            'reachability': {'ipv4_reachable_count': 8},
+            'flag_eligibility': {'guard': {'details': details}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        wfu = next(i for i in issues if 'WFU' in i['title'])
+        assert wfu['description'].startswith('4/8 authorities meet guard-wfu (≥98%; 5 needed).')
+
+    def test_a_miss_does_not_round_up_to_the_threshold(self):
+        """97.9995% is not printed as 98.0% beside a ≥98% bar, nor 7.97 days as 8.0."""
+        details = [{
+            'authority': 'bastet', 'bw_met': True,
+            'wfu_met': False, 'wfu_value': 0.979995, 'wfu_threshold': 0.98,
+            'tk_met': False, 'tk_value': 688363, 'tk_threshold': GUARD_TK_DEFAULT,
+        }]
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 1,
+            'authority_votes': [{'wfu': 0.979995, 'tk': 688363}],
+            'reachability': {'ipv4_reachable_count': 1},
+            'flag_eligibility': {'guard': {'details': details}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        by_title = {i['title']: i['description'] for i in issues}
+        assert '98.0%' not in by_title['Guard: WFU below threshold']
+        assert '97.999%' in by_title['Guard: WFU below threshold']
+        assert '8.0 days' not in by_title['Guard: Time Known below threshold']
+        assert '7.97 days' in by_title['Guard: Time Known below threshold']
+
+    def test_hours_of_time_known_are_history(self):
+        """Six seconds is no history. Twenty hours is a short measurement."""
+        def issue_for(seconds):
+            details = [{
+                'authority': 'bastet', 'bw_met': True, 'wfu_met': True,
+                'tk_met': False, 'tk_value': seconds, 'tk_threshold': GUARD_TK_DEFAULT,
+            }]
+            issues = generate_issues_from_consensus({
+                'in_consensus': True,
+                'total_authorities': 1,
+                'authority_votes': [{'tk': seconds}],
+                'reachability': {'ipv4_reachable_count': 1},
+                'flag_eligibility': {'guard': {'details': details}},
+            }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+            return next(i for i in issues if 'Time Known' in i['title'])
+        assert 'no time-known history' in issue_for(6)['description']
+        hours = issue_for(20 * 3600)
+        assert 'no time-known history' not in hours['description']
+        assert 'known this relay for 20.0 hours' in hours['description']
+        assert 'keep running stably' in hours['suggestion']
+
+    def test_collector_zero_and_missing_wfu_reach_the_warning(self):
+        """Collector keeps published 0 and omits a missing stats line, then the warning says so."""
+        from allium.lib.consensus.collector_fetcher import CollectorFetcher
+        fetcher = CollectorFetcher()
+        fetcher.flag_thresholds = {
+            name: {'guard-wfu': 0.98, 'guard-tk': GUARD_TK_DEFAULT,
+                   'guard-bw-inc-exits': 1_000_000, 'guard-bw-exc-exits': 1_000_000}
+            for name in _VOTING_AUTHORITIES
+        }
+        votes = {}
+        measured_low = {'faravahar', 'gabelmoo', 'longclaw', 'maatuska', 'tor26'}
+        for name in _VOTING_AUTHORITIES:
+            votes[name] = {
+                'flags': ['Fast', 'Stable', 'V2Dir', 'Running', 'Valid'],
+                'bandwidth': 5000, 'measured': 5000, 'tk': 20 * SECONDS_PER_DAY,
+            }
+            if name == 'bastet':
+                votes[name]['wfu'] = 0.0
+            elif name == 'moria1':
+                pass
+            elif name in measured_low:
+                votes[name]['wfu'] = 0.90
+            else:
+                votes[name]['wfu'] = 0.99
+        eligibility = fetcher._analyze_flag_eligibility({'votes': votes})
+        by_auth = {d['authority']: d for d in eligibility['guard']['details']}
+        assert by_auth['bastet']['wfu_value'] == 0.0
+        assert by_auth['bastet']['wfu_met'] is False
+        assert by_auth['moria1']['wfu_value'] is None
+        assert by_auth['moria1']['wfu_met'] is False
+        assert by_auth['dannenberg']['wfu_met'] is True
+        formatted = fetcher._format_authority_votes({'votes': votes})
+        assert next(v for v in formatted if v['authority'] == 'bastet')['wfu_display'] == '0.0%'
+        assert next(v for v in formatted if v['authority'] == 'moria1')['wfu_display'] == 'N/A'
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': formatted,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': eligibility,
+        }, current_flags=['Fast', 'Stable', 'V2Dir'], observed_bandwidth=5_000_000)
+        wfu = next(i for i in issues if i['title'] == 'Guard: WFU below threshold')
+        assert wfu['description'].startswith('2/9 authorities meet guard-wfu (≥98%; 5 needed).')
+        assert 'bastet measured 0% (no uptime credit).' in wfu['description']
+        assert 'no uptime history' not in wfu['description']
+        assert 'moria1 published no WFU.' in wfu['description']
+        assert 'moria1 measured 0%' not in wfu['description']
+
     def test_guard_requires_stable_is_warning(self):
         """Test Guard requires Stable flag is WARNING (changed from info)."""
         consensus_data = {
@@ -244,7 +514,7 @@ class TestConsensusIssues:
             'authority_votes': [{'wfu': 0.99, 'tk': 5 * SECONDS_PER_DAY}],
             'reachability': {'ipv4_reachable_count': 9},
             'flag_eligibility': {
-                'stable': {'eligible_count': 2}  # Below majority
+                'stable': {'eligible_count': 2, 'details': [{'authority': 'bastet', 'eligible': False}]},
             },
         }
         
@@ -255,8 +525,10 @@ class TestConsensusIssues:
         )
         
         stable_issues = [i for i in issues if i['category'] == 'stable']
-        assert len(stable_issues) >= 1
+        assert len(stable_issues) == 1
         assert stable_issues[0]['severity'] == 'warning'  # Changed from 'info'
+        assert stable_issues[0]['description'].startswith(
+            '2/9 authorities meet Stable (uptime or MTBF at or above their own median; 5 needed).')
     
     def test_hsdir_uptime_below_is_warning(self):
         """Fast, Stable and V2Dir without HSDir: the 96-hour uptime check is the one WARNING.

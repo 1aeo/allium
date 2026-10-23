@@ -23,6 +23,8 @@ from allium.lib.consensus.consensus_evaluation import (
     _identify_issues,
     _format_thresholds_table,
     _format_bandwidth_value,
+    _format_wfu_display,
+    _format_days,
 )
 
 # Import flag threshold constants for test validation
@@ -637,38 +639,132 @@ class TestIdentifyIssuesComprehensive:
         assert 'MB/s' in bw_issues[0]['description'] or '2 MB' in bw_issues[0]['advice']
     
     def test_guard_low_wfu_issue(self):
-        """Test detection of Guard WFU below threshold."""
+        """Guard WFU warning counts authorities below their own guard-wfu."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],  # WFU below 98%
+            'flag_eligibility': {
+                'guard': {'details': [
+                    {'wfu_met': met, 'tk_met': True, 'bw_met': True}
+                    for met in ([True, True] + [False] * 7)
+                ]},
+            },
+            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
         }
         
         issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
         
         wfu_issues = [i for i in issues if i['category'] == 'guard' and 'WFU' in i.get('title', '')]
-        assert len(wfu_issues) >= 1
-        assert '98%' in wfu_issues[0]['description']
+        assert len(wfu_issues) == 1
+        assert wfu_issues[0]['description'] == '2/9 authorities meet guard-wfu (5 needed).'
+        assert wfu_issues[0]['section'] == 'flag-guard-wfu'
     
     def test_guard_low_tk_issue(self):
-        """Test detection of Guard Time Known below threshold."""
+        """Guard Time Known warning counts authorities below their own guard-tk."""
         diagnostics = {
             'in_consensus': True,
             'vote_count': 9,
             'total_authorities': 9,
             'reachability': {'ipv4_reachable_count': 9},
-            'flag_eligibility': {},
-            'authority_votes': [{'wfu': 0.99, 'tk': 3 * SECONDS_PER_DAY}],  # TK below 8 days
+            'flag_eligibility': {
+                'guard': {'details': [
+                    {'wfu_met': True, 'tk_met': met, 'bw_met': True}
+                    for met in ([True, True] + [False] * 7)
+                ]},
+            },
+            'authority_votes': [{'wfu': 0.99, 'tk': 3 * SECONDS_PER_DAY}],
         }
         
         issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
         
         tk_issues = [i for i in issues if i['category'] == 'guard' and 'Time Known' in i.get('title', '')]
-        assert len(tk_issues) >= 1
-        assert '8 days' in tk_issues[0]['description']
+        assert len(tk_issues) == 1
+        assert tk_issues[0]['description'] == '2/9 authorities meet guard-tk (5 needed).'
+        assert tk_issues[0]['section'] == 'flag-guard-time-known'
+
+    def test_wfu_row_follows_the_authority_count_not_the_median(self):
+        """Eight values whose middle average is 98% are still Below when only 4/8 meet.
+
+        The median comparison (wfu_meets) would say the relay meets. The row and the
+        warning both follow how many authorities meet their own guard-wfu.
+        """
+        values = [0.90, 0.90, 0.90, 0.97, 0.99, 0.99, 0.99, 0.99]
+        names = ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 'longclaw', 'maatuska', 'moria1']
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 8,
+            'total_authorities': 8,
+            'majority_required': 5,
+            'authority_votes': [
+                {'authority': name, 'voted': True, 'wfu': value, 'tk': 20 * SECONDS_PER_DAY}
+                for name, value in zip(names, values)
+            ],
+            'reachability': {'ipv4_reachable_count': 8},
+            'flag_eligibility': {
+                'guard': {'details': [
+                    {'authority': name, 'wfu_met': value >= 0.98, 'tk_met': True, 'bw_met': True,
+                     'wfu_threshold': 0.98, 'wfu_value': value,
+                     'tk_threshold': GUARD_TK_DEFAULT, 'tk_value': 20 * SECONDS_PER_DAY}
+                    for name, value in zip(names, values)
+                ]},
+            },
+        }
+        formatted = format_relay_consensus_evaluation(
+            diagnostics, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        assert formatted['relay_values']['wfu_meets'] is True
+        wfu_row = next(row for row in formatted['flag_requirements_table'] if row['anchor'] == 'flag-guard-wfu')
+        assert wfu_row['status'] == 'below'
+        assert wfu_row['status_text'] == 'Below (4/8 DA)'
+        wfu_issue = next(i for i in formatted['issues'] if i['title'] == 'Guard: WFU below threshold')
+        assert wfu_issue['description'].startswith('4/8 authorities meet guard-wfu (≥98%; 5 needed).')
+        tk_row = next(row for row in formatted['flag_requirements_table'] if row['anchor'] == 'flag-guard-time-known')
+        assert tk_row['status'] == 'meets'
+        assert tk_row['status_text'] == 'Meets (8/8 DA)'
+        assert not any(i['title'] == 'Guard: Time Known below threshold' for i in formatted['issues'])
+
+    def test_guard_row_count_survives_importing_diagnostics_first(self):
+        """The row stays on the authority count when relay_diagnostics is imported first.
+
+        consensus/__init__ loads this module while relay_diagnostics is still importing
+        flag_thresholds. A module-level import of the row helpers in that window used
+        to fail and leave the row on the median.
+        """
+        import subprocess
+        import sys
+        import textwrap
+        from pathlib import Path
+        script = textwrap.dedent('''
+            import allium.lib.relay_diagnostics
+            from allium.lib.consensus.consensus_evaluation import format_relay_consensus_evaluation
+            from allium.lib.consensus.flag_thresholds import GUARD_TK_DEFAULT, SECONDS_PER_DAY
+            values = [0.90, 0.90, 0.90, 0.97, 0.99, 0.99, 0.99, 0.99]
+            names = ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+                     'longclaw', 'maatuska', 'moria1']
+            diagnostics = {
+                'in_consensus': True,
+                'total_authorities': 8,
+                'authority_votes': [
+                    {'authority': name, 'voted': True, 'wfu': value, 'tk': 20 * SECONDS_PER_DAY}
+                    for name, value in zip(names, values)
+                ],
+                'reachability': {'ipv4_reachable_count': 8},
+                'flag_eligibility': {'guard': {'details': [
+                    {'authority': name, 'wfu_met': value >= 0.98, 'tk_met': True, 'bw_met': True,
+                     'wfu_threshold': 0.98, 'wfu_value': value,
+                     'tk_threshold': GUARD_TK_DEFAULT, 'tk_value': 20 * SECONDS_PER_DAY}
+                    for name, value in zip(names, values)
+                ]}},
+            }
+            formatted = format_relay_consensus_evaluation(diagnostics, current_flags=['Fast', 'Stable'])
+            row = next(item for item in formatted['flag_requirements_table'] if item['anchor'] == 'flag-guard-wfu')
+            assert row['status_text'] == 'Below (4/8 DA)', row['status_text']
+        ''')
+        completed = subprocess.run(
+            [sys.executable, '-c', script], cwd=str(Path(__file__).resolve().parents[3]),
+            capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr
     
     def test_guard_requires_stable_flag(self):
         """Test that missing Stable flag is identified for Guard."""
@@ -1574,6 +1670,130 @@ class TestRunningValidV2DirFlags:
         fast_row = frt[0]  # First row is Fast
         assert '≥4/7 DA' in fast_row['threshold'], f"Expected ≥4/7 DA, got: {fast_row['threshold']}"
 
+    def test_majority_comes_from_the_total_when_the_field_is_missing(self):
+        """A stored majority of 5 must not survive next to a total of 7."""
+        eval_custom = dict(self.FULL_RELAY)
+        eval_custom['total_authorities'] = 7
+        eval_custom.pop('majority_required', None)
+        result = format_relay_consensus_evaluation(eval_custom, current_flags=['Running', 'Valid', 'V2Dir'])
+        assert result['majority_required'] == 4
+        fast_row = result['flag_requirements_table'][0]
+        assert '≥4/7 DA' in fast_row['threshold']
+
+    def test_reachability_color_uses_majority_of_the_total(self):
+        """Four of seven reachable authorities is a majority, not a miss of a fixed 5."""
+        reached = _format_reachability_summary({
+            'total_authorities': 7,
+            'reachability': {'ipv4_reachable_count': 4, 'total_authorities': 7},
+        })
+        assert reached['ipv4']['status_class'] == 'success'
+        assert reached['ipv4']['total'] == 7
+        short = _format_reachability_summary({
+            'reachability': {'ipv4_reachable_count': 3, 'total_authorities': 7},
+        })
+        assert short['ipv4']['status_class'] == 'danger'
+
+    def test_wfu_value_cell_uses_the_threshold_count(self):
+        """Five authorities at exactly 100% do not hide that eight of nine clear 98%."""
+        values = [1.0] * 5 + [0.99] * 3 + [0.50]
+        names = ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+                 'longclaw', 'maatuska', 'moria1', 'tor26']
+        diagnostics = {
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': [
+                {'authority': name, 'voted': True, 'wfu': value, 'tk': 20 * SECONDS_PER_DAY}
+                for name, value in zip(names, values)
+            ],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': [
+                {'authority': name, 'wfu_met': value >= 0.98, 'tk_met': True, 'bw_met': True,
+                 'wfu_value': value, 'wfu_threshold': 0.98}
+                for name, value in zip(names, values)
+            ]}},
+        }
+        formatted = format_relay_consensus_evaluation(diagnostics, current_flags=['Guard', 'Fast', 'Stable'])
+        row = next(item for item in formatted['flag_requirements_table'] if item['anchor'] == 'flag-guard-wfu')
+        assert row['status_text'] == 'Partial (8/9 DA)'
+        assert '8/9 DA above threshold' in row['value']
+        assert '(5/9 DA)' not in row['value']
+        # Five authorities published exactly 100%. That is not the set of eight
+        # that cleared 98%, so the value is a median, not a majority.
+        assert 'Median:' in row['value']
+        assert 'Majority:' not in row['value']
+        near = _format_wfu_display(0.979995, threshold=0.98)
+        assert near == '97.999%'
+        assert _format_days(688363, threshold=GUARD_TK_DEFAULT) == '7.97d'
+        # Four places still round these onto the bar. The display must not.
+        from allium.lib.string_utils import format_keeping_below
+        for percent in (97.99996, 97.9999999999996):
+            shown = format_keeping_below(percent, 98)
+            assert float(shown) < 98, shown
+        assert float(_format_wfu_display(0.9799996, threshold=0.98).rstrip('%')) < 98
+
+    def test_value_cell_says_majority_when_the_counts_are_the_same_set(self):
+        """Eight authorities at 99% are both the repeated value and the threshold count."""
+        names = ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+                 'longclaw', 'maatuska', 'moria1', 'tor26']
+        values = [0.99] * 8 + [0.50]
+        diagnostics = {
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': [
+                {'authority': name, 'voted': True, 'wfu': value, 'tk': 20 * SECONDS_PER_DAY}
+                for name, value in zip(names, values)
+            ],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': [
+                {'authority': name, 'wfu_met': value >= 0.98, 'tk_met': True, 'bw_met': True,
+                 'wfu_value': value, 'wfu_threshold': 0.98}
+                for name, value in zip(names, values)
+            ]}},
+        }
+        formatted = format_relay_consensus_evaluation(diagnostics, current_flags=['Guard', 'Fast', 'Stable'])
+        row = next(item for item in formatted['flag_requirements_table'] if item['anchor'] == 'flag-guard-wfu')
+        assert 'Majority:' in row['value']
+        assert '8/9 DA above threshold' in row['value']
+
+    def test_higher_guard_tk_does_not_round_a_miss_up_to_eight_days(self):
+        """The aggregate day text uses the lowest published guard-tk, not the highest."""
+        seconds = int(7.96 * SECONDS_PER_DAY)
+        diagnostics = {
+            'in_consensus': True,
+            'total_authorities': 2,
+            'authority_votes': [
+                {'authority': 'bastet', 'voted': True, 'wfu': 0.99, 'tk': seconds},
+                {'authority': 'moria1', 'voted': True, 'wfu': 0.99, 'tk': seconds},
+            ],
+            'reachability': {'ipv4_reachable_count': 2},
+            'flag_eligibility': {'guard': {'details': [
+                {'authority': 'bastet', 'wfu_met': True, 'tk_met': False, 'bw_met': True,
+                 'tk_value': seconds, 'tk_threshold': GUARD_TK_DEFAULT, 'wfu_threshold': 0.98},
+                {'authority': 'moria1', 'wfu_met': True, 'tk_met': False, 'bw_met': True,
+                 'tk_value': seconds, 'tk_threshold': 14 * SECONDS_PER_DAY, 'wfu_threshold': 0.98},
+            ]}},
+        }
+        thresholds = {
+            'bastet': {'guard-tk': GUARD_TK_DEFAULT, 'guard-wfu': 0.98},
+            'moria1': {'guard-tk': 14 * SECONDS_PER_DAY, 'guard-wfu': 0.98},
+        }
+        formatted = format_relay_consensus_evaluation(
+            diagnostics, thresholds, current_flags=['Fast', 'Stable'])
+        row = next(item for item in formatted['flag_requirements_table'] if item['anchor'] == 'flag-guard-time-known')
+        assert '7.96d' in row['value']
+        assert '8.0d' not in row['value']
+
+    def test_published_threshold_is_not_rounded_up_to_a_whole_number(self):
+        """A published 7.96-day bar stays 7.96 days. An exact 8-day bar stays ≥8 days."""
+        from decimal import Decimal
+        from allium.lib.string_utils import _format_tk_requirement, _format_wfu_requirement
+        assert _format_wfu_requirement(0.98) == '≥98%'
+        assert _format_wfu_requirement(0.9796) == '≥97.96%'
+        assert _format_tk_requirement(GUARD_TK_DEFAULT) == '≥8 days'
+        assert _format_tk_requirement(687744) == '≥7.96 days'
+        assert _format_tk_requirement(Decimal('7.9996') * SECONDS_PER_DAY) == '≥7.9996 days'
+        assert _format_tk_requirement(691199) == '≥7 days 23 hours 59 minutes 59 seconds'
+
 
 class TestForest44VoteBandwidthDisplay:
     """forest44's real votes: units, sources and verdicts the relay page shows."""
@@ -1806,4 +2026,5 @@ class TestHSDirUptimeRow:
             evaluation, current_flags=['Fast', 'Stable', 'V2Dir'], relay_uptime=12 * SECONDS_PER_DAY)
         uptime = next(row for row in formatted['flag_requirements_table']
                       if row['flag'] == 'HSDir' and row['metric'] == 'Uptime')
-        assert uptime['status_text'] == 'Partial (1/2 DA)'
+        # 1 of 2 is not a majority: more than half of 2 is 2.
+        assert uptime['status_text'] == 'Below (1/2 DA)'
