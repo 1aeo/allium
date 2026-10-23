@@ -28,6 +28,8 @@ def _onionoo_details():
             "first_seen": "2023-01-01 00:00:00",
             "last_seen": "2024-01-01 00:00:00",
             "last_restarted": "2023-12-01 00:00:00",
+            # Same instant as _one_overload_clock, so general overload is eligible.
+            "overload_general_timestamp": 1_700_000_000_000,
             "platform": "Tor 0.4.8.10 on Linux",
             "country": ["us", "de", "nl"][i % 3],
             "country_name": ["United States", "Germany", "Netherlands"][i % 3],
@@ -107,6 +109,9 @@ def test_parallel_and_sequential_generation_write_identical_pages(tmp_path, monk
         parallel = _build(tmp_path / "parallel", mp_workers=2)
     sequential = _build(tmp_path / "sequential", mp_workers=0)
     sequential.timestamp = parallel.timestamp  # rendered into every page
+    overload = sequential.json["relays"][0]["overload"]
+    assert overload["headline"] == "overloaded"
+    assert overload["general"]["state"] == "eligible"
 
     # Workers send relay dicts back as indexes: statuses reference the
     # parent's own relay dicts, exactly as the sequential path stores them.
