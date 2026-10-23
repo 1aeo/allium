@@ -101,6 +101,26 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     return issues
 
 
+_IPV6_SECTION = 'flag-running-ipv6-reachability'
+_IPV6_CHECK = (
+    "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
+    "address, and the route is public."
+)
+
+
+def _ipv6_issue(severity, title, description, suggestion, doc_ref):
+    """One reachability issue. The IPv6 notes all point at the same flag row."""
+    return {
+        'severity': severity,
+        'category': 'reachability',
+        'title': title,
+        'description': description,
+        'suggestion': suggestion,
+        'section': _IPV6_SECTION,
+        'doc_ref': doc_ref,
+    }
+
+
 def _legacy_ipv6_was_tested(reachability: dict, auth_count: int) -> bool:
     """True when a pre-state reachability dict says authorities tested IPv6 and missed.
 
@@ -234,25 +254,16 @@ def generate_issues_from_consensus(
     ipv6_state = reachability.get('ipv6_state')
     not_tested = reachability.get('ipv6_not_tested_authorities') or []
     if ipv6_state == 'not_tested':
-        issues.append({
-            'severity': 'info',
-            'category': 'reachability',
-            'title': 'IPv6 not tested',
-            'description': (
-                "This relay publishes an IPv6 ORPort, but no directory authority vote contains an "
-                "IPv6 reachability test. Authorities with AuthDirHasIPv6Connectivity include an 'a' line "
-                "only after they reach that address. Tor on the relay logs that an auto-discovered IPv6 "
-                "address has not been found reachable while it waits for that vote; Allium does not run "
-                "the check."
-            ),
-            'suggestion': (
-                "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
-                "address, and the route is public. An address in the descriptor is not evidence "
-                "that an authority tested it."
-            ),
-            'section': 'flag-running-ipv6-reachability',
-            'doc_ref': 'https://spec.torproject.org/dir-spec/consensus-formats.html',
-        })
+        issues.append(_ipv6_issue(
+            'info', 'IPv6 not tested',
+            "This relay publishes an IPv6 ORPort, but no directory authority vote contains an "
+            "IPv6 reachability test. Authorities with AuthDirHasIPv6Connectivity include an 'a' line "
+            "only after they reach that address. Tor on the relay logs that an auto-discovered IPv6 "
+            "address has not been found reachable while it waits for that vote; Allium does not run "
+            "the check.",
+            _IPV6_CHECK + " An address in the descriptor is not evidence that an authority tested it.",
+            'https://spec.torproject.org/dir-spec/consensus-formats.html',
+        ))
     elif ipv6_state == 'failed' or (ipv6_state is None and _legacy_ipv6_was_tested(reachability, auth_count)):
         failed = reachability.get('ipv6_failed_authorities') or []
         ipv6_tested = reachability.get('ipv6_tested_count')
@@ -261,32 +272,23 @@ def generate_issues_from_consensus(
         if ipv6_state == 'failed' and ipv6_tested <= 0:
             ipv6_tested = len(failed)
         if ipv6_tested > 0 and ipv6_count == 0:
-            issues.append({
-                'severity': 'warning',
-                'category': 'reachability',
-                'title': 'IPv6 not reachable',
-                'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
-                'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
-                'section': 'flag-running-ipv6-reachability',
-                'doc_ref': 'https://community.torproject.org/relay/setup/',
-            })
+            issues.append(_ipv6_issue(
+                'warning', 'IPv6 not reachable',
+                f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
+                'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, '
+                '2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. '
+                'Test with: curl -6 http://ipv6.icanhazip.com/',
+                'https://community.torproject.org/relay/setup/',
+            ))
         elif ipv6_state == 'failed':
-            issues.append({
-                'severity': 'warning',
-                'category': 'reachability',
-                'title': 'IPv6 not reachable',
-                'description': (
-                    "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
-                    "authorities. This fetch has no vote 'a' line for it either, so this is a "
-                    "failed confirmation, not an untested address."
-                ),
-                'suggestion': (
-                    "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
-                    "address, and the route is public."
-                ),
-                'section': 'flag-running-ipv6-reachability',
-                'doc_ref': 'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
-            })
+            issues.append(_ipv6_issue(
+                'warning', 'IPv6 not reachable',
+                "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
+                "authorities. This fetch has no vote 'a' line for it either, so this is a "
+                "failed confirmation, not an untested address.",
+                _IPV6_CHECK,
+                'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
+            ))
     
     # =========================================================================
     # FAST FLAG (1 issue type)

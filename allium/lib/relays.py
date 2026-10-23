@@ -928,13 +928,8 @@ class Relays:
                 
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
-                ipv6_state = ''
-                if formatted_consensus_evaluation.get('available'):
-                    summary = formatted_consensus_evaluation.get('reachability_summary') or {}
-                    ipv6_state = (summary.get('ipv6') or {}).get('state') or ''
-                if ipv6_state not in ('ok', 'failed', 'not_tested'):
-                    ipv6_state = ''
-                relay['ipv6_authority_test'] = ipv6_state
+                state = ((formatted_consensus_evaluation.get('reachability_summary') or {}).get('ipv6') or {}).get('state')
+                relay['ipv6_authority_test'] = state if state in ('ok', 'failed', 'not_tested') else ''
                 
                 # Generate full diagnostics including overload issues
                 # (overload data was merged in _reprocess_bandwidth_data)

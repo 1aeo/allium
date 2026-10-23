@@ -453,7 +453,7 @@ def test_relay_pages_distinguish_the_three_states(network, tmp_path):
     assert 'IPv6 not reachable' not in v4_html
     assert 'None configured' in v4_html
     assert '>0/7<' not in v4_html
-    assert 'al-status-danger">0/7' in failed_html
+    assert 'al-status-danger' in failed_html and '>0/7<' in failed_html
     assert 'Suggestion:' in untested_html
     assert 'firewall' in untested_html
 

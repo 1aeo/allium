@@ -896,15 +896,11 @@ class CollectorFetcher:
         """
         self.relay_index = {}
         self.flag_thresholds = {}  # Extract thresholds in same loop
-        # Recomputed from the votes just indexed. An authority tests IPv6 when its
-        # vote includes any 'a' line (AuthDirHasIPv6Connectivity).
         self.ipv6_testing_authorities = set()
         
         for auth_name, vote_data in sorted(self.votes.items()):
             if not vote_data:
                 continue
-            if vote_data.get('tests_ipv6'):
-                self.ipv6_testing_authorities.add(auth_name)
             
             # Extract flag thresholds (previously in separate _extract_flag_thresholds method)
             if 'flag_thresholds' in vote_data:
@@ -942,18 +938,11 @@ class CollectorFetcher:
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
 
-        # An 'a' line on any relay means this authority tests IPv6. Recover that
-        # from the index too, so a cache written before tests_ipv6 existed still
-        # names the testers. A tester that voted this hour but reached nobody
-        # has no 'a' line; keep them if the previous fetch already saw them test.
-        for relay in self.relay_index.values():
-            for auth_name, vote in relay.get('votes', {}).items():
-                if vote.get('ipv6_reachable'):
-                    self.ipv6_testing_authorities.add(auth_name)
-        prior = self.prior_ipv6_testing_authorities or set()
+        self.ipv6_testing_authorities = _collect_ipv6_testers(self.relay_index, self.votes)
+        prior = set(self.prior_ipv6_testing_authorities or ())
         if prior:
             voted = {name for name, vote in self.votes.items() if vote}
-            self.ipv6_testing_authorities |= (set(prior) & voted)
+            self.ipv6_testing_authorities |= prior & voted
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
@@ -1489,31 +1478,30 @@ class CollectorFetcher:
         }
 
 
-def ipv6_testers_from_collector(collector_data):
-    """Authorities that test IPv6, including evidence in an older cache.
-
-    A fresh fetch stores ``ipv6_testing_authorities``. A cache written before
-    that field still has ``ipv6_reachable`` on relay votes wherever an ``a``
-    line was parsed. Either source is enough. An empty result means this
-    snapshot contains no ``a`` line at all.
-    """
-    if not isinstance(collector_data, dict):
-        return set()
-    found = set(collector_data.get('ipv6_testing_authorities') or [])
-    votes = collector_data.get('votes') or {}
+def _collect_ipv6_testers(relay_index, votes=None):
+    """Authorities whose vote contains an 'a' line, from the vote or the index."""
+    found = set()
     if isinstance(votes, dict):
         for auth_name, vote in votes.items():
             if isinstance(vote, dict) and vote.get('tests_ipv6'):
                 found.add(auth_name)
-    index = collector_data.get('relay_index') or {}
-    if isinstance(index, dict):
-        for relay in index.values():
+    if isinstance(relay_index, dict):
+        for relay in relay_index.values():
             if not isinstance(relay, dict):
                 continue
             for auth_name, vote in (relay.get('votes') or {}).items():
                 if isinstance(vote, dict) and vote.get('ipv6_reachable'):
                     found.add(auth_name)
     return found
+
+
+def ipv6_testers_from_collector(collector_data):
+    """Testers named on a fetch result, including an older cache's relay index."""
+    if not isinstance(collector_data, dict):
+        return set()
+    saved = set(collector_data.get('ipv6_testing_authorities') or [])
+    return saved | _collect_ipv6_testers(
+        collector_data.get('relay_index'), collector_data.get('votes'))
 
 
 def discover_authorities(relays: list, update_registry: bool = True) -> list:
