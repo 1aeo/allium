@@ -185,14 +185,14 @@ def operator_uptime(members, uptime_map, key, windows):
         if interval % step:
             continue
         try:
-            pts = uptime_points(block, period, windows, relay, section)
+            pts = _slotted(uptime_points(block, period, windows, relay, section), step, interval)
         except Exception:  # noqa: BLE001 -- one bad history must not drop the operator chart
             continue
-        if not native:
-            pts = _slotted(pts, step, interval)
         if not pts:
             continue
         for t, value in pts.items():
+            if value != value or value in (float("inf"), float("-inf")):  # one NaN would make the mean NaN
+                continue
             total, count = bins.get(t, (0.0, 0))
             bins[t] = (total + value, count + 1)
         lasts.append((max(pts), relay.get("running") is False))

@@ -169,9 +169,27 @@ def test_operator_uptime_fills_a_shorter_history_and_stops_where_everyone_runnin
     assert [(t.day, round(v)) for t, v in zip(ts, percent)] == [(3, 50), (5, 100), (7, 100), (9, 100)]
     assert operator_uptime([relay("B", running=False)], uptime_map, "1_year", {}) is None
     assert operator_uptime([relay("Z")], {}, "1_month", {}) is None
+
+
+def test_operator_uptime_slots_every_history_and_skips_non_finite_values():
+    """A native block on a finer interval joins the majority slots. NaN does not make the mean NaN."""
+    day, first = 86400, "2026-09-01 12:00:00"
+    uptime_map = {
+        "A": _uptime([999, 999], first=first, interval=day),
+        "B": _uptime([999, 999], first=first, interval=day),
+        # Same period, outvoted interval: four 12-hour zeros are two whole days at 0%.
+        "C": _uptime([0, 0, 0, 0], first="2026-09-01 06:00:00", interval=day // 2),
+        "N": _uptime([float("nan"), 0], first=first, interval=day),
+    }
+    members = [relay(fp) for fp in "ABCN"]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert interval == day and [t.day for t in ts] == [1, 2]
+    # Sep 1: A and B up, C down, N missing. Sep 2: N is down too.
+    assert percent == pytest.approx([200.0 / 3, 50.0])
     # A member whose history cannot be read is left out; the others still draw.
-    bad = {"uptime": {"1_month": dict(uptime_map["A"]["uptime"]["1_year"], factor="x")}}
-    assert operator_uptime([relay("A"), relay("X")], {"A": uptime_map["A"], "X": bad}, "1_year", {})[2] == 2 * day
+    bad = {"uptime": {"1_month": dict(uptime_map["A"]["uptime"]["1_month"], factor="x")}}
+    drawn = operator_uptime([relay("A"), relay("X")], {"A": uptime_map["A"], "X": bad}, "1_month", {})
+    assert drawn[2] == day and drawn[1] == pytest.approx([100.0, 100.0])
 
 
 def test_family_key_is_the_effective_family_when_it_has_other_members():

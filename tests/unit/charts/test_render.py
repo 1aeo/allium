@@ -462,6 +462,14 @@ def test_operator_uptime_chart_uses_the_relay_chart_and_the_newest_restart(tmp_p
     assert "Uptime · last 30 days" in lines and "Uptime (%)" in lines and "Mean running flag" in lines
     assert "Average 50.0%  ·  Onionoo Running flag" in lines
     assert "Last restarted  Sep 20  ·  relayC" in lines and "Last restarted  Sep 12" not in lines
+    # A nickname with a newline or past Tor's 19 characters must not break the legend or the SVG.
+    messy = relay("A", nickname="line\nbreak " + "W" * 80, last_restarted="2026-09-20 08:00:00")
+    odd = relay("B", nickname=["not", "a", "string"], last_restarted="2026-09-01 08:00:00")
+    named = writer([messy, odd], {"A": history([100] * 30)}, {"A": [999] * 180})
+    named.contact([0, 1], str(tmp_path))
+    label = next(line for line in texts(tmp_path / "uptime-1m.svg") if line.startswith("Last restarted"))
+    assert label == "Last restarted  Sep 20  ·  line break WWWWWWW…" and "\n" not in label
+    assert text_width("Mean running flag", 11.5) + text_width(label, 11.5) < PLOT_WIDTH
     # Under 30 slots the relay page shows no figure, so the operator chart doesn't either.
     short = writer([relay("A")], {"A": history([100] * 30)}, {"A": [999] * 10}, uptime_first="2026-09-29 14:00:00")
     assert "1m" in short.contact([0], str(tmp_path))[1]

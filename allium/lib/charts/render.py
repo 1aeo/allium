@@ -120,10 +120,15 @@ def _restart_entry(restart, ts, end=None, who=""):
 
 
 def _latest_restart(members):
-    """``(datetime, nickname)`` of the newest ``last_restarted``, or ``(None, "")``."""
+    """``(datetime, nickname)`` of the newest ``last_restarted``, or ``(None, "")``.
+
+    The nickname is one line and at most 19 characters (Tor's limit) so the legend stays on the canvas.
+    """
     found = ((parse_onionoo_timestamp(relay.get("last_restarted")), relay) for relay in members)
-    stamp, relay = max((item for item in found if item[0]), default=(None, None), key=lambda item: item[0] or 0)
-    return stamp, (relay.get("nickname") or "").strip() if relay else ""
+    stamp, relay = max((item for item in found if item[0]), default=(None, None), key=lambda item: item[0])
+    raw = relay.get("nickname") if relay else ""
+    nick = " ".join(raw.split()) if isinstance(raw, str) else ""
+    return stamp, nick if len(nick) <= 19 else nick[:18] + "…"
 
 
 def bandwidth_chart(period, series, advertised, bands, identity, restart=None, overload=None,
