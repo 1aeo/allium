@@ -116,6 +116,14 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_not_ready_relays', 'hf_total_validated_operators',
         'hf_family_cert_count', 'hf_family_no_cert_count',
         # EXIT DNS HEALTH metrics
+        'tls_pqc_saw', 'tls_pqc_other', 'tls_pqc_no_group', 'tls_pqc_not_in_scan',
+        'tls_pqc_observed', 'tls_pqc_in_scan', 'tls_pqc_consensus', 'tls_pqc_scan_rows',
+        'tls_pqc_guard_saw', 'tls_pqc_guard_other', 'tls_pqc_guard_no_group',
+        'tls_pqc_guard_not_in_scan', 'tls_pqc_guard_observed', 'tls_pqc_guard_total',
+        'tls_pqc_exit_saw', 'tls_pqc_exit_other', 'tls_pqc_exit_no_group',
+        'tls_pqc_exit_not_in_scan', 'tls_pqc_exit_observed', 'tls_pqc_exit_total',
+        'tls_pqc_authority_saw', 'tls_pqc_authority_other', 'tls_pqc_authority_no_group',
+        'tls_pqc_authority_not_in_scan', 'tls_pqc_authority_observed', 'tls_pqc_authority_total',
         'exit_dns_health_tested', 'exit_dns_health_success', 'exit_dns_health_fail',
         'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
         'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
@@ -172,6 +180,9 @@ def preformat_network_health_template_strings(health_metrics):
         'exit_dns_health_resolver_local_22_percentage', 'exit_dns_health_resolver_local_as_percentage',
         'exit_dns_health_resolver_local_operator_percentage', 'exit_dns_health_resolver_other_percentage',
         'exit_dns_health_resolver_unknown_percentage',
+        'tls_pqc_observed_percentage', 'tls_pqc_weight_saw_percentage',
+        'tls_pqc_weight_other_percentage', 'tls_pqc_weight_no_group_percentage',
+        'tls_pqc_weight_not_in_scan_percentage',
     ]
 
     # Add 1_month period formatting keys (used directly in templates) 
@@ -526,6 +537,22 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
             fallback[f'{stat_key}_valid'] = 0
             fallback[f'{stat_key}_success_rate'] = 0.0
         health_metrics.update(fallback)
+
+
+def _integrate_tls_pqc(health_metrics, relay_set):
+    """Join the Margot TLS scan to relays currently in the consensus.
+
+    Directory-authority counts are that join. A fingerprint the scan does not
+    contain is counted as not in this scan, which is not a failed handshake.
+    """
+    try:
+        from .tls_pqc import network_tls_metrics
+        health_metrics.update(network_tls_metrics(
+            relay_set.json.get('relays') or [],
+            getattr(relay_set, 'tls_pqc_data', None)))
+    except Exception:
+        from .tls_pqc import empty_network_metrics
+        health_metrics.update(empty_network_metrics())
 
 
 def _integrate_exit_dns_health(health_metrics, relay_set):
@@ -1656,6 +1683,9 @@ def calculate_network_health_metrics(relay_set):
 
     # === EXIT DNS HEALTH METRICS ===
     _integrate_exit_dns_health(health_metrics, relay_set)
+
+    # === TLS PQC (Margot scanner; not inferred from the Tor version string) ===
+    _integrate_tls_pqc(health_metrics, relay_set)
 
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
     # DA readiness, family-cert counts, and operator_desc_counts were all

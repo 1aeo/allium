@@ -1,0 +1,16 @@
+<!doctype html><html lang=en><head><title>2026-06-18: Tor Post-Quantum TLS Status - Alexander Hansen Færøy's Homepage</title></head>
+<body><h1>2026-06-18: Tor Post-Quantum TLS Status</h1>
+<table id=tor_pqc_tls_table><thead><tr><th>Nickname</th><th>Fingerprint</th><th>Cipher Suite</th><th>Group</th><th>Notes</th></tr></thead><tbody>
+<tr><td><a href=https://metrics.torproject.org/rs.html#details/000004ACBB9D29BCBA17256BB35928DDBFC8ABA9>lisdex</a></td><td>000004ACBB9D29BCBA17256BB35928DDBFC8ABA9</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519MLKEM768</td><td>kept</td></tr>
+<tr><td><a href=https://metrics.torproject.org/rs.html#details/000C71961332DDA7B6AAB2A88FF07B0C37650F70>donottouchtheconfig</a></td><td>000C71961332DDA7B6AAB2A88FF07B0C37650F70</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519</td><td></td></tr>
+<tr><td>Amp &amp; Co</td><td>$00240ecb2b535aa4c1e1874d744dfa6af2e5e941</td><td>TLS13_AES_256_GCM_SHA384</td><td>secp256r1</td><td>lower + dollar</td></tr>
+<tr><td><a href=https://metrics.torproject.org/rs.html#details/E25CF3E2BEEB422B7F94CFA29D5B62D5109C5D60>shawnna</a></td><td>E25CF3E2BEEB422B7F94CFA29D5B62D5109C5D60</td><td></td><td></td><td>empty group</td></tr>
+<tr><td>first-empty</td><td>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</td><td></td><td></td><td></td></tr>
+<tr><td>second-group</td><td>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519MLKEM768</td><td>upgrades the empty duplicate</td></tr>
+<tr><td>keep-first</td><td>BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519</td><td></td></tr>
+<tr><td>ignore-second</td><td>BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519MLKEM768</td><td>first group wins</td></tr>
+<tr><td>not-a-fingerprint</td><td>short</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519</td><td></td></tr>
+<tr><td>only-one-cell</td></tr>
+</tbody></table>
+<script>const dataTable=new simpleDatatables.DataTable("#tor_pqc_tls_table",{paging:!1})</script>
+</body></html>

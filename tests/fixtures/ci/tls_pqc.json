@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "artifact": "html",
+  "source_url": "https://ahf.me/tor-tls-pqc/2026-06-18/",
+  "index_url": "https://ahf.me/tor-tls-pqc/",
+  "scan_time": "2026-06-18",
+  "artifact_note": "Margot's tls-ciphers command writes cipher_suites.csv (nickname;rsa_id;ed25519_id;weight_status;weight;connected;address;cipher_suite;key_exchange_group). The scans published at ahf.me are HTML tables of nickname, fingerprint, cipher suite, and key-exchange group, with no JSON or CSV sibling.",
+  "relays": {
+    "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555": {
+      "nickname": "CIFallbackExit",
+      "cipher_suite": "TLS13_AES_256_GCM_SHA384",
+      "key_exchange_group": "X25519MLKEM768",
+      "connected": true
+    }
+  }
+}

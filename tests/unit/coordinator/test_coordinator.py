@@ -489,8 +489,8 @@ class TestCoordinatorMultiAPI:
         )
         
         assert coordinator.enabled_apis == 'all'
-        # Should have all 7 API workers: details, uptime, bandwidth, aroi, exit_dns_health, collector, descriptors
-        assert len(coordinator.api_workers) == 7
+        # details, uptime, bandwidth, aroi, exit DNS, TLS PQC, collector, descriptors
+        assert len(coordinator.api_workers) == 8
         
         # Check that all APIs are configured
         api_names = [worker[0] for worker in coordinator.api_workers]
@@ -499,6 +499,7 @@ class TestCoordinatorMultiAPI:
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
         assert "exit_dns_health" in api_names
+        assert "tls_pqc" in api_names
         assert "collector_consensus" in api_names
         assert "collector_descriptors" in api_names
         
@@ -649,6 +650,7 @@ class TestCoordinatorMultiAPI:
                 bandwidth_data=None,
                 aroi_validation_data=None,
                 exit_dns_health_data=None,
+                tls_pqc_data=None,
                 collector_consensus_data=None,
                 consensus_health_data={"health_status": {}},
                 collector_descriptors_data=None,
@@ -749,8 +751,7 @@ class TestCoordinatorMultiAPI:
             enabled_apis='all'
         )
         
-        # Check that all 7 workers are configured
-        assert len(coordinator.api_workers) == 7
+        assert len(coordinator.api_workers) == 8
         
         details_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_details')
         uptime_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_uptime')
@@ -771,8 +772,7 @@ class TestCoordinatorThreading:
         """Test that worker threads are properly configured"""
         coordinator = make_coordinator(enabled_apis='all')
         
-        # Test that api_workers are properly configured (all 7 workers)
-        assert len(coordinator.api_workers) == 7
+        assert len(coordinator.api_workers) == 8
         
         api_names = [worker[0] for worker in coordinator.api_workers]
         assert "onionoo_details" in api_names
@@ -780,6 +780,7 @@ class TestCoordinatorThreading:
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
         assert "exit_dns_health" in api_names
+        assert "tls_pqc" in api_names
         assert "collector_consensus" in api_names
         assert "collector_descriptors" in api_names
     

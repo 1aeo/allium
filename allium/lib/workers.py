@@ -219,6 +219,13 @@ EXIT_DNS_HEALTH_CACHE_MAX_AGE_HOURS = 12
 EXIT_DNS_HEALTH_TIMEOUT_FRESH_CACHE = 90
 EXIT_DNS_HEALTH_TIMEOUT_STALE_CACHE = 120
 
+# TLS PQC SCAN - Margot tls-ciphers results published at ahf.me.
+# Scans are irregular (months apart). A day between index checks is enough
+# to notice a new dated directory without refetching the HTML every run.
+TLS_PQC_CACHE_MAX_AGE_HOURS = 24
+TLS_PQC_TIMEOUT_FRESH_CACHE = 90
+TLS_PQC_TIMEOUT_STALE_CACHE = 120
+
 # COLLECTOR CONSENSUS API - Fetches authority votes from CollecTor
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
 COLLECTOR_TIMEOUT_FRESH_CACHE = 90    # 90 seconds when cache is available (fallback on timeout)
@@ -349,6 +356,21 @@ EXIT_DNS_HEALTH_CONFIG = APIConfig(
     custom_headers={'User-Agent': 'Allium/1.0'},
     count_field='results',
     retry_count=2,               # External API: retry up to 2 times
+    retry_delay_base=1.0,
+    allow_exit_on_304=False,
+    critical=False,
+)
+
+TLS_PQC_CONFIG = APIConfig(
+    api_name='tls_pqc',
+    display_name='TLS PQC scan',
+    cache_max_age_hours=TLS_PQC_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=TLS_PQC_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=TLS_PQC_TIMEOUT_STALE_CACHE,
+    use_conditional_requests=False,
+    custom_headers={'User-Agent': 'Allium/1.0'},
+    count_field='relays',
+    retry_count=2,
     retry_delay_base=1.0,
     allow_exit_on_304=False,
     critical=False,
@@ -1882,6 +1904,104 @@ def fetch_consensus_health(progress_logger=None):
         return None
 
 
+def _validate_tls_pqc_document(data):
+    """Validator for a parsed Margot TLS scan cached as JSON."""
+    from .tls_pqc import validate_tls_pqc_document
+    return validate_tls_pqc_document(data)
+
+
+def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=None):
+    """
+    Fetch the latest Margot TLS cipher scan and cache the parsed document.
+
+    The default URL is the ahf.me index. A dated scan page or a Margot
+    ``cipher_suites.csv`` URL is parsed directly. Caching matches the other
+    non-Onionoo documents: a fresh file is returned without a request, and a
+    failed refresh falls back to the previous parsed scan.
+    """
+    from .tls_pqc import DEFAULT_INDEX_URL, load_tls_pqc_scan
+
+    api_name = TLS_PQC_CONFIG.api_name
+    display_name = TLS_PQC_CONFIG.display_name
+    url = tls_pqc_url or DEFAULT_INDEX_URL
+
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+
+    cache_age = _cache_manager.get_cache_age(api_name)
+    cache_max_age_seconds = TLS_PQC_CACHE_MAX_AGE_HOURS * 3600
+    if cache_age is not None and cache_age < cache_max_age_seconds:
+        cached = _load_cache(api_name)
+        if cached and _validate_tls_pqc_document(cached):
+            log_progress(
+                "using cached %s (less than %s hour(s) old)"
+                % (display_name, TLS_PQC_CACHE_MAX_AGE_HOURS))
+            _mark_ready(api_name)
+            log_progress("loaded %s relays from %s cache" % (
+                len(cached.get("relays") or {}), display_name))
+            return cached
+
+    cached_data = None
+    timeout_seconds = TLS_PQC_TIMEOUT_STALE_CACHE
+    retry_count = TLS_PQC_CONFIG.retry_count
+    try:
+        loaded = _load_cache(api_name)
+        if loaded and _validate_tls_pqc_document(loaded):
+            cached_data = loaded
+            timeout_seconds = TLS_PQC_TIMEOUT_FRESH_CACHE
+            retry_count = 0
+            log_progress(
+                "cache is %.1f hours old (>=%sh), using %s second timeout to refresh..."
+                % ((cache_age or 0) / 3600, TLS_PQC_CACHE_MAX_AGE_HOURS, timeout_seconds))
+        else:
+            log_progress(
+                "no valid cache exists, using %s second timeout for initial fetch..."
+                % timeout_seconds)
+
+        headers = dict(TLS_PQC_CONFIG.custom_headers or {})
+
+        def fetch_body(one_url):
+            log_progress("fetching %s" % one_url)
+            return _retry_with_backoff(
+                fetch_fn=_fetch_url_with_total_timeout,
+                args=(one_url, timeout_seconds, headers),
+                retry_count=retry_count,
+                retry_delay_base=TLS_PQC_CONFIG.retry_delay_base,
+                log_fn=log_progress,
+                operation_name=display_name,
+            )
+
+        data = load_tls_pqc_scan(fetch_body, url)
+        if not _validate_tls_pqc_document(data):
+            log_progress("warning: invalid %s document" % display_name)
+            if cached_data:
+                log_progress("using cached %s due to invalid response" % display_name)
+                _mark_ready(api_name)
+                return cached_data
+            _mark_stale(api_name, "Invalid TLS PQC scan")
+            return None
+
+        log_progress("caching %s..." % display_name)
+        _save_cache(api_name, data)
+        _mark_ready(api_name)
+        log_progress(
+            "parsed %s relays from %s scan %s (%s)"
+            % (len(data.get("relays") or {}), data.get("artifact"),
+               data.get("scan_time"), data.get("source_url")))
+        return data
+    except Exception as exc:
+        reason = "timeout" if "timeout" in str(exc).lower() else "error"
+        log_progress("%s: %s" % (reason, exc))
+        if cached_data:
+            log_progress("using cached %s due to %s" % (display_name, reason))
+            _mark_ready(api_name)
+            return cached_data
+        _mark_stale(api_name, "%s: %s" % (reason, exc))
+        log_progress("no cached %s available after %s" % (display_name, reason))
+        return None
+
+
 # Initialize state on module import
 _load_state() 
 
@@ -1949,6 +2069,10 @@ EXIT_DNS_HEALTH_CONFIG.worker_fn = fetch_exit_dns_health
 EXIT_DNS_HEALTH_CONFIG.progress_name = 'Exit DNS Health API'
 EXIT_DNS_HEALTH_CONFIG.args_fn = lambda c: [c.exit_dns_health_url, c._noop_logger]
 
+TLS_PQC_CONFIG.worker_fn = fetch_tls_pqc
+TLS_PQC_CONFIG.progress_name = 'TLS PQC Scan'
+TLS_PQC_CONFIG.args_fn = lambda c: [c.tls_pqc_url, c._noop_logger]
+
 COLLECTOR_CONSENSUS_CONFIG.worker_fn = fetch_collector_consensus_data
 COLLECTOR_CONSENSUS_CONFIG.args_fn = lambda c: [None, c._noop_logger]
 
@@ -1964,6 +2088,7 @@ API_CONFIGS = [
     BANDWIDTH_CONFIG,
     AROI_CONFIG,
     EXIT_DNS_HEALTH_CONFIG,
+    TLS_PQC_CONFIG,
     COLLECTOR_CONSENSUS_CONFIG,
     COLLECTOR_DESCRIPTORS_CONFIG,
     CONSENSUS_HEALTH_CONFIG,

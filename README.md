@@ -139,6 +139,7 @@ Real-time metrics at `network-health.html`:
 - IPv4/IPv6 adoption rates
 - Flag distribution (Fast, Stable, HSDir, V2Dir, Authority)
 - New relay tracking (24h, 30d, 6mo, 1yr)
+- PQC TLS (X25519MLKEM768) from the latest Margot scan published at ahf.me, including relays not in that scan
 
 </details>
 

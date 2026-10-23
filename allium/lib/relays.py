@@ -103,6 +103,7 @@ class Relays:
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
                              aroi_validation_data=None, exit_dns_health_data=None,
+                             tls_pqc_data=None,
                              collector_consensus_data=None,
                              consensus_health_data=None, collector_descriptors_data=None):
         """
@@ -135,6 +136,7 @@ class Relays:
         self.bandwidth_data = bandwidth_data
         self.aroi_validation_data = aroi_validation_data
         self.exit_dns_health_data = exit_dns_health_data
+        self.tls_pqc_data = tls_pqc_data
         self.collector_consensus_data = collector_consensus_data
         self.consensus_health_data = consensus_health_data
         self.collector_descriptors_data = collector_descriptors_data
@@ -186,6 +188,14 @@ class Relays:
         # Step 13.5: Set per-relay family support type and cache descriptor sets
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
+
+        # TLS PQC scan (before precompute: contact pages read the per-relay fields).
+        # A missing fingerprint is "not in this scan", which is not a failed relay.
+        if tls_pqc_data and self.json.get('relays'):
+            try:
+                self._attach_tls_pqc_data()
+            except Exception as e:
+                print(f"Warning: TLS PQC scan processing failed ({e}), continuing without PQC data")
 
         # Step 14: Exit DNS Health enrichment (before precompute since contact pages read relay fields)
         if exit_dns_health_data and self.json.get('relays'):
@@ -1075,6 +1085,13 @@ class Relays:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'
+
+    def _attach_tls_pqc_data(self):
+        """Copy the Margot TLS scan onto each relay, keyed by fingerprint."""
+        from .tls_pqc import attach_tls_pqc_to_relays
+        attach_tls_pqc_to_relays(
+            self.json.get('relays', []),
+            getattr(self, 'tls_pqc_data', None))
 
     def _attach_exit_dns_health_data(self):
         """Attach per-relay DNS health status for exit relays.
