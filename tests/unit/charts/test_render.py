@@ -12,8 +12,10 @@ from allium.lib.charts.bands import CATALOG, bands_for_role, census_footnote
 from allium.lib.charts.render import (
     CHARTS_DIR, CREDIT, LEFT, PLOT_WIDTH, WIDTH, bandwidth_chart, clear_chart_tree, uptime_chart,
 )
+from allium.lib.charts.svg import (
+    BLUE, CALLOUT_BG, GREEN, MUTED, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width,
+)
 from allium.lib.stability_utils import compute_relay_stability
-from allium.lib.charts.svg import BLUE, CALLOUT_BG, GREEN, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -21,6 +23,12 @@ from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, re
 def texts(path):
     """The chart's text lines (double spaces are written as no-break spaces)."""
     return [t.text.replace("\xa0", " ") for t in ET.parse(path).iter("{http://www.w3.org/2000/svg}text")]
+
+
+def texts_of(svg):
+    """``texts`` of an in-memory chart."""
+    root = ET.fromstring(svg.document())
+    return [t.text.replace("\xa0", " ") for t in root.iter("{http://www.w3.org/2000/svg}text")]
 
 
 def height(path):
@@ -562,15 +570,87 @@ def test_chart_layout_charts_writes_them_apart_from_the_pages(tmp_path, image_fo
     assert writer([], {}).folder("relay", "A", str(page)) == str(page)
 
 
+def test_network_bandwidth_chart_matches_the_relay_chart_without_role_bands(tmp_path):
+    """The network chart is the relay chart: throughput plus write/read, in Gbit/s, and no role's percentile bands."""
+    ts = [T0 + timedelta(days=i) for i in range(4)]
+    svg = bandwidth_chart(
+        "1m", (ts, [400000, 500000, 600000, 500000], [380000, 480000, 580000, 490000], DAY), 900000, None,
+        "Tor network", unit="Gbit/s", subject="Whole network", footnote="Sum of relay write and read")
+    path = tmp_path / "bandwidth-1m.svg"
+    path.write_text(svg.document(), encoding="utf-8")
+    lines = texts(path)
+    assert "Tor network" in lines and "Throughput · last 30 days" in lines
+    assert "Throughput (Gbit/s)" in lines and "Write / read" in lines
+    assert "Write avg 500 Gbit/s (56% of advertised), peak 600 Gbit/s Sep 3" in lines
+    assert "Write (outbound)" in lines and "Read (inbound)" in lines and "Advertised  900 Gbit/s" in lines
+    assert "Write / read · last 30 days" in lines and "Whole network" in lines
+    assert "Write/read 1.04 overall" in lines and "Sum of relay write and read" in lines
+    assert not any("Guard" in line or "p98" in line or "This relay" in line or "Typical" in line for line in lines)
+
+
+def test_network_bandwidth_chart_paints_the_network_census(tmp_path):
+    """A network census uses the relay chart's bands, with its own footnote instead of a role baseline."""
+    ts = [T0 + timedelta(days=i) for i in range(4)]
+    bands = {"role": "network", "n": 9151, "typical_lo": 0.99, "typical_hi": 1.37, "invest_lo": 0.97,
+             "invest_hi": 2.01}
+    svg = bandwidth_chart(
+        "1m", (ts, [400000, 500000, 600000, 500000], [380000, 480000, 580000, 490000], DAY), 900000, bands,
+        "Tor network", unit="Gbit/s", subject="Whole network", operator=True,
+        footnote="9,151 relays · ≥50 KB/s, ≥3 points")
+    path = tmp_path / "bandwidth-1m.svg"
+    path.write_text(svg.document(), encoding="utf-8")
+    lines = texts(path)
+    assert "Write / read · last 30 days  ·  vs network band" in lines
+    assert "Whole network" in lines and "Typical  0.99–1.37  ·  p10–p90" in lines
+    assert "9,151 relays · ≥50 KB/s, ≥3 points" in lines and "baseline" not in " ".join(lines)
+    low = bandwidth_chart(
+        "1m", (ts, [500.0] * 4, [1000.0] * 4, DAY), 2000.0,
+        {"role": "network", "peers": "relays", "n": 100, "typical_lo": 0.99, "typical_hi": 1.2,
+         "invest_lo": 0.9, "invest_hi": 2.0},
+        "Tor network", subject="Whole network", operator=True, footnote="100 relays · ≥50 KB/s, ≥3 points")
+    assert any("below p2" in line for line in texts_of(low))
+
+
+def test_network_charts_are_written_for_bandwidth_and_uptime(tmp_path):
+    relays = [relay("A"), relay("B")]
+    charts = writer(relays, {fp: history([100, 200, 150]) for fp in ("A", "B")},
+                    {"A": [999] * 30, "B": [999] * 30})
+    bandwidth, uptime = charts.network(str(tmp_path))
+    assert bandwidth.keys() == uptime.keys() == {"1m"}
+    lines = texts(tmp_path / "bandwidth-1m.svg")
+    assert "Gbit/s" in " ".join(lines) and "Write / read · last 30 days  ·  vs network band" in lines
+    assert "Whole network" in lines and "9,151 relays · baseline 19 Oct 2026" in lines
+    uptime_lines = texts(tmp_path / "uptime-1m.svg")
+    assert "Tor network" in uptime_lines and "Relays in that average" in uptime_lines
+    assert any("one count per 4-hour slot" in line for line in uptime_lines)
+
+
+def test_network_uptime_chart_states_the_relay_count_range(tmp_path):
+    """The count panel's subtitle is the range of relays in the average, and the slot length."""
+    ts = [T0 + timedelta(hours=4 * i) for i in range(4)]
+    svg = uptime_chart("1m", ts, [95.0, 94.0, 93.0, 90.0], 14400, "Tor network", None, 93.0, [8795, 9000, 9500, 9839])
+    path = tmp_path / "uptime-1m.svg"
+    path.write_text(svg.document(), encoding="utf-8")
+    lines = texts(path)
+    assert "Relays in that average" in lines
+    assert "8,795–9,839 relays · one count per 4-hour slot" in lines
+    assert "Relays counted" in lines
+
+
 def test_every_build_starts_the_chart_tree_afresh(tmp_path):
     """clear_chart_tree() drops the charts an earlier --chart-layout charts build wrote, and charts/ with them
-    unless it holds something allium did not write."""
+    unless it holds something allium did not write. Network charts, beside the health page or under charts/, go too."""
     for kind, name in (("relay", "A" * 40), ("contact", "h" * 32)):
         (tmp_path / "charts" / kind / name).mkdir(parents=True)
         (tmp_path / "charts" / kind / name / "bandwidth-1m.png").write_bytes(b"old")
+    (tmp_path / "charts" / "network").mkdir()
+    (tmp_path / "charts" / "network" / "uptime-1m.png").write_bytes(b"old")
+    (tmp_path / "network").mkdir()
+    (tmp_path / "network" / "bandwidth-1m.png").write_bytes(b"old")
     (tmp_path / "charts" / "README.txt").write_text("kept")
     clear_chart_tree(str(tmp_path))
     assert os.listdir(tmp_path / "charts") == ["README.txt"]
+    assert not (tmp_path / "network").exists()
     (tmp_path / "charts" / "README.txt").unlink()
     clear_chart_tree(str(tmp_path))
     assert os.listdir(tmp_path) == []
@@ -604,3 +684,38 @@ def test_a_symlinked_chart_tree_stops_the_build_and_is_not_followed(tmp_path):
     with pytest.raises(OSError, match="symbolic link"):
         clear_chart_tree(str(out))
     assert (elsewhere / "relay" / ("A" * 40) / "bandwidth-1m.png").read_bytes() == b"keep"
+
+
+def test_a_symlinked_network_directory_is_not_followed(tmp_path):
+    """charts/network as a symbolic link is refused; rmtree must not delete the link's target."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "secret").write_text("keep")
+    out = tmp_path / "out"
+    (out / "charts").mkdir(parents=True)
+    (out / "charts" / "network").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(OSError, match="symbolic link"):
+        clear_chart_tree(str(out))
+    assert (elsewhere / "secret").read_text() == "keep"
+
+
+def test_a_file_where_the_network_charts_go_is_removed(tmp_path):
+    """A file named network blocks the chart directory; the build removes that file and nothing else."""
+    (tmp_path / "network").write_text("block")
+    (tmp_path / "keep.txt").write_text("keep")
+    clear_chart_tree(str(tmp_path))
+    assert not (tmp_path / "network").exists()
+    assert (tmp_path / "keep.txt").read_text() == "keep"
+
+
+def test_gbit_spike_callout_sits_on_the_scaled_write_line():
+    """A Gbit/s axis must anchor the spike marker on the scaled write, not the raw Mbit/s value."""
+    ts = [T0 + timedelta(days=i) for i in range(6)]
+    bands = {"role": "network", "peers": "relays", "n": 100, "typical_lo": 0.9, "typical_hi": 1.2,
+             "invest_lo": 0.5, "invest_hi": 2.0}
+    svg = bandwidth_chart(
+        "1m", (ts, [1000, 1000, 1000, 20000, 1000, 1000], [1000] * 6, DAY), 30000, bands, "Tor network",
+        unit="Gbit/s", subject="Whole network", operator=True, footnote="100 relays")
+    leaders = [op for op in svg.ops if op[0] == "line" and op[5] == MUTED and op[6] == 1]
+    assert leaders
+    assert 0 < leaders[0][2] < svg.height

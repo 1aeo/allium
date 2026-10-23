@@ -1,0 +1,12 @@
+{
+  "frozen_from": "2026-10-19 16:00:00",
+  "cut": "mean throughput ≥ 50 KB/s, ≥3 aligned points",
+  "metric": "per-relay ratio of means (sum write / sum read)",
+  "note": "Frozen census. Do not recompute from the live Onionoo dump at site-build time. A network-wide shift would move live percentiles and hide itself. Rebuild from a quiet snapshot when the mix changes, not every publish.",
+  "periods": {
+    "1m": {"n": 9151, "p2": 0.965, "p10": 0.9901, "p50": 1.0354, "p90": 1.3739, "p98": 2.0103},
+    "6m": {"n": 8489, "p2": 0.966, "p10": 0.995, "p50": 1.028, "p90": 1.197, "p98": 1.811},
+    "1y": {"n": 6208, "p2": 0.976, "p10": 1.002, "p50": 1.024, "p90": 1.108, "p98": 1.347},
+    "5y": {"n": 4500, "p2": 0.972, "p10": 0.998, "p50": 1.015, "p90": 1.071, "p98": 1.164}
+  }
+}
