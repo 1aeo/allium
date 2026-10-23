@@ -370,6 +370,24 @@ class TestConsensusIssues:
         assert 'measured 0% (no uptime history for this relay).' in short_text
         assert 'no uptime credit).' not in short_text
 
+    def test_recorded_downtime_zero_uses_uptime_advice(self):
+        """0% beside days of time-known is recorded downtime, so the suggestion is uptime advice."""
+        details = [{
+            'authority': name, 'wfu_met': False, 'tk_met': True, 'bw_met': True,
+            'wfu_value': 0.0, 'wfu_threshold': 0.98,
+            'tk_value': 20 * SECONDS_PER_DAY, 'tk_threshold': GUARD_TK_DEFAULT,
+        } for name in _VOTING_AUTHORITIES]
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.0, 'tk': 20 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': details}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        wfu = next(i for i in issues if 'WFU' in i['title'])
+        assert 'measured 0% (no uptime credit)' in wfu['description']
+        assert 'Minimize restarts' in wfu['suggestion']
+        assert 'has not observed this relay up yet' not in wfu['suggestion']
+
     def test_warning_uses_the_relay_total_not_the_registry(self):
         """Eight voters on the page stay 4/8 in the warning, even if the registry says 9."""
         details = [
@@ -834,16 +852,18 @@ class TestOverloadIssues:
         assert 'LimitNOFILE' in fd_issues[0]['suggestion']
     
     def test_fd_exhaustion_without_timestamp(self):
-        """Test File Descriptor Exhaustion without timestamp (error severity)."""
+        """An empty FD object is invalid and does not count as exhaustion."""
+        from allium.lib.stability_utils import evaluate_overload
         relay = {
             'overload_fd_exhausted': {},  # No timestamp
         }
-        
+
         issues = _check_overload_issues(relay)
-        
-        fd_issues = [i for i in issues if 'File Descriptor' in i['title']]
-        assert len(fd_issues) == 1
-        assert fd_issues[0]['severity'] == 'error'
+
+        assert [i for i in issues if 'File Descriptor' in i['title']] == []
+        facts = evaluate_overload(relay)
+        assert facts['fd']['state'] == 'invalid'
+        assert facts['is_overloaded'] is False
     
     def test_write_bandwidth_limit_hit(self):
         """Test Write Bandwidth Limit Hit (warning severity)."""
@@ -853,6 +873,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 500,
                 'read-count': 0,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -871,6 +892,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 0,
                 'read-count': 1000,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -889,6 +911,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 200,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -908,6 +931,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 0,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -930,6 +954,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 200,
+                'timestamp': now_ms,
             },
         }
         
@@ -1095,6 +1120,7 @@ class TestIssueSectionAnchors:
             'overload_ratelimits': {
                 'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
                 'write-count': 100, 'read-count': 200,
+                'timestamp': now_ms,
             },
         }
         issues = _check_overload_issues(relay)

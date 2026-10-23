@@ -15,6 +15,7 @@ from allium.lib.charts.render import (
 from allium.lib.charts.svg import (
     BLUE, CALLOUT_BG, GREEN, MUTED, RED, TEXT, Panel, Svg, date_ticks, nice_ticks, text_width,
 )
+from allium.lib.stability_utils import compute_relay_stability
 
 from .fixtures import DAY, OVERLOADED, SPIKE, T0, decode, history, needs_png, relay, writer
 
@@ -412,13 +413,20 @@ def test_overload_legend_and_spike_callout(tmp_path):
                               bands_for_role("Guard"), "relay")
         (x, _y, width, _height), = [op[1:5] for op in svg.ops if op[0] == "rect" and op[5] == CALLOUT_BG]
         assert LEFT <= x and x + width <= LEFT + PLOT_WIDTH
-    # A newer rate-limit report where no limit was hit does not count toward the verdict, nor its time.
-    quiet = dict(OVERLOADED["overload_ratelimits"], **{"write-count": 0, "timestamp": OVERLOADED[
-        "overload_ratelimits"]["timestamp"] + 86400000})
-    busy = relay("A", overload_ratelimits=quiet, overload_fd_exhausted={"timestamp": quiet["timestamp"] - 2 * 86400000},
-                 stability_is_overloaded=True)
-    charts.relay(busy, str(tmp_path))
+    # The chart caption comes from compute_relay_stability, not from a hand-picked
+    # stamp. A newer zero-hit rate report is on the relay and must not become the caption.
+    quiet_at = OVERLOADED["overload_ratelimits"]["timestamp"] + 86400000  # Sep 30, 22:00
+    fd_at = quiet_at - 2 * 86400000  # Sep 28, 22:00, still inside 72 hours at the clock below
+    evaluated = int(datetime(2026, 9, 30, 23, tzinfo=timezone.utc).timestamp())
+    selected = relay("A", running=True, overload_ratelimits={
+        "timestamp": quiet_at, "write-count": 0, "read-count": 0},
+        overload_fd_exhausted={"timestamp": fd_at})
+    selected.update(compute_relay_stability(selected, evaluated))
+    assert selected["overload"]["rate"]["state"] == "zero"
+    assert selected["overload"]["latest_eligible_ms"] == fd_at
+    charts.relay(selected, str(tmp_path))
     assert "currently overloaded · last report Sep 28, 22:00 UTC" in texts(tmp_path / "bandwidth-1m.svg")
+    assert "Sep 30, 22:00 UTC" not in texts(tmp_path / "bandwidth-1m.svg")
 
 
 def test_a_malformed_history_skips_that_chart(tmp_path):

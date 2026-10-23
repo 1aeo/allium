@@ -11,7 +11,6 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from ..stability_utils import evaluate_overload
 from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
 from ..uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 from .bands import (
@@ -305,19 +304,24 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average, coun
 
 
 def _overload_text(relay):
-    """Legend text while the relay is overloaded (relays.py's verdict), with the newest report time among the
-    reports that verdict counts (a rate-limit report counts only when a limit was hit). "Currently" only while
-    it runs: an offline relay's verdict comes from its last descriptor."""
+    """Legend text while the relay is overloaded (relays.py's verdict).
+
+    The timestamp is the newest eligible signal from that same evaluation
+    (``overload['latest_eligible_ms']``). Expired, invalid, and zero-hit
+    records are not eligible, so a newer one of those does not replace the
+    caption. "currently overloaded" is used only while the relay is running;
+    an offline relay's verdict comes from its last descriptor.
+    """
     if not relay.get("stability_is_overloaded"):
         return None
-    facts = evaluate_overload(relay)
-    stamps = [stamp for stamp in (facts["general_ts"] if facts["general_active"] else None,
-                                  facts["ratelimits"].get("timestamp") if facts["ratelimit_hit"] else None,
-                                  facts["fd_timestamp"]) if stamp]
     state = "overloaded" if relay.get("running") is False else "currently overloaded"
-    if not stamps:
+    stamp = (relay.get("overload") or {}).get("latest_eligible_ms")
+    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or stamp <= 0:
         return state
-    last = datetime.fromtimestamp(max(stamps) / 1000.0, timezone.utc)
+    try:
+        last = datetime.fromtimestamp(stamp / 1000.0, timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return state
     return "{} · last report {}, {:%H:%M} UTC".format(state, format_day(last), last)
 
 

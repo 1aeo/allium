@@ -29,6 +29,45 @@ from datetime import datetime, timedelta, timezone
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
+
+def _store_overload_diagnostics(relay, overload_issues):
+    """Store overload issues without dropping issues from another category."""
+    existing = relay.get('diagnostics') if isinstance(relay.get('diagnostics'), dict) else None
+    if existing is None:
+        relay['diagnostics'] = {'issues': list(overload_issues)}
+        return
+    kept = [issue for issue in existing.get('issues') or [] if issue.get('category') != 'overload']
+    updated = dict(existing)
+    updated['issues'] = kept + list(overload_issues)
+    relay['diagnostics'] = updated
+
+
+def _cache_age_label(api_name):
+    """Age of Allium's cached API document, or None when no cache file exists.
+
+    This is the cache file's age, not Onionoo's relays_published time and not
+    a relay's overload event time. Failures stay quiet: a missing label is
+    omitted rather than shown as zero.
+    """
+    try:
+        from .workers import get_cache_age
+        age = get_cache_age(api_name)
+    except Exception:
+        return None
+    if isinstance(age, bool) or not isinstance(age, (int, float)) or age < 0:
+        return None
+    seconds = int(age)
+    if seconds < 60:
+        return f'cached {seconds}s ago'
+    if seconds < 3600:
+        return f'cached {seconds // 60}m ago'
+    hours, remainder = divmod(seconds, 3600)
+    minutes = remainder // 60
+    if minutes:
+        return f'cached {hours}h {minutes}m ago'
+    return f'cached {hours}h ago'
+
+
 # AROI parsing — share regex pair with aroi_validation.py to keep parsing
 # semantics identical across the codebase. Both v2 and v3 ciissversions
 # are accepted; all 4 supported proof types (dns-rsa, uri-rsa,
@@ -127,7 +166,7 @@ class Relays:
 
         Processing order matters:
         - Uptime BEFORE leaderboards (leaderboards reuse per-relay uptime_percentages)
-        - Bandwidth BEFORE health (health uses overload data from bandwidth)
+        - Overload evaluation BEFORE the health pass that publishes overload counts
         - ALL data processing BEFORE precompute (contact/family pages depend on everything)
         """
         # Step 7: Attach raw API data as attributes
@@ -160,21 +199,39 @@ class Relays:
                 or collector_consensus_data.get('votes')
             )
 
+        # One clock for every overload consumer in this generation.
+        self.overload_evaluated_at = time.time()
+        self._overload_evaluated = False
+
         # Steps 8-10: Uptime processing → regenerate leaderboards + health
         if uptime_data:
             self._reprocess_uptime_data()
             self._generate_aroi_leaderboards()
             calculate_network_health_metrics(self)
 
-        # Steps 11-14: Bandwidth → health → aggregate groups (needs health %) → leaderboards
+        # Steps 11-14: Bandwidth history, then overload evaluation, then health.
+        # Overload evaluation also runs when bandwidth history fails or /bandwidth
+        # was not loaded, so a /details general-overload timestamp is not dropped.
         if bandwidth_data and self.json.get('relays'):
             try:
                 self._reprocess_bandwidth_data()
+                self._evaluate_overload()
                 calculate_network_health_metrics(self)
                 self._aggregate_total_data_to_groups()
                 self._generate_aroi_leaderboards()
             except Exception as e:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
+
+        if not self._overload_evaluated and self.json.get('relays'):
+            try:
+                self._evaluate_overload()
+            except Exception as e:
+                print(f"Warning: Overload evaluation failed ({e})")
+            if 'network_health' in self.json:
+                try:
+                    calculate_network_health_metrics(self)
+                except Exception as e:
+                    print(f"Warning: Network health refresh failed ({e})")
 
         # Step 13: Collector consensus evaluation
         if collector_consensus_data and self.json.get('relays'):
@@ -672,33 +729,23 @@ class Relays:
             self._consolidated_bandwidth_results = consolidated_results
             
             # Apply results to individual relays
-            # PERF: Compute timestamp once for all relays (avoids ~10k time.time() calls)
-            now_timestamp = time.time()
-            
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
                 
-                # Apply bandwidth data from consolidated processing
+                # Apply bandwidth history from consolidated processing.
+                # Overload fields are applied later by _evaluate_overload(), which
+                # keeps absent, malformed, and unavailable values distinct and
+                # still runs when this history pass fails.
                 if fingerprint in relay_bandwidth_data:
                     bw_data = relay_bandwidth_data[fingerprint]
                     relay["bandwidth_averages"] = bw_data['bandwidth_averages']
                     relay["total_data"] = bw_data.get('total_data', {})
                     # Store flag bandwidth data for flag bandwidth analysis
                     relay["_flag_bandwidth_data"] = bw_data['flag_data']
-                    # Merge overload fields from bandwidth endpoint
-                    if bw_data.get('overload_ratelimits'):
-                        relay['overload_ratelimits'] = bw_data['overload_ratelimits']
-                    if bw_data.get('overload_fd_exhausted'):
-                        relay['overload_fd_exhausted'] = bw_data['overload_fd_exhausted']
                 else:
                     relay["bandwidth_averages"] = {'6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
                     relay["total_data"] = {}
                     relay["_flag_bandwidth_data"] = {}
-                
-                # Compute stability using helper with bandwidth formatter
-                # (overload_general_timestamp from /details is already in relay,
-                #  overload_ratelimits/overload_fd_exhausted now merged from /bandwidth)
-                relay.update(compute_relay_stability(relay, now_timestamp, self.bandwidth_formatter))
                 
                 # Pre-format total data transferred display strings
                 td = relay.get("total_data", {})
@@ -729,6 +776,62 @@ class Relays:
             print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
             self._consolidated_bandwidth_results = None
             self.network_bandwidth_percentiles = None
+
+    def _evaluate_overload(self):
+        """Classify overload once and store the facts every consumer reads.
+
+        Bandwidth-history processing is separate. A failure there, or a
+        generation with /bandwidth disabled, still evaluates general overload
+        from /details. Overload diagnostics are attached here so they exist
+        when CollecTor data is absent; the collector step adds consensus
+        issues without generating a second copy.
+        """
+        from .bandwidth_utils import apply_bandwidth_overload_fields
+        from .relay_diagnostics import _check_overload_issues
+
+        relays = self.json.get('relays') or []
+        apply_bandwidth_overload_fields(relays, getattr(self, 'bandwidth_data', None))
+        now = getattr(self, 'overload_evaluated_at', None)
+        if not isinstance(now, (int, float)) or isinstance(now, bool):
+            now = time.time()
+            self.overload_evaluated_at = now
+        source_meta = self._overload_source_meta(now)
+        self.overload_source_meta = source_meta
+        for relay in relays:
+            try:
+                relay.update(compute_relay_stability(
+                    relay, now, self.bandwidth_formatter, source_meta=source_meta))
+                overload_issues = _check_overload_issues(
+                    relay, use_bits=self.use_bits, facts=relay.get('overload'))
+            except Exception as error:
+                print(f"Warning: Overload evaluation failed for one relay ({error})")
+                relay['stability_is_overloaded'] = False
+                relay['stability_text'] = 'Incomplete'
+                relay['stability_color'] = '#6c757d'
+                relay['stability_tooltip'] = 'Overload signals could not be evaluated'
+                relay['overload'] = {'headline': 'incomplete', 'guidance': [], 'sources_line': ''}
+                overload_issues = []
+            # Replace overload issues only. A second pass, after CollecTor has
+            # stored consensus issues on this relay, keeps those issues.
+            _store_overload_diagnostics(relay, overload_issues)
+        self._overload_evaluated = True
+
+    def _overload_source_meta(self, evaluated_at):
+        """Snapshot and cache labels for the overload section. No extra fetches."""
+        details = self.json if isinstance(self.json, dict) else {}
+        bandwidth = self.bandwidth_data if isinstance(getattr(self, 'bandwidth_data', None), dict) else None
+        bandwidth_loaded = isinstance((bandwidth or {}).get('relays'), list)
+        return {
+            'evaluated_label': datetime.fromtimestamp(
+                evaluated_at, tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+            'details_published': details.get('relays_published') if isinstance(
+                details.get('relays_published'), str) else None,
+            'bandwidth_published': bandwidth.get('relays_published') if bandwidth and isinstance(
+                bandwidth.get('relays_published'), str) else None,
+            'details_cache_label': _cache_age_label('onionoo_details'),
+            'bandwidth_cache_label': _cache_age_label('onionoo_bandwidth') if bandwidth_loaded else None,
+            'bandwidth_loaded': bandwidth_loaded,
+        }
 
     def _aggregate_total_data_to_groups(self):
         """Aggregate per-relay total_data into sorted groups (contact, family, AS, etc.).
@@ -816,10 +919,9 @@ class Relays:
             return
         
         try:
-            import time as _time
             from .consensus import CollectorFetcher, format_relay_consensus_evaluation
             from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
-            from .relay_diagnostics import generate_relay_issues
+            from .relay_diagnostics import _check_overload_issues, generate_issues_from_consensus
             
             self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
             
@@ -859,8 +961,6 @@ class Relays:
             
             # Process consensus evaluation for each relay
             evaluation_count = 0
-            # PERF: Compute timestamp once for all relays (avoid ~10k time.time() calls)
-            now_timestamp = _time.time()
             
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '').upper()
@@ -909,16 +1009,32 @@ class Relays:
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
                 
-                # Generate full diagnostics including overload issues
-                # (overload data was merged in _reprocess_bandwidth_data)
-                relay['diagnostics'] = {
-                    'issues': generate_relay_issues(
-                        relay,
-                        consensus_data=raw_consensus_evaluation,
-                        use_bits=self.use_bits,
-                        now_timestamp=now_timestamp  # PERF: Reuse timestamp
-                    )
-                }
+                # Consensus issues join the overload issues already stored by
+                # _evaluate_overload(). Regenerating overload here would duplicate
+                # those issues when both sources are present, and skipping this
+                # merge would drop them when CollecTor is absent.
+                existing = relay.get('diagnostics') if isinstance(relay.get('diagnostics'), dict) else None
+                if existing is None:
+                    overload_issues = _check_overload_issues(
+                        relay, use_bits=self.use_bits,
+                        now_timestamp=getattr(self, 'overload_evaluated_at', None))
+                else:
+                    overload_issues = [
+                        issue for issue in existing.get('issues') or []
+                        if issue.get('category') == 'overload'
+                    ]
+                # Store consensus first, then put the overload issues back with
+                # the same helper a later evaluation uses, so the two passes
+                # cannot each append a copy.
+                relay['diagnostics'] = {'issues': generate_issues_from_consensus(
+                    raw_consensus_evaluation,
+                    current_flags=current_flags,
+                    observed_bandwidth=observed_bandwidth,
+                    version=version,
+                    recommended_version=recommended_version,
+                    use_bits=self.use_bits,
+                )}
+                _store_overload_diagnostics(relay, overload_issues)
                 
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
