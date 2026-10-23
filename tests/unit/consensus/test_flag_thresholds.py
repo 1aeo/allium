@@ -121,6 +121,17 @@ class TestCheckGuardEligibility:
         assert result['tk_met'] == True
         assert result['bw_meets_guarantee'] == True
         assert result['bw_eligible'] == True
+
+    def test_zero_wfu_fails_and_missing_wfu_stays_unpublished(self):
+        """0 is below the threshold. None is not rewritten into a 0 measurement."""
+        zero = check_guard_eligibility(wfu=0.0, tk=10 * SECONDS_PER_DAY, bandwidth=3_000_000)
+        assert zero['wfu_value'] == 0.0
+        assert zero['wfu_met'] is False
+        missing = check_guard_eligibility(wfu=None, tk=None, bandwidth=3_000_000)
+        assert missing['wfu_value'] is None
+        assert missing['tk_value'] is None
+        assert missing['wfu_met'] is False
+        assert missing['tk_met'] is False
     
     def test_ineligible_low_wfu(self):
         """Test a relay with low WFU."""
@@ -450,8 +461,8 @@ class TestGuardEligibilityEdgeCases:
         assert result['tk_met'] == False
         assert result['bw_eligible'] == False
     
-    def test_none_values_treated_as_zero(self):
-        """Test that None values are handled as zero."""
+    def test_none_wfu_stays_unpublished(self):
+        """None WFU and time-known stay unpublished. Missing bandwidth still counts as 0."""
         result = check_guard_eligibility(
             wfu=None,
             tk=None,
@@ -459,8 +470,10 @@ class TestGuardEligibilityEdgeCases:
         )
         
         assert result['eligible'] == False
-        assert result['wfu_value'] == 0
-        assert result['tk_value'] == 0
+        assert result['wfu_value'] is None
+        assert result['tk_value'] is None
+        assert result['wfu_met'] is False
+        assert result['tk_met'] is False
         assert result['bw_value'] == 0
     
     def test_custom_thresholds(self):

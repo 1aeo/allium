@@ -155,9 +155,14 @@ class TestIssueSectionLinks:
                 'ipv6_not_tested_authorities': ['moria1'],
             },
             'flag_eligibility': {
-                'stable': {'eligible_count': 2},
+                'stable': {'eligible_count': 2, 'details': [{'authority': 'bastet', 'eligible': False}]},
                 'fast': {'details': [{'authority': 'bastet', 'assigned': False, 'speed_value': 50_000,
                                       'speed_threshold': 102_000, 'speed_source': 'measured'}]},
+                # Fewer than a majority meet Guard WFU and time-known, so those
+                # two warnings (and their anchors) are part of the link check.
+                'guard': {'details': [
+                    {'authority': 'bastet', 'wfu_met': False, 'tk_met': False, 'bw_met': False},
+                ]},
             },
             'bandwidth': {'deviation': 10000, 'median': 5000,
                           'bw_auth_measured_count': 1, 'bw_auth_total': 6},
