@@ -457,9 +457,19 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
             'bandwidth_averages': bandwidth_averages,
             'total_data': total_data,
             'flag_data': flag_data,
-            # Overload fields from bandwidth endpoint (for stability computation)
-            'overload_ratelimits': bandwidth_relay.get('overload_ratelimits'),
-            'overload_fd_exhausted': bandwidth_relay.get('overload_fd_exhausted'),
+            # Preserve key presence. .get() cannot tell a missing overload
+            # field from an explicit null, and a later truthiness check would
+            # also drop an empty or malformed object.
+            'overload_ratelimits': (
+                bandwidth_relay['overload_ratelimits']
+                if 'overload_ratelimits' in bandwidth_relay else None
+            ),
+            'overload_ratelimits_present': 'overload_ratelimits' in bandwidth_relay,
+            'overload_fd_exhausted': (
+                bandwidth_relay['overload_fd_exhausted']
+                if 'overload_fd_exhausted' in bandwidth_relay else None
+            ),
+            'overload_fd_exhausted_present': 'overload_fd_exhausted' in bandwidth_relay,
         }
     
     # Calculate network flag statistics
@@ -492,3 +502,64 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
             'flags_found': list(network_flag_data.keys()) if include_flag_analysis else []
         }
     }
+
+
+def bandwidth_overload_index(bandwidth_data):
+    """Map fingerprint to overload-field presence for a loaded bandwidth document.
+
+    Returns None when the payload is not a loaded Onionoo bandwidth document
+    (endpoint disabled, fetch failed, or the body has no relays list). An empty
+    relays list is a loaded document in which every fingerprint is absent.
+    """
+    if not isinstance(bandwidth_data, dict) or not isinstance(bandwidth_data.get('relays'), list):
+        return None
+    index = {}
+    for row in bandwidth_data['relays']:
+        if not isinstance(row, dict):
+            continue
+        fingerprint = row.get('fingerprint')
+        if not fingerprint or not isinstance(fingerprint, str):
+            continue
+        index[fingerprint] = {
+            'ratelimits_present': 'overload_ratelimits' in row,
+            'ratelimits': row['overload_ratelimits'] if 'overload_ratelimits' in row else None,
+            'fd_present': 'overload_fd_exhausted' in row,
+            'fd': row['overload_fd_exhausted'] if 'overload_fd_exhausted' in row else None,
+        }
+    return index
+
+
+def apply_bandwidth_overload_fields(relays, bandwidth_data):
+    """Copy this generation's bandwidth overload fields onto details relays.
+
+    Absent keys are removed, including values left by an earlier response.
+    Each relay's ``_bandwidth_overload_availability`` is ``loaded``,
+    ``no_record``, or ``unavailable``. Malformed values are copied through so
+    evaluation can tell them from a field that was not in the document.
+    """
+    from .stability_utils import BANDWIDTH_AVAILABILITY_KEY
+
+    index = bandwidth_overload_index(bandwidth_data)
+    for relay in relays or []:
+        if not isinstance(relay, dict):
+            continue
+        if index is None:
+            relay.pop('overload_ratelimits', None)
+            relay.pop('overload_fd_exhausted', None)
+            relay[BANDWIDTH_AVAILABILITY_KEY] = 'unavailable'
+            continue
+        row = index.get(relay.get('fingerprint'))
+        if row is None:
+            relay.pop('overload_ratelimits', None)
+            relay.pop('overload_fd_exhausted', None)
+            relay[BANDWIDTH_AVAILABILITY_KEY] = 'no_record'
+            continue
+        relay[BANDWIDTH_AVAILABILITY_KEY] = 'loaded'
+        if row['ratelimits_present']:
+            relay['overload_ratelimits'] = row['ratelimits']
+        else:
+            relay.pop('overload_ratelimits', None)
+        if row['fd_present']:
+            relay['overload_fd_exhausted'] = row['fd']
+        else:
+            relay.pop('overload_fd_exhausted', None)

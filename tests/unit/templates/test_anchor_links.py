@@ -170,7 +170,8 @@ class TestIssueSectionLinks:
             'overload_general_timestamp': now_ms - 3600000,
             'overload_fd_exhausted': {'timestamp': now_ms},
             'overload_ratelimits': {'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
-                                    'write-count': 1, 'read-count': 1},
+                                    'write-count': 1, 'read-count': 1,
+                                    'timestamp': now_ms},
         }
         issues = generate_relay_issues(relay, consensus_data)
         assert len(issues) >= 10  # fixture should trigger many issue types

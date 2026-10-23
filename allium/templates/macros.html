@@ -183,7 +183,7 @@
    family/AS output unchanged. #}
 {%- macro overload_bullet(summary, link_href=none, path_prefix=none) -%}
 {%- if summary -%}
-<li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor proposal 328: out-of-memory, onionskin drops, TCP port exhaustion), hits its configured bandwidth rate limits, or exhausts file descriptors. Sources: Onionoo /details and /bandwidth endpoints.">Overloaded</span>:</strong>
+<li><strong><span title="Relays in this group currently flagged as overloaded. A relay is overloaded when it reports a general overload event within the last 72 hours (Tor’s internal memory handling, onionskin drops, or TCP port exhaustion), a bandwidth rate-limit hit within the last 24 hours, or file-descriptor exhaustion within the last 72 hours. Those windows are applied to the reported timestamps; an older report can still be listed as historical. Sources: Onionoo /details and /bandwidth.">Overloaded</span>:</strong>
 {% if link_href %}
     <a href="{{ link_href }}" class="al-status-danger" title="Show the relay table with overloaded relays sorted first">{{ summary.pct_formatted }} ({{ summary.overloaded }} of {{ summary.total }} relay{{ 's' if summary.total != 1 else '' }})</a>
 {%- else %}

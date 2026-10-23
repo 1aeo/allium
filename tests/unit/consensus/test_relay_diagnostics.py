@@ -556,16 +556,18 @@ class TestOverloadIssues:
         assert 'LimitNOFILE' in fd_issues[0]['suggestion']
     
     def test_fd_exhaustion_without_timestamp(self):
-        """Test File Descriptor Exhaustion without timestamp (error severity)."""
+        """An empty FD object is invalid and does not count as exhaustion."""
+        from allium.lib.stability_utils import evaluate_overload
         relay = {
             'overload_fd_exhausted': {},  # No timestamp
         }
-        
+
         issues = _check_overload_issues(relay)
-        
-        fd_issues = [i for i in issues if 'File Descriptor' in i['title']]
-        assert len(fd_issues) == 1
-        assert fd_issues[0]['severity'] == 'error'
+
+        assert [i for i in issues if 'File Descriptor' in i['title']] == []
+        facts = evaluate_overload(relay)
+        assert facts['fd']['state'] == 'invalid'
+        assert facts['is_overloaded'] is False
     
     def test_write_bandwidth_limit_hit(self):
         """Test Write Bandwidth Limit Hit (warning severity)."""
@@ -575,6 +577,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 500,
                 'read-count': 0,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -593,6 +596,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 0,
                 'read-count': 1000,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -611,6 +615,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 200,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -630,6 +635,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 0,
+                'timestamp': int(time.time() * 1000) - 3_600_000,
             },
         }
         
@@ -652,6 +658,7 @@ class TestOverloadIssues:
                 'burst-limit': 2_000_000,
                 'write-count': 100,
                 'read-count': 200,
+                'timestamp': now_ms,
             },
         }
         
@@ -817,6 +824,7 @@ class TestIssueSectionAnchors:
             'overload_ratelimits': {
                 'rate-limit': 1_000_000, 'burst-limit': 2_000_000,
                 'write-count': 100, 'read-count': 200,
+                'timestamp': now_ms,
             },
         }
         issues = _check_overload_issues(relay)
