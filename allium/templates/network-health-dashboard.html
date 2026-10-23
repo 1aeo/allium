@@ -785,90 +785,42 @@ Network Health Dashboard
         
     </div>
 
-    <!-- PQC TLS: Margot scan, not a Tor-version guess -->
-    <div class="ribbon-row" style="grid-template-columns: 1fr;">
+    <div class="ribbon-row">
         {% set pqc = relays.json.network_health %}
         <div class="ribbon-card tls-pqc">
             <div class="card-header" id="tls-pqc">
-                <h4><a href="#tls-pqc" class="al-link-plain">🔐 PQC TLS (X25519MLKEM768)</a></h4>
+                <h4><a href="#tls-pqc" class="al-link-plain">🔐 PQC TLS</a></h4>
             </div>
             <div class="card-metrics">
                 {% if pqc.tls_pqc_available %}
-                <div class="metric-item primary" title="Share of relays whose latest Margot handshake negotiated X25519MLKEM768, among relays where that scan recorded a key-exchange group. Relays absent from the scan are counted separately.">
-                    <span class="metric-value"{% if pqc.tls_pqc_observed_percentage is not none %} style="color: {% if pqc.tls_pqc_observed_percentage >= 50 %}#28a745{% elif pqc.tls_pqc_observed_percentage >= 20 %}#856404{% else %}#374151{% endif %};"{% endif %}>{{ pqc.tls_pqc_observed_percentage_formatted }}</span>
-                    <span class="metric-label">Saw X25519MLKEM768, of relays with a negotiated group</span>
-                    <div class="al-text-small-muted metric-subtext">Scan {{ pqc.tls_pqc_scan_time|e }}{% if pqc.tls_pqc_scan_url %} · <a href="{{ pqc.tls_pqc_scan_url|e }}">this scan</a>{% endif %}{% if pqc.tls_pqc_index_url %} · <a href="{{ pqc.tls_pqc_index_url|e }}">all scans</a>{% endif %}</div>
+                <div class="metric-item primary" title="Share of consensus weight on relays whose latest Margot scan negotiated X25519MLKEM768. Relays absent from the scan are counted separately.">
+                    <span class="metric-value"{% if pqc.tls_pqc_weight_saw_percentage is not none %} style="color: {% if pqc.tls_pqc_weight_saw_percentage >= 50 %}#28a745{% elif pqc.tls_pqc_weight_saw_percentage >= 20 %}#856404{% else %}#374151{% endif %};"{% endif %}>{{ pqc.tls_pqc_weight_saw_percentage_formatted }}</span>
+                    <span class="metric-label">X25519MLKEM768 consensus weight</span>
+                    <div class="al-text-small-muted metric-subtext">Scan {{ pqc.tls_pqc_scan_time|e }}{% if pqc.tls_pqc_scan_url %} · <a href="{{ pqc.tls_pqc_scan_url|e }}">source</a>{% endif %}</div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
-                    <div class="metric-item" title="Relays in the current consensus whose latest scan negotiated X25519MLKEM768.">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Relays in this consensus whose scan negotiated X25519MLKEM768.">
                         <span class="metric-value al-status-success">{{ pqc.tls_pqc_saw_formatted }}</span>
                         <span class="metric-label">Saw X25519MLKEM768</span>
-                    </div>
-                    <div class="metric-item" title="Relays whose latest scan negotiated a different key-exchange group.">
-                        <span class="metric-value">{{ pqc.tls_pqc_other_formatted }}</span>
-                        <span class="metric-label">Negotiated another group</span>
-                    </div>
-                    <div class="metric-item" title="Fingerprints present in the scan with no negotiated key-exchange group. The scanner recorded no handshake for that relay.">
-                        <span class="metric-value">{{ pqc.tls_pqc_no_group_formatted }}</span>
-                        <span class="metric-label">No negotiated group</span>
                     </div>
                     <div class="metric-item" title="Relays in this consensus whose fingerprint is absent from the latest scan.">
                         <span class="metric-value">{{ pqc.tls_pqc_not_in_scan_formatted }}</span>
                         <span class="metric-label">not in this scan</span>
                     </div>
-                </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Consensus weight of relays that negotiated X25519MLKEM768, as a share of all consensus weight. Weight for relays not in this scan is shown separately.">
-                        <span class="metric-value">{{ pqc.tls_pqc_weight_saw_percentage_formatted }}</span>
-                        <span class="metric-label">Consensus weight, X25519MLKEM768</span>
-                    </div>
-                    <div class="metric-item" title="Consensus weight of relays that negotiated a different group.">
-                        <span class="metric-value">{{ pqc.tls_pqc_weight_other_percentage_formatted }}</span>
-                        <span class="metric-label">Consensus weight, another group</span>
-                    </div>
-                    <div class="metric-item" title="Consensus weight of relays whose fingerprint is absent from this scan.">
-                        <span class="metric-value">{{ pqc.tls_pqc_weight_not_in_scan_percentage_formatted }}</span>
-                        <span class="metric-label">Consensus weight not in this scan</span>
-                    </div>
-                </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Guard-flagged relays. The fraction uses relays whose scan recorded a key-exchange group. Guards absent from the scan are counted beside it.">
-                        <span class="metric-value">{% if pqc.tls_pqc_guard_observed %}{{ pqc.tls_pqc_guard_saw }} of {{ pqc.tls_pqc_guard_observed }}{% else %}0{% endif %}</span>
-                        <span class="metric-label">Guards saw X25519MLKEM768{% if pqc.tls_pqc_guard_not_in_scan %} · {{ pqc.tls_pqc_guard_not_in_scan }} not in this scan{% endif %}</span>
-                    </div>
-                    <div class="metric-item" title="Exit-flagged relays. The fraction uses relays whose scan recorded a key-exchange group.">
-                        <span class="metric-value">{% if pqc.tls_pqc_exit_observed %}{{ pqc.tls_pqc_exit_saw }} of {{ pqc.tls_pqc_exit_observed }}{% else %}0{% endif %}</span>
-                        <span class="metric-label">Exits saw X25519MLKEM768{% if pqc.tls_pqc_exit_not_in_scan %} · {{ pqc.tls_pqc_exit_not_in_scan }} not in this scan{% endif %}</span>
-                    </div>
-                    <div class="metric-item" title="Directory authorities in this consensus. Both numbers come from joining the Authority flag to this scan.">
+                    <div class="metric-item" title="Directory authorities in this consensus. Both numbers join the Authority flag to this scan.">
                         <span class="metric-value">{% if pqc.tls_pqc_authority_total %}{{ pqc.tls_pqc_authority_saw }} of {{ pqc.tls_pqc_authority_total }}{% else %}0{% endif %}</span>
-                        <span class="metric-label">Directory authorities negotiated X25519MLKEM768{% if pqc.tls_pqc_authority_not_in_scan %} · {{ pqc.tls_pqc_authority_not_in_scan }} not in this scan{% endif %}{% if pqc.tls_pqc_authority_other %} · {{ pqc.tls_pqc_authority_other }} negotiated another group{% endif %}{% if pqc.tls_pqc_authority_no_group %} · {{ pqc.tls_pqc_authority_no_group }} with no negotiated group{% endif %}</span>
+                        <span class="metric-label">Authorities</span>
                     </div>
-                </div>
-                {% if pqc.tls_pqc_groups %}
-                <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
-                    {% for group in pqc.tls_pqc_groups %}
-                    <div class="metric-item" title="Relays in this consensus whose scan recorded this key-exchange group.">
-                        <span class="metric-value">{{ "{:,}".format(group.count) }}</span>
-                        <span class="metric-label">{{ group.name|e }}</span>
+                    <div class="metric-item" title="Relays whose scan negotiated a different key-exchange group.">
+                        <span class="metric-value">{{ pqc.tls_pqc_other_formatted }}</span>
+                        <span class="metric-label">Another group</span>
                     </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                <div class="al-text-small-muted metric-subtext" style="text-align: center;">
-                    {{ pqc.tls_pqc_in_scan_formatted }} of {{ pqc.tls_pqc_consensus_formatted }} relays in this consensus are in the scan
-                    ({{ pqc.tls_pqc_scan_rows_formatted }} fingerprints in the published file).
-                    {{ pqc.tls_pqc_not_in_scan_formatted }} not in this scan.
-                    {% if pqc.tls_pqc_artifact == 'html' %}The published scan is an HTML table; Margot's tls-ciphers command writes cipher_suites.csv.{% endif %}
-                    <a href="https://forum.torproject.org/t/tor-relays-post-quantum-cryptography-in-tors-tls-layer-help-needed/21288">Operator guidance</a>
-                    · <a href="https://gitlab.torproject.org/tpo/network-health/margot">Margot</a>
-                    · <a href="https://gitlab.torproject.org/tpo/core/tor/-/issues/41300">LibreSSL and ML-KEM</a>
                 </div>
                 {% else %}
-                <div class="metric-item primary" title="The Margot TLS scan was not loaded for this run. No percentage is shown.">
-                    <span class="metric-value">Unavailable</span>
+                <div class="metric-item primary" title="The Margot TLS scan was not loaded for this run.">
+                    <span class="metric-value">n/a</span>
                     <span class="metric-label">TLS scan unavailable</span>
-                    <div class="al-text-small-muted metric-subtext">No Margot scan was loaded, so this page does not guess X25519MLKEM768 from Tor version strings. <a href="https://ahf.me/tor-tls-pqc/">Published scans</a></div>
+                    <div class="al-text-small-muted metric-subtext"><a href="https://ahf.me/tor-tls-pqc/">Published scans</a></div>
                 </div>
                 {% endif %}
             </div>

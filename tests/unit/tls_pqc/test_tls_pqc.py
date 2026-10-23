@@ -241,11 +241,16 @@ def test_dashboard_template_does_not_hardcode_directory_authority_counts():
     text = (REPO / "allium" / "templates" / "network-health-dashboard.html").read_text(encoding="utf-8")
     start = text.index('id="tls-pqc"')
     card = text[start:text.index("FOURTH ROW", start)]
+    row = text[text.rindex('<div class="ribbon-row">', 0, start):start]
+    assert "grid-template-columns: 1fr" not in row
     assert "5 of 9" not in card
     assert "5/9" not in card
     assert "tls_pqc_authority_saw" in card
     assert "tls_pqc_authority_total" in card
+    assert "tls_pqc_weight_saw_percentage_formatted" in card
     assert "not in this scan" in card
+    assert "tls_pqc_groups" not in card
+    assert "Guards saw" not in card
 
 
 def test_fresh_cache_skips_the_network_and_a_timeout_uses_the_cache():
@@ -300,7 +305,8 @@ def test_pages_show_the_scan_result_and_absence(tmp_path):
         "Network Health Dashboard", relay_set.timestamp)
     write_misc(relay_set, "network-health-dashboard.html", "network-health.html", page_ctx=page_ctx)
     dashboard = (tmp_path / "network-health.html").read_text(encoding="utf-8")
-    assert "Saw X25519MLKEM768, of relays with a negotiated group" in dashboard
+    assert "X25519MLKEM768 consensus weight" in dashboard
+    assert "62.5%" in dashboard
     assert "0 of 1" in dashboard
     assert "not in this scan" in dashboard
     assert "5 of 9" not in dashboard
