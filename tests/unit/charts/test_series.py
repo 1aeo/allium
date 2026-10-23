@@ -216,6 +216,21 @@ def test_operator_uptime_slots_every_history_and_skips_non_finite_values():
     bad = {"uptime": {"1_month": dict(uptime_map["A"]["uptime"]["1_month"], factor="x")}}
     drawn = operator_uptime([relay("A"), relay("X")], {"A": uptime_map["A"], "X": bad}, "1_month", {})
     assert drawn[2] == day and drawn[1] == pytest.approx([100.0, 100.0])
+    # A non-mapping uptime object is skipped; it must not raise before the other relays are read.
+    weird = {"uptime": "not-an-object"}
+    drawn = operator_uptime([relay("A"), relay("W")], {"A": uptime_map["A"], "W": weird}, "1_month", {})
+    assert drawn[1] == pytest.approx([100.0, 100.0])
+    # Null-only native blocks must not vote the interval over a relay that has real daily samples.
+    empty = {"uptime": {"1_month": block([None, None], interval=14400)}}
+    daily = _uptime([999, 999], first=first, interval=day)
+    drawn = operator_uptime([relay("E1"), relay("E2"), relay("G")],
+                            {"E1": empty, "E2": empty, "G": daily}, "1_month", {})
+    assert drawn[2] == day and drawn[1] == pytest.approx([100.0, 100.0])
+    # A trailing NaN is not a reported point, so the series stops at the last finite slot both relays have.
+    nan_tail = _uptime([999, 999, float("nan")], first=first, interval=day)
+    full = _uptime([999, 999, 999], first=first, interval=day)
+    ts, percent, _interval = operator_uptime([relay("A"), relay("B")], {"A": full, "B": nan_tail}, "1_month", {})
+    assert [t.day for t in ts] == [1, 2] and percent == pytest.approx([100.0, 100.0])
 
 
 def test_network_uptime_averages_the_relays_that_have_the_period():

@@ -226,33 +226,38 @@ def operator_uptime(members, uptime_map, key, windows):
     """
     histories = []
     for relay in members:
-        section = ((uptime_map.get(relay["fingerprint"]) or {}).get("uptime") or {})
+        section = uptime_section(uptime_map, relay["fingerprint"])
         for period in _periods_from(key):
-            block = section.get(period) or {}
+            block = _mapping(section.get(period))
             step = block.get("interval")
-            if block.get("values") and isinstance(step, int) and step > 0:
-                histories.append((period == key, step, block, period, section, relay))
-                break
+            if isinstance(step, bool) or not isinstance(step, int) or step <= 0:
+                continue
+            try:
+                raw = uptime_points(block, period, windows, relay, section)
+            except Exception:  # noqa: BLE001 -- one bad history must not drop the operator chart
+                continue
+            pts = {t: value for t, value in raw.items()
+                   if value == value and value not in (float("inf"), float("-inf"))}
+            if not pts:  # nulls or NaN only: try a shorter period instead of voting this interval
+                continue
+            histories.append((period == key, step, pts, relay))
+            break
     steps = Counter(step for native, step, *_rest in histories if native)
     if not steps:
         return None
     interval = steps.most_common(1)[0][0]
     bins, lasts = {}, []
-    for native, step, block, period, section, relay in histories:
+    for _native, step, pts, relay in histories:
         if interval % step:
             continue
-        try:
-            pts = _slotted(uptime_points(block, period, windows, relay, section), step, interval)
-        except Exception:  # noqa: BLE001 -- one bad history must not drop the operator chart
-            continue
+        if step != interval:
+            pts = _slotted(pts, step, interval)
         if not pts:
             continue
         for t, value in pts.items():
-            if value != value or value in (float("inf"), float("-inf")):  # one NaN would make the mean NaN
-                continue
             total, count = bins.get(t, (0.0, 0))
             bins[t] = (total + value, count + 1)
-        lasts.append((max(pts), relay.get("running") is False))
+        lasts.append((max(pts), relay.get("running") is False))  # latest finite point, not a trailing NaN
     end = _reported_end(lasts, interval)
     ts = sorted(t for t in bins if end is not None and t <= end)
     return (ts, [bins[t][0] / bins[t][1] for t in ts], interval) if len(ts) >= 2 else None
