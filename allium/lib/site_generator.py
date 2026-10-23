@@ -195,6 +195,7 @@ def generate_site(relay_set, args, progress_logger):
     allium_pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     progress_logger.log(f"Details API data loaded successfully - found {len(relay_set.json.get('relays', []))} relays")
+    _write_network_history(relay_set, args.output_dir)
 
     # Compute API diagnostics data before page generation
     from .api_diagnostics import collect_api_diagnostics
@@ -418,6 +419,17 @@ def _sync_static_files(src_dir, dst_dir):
             copied += 1
 
     return copied, skipped
+
+
+def _write_network_history(relay_set, output_dir):
+    """Draw the whole-network charts and remember their heights for the health page.
+
+    No writer (``--no-charts`` or a details-only build) leaves both maps empty, and the page omits the section.
+    """
+    writer = getattr(relay_set, "chart_writer", None)
+    directory = os.path.join(writer.root if writer and writer.root else output_dir, "network")
+    bandwidth, uptime = writer.network(directory) if writer else ({}, {})
+    relay_set.network_bandwidth_periods, relay_set.network_uptime_periods = bandwidth, uptime
 
 
 def _build_page_context(page_def, relay_set):

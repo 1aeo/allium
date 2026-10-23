@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, chart_history, chart_period_anchors, history_jump %}
 {% extends "skeleton.html" -%}
 
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/network-health.css">{% endblock %}
@@ -143,6 +143,7 @@ Network Health Dashboard
                     <div class="ribbon-card bandwidth-counts">
                 <div class="card-header" id="bandwidth-capacity">
                     <h4><a href="#bandwidth-capacity" class="al-link-plain">⚡ Bandwidth Capacity Availability</a></h4>
+                    {{ history_jump(relays.network_bandwidth_periods, 'network-bandwidth', 'Bandwidth history') }}
                 </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total observed bandwidth capacity across all relays. Sum of observed_bandwidth from all active relays.">
@@ -248,6 +249,7 @@ Network Health Dashboard
         <div class="ribbon-card relay-uptime">
             <div class="card-header" id="relay-uptime">
                 <h4><a href="#relay-uptime" class="al-link-plain">⏰ Relay Uptime</a></h4>
+                {{ history_jump(relays.network_uptime_periods, 'network-uptime', 'Uptime history') }}
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ relays.json.network_health.exit_uptime_1_month_mean_formatted }}, Guard {{ relays.json.network_health.guard_uptime_1_month_mean_formatted }}, Middle {{ relays.json.network_health.middle_uptime_1_month_mean_formatted }}, Other {{ relays.json.network_health.other_uptime_1_month_mean_formatted }}.">
@@ -1130,7 +1132,31 @@ Network Health Dashboard
         {% endif %}
 
     </div>
-    
+
+    {% if relays.network_bandwidth_periods or relays.network_uptime_periods %}
+    {# Beside network-health.html, or under charts/network/ with --chart-layout charts. #}
+    {% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'network/' %}
+    <section class="ribbon-card network-history" id="network-history">
+        {{ chart_period_anchors() }}
+        <div class="card-header">
+            <h4><a href="#network-history" class="al-link-plain">Network History</a></h4>
+        </div>
+        <p class="history-lead">Write and read summed, against the whole network's write/read percentiles,
+            and the mean running flag with how many relays are in each slot. The same 1 month, 6 months,
+            1 year, and 5 years as a relay page. A thumbnail changes that chart. A period link changes both.</p>
+        <p class="history-periods">
+            {% for period in chart_spans %}<a href="#{{ period }}">{{ period|upper }}</a>{% endfor %}
+        </p>
+        <div class="history-grid">
+            {% for name, periods, alt, heading in (
+                ('bandwidth', relays.network_bandwidth_periods, 'Throughput and write/read', 'Bandwidth'),
+                ('uptime', relays.network_uptime_periods, 'Uptime', 'Uptime')) if periods %}
+            <div id="network-{{ name }}">{{ chart_history(name, periods, alt, src=chart_src, ext=chart_ext, heading=heading) }}</div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     <!-- LAST UPDATED -->
     <div class="ribbon-footer">
         <p class="last-updated">Last updated: {{ page_ctx.timestamp_str }} UTC</p>

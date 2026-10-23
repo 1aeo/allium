@@ -19,6 +19,15 @@ def test_every_period_has_a_target_and_a_thumbnail_link():
     assert 'href="#uptime-1m"' in html and 'href="#uptime-6m"' in html
     # A thumbnail's accessible name holds its visible label (WCAG 2.5.3), so "click 1M" finds it.
     assert 'aria-label="1M: show the last 30 days"' in html
+    assert ">History</h5>" in html
+
+
+def test_a_chart_heading_can_name_the_chart():
+    named = ENV.from_string(
+        '{% from "macros.html" import chart_history %}'
+        '{{ chart_history("bandwidth", {"1m": 10}, "Throughput", heading="Bandwidth") }}'
+    ).render()
+    assert ">Bandwidth</h5>" in named and ">History</h5>" not in named
 
 
 def test_page_wide_period_links_fall_back_to_the_default_chart():

@@ -14,12 +14,15 @@ from datetime import datetime, timedelta, timezone
 from ..stability_utils import evaluate_overload
 from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
 from ..uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
-from .bands import RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi, role_from_flags
+from .bands import (
+    RATIO_SCALE_HI, RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi,
+    role_from_flags,
+)
 from .identity import chart_identity, operator_from_contact, operator_identity
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, ratio_subtitle, ratio_text, throughput_subtitle
 from .series import (
-    MBIT, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, operator_throughput, peer_medians, throughput,
-    uptime_points,
+    MBIT, MIN_ACTIVE_KBYTES, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, network_ratio_bands,
+    network_uptime, operator_throughput, peer_medians, throughput, uptime_points, uptime_section,
 )
 from .svg import (
     AXIS, BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
@@ -34,19 +37,25 @@ CHARTS_DIR = "charts"
 logger = logging.getLogger(__name__)
 
 
+def _refuse_symlink(path):
+    """A chart directory that is a symbolic link would delete files outside the output tree."""
+    if os.path.islink(path):
+        raise OSError("%s is a symbolic link; refusing to delete charts through it" % path)
+
+
 def clear_chart_tree(output_dir):
-    """Delete ``<out>/charts/relay`` and ``<out>/charts/contact``, then ``<out>/charts`` when that empties it.
+    """Delete ``<out>/charts/relay``, ``contact`` and ``network``, then ``<out>/charts`` when that empties it,
+    and ``<out>/network`` (the network charts written beside network-health.html).
 
     Call it on every build before any page is written. With relay/ and contact/, which the page writer rebuilds
     (and the charts beside the pages with them), it leaves only the charts this build writes, in its own layout:
     a build that writes them beside the pages, or none, drops the tree an earlier --chart-layout charts build left.
     Anything else in charts/ stays. A tree it cannot remove stops the build, as relay/ and contact/ do, and so
-    does a charts/ that is a symbolic link: deleting through it would reach outside the output directory.
+    does a charts/ or network/ that is a symbolic link: deleting through it would reach outside the output directory.
     """
     root = os.path.join(output_dir, CHARTS_DIR)
-    if os.path.islink(root):
-        raise OSError(f"{root} is a symbolic link; refusing to delete chart trees through it")
-    for kind in ("relay", "contact"):
+    _refuse_symlink(root)
+    for kind in ("relay", "contact", "network"):
         path = os.path.join(root, kind)
         if os.path.exists(path):
             shutil.rmtree(path)
@@ -54,6 +63,10 @@ def clear_chart_tree(output_dir):
         os.rmdir(root)
     except OSError:  # missing, or holds something allium did not write
         pass
+    beside = os.path.join(output_dir, "network")
+    _refuse_symlink(beside)
+    if os.path.isdir(beside):
+        shutil.rmtree(beside)
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -69,14 +82,21 @@ def _header(svg, identity, title, subtitle, y=10):
     return y + 12
 
 
+def _step_name(interval):
+    """``4-hour`` / ``1-day`` / ``10-day``, or "" when ``interval`` is not a whole hour, day, or week."""
+    for size, name in ((SECONDS_PER_WEEK, "week"), (SECONDS_PER_DAY, "day"), (SECONDS_PER_HOUR, "hour")):
+        if interval and interval % size == 0:
+            return "{}-{}".format(interval // size, name)
+    return ""
+
+
 def _footer(svg, panel, period, interval, footnote=""):
     """Date-axis caption (``6M · 1-day``) under longer periods, then a line with the footnote on the left and
     the CREDIT on the right. Returns the height."""
     y = panel.top + panel.height + 38
     if period != "1m":
-        units = ((SECONDS_PER_WEEK, "week"), (SECONDS_PER_DAY, "day"), (SECONDS_PER_HOUR, "hour"))
-        unit = next(((s, n) for s, n in units if interval and interval % s == 0), None)
-        caption = period.upper() + (" · {}-{}".format(interval // unit[0], unit[1]) if unit else "")
+        step = _step_name(interval)
+        caption = period.upper() + (" · " + step if step else "")
         y += 20
         svg.text(LEFT + PLOT_WIDTH / 2, y, caption, 13, MUTED, "middle")
     y += 24
@@ -119,12 +139,16 @@ def _restart_entry(restart, ts, end=None):
 
 
 def bandwidth_chart(period, series, advertised, bands, identity, restart=None, overload=None,
-                    overlays=None, family_n=0, operator=False, end=None):
-    """Throughput panel over a write/read panel against the role's frozen bands.
+                    overlays=None, family_n=0, operator=False, end=None, unit="Mbit/s", subject=None,
+                    footnote=None):
+    """Throughput panel over a write/read panel.
 
-    ``series`` is ``(ts, write, read, interval)`` in Mbit/s (``series.throughput``); ``overlays`` maps
-    ``"role"`` / ``"family"`` to ``{ts: median write/read}`` (1M relay charts only; ``family_n`` relays).
-    ``end`` is the period window's end (``relays_published``): the time axis runs to it at least.
+    ``series`` is ``(ts, write, read, interval)`` in Mbit/s (``series.throughput``). ``bands`` are the role's
+    frozen write/read bands; None draws the same panels without grading the ratio against a role (the network
+    sum is not one role). ``unit`` of ``"Gbit/s"`` scales the throughput panel by 1,000; the ratio stays on the
+    Mbit/s series. ``overlays`` maps ``"role"`` / ``"family"`` to ``{ts: median write/read}`` (1M relay charts
+    only; ``family_n`` relays). ``end`` is the period window's end (``relays_published``): the time axis runs
+    to it at least. ``subject`` is the ratio legend (otherwise ``This relay`` or ``This operator``).
     """
     ts, write, read, interval = series
     # Write/read only on days with enough traffic to compare, the band census's cut: below it the ratio is noise.
@@ -136,55 +160,70 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
         if text_width(ratio_sub, 12) <= PLOT_WIDTH:
             break
     span = PERIOD_SPAN[period]
-    role = "  ·  vs {} band".format(bands["role"]) if operator else "  ·  " + bands["role"]
+    role = ("  ·  vs {} band".format(bands["role"]) if operator else "  ·  " + bands["role"]) if bands else ""
     restarted = _restart_entry(restart, ts, end)
     svg = Svg(WIDTH)
+    # Ratio days and the write/read line use the Mbit/s series. Only the throughput panel is rescaled.
+    if unit == "Gbit/s":
+        shown_write = [value / 1000.0 for value in write]
+        shown_read = [value / 1000.0 for value in read]
+        shown_advertised = (advertised or 0) / 1000.0
+    else:
+        shown_write, shown_read, shown_advertised = write, read, advertised
 
-    y = _header(svg, identity, "Throughput · " + span + ("" if operator else role),
-                throughput_subtitle(ts, write, advertised, period))
-    ceiling = max(max(write), max(read), advertised) or 1.0
+    y = _header(svg, identity, "Throughput · " + span + ("" if operator or not bands else role),
+                throughput_subtitle(ts, shown_write, shown_advertised, period, unit=unit))
+    ceiling = max(max(shown_write), max(shown_read), shown_advertised) or 1.0
     # Headroom for the legend (two rows when overloaded) and, with a spike, its callout below it.
-    high = [row for row in rows if row[3] > bands["invest_hi"]]
+    high = [row for row in rows if bands and row[3] > bands["invest_hi"]]
     headroom = (1.45 if overload else 1.34) if high else (1.28 if overload else 1.26)
     top = Panel(svg, "t", LEFT, y, PLOT_WIDTH, 290, ts, 0, ceiling * headroom, end, interval)
-    top.yaxis(nice_ticks(top.yspan), "Throughput (Mbit/s)")
+    top.yaxis(nice_ticks(top.yspan), "Throughput ({})".format(unit))
     top.xaxis(period, labels=False)
     entries = [("line", GREEN, None, "Write (outbound)"), ("line", BLUE, None, "Read (inbound)")]
-    if advertised:
-        top.hline(advertised, ORANGE, 1.3, DASHED)
-        entries.append(("line", ORANGE, DASHED, "Advertised  {} Mbit/s".format(mbit(advertised))))
+    if shown_advertised:
+        top.hline(shown_advertised, ORANGE, 1.3, DASHED)
+        entries.append(("line", ORANGE, DASHED, "Advertised  {} {}".format(mbit(shown_advertised), unit)))
     if restarted:
         top.vline(restart, PURPLE, 1.4, DASHDOT)
-    top.series(write, GREEN, 2.4)
-    top.series(read, BLUE, 1.7)
+    top.series(shown_write, GREEN, 2.4)
+    top.series(shown_read, BLUE, 1.7)
     y += 8 + legend(svg, LEFT + 8, y + 8, [entries + restarted] + ([[("marker", RED, None, overload)]] if overload else []))
-    ylo, yhi = RATIO_SCALE_LO, ratio_strip_data_hi(bands)
+    ylo, yhi = RATIO_SCALE_LO, ratio_strip_data_hi(bands) if bands else RATIO_SCALE_HI
     if high:
         _spike_callout(svg, top, high, yhi, y, period, bands, interval)
 
     y = _header(svg, "", "Write / read · " + span + role, ratio_sub, top.top + top.height + 8)
-    entries = [("line", TEXT, None, "This operator" if operator else "This relay")] if rows else []
+    who = subject or ("This operator" if operator else "This relay")
+    entries = [("line", TEXT, None, who)] if rows else []
     if overlays.get("family"):
         entries.append(("line", MUTED, DOTTED, "Operator Family (median, n={})".format(family_n)))
     if overlays.get("role"):
         entries.append(("line", CYAN, DASHED, "Peers (network median)"))
-    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
-    out = [r is not None and not ilo <= r <= ihi for r in ratios]
-    if any(out):
-        entries.append(("dot", RED, None, "Outside p2–p98"))
-    labels = band_legend_labels(bands)
-    bands_row = [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]), ("patch", RED, 0.22, labels[2])]
-    y += 6 + legend(svg, LEFT, y, [row for row in (entries + restarted, bands_row) if row])
+    if bands:
+        tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
+        out = [r is not None and not ilo <= r <= ihi for r in ratios]
+        if any(out):
+            entries.append(("dot", RED, None, "Outside p2–p98"))
+        labels = band_legend_labels(bands)
+        bands_row = [("patch", GREEN, 0.25, labels[0]), ("patch", ORANGE, 0.22, labels[1]),
+                     ("patch", RED, 0.22, labels[2])]
+    else:
+        out, bands_row = [], []
+    legend_rows = [row for row in (entries + restarted, bands_row) if row]
+    y += 6 + (legend(svg, LEFT, y, legend_rows) if legend_rows else 0)
     strip = Panel(svg, "r", LEFT, y, PLOT_WIDTH, 150, ts, ylo, yhi, end, interval)
-    for lo, hi, color, opacity in ((ylo, ilo, RED, 0.08), (ilo, tlo, ORANGE, 0.07), (tlo, thi, GREEN, 0.14),
-                                   (thi, ihi, ORANGE, 0.07), (ihi, yhi, RED, 0.08)):
-        strip.hband(lo, hi, color, opacity)
+    if bands:
+        for lo, hi, color, opacity in ((ylo, ilo, RED, 0.08), (ilo, tlo, ORANGE, 0.07), (tlo, thi, GREEN, 0.14),
+                                       (thi, ihi, ORANGE, 0.07), (ihi, yhi, RED, 0.08)):
+            strip.hband(lo, hi, color, opacity)
     # Plain labels on the fixed grid lines; the typical band and the top Investigate shelf are named in their own
     # ranges (beside a grid label where the range is too narrow to clear it).
     ticks = (ylo, 1.0, 1.5)
     strip.yaxis(ticks, "Write / read", fmt="{:.1f}")
-    strip.band_label("p10–p90", tlo, thi, GREEN, ticks)
-    strip.band_label(">p98", ihi, yhi, RED, ticks)
+    if bands:
+        strip.band_label("p10–p90", tlo, thi, GREEN, ticks)
+        strip.band_label(">p98", ihi, yhi, RED, ticks)
     strip.xaxis(period)
     strip.hline(1.0, AXIS, 1.0)  # write = read: its grid line, drawn brighter
     for key, color, dash in (("role", CYAN, DASHED), ("family", MUTED, DOTTED)):
@@ -200,24 +239,36 @@ def bandwidth_chart(period, series, advertised, bands, identity, restart=None, o
         for clip, clip_top, clip_bottom in (("ri", strip.top, strip.y(ihi)), ("rl", strip.y(ilo), strip.top + strip.height)):
             svg.clip(clip, strip.left, clip_top, strip.width, clip_bottom - clip_top)
             strip.series(near, RED, 2.4, clip=clip)
-    for high, edge in ((True, strip.y(ihi)), (False, strip.y(ilo))):
-        for run in strip.runs([v if o and (v > ihi) == high else None for v, o in zip(ratios, out)]):
-            for i in run:
-                dot_y = strip.y(ratios[i])
-                if ylo <= ratios[i] <= yhi and (not run[1:] or abs(dot_y - edge) < 2):
-                    svg.dot(strip.xs[i], dot_y, 3.5, RED)  # off the scale, the edge marker below shows it
+    if bands:
+        for high, edge in ((True, strip.y(ihi)), (False, strip.y(ilo))):
+            for run in strip.runs([v if o and (v > ihi) == high else None for v, o in zip(ratios, out)]):
+                for i in run:
+                    dot_y = strip.y(ratios[i])
+                    if ylo <= ratios[i] <= yhi and (not run[1:] or abs(dot_y - edge) < 2):
+                        svg.dot(strip.xs[i], dot_y, 3.5, RED)  # off the scale, the edge marker below shows it
     for x, r in zip(strip.xs, ratios):
         if r is not None and not ylo <= r <= yhi:
             edge = strip.y(yhi if r > yhi else ylo)
             svg.path("M%.1f %.1fl5 %gh-10z" % (x, edge, 8 if r > yhi else -8), RED, 1, fill=RED)
     if restarted:
         strip.vline(restart, PURPLE, 1.4, DASHDOT)
-    return svg.finish(_footer(svg, strip, period, interval, census_footnote(bands)))
+    # An explicit footnote replaces the role census line. Relay charts pass none, so theirs stays the census.
+    note = footnote if footnote is not None else (census_footnote(bands) if bands else "")
+    return svg.finish(_footer(svg, strip, period, interval, note))
 
 
-def uptime_chart(period, ts, percent, interval, identity, restart, average):
+def _advertised_mbit(summed):
+    """Current advertised capacity of the relays ``operator_throughput`` actually summed, in Mbit/s."""
+    return sum((relay.get("advertised_bandwidth") or 0) for relay, _traffic in summed) * MBIT
+
+
+def uptime_chart(period, ts, percent, interval, identity, restart, average, counts=None):
     """Running-flag uptime percent over one period, its legend above the plot. ``average`` is the relay page's
-    figure for the period, the mean of what is drawn (0.0 when the page shows none: under 30 slots, or 1% or less)."""
+    figure for the period, the mean of what is drawn (0.0 when the page shows none: under 30 slots, or 1% or less).
+
+    ``counts``, when given, is how many relays were averaged at each timestamp: a second panel, used by the
+    network chart. A relay chart passes none, and draws exactly as before.
+    """
     svg = Svg(WIDTH)
     subtitle = "Average {:.1f}%  ·  Onionoo Running flag".format(average) if average else ""
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
@@ -225,11 +276,25 @@ def uptime_chart(period, ts, percent, interval, identity, restart, average):
     y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
     panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105, interval=interval)
     panel.yaxis(range(0, 101, 20), "Uptime (%)")
-    panel.xaxis(period)
+    panel.xaxis(period, labels=not counts)
     if restarted:
         panel.vline(restart, PURPLE, 1.4, DASHDOT)
     panel.series(percent, GREEN, 2.2)
-    return svg.finish(_footer(svg, panel, period, interval))
+    if not counts:
+        return svg.finish(_footer(svg, panel, period, interval))
+    lo, hi = min(counts), max(counts)
+    counted = "{:,} relays".format(lo) if lo == hi else "{:,}–{:,} relays".format(lo, hi)
+    step = _step_name(interval)
+    y = _header(svg, "", "Relays in that average",
+                counted + (" · one count per {} slot".format(step) if step else ""), panel.top + panel.height + 8)
+    y += 6 + legend(svg, LEFT, y, [[("line", MUTED, None, "Relays counted")] + restarted])
+    lower = Panel(svg, "c", LEFT, y, PLOT_WIDTH, 130, ts, 0, hi * 1.15 or 1, interval=interval)
+    lower.yaxis(nice_ticks(lower.yspan), "Relays")
+    lower.xaxis(period)
+    if restarted:
+        lower.vline(restart, PURPLE, 1.4, DASHDOT)
+    lower.series(counts, MUTED, 2.0)
+    return svg.finish(_footer(svg, lower, period, interval))
 
 
 def _overload_text(relay):
@@ -415,7 +480,7 @@ class ChartWriter(object):
         return bandwidth_chart(period, series, overlays=overlays, family_n=family_n, end=end, **common)
 
     def _relay_uptime(self, relay, common, key, period):
-        section = (self.uptime.get(relay["fingerprint"]) or {}).get("uptime") or {}
+        section = uptime_section(self.uptime, relay["fingerprint"])
         block = section.get(key) or {}
         average, slots = _block_uptime_percentage_and_datapoints(block, key, self.uptime_windows, relay, section)
         if slots < 2:  # padded slots alone are not a history
@@ -443,6 +508,36 @@ class ChartWriter(object):
         for relay, carried in summed:
             traffic[role_from_flags(relay.get("flags"))] += carried
         bands = bands_for_role(max(sorted(traffic), key=traffic.get))
-        advertised = sum(relay.get("advertised_bandwidth") or 0 for relay, _carried in summed) * MBIT
         end = self._end(series, all(relay.get("running") is False for relay in members))  # as for a relay
+        advertised = _advertised_mbit(summed)
         return bandwidth_chart(period, series, advertised, bands, identity, operator=True, end=end)
+
+    def network(self, directory):
+        """Write the whole-network ``bandwidth-<period>`` and ``uptime-<period>`` charts.
+
+        Return their ``{period: height}`` maps, bandwidth first, drawn periods only.
+        """
+        return (self._charts(directory, "bandwidth", self._network_bandwidth),
+                self._charts(directory, "uptime", self._network_uptime))
+
+    def _network_bandwidth(self, key, period):
+        series, summed = operator_throughput(
+            self.relays, self.bandwidth, key, self._since(period), until_slowest=False)
+        if not series:
+            return None
+        # Same chart as a relay. The band is the whole network's write/read census for this period, not one
+        # role's. Gbit/s matches the bandwidth card; the series stays in Mbit/s until the throughput panel.
+        # Below MIN_NETWORK_CENSUS relays the sum is drawn with no band.
+        bands = network_ratio_bands(self.relays, self.bandwidth, key, self._since(period))
+        footnote = ("{:,} relays · ≥{} KB/s, ≥3 points".format(bands["n"], MIN_ACTIVE_KBYTES) if bands else
+                    "Sum of relay write and read")
+        return bandwidth_chart(period, series, _advertised_mbit(summed), bands, "Tor network",
+                               end=self._end(series, False), unit="Gbit/s", subject="Whole network",
+                               operator=bool(bands), footnote=footnote)
+
+    def _network_uptime(self, key, period):
+        drawn = network_uptime(self.relays, self.uptime, key, self.uptime_windows)
+        if not drawn:
+            return None
+        ts, percent, interval, average, counts = drawn
+        return uptime_chart(period, ts, percent, interval, "Tor network", None, average, counts)

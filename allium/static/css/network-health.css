@@ -14,9 +14,23 @@
 }
 
 .network-health-ribbon {
-    max-width: 1400px;
+    /* Wider than the 1400px cards so two 1094px chart boxes fit without shrinking either.
+       .chart-history's max-width in allium-base.css is that box. */
+    max-width: none;
+    width: 100%;
     margin: 0 auto;
-    padding: 7px;
+    padding: 7px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ribbon-row,
+.ribbon-footer {
+    width: min(1400px, 100%);
+    box-sizing: border-box;
+    padding-left: 7px;
+    padding-right: 7px;
 }
 
 .ribbon-row {
@@ -161,6 +175,36 @@
     border-top: 1px solid var(--nh-border-footer);
 }
 
+/* --chart-box is .chart-history's max-width. Two columns start only when both fit, so neither chart shrinks. */
+.history-jump { display: inline-block; margin-top: 3px; font-size: 1.15rem; font-weight: 600; }
+.network-history {
+    --chart-box: 1094px;
+    --chart-gap: 12px;
+    width: min(calc(var(--chart-box) * 2 + var(--chart-gap) + 36px), 100%);
+    margin-bottom: 7px;
+}
+.network-history:hover { transform: none; }
+.history-lead { margin: 0 0 8px; color: var(--nh-text-label); font-size: 14px; }
+.history-periods { margin: 0 0 4px; }
+.history-periods a {
+    display: inline-block;
+    margin: 0 6px 6px 0;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--nh-bg-metric);
+    color: var(--color-link);
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--chart-box)), 1fr));
+    gap: var(--chart-gap);
+    align-items: start;
+}
+.history-chart { width: 100%; max-width: var(--chart-box); justify-self: center; }
+
 .ribbon-footer .last-updated {
     font-size: 0.9rem;
     color: var(--nh-text-footer);
@@ -175,7 +219,8 @@
 
 @media (max-width: 768px) {
     .ribbon-row { grid-template-columns: 1fr; gap: 6px; }
-    .network-health-ribbon { padding: 6px; }
+    .network-health-ribbon { padding: 6px 0; }
+    .ribbon-row, .ribbon-footer { padding-left: 6px; padding-right: 6px; }
     .ribbon-card { padding: 8px; min-height: 80px; }
     .ribbon-card .card-header h4 { font-size: 1.35rem; }
     .metric-item.primary .metric-value { font-size: 2.7rem; }

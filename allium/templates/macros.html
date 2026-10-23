@@ -632,11 +632,11 @@
     maps each drawn period to its chart's height, so the page reserves the image's box.
     chart_spans is a fixed global; pass ext=chart_ext, which allium.py changes after the
     macros may already be imported and cached. -#}
-{% macro chart_history(name, periods, alt, src='', ext='svg') %}
+{% macro chart_history(name, periods, alt, src='', ext='svg', heading='History') %}
 {% if periods %}
 {% set order = periods|list %}
 {% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
-<h5 class="subsection-header" style="margin-top: 16px;">History</h5>
+<h5 class="subsection-header" style="margin-top: 16px;">{{ heading }}</h5>
 <div class="chart-history">
     {% for period in order[1:] + order[:1] %}
     <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="{{ alt }}, {{ chart_spans[period] }}" loading="lazy"></a>
@@ -658,3 +658,7 @@
 {% macro chart_period_anchors(above='') %}
 {% for period in chart_spans %}<span id="{{ period }}" class="chart-period{{ ' chart-period-' ~ above if above }}"></span>{% endfor %}
 {% endmacro %}
+
+{% macro history_jump(periods, anchor, label) -%}
+{% if periods %}<a class="history-jump" href="#{{ anchor }}">{{ label }}</a>{% endif %}
+{%- endmacro %}

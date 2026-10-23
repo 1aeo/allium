@@ -21,6 +21,8 @@ MBIT = 8e-6  # bytes/s -> Mbit/s
 # (the band census's cut): quieter days leave the relay's write/read strip and the family and peer medians.
 MIN_ACTIVE_KBYTES = 50
 MIN_ACTIVE_MBIT = MIN_ACTIVE_KBYTES * 1000 * MBIT
+# p2 and p98 of a handful of relays are not a census. The live network is thousands.
+MIN_NETWORK_CENSUS = 30
 # Fewest family members counted (see active_ratio) for a family median: the median includes the relay
 # itself, so with two members it is the mean of this relay and the other, and moves half as far as this relay.
 MIN_FAMILY = 3
@@ -80,6 +82,18 @@ def _blocks(bandwidth_row, key):
             ((bandwidth_row or {}).get("read_history") or {}).get(key) or {})
 
 
+def _percentile(values, quantile):
+    """Linear percentile, the same index as ``numpy.percentile``: ``(n - 1) * quantile / 100``."""
+    values = sorted(values)
+    if len(values) == 1:
+        return values[0]
+    rank = (len(values) - 1) * quantile / 100.0
+    lo = int(rank)
+    hi = min(lo + 1, len(values) - 1)
+    frac = rank - lo
+    return values[lo] * (1.0 - frac) + values[hi] * frac
+
+
 def active_ratio(write, read):
     """Write/read on a day with traffic enough to compare (``MIN_ACTIVE_MBIT``), else None."""
     return write / read if read and (write + read) / 2 >= MIN_ACTIVE_MBIT else None
@@ -102,7 +116,7 @@ def _slotted(pts, step, interval):
     return {t: sum(vs) / len(vs) for t, vs in slots.items() if len(vs) * step == interval}
 
 
-def operator_throughput(members, bandwidth_map, key, since=None):
+def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=True):
     """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
     members summed (their write plus read over the window, in Mbit/s per slot).
 
@@ -110,9 +124,10 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     relay's period when a shorter one holds its whole history, so a member
     without this period is summed from its next shorter one, averaged into this
     period's slots; members on other intervals are left out. Members' histories
-    reach the newest slot at different times, so the sum stops at the newest slot
+    reach the newest slot at different times, so with ``until_slowest`` the sum stops at the newest slot
     every member still reporting has reached, not on a partial sum. A member no
     longer running has stopped for good: its end is a real drop, not a delay.
+    The network chart passes ``until_slowest=False``: one relay a slot behind must not hide the rest.
     """
     histories = []
     for relay in members:
@@ -137,10 +152,91 @@ def operator_throughput(members, bandwidth_map, key, since=None):
             read.update({t: r[t] for t in both})
             summed.append((relay, sum(w[t] + r[t] for t in both)))
             lasts.append((max(w.keys() | r.keys()), relay.get("running") is False))
-    newest = max((last for last, _stopped in lasts), default=None)
-    reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
-    end = min(reporting, default=newest)
-    return _aligned({t: v for t, v in write.items() if t <= end}, read, interval) if end else None, summed
+    if until_slowest:
+        newest = max((last for last, _stopped in lasts), default=None)
+        reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
+        end = min(reporting, default=newest)
+        if end:
+            write = {t: value for t, value in write.items() if t <= end}
+        else:
+            write = {}
+    return _aligned(write, read, interval), summed
+
+
+def network_ratio_bands(relays, bandwidth_map, key, since=None):
+    """Write/read percentiles of the whole network for one Onionoo period, or None.
+
+    The relay chart's census, counted across every relay instead of one role: each relay's
+    ratio of sums (sum of write / sum of read), kept when it has at least three aligned
+    points and a mean of write and read of at least 50 KB/s. ``typical_lo``/``typical_hi``
+    are p10/p90 and ``invest_lo``/``invest_hi`` are p2/p98, which ``bandwidth_chart`` paints.
+    A relay without this period's own history is left out, rather than filled from a shorter
+    period the way the network sum is. None below ``MIN_NETWORK_CENSUS`` relays.
+    """
+    ratios = []
+    for relay in relays:
+        row = throughput(bandwidth_map.get(relay["fingerprint"]), key, since)
+        if not row:
+            continue
+        ts, write, read, _interval = row
+        if len(ts) < 3 or not sum(read):
+            continue
+        if sum(write) + sum(read) < 2 * MIN_ACTIVE_MBIT * len(ts):
+            continue
+        ratios.append(sum(write) / sum(read))
+    if len(ratios) < MIN_NETWORK_CENSUS:
+        return None
+    p2, p10, p90, p98 = (_percentile(ratios, q) for q in (2, 10, 90, 98))
+    # ``peers`` is what the ratio subtitle says when a peer median leaves the band with the line. The network
+    # chart has no peer median, so the word is unused; the subtitle still looks the key up.
+    return {"role": "network", "peers": "relays", "n": len(ratios), "typical_lo": p10, "typical_hi": p90,
+            "invest_lo": p2, "invest_hi": p98}
+
+
+def uptime_section(uptime_map, fingerprint):
+    """The Onionoo uptime object for one relay, or ``{}``."""
+    return ((uptime_map or {}).get(fingerprint) or {}).get("uptime") or {}
+
+
+def network_uptime(relays, uptime_map, key, windows):
+    """Mean running-flag percent at each timestamp of one Onionoo period.
+
+    A relay counts only when it has that period's block (a new relay has no 5-year history, so it does not
+    pull the early average) and that block uses the period's most common sampling interval. A timestamp
+    almost nobody shares, such as one relay's padded trailing slot, is left out. Returns
+    ``(ts, percents, interval, average, counts)`` or None under two timestamps. ``counts`` is how many
+    relays were averaged at each timestamp. ``average`` is the mean of the drawn points, the figure
+    ``uptime_chart`` prints, or 0.0 under the same rule as a relay chart: fewer than 30 slots, or 1% or
+    less, and the chart states no average.
+    """
+    intervals = Counter()
+    for relay in relays:
+        block = uptime_section(uptime_map, relay["fingerprint"]).get(key) or {}
+        if len(block.get("values") or ()) >= 2:
+            intervals[int(block.get("interval") or 0)] += 1
+    if not intervals:
+        return None
+    interval = intervals.most_common(1)[0][0]
+    totals, counts = {}, {}
+    for relay in relays:
+        section = uptime_section(uptime_map, relay["fingerprint"])
+        block = section.get(key) or {}
+        if int(block.get("interval") or 0) != interval or len(block.get("values") or ()) < 2:
+            continue
+        drawn = uptime_points(block, key, windows, relay, section)
+        for stamp, value in drawn.items():
+            totals[stamp] = totals.get(stamp, 0.0) + value
+            counts[stamp] = counts.get(stamp, 0) + 1
+    busiest = max(counts.values(), default=0)
+    ts = [stamp for stamp in sorted(totals) if counts[stamp] * 10 >= busiest]
+    if len(ts) < 2:
+        return None
+    percent = [totals[stamp] / counts[stamp] for stamp in ts]
+    average = sum(percent) / len(percent)
+    # _compute_uptime_percentage_and_datapoints: a relay chart shows no average under 30 slots or at 1% or less.
+    if len(percent) < 30 or average <= 1.0:
+        average = 0.0
+    return ts, percent, interval, average, [counts[stamp] for stamp in ts]
 
 
 def family_key(relay):
