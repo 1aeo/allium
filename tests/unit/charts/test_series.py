@@ -207,6 +207,25 @@ def test_network_uptime_averages_the_relays_that_have_the_period():
     assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
 
 
+def test_network_uptime_rejects_a_fractional_interval():
+    relays = [relay("good"), relay("a"), relay("b")]
+    uptime_map = {
+        "good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+        # int(1.5) is 1. Two of these would outvote the 4-hour history and plot one-second samples.
+        "a": {"uptime": {"1_month": block([999, 999], interval=1.5, factor=1 / 999.0)}},
+        "b": {"uptime": {"1_month": block([0, 0], interval=1.5, factor=1 / 999.0)}},
+    }
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
+    assert network_uptime([relay("a")], {"a": uptime_map["a"]}, "1_month", {}) is None
+    # 14400.0 is the same number of seconds as 14400.
+    whole = {"uptime": {"1_month": block([999, 999], interval=14400.0, factor=1 / 999.0)}}
+    _ts, _percent, interval, _average, counts = network_uptime(
+        [relay("good"), relay("whole")], {"good": uptime_map["good"], "whole": whole}, "1_month", {})
+    assert interval == 14400 and counts == [2, 2]
+
+
 def test_network_uptime_ignores_a_block_with_no_numeric_values():
     relays = [relay("good"), relay("words"), relay("holes"), relay("mixed")]
     uptime_map = {

@@ -247,8 +247,8 @@ def network_uptime(relays, uptime_map, key, windows):
             step = int(block.get("interval") or 0)
         except (TypeError, ValueError):
             continue  # a block that is not Onionoo's; it must not become the period's interval
-        if step <= 0:
-            continue
+        if step <= 0 or block.get("interval") != step:
+            continue  # int(1.5) is 1; a fraction must not vote as a one-second sample
         intervals[step] += 1
         rows.append((step, relay, section, block))
     if not intervals:
