@@ -743,7 +743,7 @@ Network Health Dashboard
                 </div>
                 {% if relays.json.network_health.obsolete_operator_top %}
                 <div class="obsolete-operators">
-                    <div class="obsolete-operators-label" title="Operators with the most consensus weight on relays directory authorities mark obsolete. Consensus weight estimates relay utility (Dejaeghere et al. 2026, section 6.5). Relays with no contact are omitted.">Top {{ relays.json.network_health.obsolete_operator_top|length }} obsolete operators</div>
+                    <div class="obsolete-operators-label" title="Operators with the most consensus weight on relays directory authorities mark obsolete. Consensus weight estimates relay utility (Dejaeghere et al. 2026, section 6.5). Relays with no contact are omitted.">Top {{ relays.json.network_health.obsolete_operator_top|length }} obsolete operators<br>by consensus weight</div>
                     <div class="metric-grid">
                         {% for op in relays.json.network_health.obsolete_operator_top %}
                         <a class="metric-item" href="{{ page_ctx.path_prefix }}contact/{{ op.contact_hash }}/#version-compliance" title="{{ op.title|e }}">

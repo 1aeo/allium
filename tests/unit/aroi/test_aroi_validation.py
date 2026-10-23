@@ -672,14 +672,12 @@ class TestAROIValidation(unittest.TestCase):
              "URI: Access forbidden (403)"),
             (joined("HTTP SSL certificate expired for", "HTTP error 403 for"),
              "URI: SSL certificate error"),
-            # A v3 404 reads "proof file not found ... ed25519-family-id.txt": no
-            # '404', and the not-found rule skips messages containing 'txt', so it
-            # has no specific label and the whole message is labelled, as before.
+            # a v3 404 ("proof file not found") is labelled as a 404.
             (joined("proof file not found at", "HTTP error name resolution failed for"),
-             "URI: Connection error"),
+             "URI: Proof file not found (404)"),
             (f"URI-FamilyID: proof file not found at d.example at URL: https://d.example{path}"
              f". Used domain cache after 3 attempts.",
-             "URI: Connection error"),
+             "URI: Proof file not found (404)"),
         ]
         for error, expected in cases:
             self.assertEqual(_simplify_error_message(error), (expected, 'uri'), error)
@@ -751,11 +749,11 @@ class TestAROIValidation(unittest.TestCase):
         metrics = calculate_aroi_validation_metrics(
             relays, validation_data, calculate_operator_metrics=True)
 
-        relay_counts = {"URI: Fingerprint file not found (404)": 5, "URI: Connection error": 2}
+        relay_counts = {"URI: Fingerprint file not found (404)": 5, "URI: Proof file not found (404)": 2}
         self.assertEqual(dict(metrics['relay_error_top5']), relay_counts)
         self.assertEqual(dict(metrics['uri_error_top5']), relay_counts)
         self.assertEqual(dict(metrics['operator_error_top5']),
-                         {"URI: Fingerprint file not found (404)": 1, "URI: Connection error": 1})
+                         {"URI: Fingerprint file not found (404)": 1, "URI: Proof file not found (404)": 1})
 
     def test_error_simplification_tls_causes(self):
         """aroivalidator's cause-specific TLS errors map to the SSL/TLS labels."""
@@ -784,6 +782,88 @@ class TestAROIValidation(unittest.TestCase):
         msg, _ = _simplify_error_message(
             f"URI-RSA: HTTP error connection max retries exceeded for URL: {url}")
         self.assertEqual(msg, "URI: Server unreachable")
+
+    def test_error_simplification_aroivalidator_wordings(self):
+        """aroivalidator 404, content-mismatch, timeout, and name-resolution wordings."""
+        rsa = "/.well-known/tor-relay/rsa-fingerprint.txt"
+        fam = "/.well-known/tor-relay/ed25519-family-id.txt"
+        cached = ". Used domain cache after 3 attempts."
+        proof_404 = (
+            f"URI-FamilyID: proof file not found at d.example at URL: "
+            f"https://d.example{fam}")
+        timed = (
+            f"URI-RSA: HTTP error connection timed out after 5s for URL: "
+            f"https://d.example{rsa}")
+        named = (
+            f"URI-RSA: HTTP error name resolution failed for d.example at URL: "
+            f"https://d.example{rsa}")
+        cases = [
+            (proof_404, "URI: Proof file not found (404)"),
+            (proof_404 + cached, "URI: Proof file not found (404)"),
+            (proof_404 + f"; URI-FamilyID: HTTP error connection max retries "
+             f"exceeded for URL: https://www.d.example{fam}",
+             "URI: Proof file not found (404)"),
+            (f"URI-FamilyID: HTTP redirect (301) to https://www.d.example{fam} "
+             f"for d.example at URL: https://d.example{fam} — CIISS spec "
+             f"disallows redirects on proof URI; URI-FamilyID: proof file not "
+             f"found at www.d.example at URL: https://www.d.example{fam}",
+             "URI: Proof file not found (404)"),
+            ("URI-RSA: Fingerprint not found at d.example",
+             "URI: Fingerprint not in proof file"),
+            (f"Fingerprint not found in https://d.example{rsa}",
+             "URI: Fingerprint not in proof file"),
+            ("URI-FamilyID: family_id not found at d.example",
+             "URI: Family ID not in proof file"),
+            ("URI-FamilyID: family_id not found at gutter.duckdns.org",
+             "URI: Family ID not in proof file"),
+            (f"URI-RSA: HTTP error 404 for gutter.duckdns.org at URL: "
+             f"https://gutter.duckdns.org{rsa}",
+             "URI: Fingerprint file not found (404)"),
+            (f"URI-FamilyID: HTTP error 404 for gutter.duckdns.org at URL: "
+             f"https://gutter.duckdns.org{fam}",
+             "URI: Proof file not found (404)"),
+            (f"URI-FamilyID: proof file not found at gutter.duckdns.org at "
+             f"URL: https://gutter.duckdns.org{fam}",
+             "URI: Proof file not found (404)"),
+            (f"URI-RSA: HTTP error connection timed out after 5s for URL: "
+             f"https://gutter.duckdns.org{rsa}",
+             "URI: Connection timeout"),
+            (timed, "URI: Connection timeout"),
+            (timed + cached, "URI: Connection timeout"),
+            (named, "URI: Domain resolution failed"),
+            (named + f"; URI-RSA: HTTP error name resolution failed for "
+             f"www.d.example at URL: https://www.d.example{rsa}",
+             "URI: Domain resolution failed"),
+            (named + f"; URI-RSA: HTTP error connection max retries exceeded "
+             f"for URL: https://www.d.example{rsa}",
+             "URI: Domain resolution failed"),
+            (f"URI-RSA: HTTP error 526 for d.example at URL: "
+             f"https://d.example{rsa}; URI-RSA: HTTP error connection timed "
+             f"out after 5s for URL: https://www.d.example{rsa}",
+             "URI: Connection error"),
+            (f"URI-RSA: HTTP redirect (301) to https://other.example/ for "
+             f"d.example at URL: https://d.example{rsa} — CIISS spec "
+             f"disallows redirects on proof URI; URI-RSA: HTTP error name "
+             f"resolution failed for www.d.example at URL: "
+             f"https://www.d.example{rsa}",
+             "URI: Connection error"),
+            (f"URI-RSA: HTTP error connection remote end closed connection "
+             f"for URL: https://d.example{rsa}; URI-RSA: HTTP error name "
+             f"resolution failed for www.d.example at URL: "
+             f"https://www.d.example{rsa}",
+             "URI: Connection error"),
+        ]
+        for error, expected in cases:
+            self.assertEqual(
+                _simplify_error_message(error), (expected, 'uri'), error)
+
+        dns_error = (
+            "DNS-RSA: TXT record has invalid proof content. Expected "
+            "'we-run-this-tor-relay', found: v=spf1 at gutter.duckdns.org")
+        self.assertEqual(
+            _simplify_error_message(dns_error),
+            ("DNS: TXT record error", 'dns'),
+            dns_error)
 
     def test_error_categorization(self):
         """Test that errors are categorized into DNS and URI correctly."""

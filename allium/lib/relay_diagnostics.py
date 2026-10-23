@@ -21,34 +21,45 @@ the last detected overload event.
 """
 
 import html as _html
-from collections import Counter
+import math
 from datetime import datetime, timezone
 from typing import List, Optional
 
 # Import flag thresholds from centralized module
 from .consensus.flag_thresholds import (
     SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
     GUARD_TK_DEFAULT,
+    GUARD_TK_NEAR_MARGIN,
     GUARD_WFU_DEFAULT,
+    GUARD_WFU_NEAR_MARGIN,
     GUARD_BW_GUARANTEE,
+    GUARD_BW_NEAR_FRACTION,
     FAST_BW_GUARANTEE,
     BW_SOURCE_MEASURED,
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
+    guard_bandwidth_requirement,
+    resolve_voting_total,
+)
+from .string_utils import (
+    format_days,
+    format_keeping_below,
+    format_known_duration,
+    format_percentage_from_fraction,
+    format_wfu_display,
+    _format_tk_requirement,
+    _format_wfu_requirement,
+    _threshold_summary,
 )
 
 # Import authority data from collector_fetcher
 try:
-    from .consensus.collector_fetcher import (
-        get_voting_authority_names,
-        get_voting_authority_count,
-    )
+    from .consensus.collector_fetcher import get_voting_authority_names
 except ImportError:
     def get_voting_authority_names():
         return ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
                 'longclaw', 'maatuska', 'moria1', 'tor26']
-    def get_voting_authority_count():
-        return 9
 
 # Import bandwidth formatter (shared cached instances, keyed by use_bits)
 try:
@@ -176,9 +187,9 @@ def generate_issues_from_consensus(
     flag_eligibility = consensus_data.get('flag_eligibility') or {}
     if not isinstance(flag_eligibility, dict):
         flag_eligibility = {}
-    auth_count = get_voting_authority_count()
-    majority_threshold = (auth_count // 2) + 1
-    
+    # Same total and majority as the flag rows. A missing total uses the registry.
+    auth_count, majority_threshold = resolve_voting_total(consensus_data.get('total_authorities'))
+
     # Get relay metrics from first available vote
     relay_wfu = relay_tk = None
     for vote in authority_votes:
@@ -196,12 +207,11 @@ def generate_issues_from_consensus(
     # =========================================================================
     if not consensus_data.get('in_consensus'):
         vote_count = consensus_data.get('vote_count', 0)
-        total = consensus_data.get('total_authorities', auth_count)
         issues.append({
             'severity': 'error',
             'category': 'consensus',
             'title': 'Not in consensus',
-            'description': f"Only {vote_count}/{total} authorities voted for this relay (need {majority_threshold})",
+            'description': f"Only {vote_count}/{auth_count} authorities voted for this relay (need {majority_threshold})",
             'suggestion': 'Verify your relay is reachable from multiple geographic locations. Check firewall rules allow incoming connections on your ORPort from all directory authority IP addresses.',
             'section': 'col-running',
             'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
@@ -303,18 +313,29 @@ def generate_issues_from_consensus(
         })
     
     # =========================================================================
-    # GUARD FLAG ELIGIBILITY (5 issue types) - 3 changed from info to warning
+    # GUARD FLAG ELIGIBILITY
+    # Without Guard: the requirement that failed (warning). Those texts stay.
+    # With Guard: an info note when WFU, time-known, or bandwidth is near that
+    # authority's own published threshold. This does not assign the flag.
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
-    guard_details = flag_eligibility.get('guard', {}).get('details', [])
+    # A missing or non-list details value used to raise in the majority count.
+    # Rows that are not dicts are not authority measurements.
+    guard_block = flag_eligibility.get('guard') if isinstance(flag_eligibility, dict) else None
+    raw_details = guard_block.get('details') if isinstance(guard_block, dict) else None
+    guard_details = [row for row in raw_details or [] if isinstance(row, dict)]
     guard_bw_votes = sum(1 for d in guard_details if d.get('bw_met'))
     if guard_details:
         guard_bw_eligible = guard_bw_votes >= majority_threshold
     else:
         guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
-    wfu_eligible = relay_wfu and relay_wfu >= GUARD_WFU_DEFAULT
-    tk_eligible = relay_tk and relay_tk >= GUARD_TK_DEFAULT
+    # Each authority compares its own WFU and time-known with its own guard-wfu
+    # and guard-tk (voteflags.c dirauth_set_routerstatus_from_routerinfo).
+    # wfu_met / tk_met are those comparisons. A majority of them is what the
+    # consensus needs (dirvote.c networkstatus_compute_consensus).
+    wfu_met_count = sum(1 for d in guard_details if d.get('wfu_met'))
+    tk_met_count = sum(1 for d in guard_details if d.get('tk_met'))
     
     if not has_guard:
         # Check each Guard requirement (order matches flag table: Fast → Stable → V2Dir → BW → WFU → TK)
@@ -365,46 +386,58 @@ def generate_issues_from_consensus(
                 'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
             })
         
-        if not wfu_eligible and relay_wfu is not None:
-            wfu_pct = relay_wfu * 100
+        if guard_details and wfu_met_count < majority_threshold:
+            wfu_short = [d for d in guard_details if not d.get('wfu_met')]
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: WFU below threshold',
-                'description': f"Weighted Fractional Uptime {wfu_pct:.1f}% is below 98% requirement",
-                'suggestion': 'WFU measures recent uptime (recent downtime weighs more heavily). To improve: 1) Minimize restarts, 2) Use systemd with Restart=always, 3) Monitor for OOM kills, 4) Schedule updates during low-traffic periods.',
+                'description': _describe_measurement_shortfall(
+                    guard_details, wfu_met_count, auth_count, majority_threshold,
+                    met_key='wfu_met', value_key='wfu_value', threshold_key='wfu_threshold',
+                    what='guard-wfu', requirement=_format_wfu_requirement, amount=format_wfu_display,
+                    bucket_of=_wfu_shortfall_bucket, bucket_text=_WFU_SHORTFALL),
+                'suggestion': _guard_wfu_suggestion(wfu_short),
                 'section': 'flag-guard-wfu',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
-        
-        if not tk_eligible and relay_tk is not None:
-            tk_days = relay_tk / SECONDS_PER_DAY
-            days_needed = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
+
+        if guard_details and tk_met_count < majority_threshold:
+            tk_short = [d for d in guard_details if not d.get('tk_met')]
             issues.append({
                 'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: Time Known below threshold',
-                'description': f"Time Known {tk_days:.1f} days is below 8 days requirement ({days_needed:.1f} more days needed)",
-                'suggestion': 'Time Known tracks how long authorities have observed your relay. This resets if: 1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.',
+                'description': _describe_measurement_shortfall(
+                    guard_details, tk_met_count, auth_count, majority_threshold,
+                    met_key='tk_met', value_key='tk_value', threshold_key='tk_threshold',
+                    what='guard-tk', requirement=_format_tk_requirement, amount=format_known_duration,
+                    bucket_of=_tk_shortfall_bucket, bucket_text=_TK_SHORTFALL),
+                'suggestion': _guard_tk_suggestion(tk_short),
                 'section': 'flag-guard-time-known',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
+    else:
+        issues.extend(_guard_near_threshold_notes(guard_details, use_bits))
     
     # =========================================================================
     # STABLE FLAG ISSUES (1 issue type) - changed from info to warning
     # =========================================================================
-    if not has_stable and relay_tk is not None:
-        stable_eligibility = flag_eligibility.get('stable', {})
-        if stable_eligibility.get('eligible_count', 0) < majority_threshold:
-            issues.append({
-                'severity': 'warning',  # Changed from 'info'
-                'category': 'stable',
-                'title': 'Not eligible for Stable flag',
-                'description': 'Uptime or MTBF below network median for most authorities',
-                'suggestion': 'Stable flag requires uptime/MTBF at or above network median. Keep your relay running continuously for 2-3 weeks. Avoid restarts. Use reliable hardware and network connection.',
-                'section': 'flag-stable-mtbf',
-                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
+    stable_eligibility = flag_eligibility.get('stable') or {}
+    stable_details = stable_eligibility.get('details') or []
+    stable_met = stable_eligibility.get('eligible_count', 0)
+    # Same signal as wfu_met: per-authority details, not "some vote published tk".
+    if not has_stable and stable_details and stable_met < majority_threshold:
+        issues.append({
+            'severity': 'warning',  # Changed from 'info'
+            'category': 'stable',
+            'title': 'Not eligible for Stable flag',
+            'description': _describe_stable_shortfall(
+                stable_details, stable_met, auth_count, majority_threshold),
+            'suggestion': 'Stable flag requires uptime/MTBF at or above network median. Keep your relay running continuously for 2-3 weeks. Avoid restarts. Use reliable hardware and network connection.',
+            'section': 'flag-stable-mtbf',
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+        })
     
     # =========================================================================
     # HSDIR FLAG ISSUES (4 issue types) - all warning severity
@@ -755,24 +788,23 @@ def _format_volume(volume_bytes: int) -> str:
     return format_data_volume_with_unit(volume_bytes)
 
 
+def _join_names(names) -> str:
+    """'a', 'a and b', or 'a, b and c'."""
+    names = list(names)
+    if len(names) <= 1:
+        return names[0] if names else ''
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def _authority_names(details: list) -> str:
     """The details' authority names as 'a', 'a and b' or 'a, b and c'."""
-    names = [d.get('authority', '?') for d in details]
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    return _join_names(detail.get('authority', '?') for detail in details)
 
 
 def _rate_range(values: list, use_bits: bool) -> str:
     """'low – high' for the rates, or a single rate when both ends display the same."""
     low, high = (_format_rate(v, use_bits, decimal_places=1) for v in (min(values), max(values)))
     return low if low == high else f"{low} – {high}"
-
-
-def _threshold_summary(details: list, key: str, use_bits: bool) -> str:
-    """Most common threshold, then each authority that differs ('102.0 KB/s; moria1: 1.0 MB/s')."""
-    typical = Counter(d[key] for d in details).most_common(1)[0][0]
-    others = [f"{d.get('authority', '?')}: {_format_rate(d[key], use_bits, decimal_places=1)}"
-              for d in details if d[key] != typical]
-    return '; '.join([_format_rate(typical, use_bits, decimal_places=1)] + others)
 
 
 # What each bandwidth source an authority judged the relay by says about it
@@ -786,12 +818,15 @@ _BW_SOURCE_SENTENCES = {
 def _bandwidth_source_sentences(details: list, value_key: str, source_key: str, use_bits: bool,
                                 fast_threshold_key: Optional[str] = None) -> List[str]:
     """One sentence per bandwidth source, for the details that have a value."""
+    def rate(value):
+        return _format_rate(value, use_bits, decimal_places=1)
+
     sentences = []
     for source, sentence in _BW_SOURCE_SENTENCES.items():
         group = [d for d in details if d.get(source_key) == source and d.get(value_key) is not None]
         if group:
-            below = (f", below the Fast threshold ({_threshold_summary(group, fast_threshold_key, use_bits)})"
-                     if fast_threshold_key else '')
+            summary = _threshold_summary(group, fast_threshold_key, rate) if fast_threshold_key else None
+            below = f", below the Fast threshold ({summary})" if summary else ''
             sentences.append(sentence.format(names=_authority_names(group), below=below,
                                              rate=_rate_range([d[value_key] for d in group], use_bits)))
     return sentences
@@ -820,6 +855,146 @@ def _describe_fast_shortfall(details: list, fast_votes: int, auth_count: int, ma
     return ' '.join(sentences)
 
 
+def _requirement_lead(met_count: int, auth_count: int, majority: int, what: str, threshold: Optional[str]) -> str:
+    """'2/9 authorities meet guard-wfu (≥98%; 5 needed).'"""
+    requirement = f"{threshold}; {majority} needed" if threshold else f"{majority} needed"
+    return f"{met_count}/{auth_count} authorities meet {what} ({requirement})."
+
+
+_WFU_MEASURED_SUGGESTION = (
+    'WFU measures recent uptime (recent downtime weighs more heavily). To improve: '
+    '1) Minimize restarts, 2) Use systemd with Restart=always, 3) Monitor for OOM kills, '
+    '4) Schedule updates during low-traffic periods.'
+)
+_WFU_HISTORY_SUGGESTION = (
+    'A WFU of 0 means that authority has not observed this relay up yet, so it has no uptime '
+    'credit. Keep the relay running and reachable from those authorities. This is that '
+    "authority's history, not a network-wide measurement of 0%."
+)
+_TK_MEASURED_SUGGESTION = (
+    'Time Known tracks how long authorities have observed your relay. This resets if: '
+    '1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.'
+)
+_TK_HISTORY_SUGGESTION = (
+    'Time Known stays near zero until an authority has observed the relay. Keep it running '
+    'with the same identity key so those authorities accumulate history.'
+)
+
+
+def _guard_wfu_suggestion(short: list) -> str:
+    """History advice when every shortfall is 0 or unpublished. Otherwise the uptime advice."""
+    if short and all('wfu_value' in d and (d.get('wfu_value') is None or d.get('wfu_value') == 0) for d in short):
+        return _WFU_HISTORY_SUGGESTION
+    return _WFU_MEASURED_SUGGESTION
+
+
+def _guard_tk_suggestion(short: list) -> str:
+    """History advice only when every shortfall is unpublished or under an hour."""
+    if short and all('tk_value' in d and (
+            d.get('tk_value') is None or d.get('tk_value') < SECONDS_PER_HOUR) for d in short):
+        return _TK_HISTORY_SUGGESTION
+    return _TK_MEASURED_SUGGESTION
+
+
+def _span_details(details: list, value_key: str, threshold_key: str, formatter) -> str:
+    """Low–high for the group, each end formatted against its own threshold."""
+    ordered = sorted(details, key=lambda detail: detail[value_key])
+    low, high = ordered[0], ordered[-1]
+    start = formatter(low[value_key], low.get(threshold_key))
+    end = formatter(high[value_key], high.get(threshold_key))
+    return start if start == end else f"{start}–{end}"
+
+
+def _wfu_shortfall_bucket(detail: dict) -> str:
+    """Split a missed WFU into unpublished, untracked zero, recorded-down zero, or a measurement.
+
+    Tor's rep_hist_get_weighted_fractional_uptime returns 0 both when the relay
+    has not been observed and when only downtime has been recorded. Days of
+    time-known beside that 0 are recorded downtime, not missing history.
+    """
+    value = detail.get('wfu_value')
+    if value is None:
+        return 'missing'
+    if value != 0:
+        return 'measured'
+    tracked = detail.get('tk_value')
+    if tracked is not None and tracked >= SECONDS_PER_HOUR:
+        return 'down'
+    return 'history'
+
+
+def _tk_shortfall_bucket(detail: dict) -> str:
+    """Split a missed Time Known into unpublished, under an hour, or a real measurement."""
+    value = detail.get('tk_value')
+    if value is None:
+        return 'missing'
+    if value < SECONDS_PER_HOUR:
+        return 'untracked'
+    return 'measured'
+
+
+def _measured_sentence(group: list, formatter, value_key: str, threshold_key: str, prefix: str) -> str:
+    span = _span_details(group, value_key, threshold_key, formatter)
+    return f"{_authority_names(group)} {prefix}{span}."
+
+
+# Unpublished, empty, and measured are different sentences. A WFU of 0 beside
+# days of time-known is recorded downtime; under an hour it is no history.
+_WFU_SHORTFALL = (
+    ('history', lambda group, _fmt: (
+        f"{_authority_names(group)} measured 0% (no uptime history for this relay).")),
+    ('down', lambda group, _fmt: f"{_authority_names(group)} measured 0% (no uptime credit)."),
+    ('missing', lambda group, _fmt: f"{_authority_names(group)} published no WFU."),
+    ('measured', lambda group, fmt: _measured_sentence(group, fmt, 'wfu_value', 'wfu_threshold', 'measured ')),
+)
+_TK_SHORTFALL = (
+    ('untracked', lambda group, fmt: (
+        f"{_authority_names(group)} have no time-known history "
+        f"({_span_details(group, 'tk_value', 'tk_threshold', fmt)}).")),
+    ('missing', lambda group, _fmt: f"{_authority_names(group)} published no Time Known."),
+    ('measured', lambda group, fmt: _measured_sentence(
+        group, fmt, 'tk_value', 'tk_threshold', 'have known this relay for ')),
+)
+
+
+def _describe_measurement_shortfall(details: list, met_count: int, auth_count: int, majority: int, *,
+                                    met_key: str, value_key: str, threshold_key: str, what: str,
+                                    requirement, amount, bucket_of, bucket_text) -> str:
+    """Count, the authorities' own bar, and one sentence per kind of shortfall."""
+    threshold = _threshold_summary(details, threshold_key, requirement)
+    sentences = [_requirement_lead(met_count, auth_count, majority, what, threshold)]
+    groups = {}
+    unnamed = []
+    for detail in details:
+        if detail.get(met_key):
+            continue
+        if value_key not in detail:
+            unnamed.append(detail)
+            continue
+        groups.setdefault(bucket_of(detail), []).append(detail)
+    for bucket, text in bucket_text:
+        group = groups.get(bucket)
+        if group:
+            sentences.append(text(group, amount))
+    named = [detail for detail in unnamed if detail.get('authority')]
+    if named:
+        sentences.append(f"{_authority_names(named)} do not meet it.")
+    return ' '.join(sentences)
+
+
+def _describe_stable_shortfall(details: list, met_count: int, auth_count: int, majority: int) -> str:
+    """How many authorities find the relay Stable, and who does not when the details agree."""
+    lead = _requirement_lead(met_count, auth_count, majority, 'Stable',
+                             'uptime or MTBF at or above their own median')
+    eligible_in_details = sum(1 for detail in details if detail.get('eligible'))
+    if eligible_in_details != met_count:
+        return lead
+    short = [detail for detail in details if not detail.get('eligible') and detail.get('authority')]
+    if short:
+        lead += f" {_authority_names(short)} do not."
+    return lead
+
+
 def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int, majority: int,
                                  guarantee: str, use_bits: bool = False) -> str:
     """How far each authority's bandwidth for this relay is from the Guard requirement."""
@@ -829,6 +1004,198 @@ def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int,
                      f"({majority} needed): at least {guarantee} (AuthDirGuardBWGuarantee){top25}."]
                     + _bandwidth_source_sentences([d for d in details if not d.get('bw_met')],
                                                   'bw_value', 'bw_source', use_bits))
+
+
+def _is_number(value) -> bool:
+    """True for a finite int or float. bool is an int subclass and is not a measurement."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _published_positive(detail: dict, key: str, default: float) -> Optional[float]:
+    """That authority's threshold, or the dirauth default when the vote omitted it."""
+    value = detail.get(key) if key in detail else default
+    if value is None:
+        value = default
+    return float(value) if _is_number(value) and value > 0 else None
+
+
+def _append_near(bucket: list, authority: str, value, threshold, margin) -> None:
+    """Record a measurement within the open margin on either side of its bar.
+
+    A zero on the failing side is an empty measurement (no WFU credit, no
+    time-known history), not a value sitting against the bar.
+    """
+    if threshold is None or not _is_number(value) or value < 0 or not _is_number(margin) or margin <= 0:
+        return
+    slack = value - threshold
+    if slack < 0 and value == 0:
+        return
+    if -margin < slack < margin:
+        bucket.append((authority, value, threshold))
+
+
+def _tk_near_margin(threshold: float) -> float:
+    """One day, but never more than an eighth of a shorter published bar.
+
+    A fixed one-day window is wider than a bar of a few hours, and would call
+    every smaller measurement, including zero, "just under" that bar. An eighth
+    of the 8-day cap is still one day.
+    """
+    return min(GUARD_TK_NEAR_MARGIN, threshold / 8.0)
+
+
+def _format_near_wfu(value, threshold) -> str:
+    """WFU text that does not round a close call up to the far edge of the margin."""
+    shown = format_wfu_display(value, threshold)
+    if not (threshold <= value < threshold + GUARD_WFU_NEAR_MARGIN):
+        return shown
+    edge = threshold + GUARD_WFU_NEAR_MARGIN
+    if shown != format_percentage_from_fraction(edge, 1):
+        return shown
+    # Two decimals can still print 98.50%, the excluded edge of a 98.5% window.
+    return format_keeping_below(value * 100, edge * 100, start=2) + '%'
+
+
+def _format_near_tk(value, threshold) -> str:
+    """Time-known text that does not round a close call up to the far edge of the margin."""
+    shown = format_known_duration(value, threshold=threshold)
+    margin = _tk_near_margin(threshold)
+    if not (threshold <= value < threshold + margin) or value < SECONDS_PER_DAY:
+        return shown
+    edge = threshold + margin
+    if shown != format_days(edge, decimals=1, suffix=' days'):
+        return shown
+    # Two decimals can still print 9.00 days, the excluded edge of a 9-day window.
+    return format_keeping_below(value / SECONDS_PER_DAY, edge / SECONDS_PER_DAY, start=2) + ' days'
+
+
+def _near_phrase(entries: list, format_value, format_bar) -> str:
+    """Authorities that share a rendered measurement and bar, then any that differ."""
+    groups = {}
+    order = []
+    for name, value, threshold in sorted(entries, key=lambda item: item[0]):
+        rendered = (format_value(value, threshold), format_bar(value, threshold))
+        names = groups.get(rendered)
+        if names is None:
+            groups[rendered] = names = []
+            order.append(rendered)
+        names.append(name)
+    parts = [f"{_join_names(groups[rendered])} ({rendered[0]}, need {rendered[1]})" for rendered in order]
+    return parts[0] if len(parts) == 1 else _join_names(parts)
+
+
+def _near_clause(entries: list, requirement: str, format_value, format_bar) -> str:
+    """'just above guard-wfu at A and just under guard-wfu at B'."""
+    sides = (
+        ('just above', [entry for entry in entries if entry[1] >= entry[2]]),
+        ('just under', [entry for entry in entries if entry[1] < entry[2]]),
+    )
+    return ' and '.join(
+        f"{word} {requirement} at {_near_phrase(group, format_value, format_bar)}"
+        for word, group in sides if group)
+
+
+def _bandwidth_pair(value, threshold, use_bits: bool):
+    """(measurement, bar) in one unit. A miss stays strictly below the displayed bar.
+
+    Rounding the bar alone can turn 2.04 MB/s into 2.0 MB/s while 2.03 MB/s still
+    shows two decimals, so a lower measurement looks higher than the bar.
+    """
+    if not _get_bw_formatter or not _is_number(value) or not _is_number(threshold):
+        shown = _format_rate(value, use_bits, decimal_places=1)
+        bar = _format_rate(threshold, use_bits, decimal_places=1) if _is_number(threshold) else shown
+        return shown, '≥' + bar
+    fmt = _get_bw_formatter(use_bits=use_bits)
+    unit = fmt.determine_unit(max(value, threshold))
+    divisor = fmt.get_divisor_for_unit(unit)
+    value_units, bar_units = value / divisor, threshold / divisor
+    decimals = 1
+    if value < threshold:
+        for decimals in range(1, 9):
+            if float(f"{value_units:.{decimals}f}") < float(f"{bar_units:.{decimals}f}"):
+                break
+    return f"{value_units:.{decimals}f} {unit}", f"≥{bar_units:.{decimals}f} {unit}"
+
+
+def _guard_bw_bar(detail: dict) -> Optional[float]:
+    """Easier of this authority's guarantee and its top-25% cutoff."""
+    guarantee = detail.get('bw_guarantee')
+    if not _is_number(guarantee) or guarantee <= 0:
+        guarantee = GUARD_BW_GUARANTEE
+    return guard_bandwidth_requirement(guarantee, detail.get('bw_top25_threshold'))
+
+
+def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[dict]:
+    """Info notes when a relay that has Guard is within the margin of one authority's bar.
+
+    One pass over the guard details. A missing measurement is skipped. An omitted
+    guard-wfu or guard-tk uses the dirauth default. Bandwidth uses the easier of
+    AuthDirGuardBWGuarantee and the top-25% cutoff. This does not assign Guard.
+    """
+    if not details:
+        return []
+    wfu_near, tk_near, bw_near = [], [], []
+    for detail in details:
+        authority = detail.get('authority') or '?'
+        _append_near(wfu_near, authority, detail.get('wfu_value'),
+                     _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT), GUARD_WFU_NEAR_MARGIN)
+        tk_bar = _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT)
+        if tk_bar:
+            _append_near(tk_near, authority, detail.get('tk_value'), tk_bar, _tk_near_margin(tk_bar))
+        bar = _guard_bw_bar(detail)
+        if bar:
+            _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
+
+    def rate(value, threshold) -> str:
+        return _bandwidth_pair(value, threshold, use_bits)[0]
+
+    # The Notes box shows title and description only. Say which input, which
+    # authorities, the published bar, and the one thing that can cross it.
+    wfu_text = ('Recent downtime weighs more than older downtime. Avoid restarts '
+                'while it is this close; a short outage can drop the Guard flag.')
+    tk_text = ('This is weighted time, so the day count is shorter than calendar uptime, '
+               'and it falls while the relay is unreachable. Stay reachable so it can move clear of the bar.')
+    bw_text = ("The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
+               'top 25%. A dip in the bandwidth it counts can drop the Guard flag.')
+    # (rows, title, section, subject, value formatter, bar formatter, description tail, suggestion)
+    wfu_suggestion = (
+        'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
+        'Restart=always, and watch for OOM kills until each authority has more room above '
+        'its own guard-wfu.'
+    )
+    tk_suggestion = (
+        'Weighted time-known falls while the relay is unreachable and resets if the identity '
+        'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
+        'a few weeks of continuous uptime. Stay up with the same key.'
+    )
+    bw_suggestion = (
+        "The bandwidth that counts is that authority's measurement when it has one, otherwise "
+        'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
+        "default) and that authority's top 25%."
+    )
+    def bar_text(value, threshold) -> str:
+        return _bandwidth_pair(value, threshold, use_bits)[1]
+    specs = (
+        (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
+         _format_near_wfu, lambda _value, threshold: _format_wfu_requirement(threshold),
+         wfu_text, wfu_suggestion),
+        (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
+         _format_near_tk, lambda _value, threshold: _format_tk_requirement(threshold),
+         tk_text, tk_suggestion),
+        (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
+         'Bandwidth counted for Guard', rate, bar_text, bw_text, bw_suggestion),
+    )
+    notes = []
+    for entries, title, section, subject, format_value, format_bar, consequence, suggestion in specs:
+        if not entries:
+            continue
+        clause = _near_clause(entries, 'the Guard bar', format_value, format_bar)
+        notes.append({
+            'severity': 'info', 'category': 'guard', 'title': title, 'section': section,
+            'description': f"{subject} is {clause}. {consequence}", 'suggestion': suggestion,
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+        })
+    return notes
 
 
 def _format_rate(rate_bytes: int, use_bits: bool = False, decimal_places: int = 0) -> str:
