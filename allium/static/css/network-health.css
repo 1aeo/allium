@@ -203,7 +203,6 @@
     gap: var(--chart-gap);
     align-items: start;
 }
-.history-chart { width: 100%; max-width: var(--chart-box); justify-self: center; }
 
 .ribbon-footer .last-updated {
     font-size: 0.9rem;

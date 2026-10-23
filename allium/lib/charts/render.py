@@ -521,14 +521,15 @@ class ChartWriter(object):
                 self._charts(directory, "uptime", self._network_uptime))
 
     def _network_bandwidth(self, key, period):
+        since = self._since(period)
+        ratios = []
         series, summed = operator_throughput(
-            self.relays, self.bandwidth, key, self._since(period), until_slowest=False)
+            self.relays, self.bandwidth, key, since, until_slowest=False, ratios=ratios)
         if not series:
             return None
-        # Same chart as a relay. The band is the whole network's write/read census for this period, not one
-        # role's. Gbit/s matches the bandwidth card; the series stays in Mbit/s until the throughput panel.
-        # Below MIN_NETWORK_CENSUS relays the sum is drawn with no band.
-        bands = network_ratio_bands(self.relays, self.bandwidth, key, self._since(period))
+        # The band is this period's census, collected while the sum was parsed. Below MIN_NETWORK_CENSUS
+        # relays the sum is drawn with no band. Gbit/s matches the bandwidth card.
+        bands = network_ratio_bands(ratios)
         footnote = ("{:,} relays · ≥{} KB/s, ≥3 points".format(bands["n"], MIN_ACTIVE_KBYTES) if bands else
                     "Sum of relay write and read")
         return bandwidth_chart(period, series, _advertised_mbit(summed), bands, "Tor network",

@@ -171,13 +171,24 @@ def test_network_ratio_bands_uses_the_relay_census_cut():
     bandwidth["short"] = history([5000] * 2, [1000] * 2)  # two points: not a census member
     relays.append(relay("quiet"))
     bandwidth["quiet"] = history([1] * 5, [1] * 5)  # under 50 KB/s
-    assert network_ratio_bands(relays[:10], {r["fingerprint"]: bandwidth[r["fingerprint"]] for r in relays[:10]},
-                               "1_month") is None
-    bands = network_ratio_bands(relays, bandwidth, "1_month")
+    few = []
+    operator_throughput(relays[:10], bandwidth, "1_month", ratios=few)
+    assert network_ratio_bands(few) is None
+    ratios = []
+    operator_throughput(relays, bandwidth, "1_month", ratios=ratios)
+    bands = network_ratio_bands(ratios)
     assert bands["n"] == 40 and bands["role"] == "network"
     # rank = 39 * quantile / 100, between value 1 + i*0.01 and the next.
     assert bands["typical_lo"] == pytest.approx(1.039) and bands["typical_hi"] == pytest.approx(1.351)
     assert bands["invest_lo"] == pytest.approx(1.0078) and bands["invest_hi"] == pytest.approx(1.3822)
+    # A native history on another interval stays in the census and out of the sum.
+    odd = [relay("day"), relay("day2"), relay("wide")]
+    odd_bw = {name: history([1000] * 5) for name in ("day", "day2")}
+    odd_bw["wide"] = history([2000] * 4, [1000] * 4, interval=2 * DAY)
+    odd_ratios = []
+    _series, summed = operator_throughput(odd, odd_bw, "1_month", ratios=odd_ratios)
+    assert sorted(round(ratio, 3) for ratio in odd_ratios) == [1.0, 1.0, 2.0]
+    assert [relay["fingerprint"] for relay, _traffic in summed] == ["day", "day2"]
 
 
 def test_family_key_is_the_effective_family_when_it_has_other_members():

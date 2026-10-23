@@ -427,8 +427,8 @@ def _write_network_history(relay_set, output_dir):
     No writer (``--no-charts`` or a details-only build) leaves both maps empty, and the page omits the section.
     """
     writer = getattr(relay_set, "chart_writer", None)
-    directory = os.path.join(writer.root if writer and writer.root else output_dir, "network")
-    bandwidth, uptime = writer.network(directory) if writer else ({}, {})
+    bandwidth, uptime = (writer.network(os.path.join(writer.root or output_dir, "network")) if writer else
+                         ({}, {}))
     relay_set.network_bandwidth_periods, relay_set.network_uptime_periods = bandwidth, uptime
 
 
