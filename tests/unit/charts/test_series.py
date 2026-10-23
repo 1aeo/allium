@@ -153,6 +153,17 @@ def test_network_uptime_averages_the_relays_that_have_the_period():
     ts, percent, interval, average, counts = network_uptime(relays, uptime_map, "1_month", {})
     assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
     assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and average == 0.0 and counts == [20, 20]
+    # Early slots of a long period have fewer relays. They stay; only a sparse trailing slot is dropped.
+    old = [relay("old1"), relay("old2")]
+    young = [relay("y%d" % i) for i in range(20)]
+    early = {}
+    for item in old:
+        early[item["fingerprint"]] = {"uptime": {"1_month": block([999] * 4, interval=14400, factor=1 / 999.0)}}
+    for item in young:
+        early[item["fingerprint"]] = {"uptime": {"1_month": block(
+            [999, 999], interval=14400, factor=1 / 999.0, first="2026-09-01 20:00:00")}}
+    ts, _percent, _interval, _average, counts = network_uptime(old + young, early, "1_month", {})
+    assert [t.hour for t in ts] == [12, 16, 20, 0] and counts == [2, 2, 22, 22]
     # Thirty slots at 100% and 0%: the mean is shown. One percent or less is not, as on a relay chart.
     long_map = {"A": {"uptime": {"1_month": block([999] * 30, interval=14400, factor=1 / 999.0)}},
                 "B": {"uptime": {"1_month": block([0] * 30, interval=14400, factor=1 / 999.0)}}}

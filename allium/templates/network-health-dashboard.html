@@ -1151,7 +1151,7 @@ Network Health Dashboard
             {% for name, periods, alt, heading in (
                 ('bandwidth', relays.network_bandwidth_periods, 'Throughput and write/read', 'Bandwidth'),
                 ('uptime', relays.network_uptime_periods, 'Uptime', 'Uptime')) if periods %}
-            <div id="network-{{ name }}">{{ chart_history(name, periods, alt, src=chart_src, ext=chart_ext, heading=heading) }}</div>
+            <div id="network-{{ name }}" class="history-chart">{{ chart_history(name, periods, alt, src=chart_src, ext=chart_ext, heading=heading) }}</div>
             {% endfor %}
         </div>
     </section>

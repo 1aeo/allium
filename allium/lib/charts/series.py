@@ -218,7 +218,8 @@ def network_uptime(relays, uptime_map, key, windows):
 
     A relay counts only when it has that period's block (a new relay has no 5-year history, so it does not
     pull the early average) and that block uses the period's most common sampling interval. A timestamp
-    almost nobody shares, such as one relay's padded trailing slot, is left out. Returns
+    almost nobody shares at the end, such as one relay's padded trailing slot, is left out. Early slots stay:
+    a long period starts with fewer relays because younger relays have no history yet. Returns
     ``(ts, percents, interval, average, counts)`` or None under two timestamps. ``counts`` is how many
     relays were averaged at each timestamp. ``average`` is the mean of the drawn points, the figure
     ``uptime_chart`` prints, or 0.0 under the same rule as a relay chart: fewer than 30 slots, or 1% or
@@ -253,7 +254,10 @@ def network_uptime(relays, uptime_map, key, windows):
             totals[stamp] = totals.get(stamp, 0.0) + value
             counts[stamp] = counts.get(stamp, 0) + 1
     busiest = max(counts.values(), default=0)
-    ts = [stamp for stamp in sorted(totals) if counts[stamp] * 10 >= busiest]
+    ts = sorted(totals)
+    # Only the trailing edge: a padded slot after the history, not the early years of a long period.
+    while len(ts) > 2 and counts[ts[-1]] * 10 < busiest:
+        ts.pop()
     if len(ts) < 2:
         return None
     percent = [totals[stamp] / counts[stamp] for stamp in ts]

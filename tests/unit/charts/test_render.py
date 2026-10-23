@@ -610,9 +610,8 @@ def test_network_charts_are_written_for_bandwidth_and_uptime(tmp_path):
     bandwidth, uptime = charts.network(str(tmp_path))
     assert bandwidth.keys() == uptime.keys() == {"1m"}
     lines = texts(tmp_path / "bandwidth-1m.svg")
-    assert "Gbit/s" in " ".join(lines) and "Write / read · last 30 days" in lines and "Whole network" in lines
-    # Two relays are below the census minimum, so the sum is drawn with no band.
-    assert "Sum of relay write and read" in lines and "vs network band" not in " ".join(lines)
+    assert "Gbit/s" in " ".join(lines) and "Write / read · last 30 days  ·  vs network band" in lines
+    assert "Whole network" in lines and "9,151 relays · baseline 19 Oct 2026" in lines
     uptime_lines = texts(tmp_path / "uptime-1m.svg")
     assert "Tor network" in uptime_lines and "Relays in that average" in uptime_lines
     assert any("one count per 4-hour slot" in line for line in uptime_lines)

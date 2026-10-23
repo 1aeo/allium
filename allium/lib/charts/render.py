@@ -15,14 +15,14 @@ from ..stability_utils import evaluate_overload
 from ..time_utils import SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_WEEK, parse_onionoo_timestamp
 from ..uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 from .bands import (
-    RATIO_SCALE_HI, RATIO_SCALE_LO, band_legend_labels, bands_for_role, census_footnote, ratio_strip_data_hi,
-    role_from_flags,
+    RATIO_SCALE_HI, RATIO_SCALE_LO, band_legend_labels, bands_for_network, bands_for_role, census_footnote,
+    network_census_footnote, ratio_strip_data_hi, role_from_flags,
 )
 from .identity import chart_identity, operator_from_contact, operator_identity
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, ratio_subtitle, ratio_text, throughput_subtitle
 from .series import (
-    MBIT, MIN_ACTIVE_KBYTES, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, network_ratio_bands,
-    network_uptime, operator_throughput, peer_medians, throughput, uptime_points, uptime_section,
+    MBIT, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, network_uptime, operator_throughput,
+    peer_medians, throughput, uptime_points, uptime_section,
 )
 from .svg import (
     AXIS, BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
@@ -528,17 +528,14 @@ class ChartWriter(object):
                 self._charts(directory, "uptime", self._network_uptime))
 
     def _network_bandwidth(self, key, period):
-        since = self._since(period)
-        ratios = []
         series, summed = operator_throughput(
-            self.relays, self.bandwidth, key, since, until_slowest=False, ratios=ratios)
+            self.relays, self.bandwidth, key, self._since(period), until_slowest=False)
         if not series:
             return None
-        # The band is this period's census, collected while the sum was parsed. Below MIN_NETWORK_CENSUS
-        # relays the sum is drawn with no band. Gbit/s matches the bandwidth card.
-        bands = network_ratio_bands(ratios)
-        footnote = ("{:,} relays · ≥{} KB/s, ≥3 points".format(bands["n"], MIN_ACTIVE_KBYTES) if bands else
-                    "Sum of relay write and read")
+        # Frozen census for this period, not a live one: a network-wide shift must not move the yardstick.
+        # Gbit/s matches the bandwidth card; the series stays in Mbit/s until the throughput panel.
+        bands = bands_for_network(period)
+        footnote = network_census_footnote(bands) if bands else "Sum of relay write and read"
         return bandwidth_chart(period, series, _advertised_mbit(summed), bands, "Tor network",
                                end=self._end(series, False), unit="Gbit/s", subject="Whole network",
                                operator=bool(bands), footnote=footnote)

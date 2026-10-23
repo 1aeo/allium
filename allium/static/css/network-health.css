@@ -180,7 +180,9 @@
 .network-history {
     --chart-box: 1094px;
     --chart-gap: 12px;
-    width: min(calc(var(--chart-box) * 2 + var(--chart-gap) + 36px), 100%);
+    /* 100vw, not the Bootstrap container: two 1094px charts fit once the window does, and the ribbon centers it. */
+    width: min(calc(var(--chart-box) * 2 + var(--chart-gap) + 36px), calc(100vw - 16px));
+    max-width: none;
     min-width: 0;  /* a flex item's default min-width is the chart's 1080px, which scrolls a phone sideways */
     margin-bottom: 7px;
 }
@@ -204,6 +206,7 @@
     gap: var(--chart-gap);
     align-items: start;
 }
+.history-chart { width: 100%; max-width: var(--chart-box); justify-self: center; min-width: 0; }
 
 .ribbon-footer .last-updated {
     font-size: 0.9rem;
