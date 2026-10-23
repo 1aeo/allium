@@ -732,10 +732,17 @@ def _format_volume(volume_bytes: int) -> str:
     return format_data_volume_with_unit(volume_bytes)
 
 
+def _join_names(names) -> str:
+    """'a', 'a and b', or 'a, b and c'."""
+    names = list(names)
+    if len(names) <= 1:
+        return names[0] if names else ''
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def _authority_names(details: list) -> str:
     """The details' authority names as 'a', 'a and b' or 'a, b and c'."""
-    names = [d.get('authority', '?') for d in details]
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    return _join_names(detail.get('authority', '?') for detail in details)
 
 
 def _rate_range(values: list, use_bits: bool) -> str:
@@ -950,88 +957,49 @@ def _is_number(value) -> bool:
 
 def _published_positive(detail: dict, key: str, default: float) -> Optional[float]:
     """That authority's threshold, or the dirauth default when the vote omitted it."""
-    if key not in detail or detail.get(key) is None:
-        return default
-    value = detail.get(key)
-    if _is_number(value) and value > 0:
-        return float(value)
-    return None
+    value = detail.get(key) if key in detail else default
+    if value is None:
+        value = default
+    return float(value) if _is_number(value) and value > 0 else None
 
 
-def _near_threshold_entries(details: list, value_of, threshold_of, margin_of) -> list:
-    """(authority, value, threshold) within the open margin on either side of the bar."""
-    entries = []
-    for detail in details:
-        value = value_of(detail)
-        threshold = threshold_of(detail)
-        if threshold is None or not _is_number(value):
-            continue
-        margin = margin_of(threshold)
-        if not _is_number(margin) or margin <= 0:
-            continue
-        slack = value - threshold
-        if -margin < slack < margin:
-            entries.append((detail.get('authority') or '?', value, threshold))
-    return entries
+def _append_near(bucket: list, authority: str, value, threshold, margin) -> None:
+    """Record a measurement within the open margin on either side of its bar."""
+    if threshold is None or not _is_number(value) or not _is_number(margin) or margin <= 0:
+        return
+    slack = value - threshold
+    if -margin < slack < margin:
+        bucket.append((authority, value, threshold))
 
 
-def _near_phrase(entries: list, format_value, format_threshold) -> str:
-    """Authorities that share a measurement and threshold, then any that differ.
-
-    Same shape as the stricter-authority notes: the common group, then each
-    authority whose published bar (or measured value) is different. Value text
-    uses the same formatters as the below-threshold warning, including the rule
-    that a miss does not round up onto its bar.
-    """
-    groups = []
-    grouped = {}
+def _near_phrase(entries: list, format_value, format_bar) -> str:
+    """Authorities that share a rendered measurement and bar, then any that differ."""
+    groups = {}
+    order = []
     for name, value, threshold in sorted(entries, key=lambda item: item[0]):
-        rendered = (format_value(value, threshold), format_threshold(threshold))
-        slot = grouped.get(rendered)
-        if slot is None:
-            slot = [rendered[0], rendered[1], []]
-            grouped[rendered] = slot
-            groups.append(slot)
-        slot[2].append(name)
-    parts = []
-    for value_text, threshold_text, names in groups:
-        label = _authority_names([{'authority': name} for name in names])
-        parts.append(f"{label} ({value_text} vs {threshold_text})")
-    if len(parts) == 1:
-        return parts[0]
-    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+        rendered = (format_value(value, threshold), format_bar(threshold))
+        names = groups.get(rendered)
+        if names is None:
+            groups[rendered] = names = []
+            order.append(rendered)
+        names.append(name)
+    parts = [f"{_join_names(groups[rendered])} ({rendered[0]} vs {rendered[1]})" for rendered in order]
+    return parts[0] if len(parts) == 1 else _join_names(parts)
 
 
-def _near_position_clause(entries: list, requirement: str, format_value, format_threshold) -> str:
-    """'just above guard-wfu at A and just under guard-wfu at B' for one input."""
-    above = [entry for entry in entries if entry[1] >= entry[2]]
-    under = [entry for entry in entries if entry[1] < entry[2]]
-    parts = []
-    if above:
-        where = _near_phrase(above, format_value, format_threshold)
-        parts.append(f"just above {requirement} at {where}")
-    if under:
-        where = _near_phrase(under, format_value, format_threshold)
-        parts.append(f"just under {requirement} at {where}")
-    return ' and '.join(parts)
+def _near_clause(entries: list, requirement: str, format_value, format_bar) -> str:
+    """'just above guard-wfu at A and just under guard-wfu at B'."""
+    sides = (
+        ('just above', [entry for entry in entries if entry[1] >= entry[2]]),
+        ('just under', [entry for entry in entries if entry[1] < entry[2]]),
+    )
+    return ' and '.join(
+        f"{word} {requirement} at {_near_phrase(group, format_value, format_bar)}"
+        for word, group in sides if group)
 
 
-def _guard_near_note(title: str, section: str, subject: str, requirement: str, entries: list,
-                     format_value, format_threshold, consequence: str, suggestion: str) -> dict:
-    clause = _near_position_clause(entries, requirement, format_value, format_threshold)
-    return {
-        'severity': 'info',
-        'category': 'guard',
-        'title': title,
-        'description': f"{subject} is {clause}. {consequence}",
-        'suggestion': suggestion,
-        'section': section,
-        'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-    }
-
-
-def _guard_bw_threshold(detail: dict) -> Optional[float]:
-    """Binding Guard bandwidth bar for one authority's measured-vs-threshold row."""
+def _guard_bw_bar(detail: dict) -> Optional[float]:
+    """Easier of this authority's guarantee and its top-25% cutoff."""
     guarantee = detail.get('bw_guarantee')
     if not _is_number(guarantee) or guarantee <= 0:
         guarantee = GUARD_BW_GUARANTEE
@@ -1039,94 +1007,56 @@ def _guard_bw_threshold(detail: dict) -> Optional[float]:
 
 
 def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[dict]:
-    """Info notes when a relay has Guard and an input is near one authority's bar.
+    """Info notes when a relay that has Guard is within the margin of one authority's bar.
 
-    WFU, time-known, and bandwidth are the measured-vs-threshold values already
-    stored on each guard detail (the Per-Authority Details row). The threshold
-    is that authority's published guard-wfu, guard-tk, or bandwidth bar.
-    A missing WFU or time-known value is unpublished and is not compared. A vote
-    that omits the threshold uses AuthDirVoteGuardGuaranteeWFU (98%) and
-    AuthDirVoteGuardGuaranteeTimeKnown (8 days). Bandwidth passes at the lower of
-    AuthDirGuardBWGuarantee and the authority's top-25% cutoff. A published 0
-    stays a measurement, so it is near only when that authority's bar is within
-    the margin of 0.
-
-    Nothing here changes who is assigned the Guard flag. The below-threshold
-    warnings stay the majority shortfalls from each authority's own bar.
+    One pass over the guard details. A missing measurement is skipped. An omitted
+    guard-wfu or guard-tk uses the dirauth default. Bandwidth uses the easier of
+    AuthDirGuardBWGuarantee and the top-25% cutoff. This does not assign Guard.
     """
     if not details:
         return []
-    notes = []
+    wfu_near, tk_near, bw_near = [], [], []
+    for detail in details:
+        authority = detail.get('authority') or '?'
+        _append_near(wfu_near, authority, detail.get('wfu_value'),
+                     _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT), GUARD_WFU_NEAR_MARGIN)
+        _append_near(tk_near, authority, detail.get('tk_value'),
+                     _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT), GUARD_TK_NEAR_MARGIN)
+        bar = _guard_bw_bar(detail)
+        if bar:
+            _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
 
-    def _bw_value(value, _threshold):
+    def rate(value, _threshold):
         return _format_rate(value, use_bits, decimal_places=1)
 
-    def _bw_bar(threshold):
-        return '≥' + _format_rate(threshold, use_bits, decimal_places=1)
-
-    wfu_entries = _near_threshold_entries(
-        details,
-        lambda detail: detail.get('wfu_value'),
-        lambda detail: _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT),
-        lambda _threshold: GUARD_WFU_NEAR_MARGIN,
+    # (rows, title, section, subject, requirement name, value formatter, bar formatter, consequence, suggestion)
+    specs = (
+        (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime', 'guard-wfu',
+         lambda value, threshold: format_wfu_display(value, threshold), _format_wfu_requirement,
+         'Recent downtime counts more than older downtime, so a short outage can move '
+         'WFU across that requirement and drop the Guard flag.', _WFU_MEASURED_SUGGESTION),
+        (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known', 'guard-tk',
+         lambda value, threshold: format_known_duration(value, threshold=threshold), _format_tk_requirement,
+         "Weighted time-known falls while the relay is unreachable, and crossing that "
+         "authority's guard-tk drops the Guard flag.", _TK_MEASURED_SUGGESTION),
+        (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
+         'Bandwidth counted for Guard', 'the Guard bandwidth bar', rate,
+         lambda threshold: '≥' + rate(threshold, None),
+         "That bar is AuthDirGuardBWGuarantee, or the authority's top-25% cutoff "
+         'when the cutoff is lower. Measured bandwidth moving across it drops the Guard flag.',
+         'Keep the bandwidth each authority counts above the lower of AuthDirGuardBWGuarantee '
+         "and that authority's top-25% cutoff."),
     )
-    if wfu_entries:
-        notes.append(_guard_near_note(
-            'Guard: WFU near threshold',
-            'flag-guard-wfu',
-            'Weighted Fractional Uptime',
-            'guard-wfu',
-            wfu_entries,
-            lambda value, threshold: format_wfu_display(value, threshold),
-            _format_wfu_requirement,
-            'Recent downtime counts more than older downtime, so a short outage can move '
-            'WFU across that requirement and drop the Guard flag.',
-            'Keep the relay running without restarts. Each authority applies the guard-wfu '
-            'value from its own vote.',
-        ))
-
-    tk_entries = _near_threshold_entries(
-        details,
-        lambda detail: detail.get('tk_value'),
-        lambda detail: _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT),
-        lambda _threshold: GUARD_TK_NEAR_MARGIN,
-    )
-    if tk_entries:
-        notes.append(_guard_near_note(
-            'Guard: Time Known near threshold',
-            'flag-guard-time-known',
-            'Time Known',
-            'guard-tk',
-            tk_entries,
-            lambda value, threshold: format_known_duration(value, threshold=threshold),
-            _format_tk_requirement,
-            "Weighted time-known falls while the relay is unreachable, and crossing that "
-            "authority's guard-tk drops the Guard flag.",
-            'Stay reachable. Each authority applies the guard-tk value from its own vote, '
-            'capped by AuthDirVoteGuardGuaranteeTimeKnown (8 days) when its measured '
-            'cutoff would be higher.',
-        ))
-
-    bw_entries = _near_threshold_entries(
-        details,
-        lambda detail: detail.get('bw_value'),
-        _guard_bw_threshold,
-        lambda threshold: threshold * GUARD_BW_NEAR_FRACTION,
-    )
-    if bw_entries:
-        notes.append(_guard_near_note(
-            'Guard: bandwidth near threshold',
-            'flag-guard-bandwidth',
-            'Bandwidth counted for Guard',
-            'the Guard bandwidth bar',
-            bw_entries,
-            _bw_value,
-            _bw_bar,
-            "That bar is AuthDirGuardBWGuarantee, or the authority's top-25% cutoff "
-            'when the cutoff is lower. Measured bandwidth moving across it drops the Guard flag.',
-            'Keep the bandwidth each authority counts above the lower of '
-            "AuthDirGuardBWGuarantee and that authority's top-25% cutoff.",
-        ))
+    notes = []
+    for entries, title, section, subject, requirement, format_value, format_bar, consequence, suggestion in specs:
+        if not entries:
+            continue
+        clause = _near_clause(entries, requirement, format_value, format_bar)
+        notes.append({
+            'severity': 'info', 'category': 'guard', 'title': title, 'section': section,
+            'description': f"{subject} is {clause}. {consequence}", 'suggestion': suggestion,
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+        })
     return notes
 
 

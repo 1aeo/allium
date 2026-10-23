@@ -191,16 +191,11 @@ def guard_bw_top_threshold(thresholds: Dict[str, Any]) -> Optional[float]:
 
 def guard_bandwidth_requirement(guarantee: Optional[float] = None,
                                 top25: Optional[float] = None) -> Optional[float]:
-    """Lowest bandwidth (bytes/s) that still satisfies Guard's bandwidth rule.
+    """Easier Guard bandwidth bar, in bytes/s. Does not assign the flag.
 
-    dirauth_set_routerstatus_from_routerinfo assigns the bandwidth part of Guard
-    when credible bandwidth is at least AuthDirGuardBWGuarantee, or at least
-    MIN(guard-bw-inc-exits, guard-bw-exc-exits), the easier of the two bars. ``top25`` is
-    that MIN (see guard_bw_top_threshold). A missing or non-positive cutoff leaves
-    only the guarantee. Returns None when neither bar is set.
-
-    Relay diagnostics use this as the failing side of the bandwidth input.
-    It does not assign the Guard flag.
+    dirauth_set_routerstatus_from_routerinfo passes a relay at AuthDirGuardBWGuarantee
+    or at MIN(guard-bw-inc-exits, guard-bw-exc-exits). ``top25`` is that MIN.
+    A missing or non-positive cutoff leaves only the guarantee. None when both are unset.
     """
     bars = []
     for value in (guarantee, top25):
