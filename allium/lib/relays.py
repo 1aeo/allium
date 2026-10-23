@@ -1034,8 +1034,12 @@ class Relays:
                 
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
-                state = ((formatted_consensus_evaluation.get('reachability_summary') or {}).get('ipv6') or {}).get('state')
-                relay['ipv6_authority_test'] = state if state in ('ok', 'failed', 'not_tested') else ''
+                ipv6 = ((formatted_consensus_evaluation.get('reachability_summary') or {}).get('ipv6') or {})
+                state = ipv6.get('state')
+                # Onionoo unconfirmed, with no vote 'a' line, is not a tester omission.
+                if state == 'failed' and ipv6.get('label') == 'Unreachable':
+                    state = 'unreachable'
+                relay['ipv6_authority_test'] = state if state in ('ok', 'failed', 'not_tested', 'unreachable') else ''
                 
                 # Consensus issues join the overload issues already stored by
                 # _evaluate_overload(). Regenerating overload here would duplicate

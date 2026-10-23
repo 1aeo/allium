@@ -703,6 +703,48 @@ class TestIpv6ReachabilityStates:
         fetcher._credible_bandwidth('moria1', {'measured': None, 'bandwidth': 50, 'flags': []})
 
 
+def test_onionoo_unreachable_list_mark_is_not_a_vote_failure(tmp_path):
+    """A list mark for an unconfirmed address must not say testers omitted an a-line."""
+    from allium.lib.relays import Relays
+
+    fingerprint = '78' * 20
+    fetcher = _load({
+        'dizum': _vote_document([_relay_block(fingerprint, 'Unconf')]),
+    })
+    relay_set = Relays(
+        output_dir=str(tmp_path),
+        onionoo_url='https://onionoo.example.invalid/details',
+        relay_data={
+            'version': '8.0',
+            'relays_published': '2026-10-17 12:00:00',
+            'relays': [{
+                'nickname': 'Unconf',
+                'fingerprint': fingerprint,
+                'running': True,
+                'observed_bandwidth': 1_000_000,
+                'consensus_weight': 100,
+                'flags': ['Running', 'Valid'],
+                'first_seen': '2024-01-01 00:00:00',
+                'last_seen': '2026-10-17 12:00:00',
+                'last_restarted': '2026-10-01 00:00:00',
+                'or_addresses': ['192.0.2.8:9001'],
+                'unreachable_or_addresses': ['[2001:db8::8]:9001'],
+                'contact': 'Unconf <u@example.org>',
+                'effective_family': [fingerprint],
+            }],
+        },
+        filter_downtime_days=0,
+        mp_workers=0,
+    )
+    relay_set.enrich_with_api_data(collector_consensus_data={
+        'relay_index': fetcher.relay_index,
+        'flag_thresholds': {},
+        'bw_authorities': [],
+        'ipv6_testing_authorities': [],
+    })
+    assert relay_set.json['relays'][0]['ipv6_authority_test'] == 'unreachable'
+
+
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):
     """Rendered relay pages: Not tested is its own label, and 0/N stays a failure."""
     from jinja2 import Environment, FileSystemLoader
@@ -801,3 +843,7 @@ def test_relay_pages_distinguish_the_three_states(network, tmp_path):
     failed_mark = mark.render(relay={'ipv6_authority_test': 'failed'})
     assert 'v6 Fail' in failed_mark.split('|')[0]
     assert 'v6 N/T' not in failed_mark
+    unreachable_mark = mark.render(relay={'ipv6_authority_test': 'unreachable'})
+    assert 'v6 Unreach' in unreachable_mark.split('|')[0]
+    assert 'omitted' not in unreachable_mark
+    assert '>Unreachable<' in unreachable_mark.split('|')[1]

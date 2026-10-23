@@ -681,6 +681,7 @@
     'ok': ('al-status-success', "Directory authorities included this IPv6 ORPort on a vote 'a' line.", 'v6', 'OK'),
     'failed': ('al-status-danger', "IPv6 ORPort published. Authorities that test IPv6 voted for this relay and omitted the 'a' line.", 'v6 Fail', 'Fail'),
     'not_tested': ('al-status-muted', 'IPv6 ORPort published. No directory authority vote contains an IPv6 reachability test.', 'v6 N/T', 'N/T'),
+    'unreachable': ('al-status-danger', 'Onionoo lists this IPv6 ORPort as declared but not confirmed. No vote contains an a-line test.', 'v6 Unreach', 'Unreachable'),
 } -%}
 {%- set mark = marks.get(relay.get('ipv6_authority_test')) -%}
 {%- if mark -%}<span class="{{ mark[0] }}" title="{{ mark[1] }}">{{ mark[2] if compact else mark[3] }}</span>{%- endif -%}
