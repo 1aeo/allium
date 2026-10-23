@@ -8,6 +8,9 @@ DEPRECATED: Use html_escape_utils.py for HTML escaping operations.
 This module is maintained for backward compatibility.
 """
 
+from collections import Counter
+from decimal import Decimal
+from fractions import Fraction
 from typing import Optional
 
 # Import from centralized HTML escaping utilities
@@ -59,6 +62,173 @@ def format_percentage_from_fraction(value, decimals=1, fallback=NA_FALLBACK):
         return f"{float(value) * 100:.{decimals}f}%"
     except (ValueError, TypeError):
         return fallback
+
+
+# Float text past this still landing on the bar is truncated instead of rounded.
+_BELOW_BAR_DECIMALS = 16
+
+
+def _rounded_below(value, threshold, decimals):
+    """True when ``value`` printed at ``decimals`` is strictly under ``threshold``."""
+    return float(f"{value:.{decimals}f}") < float(f"{threshold:.{decimals}f}")
+
+
+def decimals_keeping_below(value, threshold, start=1, limit=4):
+    """Decimals so formatting ``value`` does not round it up onto ``threshold``.
+
+    ``value`` and ``threshold`` are already in display units (a percent, or days).
+    A measurement that missed its bar must not print as if it had met it
+    (0.979995 must not become 98.0% beside a 98% bar). Searches past ``limit``
+    when that many places still round onto the bar. ``format_keeping_below``
+    truncates if rounding never separates them.
+    """
+    if threshold is None or value >= threshold:
+        return start
+    ceiling = max(limit, _BELOW_BAR_DECIMALS)
+    for decimals in range(start, ceiling + 1):
+        if _rounded_below(value, threshold, decimals):
+            return decimals
+    return ceiling
+
+
+def format_keeping_below(value, threshold, start=1, limit=4):
+    """Number text for ``value``. A miss stays strictly below ``threshold``."""
+    if threshold is None or value >= threshold:
+        return f"{value:.{start}f}"
+    decimals = decimals_keeping_below(value, threshold, start=start, limit=limit)
+    shown = f"{value:.{decimals}f}"
+    if _rounded_below(value, threshold, decimals):
+        return shown
+    # Rounding still lands on the bar. Drop digits instead of rounding up.
+    from decimal import Decimal, ROUND_DOWN
+    number = Decimal(str(value))
+    bar = Decimal(str(threshold))
+    for places in range(start, _BELOW_BAR_DECIMALS + 2):
+        quant = Decimal(1).scaleb(-places)
+        truncated = number.quantize(quant, rounding=ROUND_DOWN)
+        if truncated < bar.quantize(quant, rounding=ROUND_DOWN):
+            return f"{truncated:.{places}f}"
+    return format(number, 'f')
+
+
+# A day and an hour, for display. These match flag_thresholds.SECONDS_PER_DAY
+# and SECONDS_PER_HOUR. Importing that module from here would load the
+# consensus package while this module is still starting.
+_DAY_SECONDS = 86400
+_HOUR_SECONDS = 3600
+
+
+def format_wfu_display(wfu, threshold=None, decimals=1, fallback=NA_FALLBACK):
+    """Percent text for a WFU fraction. A miss does not round up onto ``threshold``."""
+    if wfu is None:
+        return fallback
+    if threshold is not None and wfu < threshold:
+        return format_keeping_below(wfu * 100, threshold * 100, start=decimals) + '%'
+    return format_percentage_from_fraction(wfu, decimals, fallback)
+
+
+def format_days(seconds, decimals=1, suffix='d', fallback=NA_FALLBACK, threshold=None):
+    """Seconds as days. A miss does not round up onto ``threshold``."""
+    if seconds is None:
+        return fallback
+    days = seconds / _DAY_SECONDS
+    if threshold is not None and seconds < threshold:
+        return format_keeping_below(days, threshold / _DAY_SECONDS, start=decimals) + suffix
+    return f"{days:.{decimals}f}{suffix}"
+
+
+def format_known_duration(seconds, threshold=None, day_suffix=' days', fallback=NA_FALLBACK):
+    """Days, hours, or seconds. A day-scale miss does not round up onto ``threshold``."""
+    if seconds is None:
+        return fallback
+    if seconds >= _DAY_SECONDS:
+        return format_days(seconds, suffix=day_suffix, threshold=threshold, fallback=fallback)
+    if seconds >= _HOUR_SECONDS:
+        # 86399 seconds is under a 86400-second bar. One decimal would print 24.0 hours.
+        if threshold is not None and seconds < threshold:
+            return format_keeping_below(seconds / _HOUR_SECONDS, threshold / _HOUR_SECONDS) + ' hours'
+        return f"{seconds / _HOUR_SECONDS:.1f} hours"
+    return f"{int(seconds)} seconds"
+
+
+def _format_requirement_number(value) -> str:
+    """Whole numbers print without a decimal. Any other published value keeps its digits.
+
+    98.000% stays '98'. 7.96 days stays '7.96' and does not become '8'.
+    """
+    number = value if isinstance(value, Decimal) else Decimal(str(value))
+    integral = number.to_integral_value()
+    if number == integral:
+        return str(int(integral))
+    text = format(number, 'f')
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
+def _format_wfu_requirement(value) -> str:
+    """'≥98%' for an authority's guard-wfu fraction."""
+    return f"≥{_format_requirement_number(Decimal(str(value)) * 100)}%"
+
+
+def _concise_day_count(seconds):
+    """Day text when ``seconds / 86400`` is a short terminating decimal, else None.
+
+    691200 is '8'. 687744 is '7.96'. 691199 does not terminate, so it is None
+    and the caller shows the exact duration instead of a 28-digit approximation.
+    """
+    quotient = Fraction(Decimal(str(seconds))) / _DAY_SECONDS
+    denominator = quotient.denominator
+    for factor in (2, 5):
+        while denominator % factor == 0:
+            denominator //= factor
+    if denominator != 1:
+        return None
+    text = _format_requirement_number(Decimal(quotient.numerator) / Decimal(quotient.denominator))
+    fractional = text.split('.')
+    if len(fractional) == 2 and len(fractional[1]) > 4:
+        return None
+    return text
+
+
+def _format_exact_duration(seconds) -> str:
+    """'7 days 23 hours 59 minutes 59 seconds' for a whole number of seconds."""
+    total = int(Decimal(str(seconds)))
+    if Decimal(str(seconds)) != total:
+        return f"{_format_requirement_number(seconds)} seconds"
+    parts = []
+    days, remainder = divmod(total, _DAY_SECONDS)
+    hours, remainder = divmod(remainder, _HOUR_SECONDS)
+    minutes, secs = divmod(remainder, 60)
+    for count, singular, plural in (
+        (days, 'day', 'days'),
+        (hours, 'hour', 'hours'),
+        (minutes, 'minute', 'minutes'),
+        (secs, 'second', 'seconds'),
+    ):
+        if count:
+            parts.append(f"{count} {singular if count == 1 else plural}")
+    return ' '.join(parts) if parts else '0 seconds'
+
+
+def _format_tk_requirement(seconds) -> str:
+    """'≥8 days' for an authority's guard-tk seconds."""
+    days = _concise_day_count(seconds)
+    if days is not None:
+        return f"≥{days} days"
+    return f"≥{_format_exact_duration(seconds)}"
+
+
+def _threshold_summary(details: list, key: str, formatter):
+    """Most common value, then each authority that differs, joined by '; '.
+
+    '≥98%' or '≥98%; moria1: ≥99%'. None when no detail carries ``key``.
+    """
+    present = [detail for detail in details if detail.get(key) is not None]
+    if not present:
+        return None
+    typical = Counter(detail[key] for detail in present).most_common(1)[0][0]
+    others = [f"{detail.get('authority', '?')}: {formatter(detail[key])}"
+              for detail in present if detail[key] != typical]
+    return '; '.join([formatter(typical)] + others)
 
 
 import re

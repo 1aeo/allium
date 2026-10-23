@@ -140,10 +140,20 @@ class TestCollectorFetcher:
         # Days
         assert fetcher._format_time_known(86400) == '1.0 days'
         assert fetcher._format_time_known(691200) == '8.0 days'  # Guard requirement
+        # A miss of the 8-day bar must not print as 8.0 days.
+        assert fetcher._format_time_known(688363, 691200) == '7.97 days'
+        assert fetcher._format_wfu(0.979995, 0.98) == '97.999%'
+        assert fetcher._format_wfu(0.0, 0.98) == '0.0%'
+        assert fetcher._format_wfu(None, 0.98) == 'N/A'
         
         # Hours
         assert fetcher._format_time_known(3600) == '1.0 hours'
         assert fetcher._format_time_known(7200) == '2.0 hours'
+        # One second under a 1-day bar stays in hours and under 24.
+        near_day = fetcher._format_time_known(86399, 86400)
+        assert near_day.endswith(' hours')
+        assert near_day != '24.0 hours'
+        assert float(near_day.split()[0]) < 24
         
         # Seconds
         assert fetcher._format_time_known(60) == '60 seconds'

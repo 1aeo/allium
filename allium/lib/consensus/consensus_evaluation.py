@@ -31,6 +31,8 @@ from .flag_thresholds import (
     BW_SOURCE_UNPUBLISHED,
     guard_bw_top_threshold,
     parse_wfu_threshold as _parse_wfu_threshold,
+    resolve_voting_total,
+    voting_majority,
 )
 
 # Import authority data from collector_fetcher
@@ -40,7 +42,6 @@ try:
         get_authority_names,           # All authorities (10) - for display
         get_authority_count,           # All authorities count (10)
         get_voting_authority_names,    # Voting authorities (9) - for consensus
-        get_voting_authority_count,    # Voting authorities count (9)
     )
 except ImportError:
     AUTHORITY_COUNTRIES = {}
@@ -52,10 +53,8 @@ except ImportError:
     def get_voting_authority_names():
         return ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
                 'longclaw', 'maatuska', 'moria1', 'tor26']
-    def get_voting_authority_count():
-        return 9
 
-# Note: For consensus-related calculations (majority, reachability), use get_voting_authority_count() (9).
+# Majority for a relay is resolve_voting_total(): more than half of that relay's total.
 # For display of all authorities, use get_authority_count() (10).
 # Serge has Authority flag but doesn't vote.
 
@@ -66,18 +65,30 @@ try:
 except ImportError:
     _get_bw_formatter = None
 
-# Reuse existing percentage formatter from string_utils
+# WFU, day, and threshold text live in string_utils, next to decimals_keeping_below.
 try:
-    from ..string_utils import format_percentage_from_fraction
+    from ..string_utils import (
+        format_days as _format_days,
+        format_wfu_display as _format_wfu_display,
+        _format_tk_requirement,
+        _format_wfu_requirement,
+        _threshold_summary,
+    )
 except ImportError:
-    # Fallback if import fails
-    def format_percentage_from_fraction(value, decimals=1, fallback='N/A'):
-        if value is None:
-            return fallback
-        try:
-            return f"{float(value) * 100:.{decimals}f}%"
-        except (ValueError, TypeError):
-            return fallback
+    def _format_days(seconds, decimals=1, suffix='d', fallback='N/A', threshold=None):
+        return fallback if seconds is None else f"{seconds / 86400:.{decimals}f}{suffix}"
+
+    def _format_wfu_display(wfu, threshold=None, decimals=1, fallback='N/A'):
+        return fallback if wfu is None else f"{float(wfu) * 100:.{decimals}f}%"
+
+    def _format_wfu_requirement(value):
+        return f"≥{float(value) * 100:.0f}%"
+
+    def _format_tk_requirement(seconds):
+        return f"≥{float(seconds) / 86400:.0f} days"
+
+    def _threshold_summary(details, key, formatter):
+        return None
 
 # Import relay_diagnostics at module level (PERF: avoid in-function import on ~10k calls)
 try:
@@ -97,14 +108,6 @@ DEFAULT_WFU_THRESHOLD = GUARD_WFU_DEFAULT  # 98% uptime for Guard
 # ============================================================================
 # LOCAL HELPER FUNCTIONS - Reduce code duplication within this module
 # ============================================================================
-def _format_days(seconds, decimals=1, suffix='d', fallback='N/A'):
-    """Format seconds as days. Consolidates repeated SECONDS_PER_DAY division."""
-    if seconds is None:
-        return fallback
-    days = seconds / SECONDS_PER_DAY
-    return f"{days:.{decimals}f}{suffix}"
-
-
 def _hsdir_prereqs(detail) -> bool:
     """Fast, Stable and V2Dir, from the compact flag or an older three-key detail."""
     if 'prereqs' in detail:
@@ -135,13 +138,6 @@ def _hsdir_stricter_note(flag_thresholds) -> str:
     note = _format_stricter_threshold(sorted(names), ' and ≥'.join(parts))
     _hsdir_stricter_note._cached = (flag_thresholds, note)
     return note
-
-
-def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
-    """Format WFU (weighted fractional uptime) as percentage using existing formatter."""
-    if wfu is None:
-        return fallback
-    return format_percentage_from_fraction(wfu, decimals, fallback)
 
 
 def _port_in_rules(rules: list, port: int) -> bool:
@@ -241,10 +237,6 @@ _EMPTY_DA_STATS = {
     'total_possible': 0,    # Total authorities that could vote
 }
 
-# Tor spec: majority = more than half = ≥5/9 authorities
-MAJORITY_THRESHOLD = 5
-
-
 def _compute_da_value_stats(values: list, format_func, total_possible: int = 9, threshold: float = None) -> dict:
     """
     Compute majority/median, min, max statistics for DA-measured values.
@@ -283,8 +275,8 @@ def _compute_da_value_stats(values: list, format_func, total_possible: int = 9, 
     value_counts = Counter(values)
     most_common_value, most_common_count = value_counts.most_common(1)[0]
     
-    # Tor majority = ≥5 authorities agreeing on same value
-    has_majority = most_common_count >= MAJORITY_THRESHOLD
+    # Same rule as a flag: more than half of the authorities, not a fixed 5.
+    has_majority = most_common_count >= voting_majority(total_possible)
     
     # Primary value: majority if exists, else median
     if has_majority:
@@ -393,14 +385,15 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         }
     
     current_flags = current_flags or []
+    total_authorities, majority_required = resolve_voting_total(evaluation.get('total_authorities'))
     
     formatted = {
         'available': True,
         'fingerprint': evaluation.get('fingerprint', ''),
         'in_consensus': evaluation.get('in_consensus', False),
         'vote_count': evaluation.get('vote_count', 0),
-        'total_authorities': evaluation.get('total_authorities', get_voting_authority_count()),
-        'majority_required': evaluation.get('majority_required', 5),
+        'total_authorities': total_authorities,
+        'majority_required': majority_required,
         
         # Relay values (consumed by flag_requirements_table builder below)
         'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary, current_flags=current_flags, version=version, recommended_version=recommended_version, dir_address=dir_address),
@@ -468,7 +461,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     authority_votes = consensus_data.get('authority_votes', [])
     flag_eligibility = consensus_data.get('flag_eligibility', {})
     reachability = consensus_data.get('reachability', {})
-    total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
+    total_authorities, _ = resolve_voting_total(consensus_data.get('total_authorities'))
     
     # Collect ALL values from all authorities for DA-measured metrics
     # This enables computing majority, min, median, max statistics
@@ -485,8 +478,9 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
             all_mtbf_values.append(vote['mtbf'])
     
     # Compute WFU stats (threshold is consistent across authorities)
-    wfu_stats = _compute_da_value_stats(all_wfu_values, _format_wfu_display, total_authorities,
-                                        threshold=DEFAULT_WFU_THRESHOLD)
+    wfu_stats = _compute_da_value_stats(
+        all_wfu_values, lambda value: _format_wfu_display(value, threshold=GUARD_WFU_DEFAULT),
+        total_authorities, threshold=DEFAULT_WFU_THRESHOLD)
     
     # TK and MTBF stats computed after threshold collection (thresholds vary per authority)
     # Placeholder - will be computed after threshold loop
@@ -500,6 +494,11 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     # Track both actual values set AND defaults for authorities that don't set values
     guard_wfu_threshold = DEFAULT_WFU_THRESHOLD
     guard_tk_threshold = GUARD_TK_DEFAULT
+    # Lowest published guard-tk. Display uses this so a higher outlier cannot
+    # let a miss of a lower bar print as if it had met it (7.96 days must not
+    # become 8.0d beside an 8-day bar). The meets count still uses the max,
+    # and per-authority rows use their own bar.
+    published_guard_tk = []
     
     guard_bw_values = []
     stable_uptime_values = []
@@ -519,7 +518,10 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
                 if val:
                     guard_wfu_threshold = max(guard_wfu_threshold, val)
             if 'guard-tk' in thresholds:
-                guard_tk_threshold = max(guard_tk_threshold, thresholds['guard-tk'] or 0)
+                published = thresholds['guard-tk'] or 0
+                guard_tk_threshold = max(guard_tk_threshold, published)
+                if published:
+                    published_guard_tk.append(published)
             guard_bw_top = guard_bw_top_threshold(thresholds)
             if guard_bw_top is not None:
                 guard_bw_values.append(guard_bw_top)
@@ -539,10 +541,14 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     # MTBF thresholds vary per authority; use median as representative threshold
     stable_mtbf_typical = sorted(stable_mtbf_values)[len(stable_mtbf_values)//2] if stable_mtbf_values else 0
     
-    # Now compute TK and MTBF stats with threshold comparison
-    # TK: Use Guard TK threshold (8 days) - what most authorities require
-    tk_stats = _compute_da_value_stats(all_tk_values, _format_days, total_authorities,
-                                       threshold=guard_tk_threshold)
+    # Now compute TK and MTBF stats with threshold comparison.
+    # Display against the lowest published guard-tk (else the 8-day default).
+    # The count uses the max, and is replaced by each authority's own tk_met
+    # once guard details exist.
+    guard_tk_display = min(published_guard_tk) if published_guard_tk else GUARD_TK_DEFAULT
+    tk_stats = _compute_da_value_stats(
+        all_tk_values, lambda value: _format_days(value, threshold=guard_tk_display),
+        total_authorities, threshold=guard_tk_threshold)
     
     # MTBF: Use median authority threshold for comparison
     mtbf_stats = _compute_da_value_stats(all_mtbf_values, _format_days, total_authorities,
@@ -617,6 +623,23 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     fast_details = flag_eligibility.get('fast', {}).get('details', [])
     fast_meets_count = flag_eligibility.get('fast', {}).get('eligible_count', 0)
     guard_bw_meets_count = sum(1 for d in guard_details if d.get('bw_met'))
+    # The eligibility row's count is each authority's own wfu_met / tk_met, the
+    # same numbers the warning uses. The median stays in the value cell.
+    guard_wfu_met_count = guard_tk_met_count = None
+    guard_wfu_requirement = guard_tk_requirement = None
+    if guard_details:
+        guard_wfu_met_count = sum(1 for d in guard_details if d.get('wfu_met'))
+        guard_tk_met_count = sum(1 for d in guard_details if d.get('tk_met'))
+        # The parenthetical on the value cell is this threshold count, not how
+        # many authorities published one identical number.
+        wfu_stats = {**wfu_stats, 'meets_threshold_count': guard_wfu_met_count,
+                     'threshold_count_is_status': True}
+        tk_stats = {**tk_stats, 'meets_threshold_count': guard_tk_met_count,
+                    'threshold_count_is_status': True}
+        guard_wfu_requirement = _threshold_summary(
+            guard_details, 'wfu_threshold', _format_wfu_requirement)
+        guard_tk_requirement = _threshold_summary(
+            guard_details, 'tk_threshold', _format_tk_requirement)
     
     # IPv4/IPv6 reachability
     ipv4_reachable_count = reachability.get('ipv4_reachable_count', 0)
@@ -637,9 +660,13 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'tk_stats': tk_stats,
         'mtbf_stats': mtbf_stats,
         
-        # Guard WFU/TK eligibility
-        'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
-        'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
+        # Median comparison. The flag row uses guard_*_met_count when details exist.
+        'wfu_meets': relay_wfu is not None and relay_wfu >= guard_wfu_threshold,
+        'tk_meets': relay_tk is not None and relay_tk >= guard_tk_threshold,
+        'guard_wfu_met_count': guard_wfu_met_count,
+        'guard_tk_met_count': guard_tk_met_count,
+        'guard_wfu_requirement': guard_wfu_requirement,
+        'guard_tk_requirement': guard_tk_requirement,
         'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
         
         # Guard BW eligibility (each authority's own bandwidth)
@@ -899,62 +926,43 @@ def _vote_threshold(threshold: str, majority: int, total: int) -> str:
 
 
 def _format_da_value_html(stats: dict, source_label: str = 'DA') -> str:
-    """Format DA-measured value from stats dict.
-    
-    Per Tor spec: majority = ≥5/9 authorities agreeing on same value.
-    
-    First row always shows count of authorities with that EXACT value.
-    Second row always shows total voting counts (voting_count/total_possible).
-    
-    Format when majority exists:
-        Majority: **{value}** ({majority_count}/{total_possible} DA)
-        Min/Med/Max: {min} / {med} / {max} ({voting_count}/{total_possible})
-    
-    Format when no majority (fall back to median):
-        Median: **{value}** ({median_match_count}/{total_possible} DA, No Majority)
-        Min/Max: {min} / {max} ({voting_count}/{total_possible})
+    """Format a directory-authority value: the repeated value, or the median.
+
+    The parenthetical is that exact-value count. WFU and Time Known pass
+    ``threshold_count_is_status`` so it is instead how many cleared the bar,
+    the same count as the status cell. The word Majority is only used when
+    that count is the repeated value. Five authorities at 100% while eight
+    clear 98% is a median, labeled with 8/9 above threshold.
     """
     voting_count = stats.get('voting_count', 0)
     total_possible = stats.get('total_possible', 9)
     primary_count = stats.get('primary_count', 0)
     has_majority = stats.get('has_majority', False)
-    vote_ratio = f'{voting_count}/{total_possible}'
-    
-    # Second row clarification text
-    vote_clarification = f'({vote_ratio} {source_label}, Voting / Total Eligible)'
     meets_threshold = stats.get('meets_threshold_count')
-    
-    if has_majority:
-        # Majority exists: show value with agreement count (≥5)
-        line1 = (f'<span class="al-text-small-muted">Majority:</span> '
-                 f'<strong>{stats["primary_display"]}</strong> '
-                 f'<span class="al-text-small-muted">({primary_count}/{total_possible} {source_label})</span>')
-        # Second row: Min/Med/Max with total voting ratio and clarification
-        if stats.get('has_variation'):
-            line2 = (f'<br><span class="al-text-small-muted">Min/Med/Max: '
-                     f'{stats["min_display"]} / {stats["median_display"]} / {stats["max_display"]} '
-                     f'{vote_clarification}</span>')
-            return line1 + line2
-        return line1
+    status_count = meets_threshold is not None and stats.get('threshold_count_is_status')
+    counts_match = not status_count or primary_count == meets_threshold
+    show_majority = has_majority and counts_match
+
+    if meets_threshold is not None and (status_count or not show_majority):
+        parenthetical = f'{meets_threshold}/{total_possible} {source_label} above threshold'
+    elif show_majority:
+        parenthetical = f'{primary_count}/{total_possible} {source_label}'
     else:
-        # No majority: show median
-        # For time metrics with threshold, show "X/9 DA above threshold" instead of "No Majority"
-        if meets_threshold is not None:
-            threshold_text = f'{meets_threshold}/{total_possible} {source_label} above threshold'
-            line1 = (f'<span class="al-text-small-muted">Median:</span> '
-                     f'<strong>{stats["primary_display"]}</strong> '
-                     f'<span class="al-text-small-muted">({threshold_text})</span>')
-        else:
-            line1 = (f'<span class="al-text-small-muted">Median:</span> '
-                     f'<strong>{stats["primary_display"]}</strong> '
-                     f'<span class="al-text-small-muted">({primary_count}/{total_possible} {source_label}, No Majority)</span>')
-        # Second row: Min/Max with total voting ratio and clarification
-        if stats.get('has_variation'):
-            line2 = (f'<br><span class="al-text-small-muted">Min/Max: '
-                     f'{stats["min_display"]} / {stats["max_display"]} '
-                     f'{vote_clarification}</span>')
-            return line1 + line2
+        parenthetical = f'{primary_count}/{total_possible} {source_label}, No Majority'
+
+    label = 'Majority' if show_majority else 'Median'
+    line1 = (f'<span class="al-text-small-muted">{label}:</span> '
+             f'<strong>{stats["primary_display"]}</strong> '
+             f'<span class="al-text-small-muted">({parenthetical})</span>')
+    if not stats.get('has_variation'):
         return line1
+    vote_clarification = f'({voting_count}/{total_possible} {source_label}, Voting / Total Eligible)'
+    if has_majority:
+        spread = (f'Min/Med/Max: {stats["min_display"]} / {stats["median_display"]} / '
+                  f'{stats["max_display"]}')
+    else:
+        spread = f'Min/Max: {stats["min_display"]} / {stats["max_display"]}'
+    return line1 + f'<br><span class="al-text-small-muted">{spread} {vote_clarification}</span>'
 
 
 def _format_relay_value_html(value_display: str) -> str:
@@ -1093,8 +1101,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     if not rv or not diag:
         return []
     
-    majority_required = diag.get('majority_required', 5)
-    total_authorities = diag.get('total_authorities', 9)
+    total_authorities, majority_required = resolve_voting_total(diag.get('total_authorities'))
     flag_summary = diag.get('flag_summary', {})
     
     def get_flag_color(flag_name: str) -> str:
@@ -1304,26 +1311,37 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                                   guard_prereq_v2dir, total_authorities, majority_required,
                                   threshold_override=v2dir_threshold))
     
-    # Row 4: WFU (using DRY helper)
-    wfu_status = 'meets' if rv.get('wfu_meets') else 'below'
-    guard_wfu_da_count = wfu_stats.get('meets_threshold_count', 0) or 0
+    def count_status(met_count, meets, stats, median_extra=''):
+        """Per-authority count when the votes recorded it, else the median comparison."""
+        if met_count is not None:
+            return _count_status(met_count, majority_required, total_authorities), met_count, ''
+        status = 'meets' if meets else 'below'
+        extra = median_extra if status != 'meets' else ''
+        return status, stats.get('meets_threshold_count', 0) or 0, extra
+
+    # WFU and Time Known use the same count as the warning. The median stays in
+    # the value cell. "need N more days" is that median, so only the fallback uses it.
+    wfu_status, guard_wfu_da_count, _ = count_status(
+        rv.get('guard_wfu_met_count'), rv.get('wfu_meets'), wfu_stats)
+    wfu_requirement = rv.get('guard_wfu_requirement') or '≥98%'
     rows.append(_make_row('Guard', guard_tooltip, guard_color, 'WFU', METRIC_TOOLTIPS['wfu_guard'],
                           _format_da_value_html(wfu_stats), 'da',
-                          _vote_threshold('≥98%', majority_required, total_authorities),
+                          _vote_threshold(wfu_requirement, majority_required, total_authorities),
                           wfu_status,
                           _get_status_text(wfu_status, da_count=guard_wfu_da_count, da_total=total_authorities),
                           anchor='flag-guard-wfu'))
-    
-    # Row 5: Time Known (using DRY helper)
-    tk_status = 'meets' if rv.get('tk_meets') else 'below'
-    tk_extra = f" (need {rv['tk_days_needed']:.1f} more days)" if not rv.get('tk_meets') and rv.get('tk_days_needed', 0) > 0 else ''
-    guard_tk_da_count = tk_stats.get('meets_threshold_count', 0) or 0
+
+    tk_median_extra = ''
+    if not rv.get('tk_meets') and rv.get('tk_days_needed', 0) > 0:
+        tk_median_extra = f" (need {rv['tk_days_needed']:.1f} more days)"
+    tk_status, guard_tk_da_count, tk_extra = count_status(
+        rv.get('guard_tk_met_count'), rv.get('tk_meets'), tk_stats, tk_median_extra)
+    tk_requirement = rv.get('guard_tk_requirement') or '≥8 days'
     rows.append(_make_row('Guard', guard_tooltip, guard_color, 'Time Known', METRIC_TOOLTIPS['tk_guard'],
                           _format_da_value_html(tk_stats), 'da',
-                          _vote_threshold('≥8 days', majority_required, total_authorities),
+                          _vote_threshold(tk_requirement, majority_required, total_authorities),
                           tk_status,
-                          _get_status_text(tk_status, tk_extra if tk_status != 'meets' else '',
-                                           da_count=guard_tk_da_count, da_total=total_authorities),
+                          _get_status_text(tk_status, tk_extra, da_count=guard_tk_da_count, da_total=total_authorities),
                           anchor='flag-guard-time-known'))
     
     # Row 6: Bandwidth (using DRY helper)
@@ -1531,14 +1549,14 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             'flag_bw_title': flag_bw_title,
             
             'wfu': relay_wfu,
-            'wfu_display': _format_wfu_display(relay_wfu),
+            'wfu_display': _format_wfu_display(relay_wfu, threshold=guard_wfu_threshold),
             'wfu_threshold_display': _format_wfu_display(guard_wfu_threshold, decimals=0),
-            'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
+            'wfu_meets': relay_wfu is not None and relay_wfu >= guard_wfu_threshold,
             
             'tk': relay_tk,
-            'tk_display': _format_days(relay_tk),
+            'tk_display': _format_days(relay_tk, threshold=guard_tk_threshold),
             'tk_threshold_display': _format_days(guard_tk_threshold, decimals=0),
-            'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
+            'tk_meets': relay_tk is not None and relay_tk >= guard_tk_threshold,
             
             # Guard BW: this authority's bandwidth vs guarantee / its top-25% cutoff
             'guard_bw_value_display': flag_bw_display,
@@ -1653,7 +1671,7 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
         observed_bandwidth: Relay's actual observed bandwidth (unused, kept for API compatibility)
     """
     flag_eligibility = consensus_data.get('flag_eligibility', {})
-    total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
+    total_authorities, majority = resolve_voting_total(consensus_data.get('total_authorities'))
     
     summary = {}
     
@@ -1670,7 +1688,7 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
             status = 'none'
             status_class = 'danger'
             display = f"Not eligible from any authority"
-        elif eligible_count < 5:
+        elif eligible_count < majority:
             status = 'partial'
             status_class = 'warning'
             display = f"Eligible from {eligible_count}/{total_authorities} authorities"
@@ -1697,7 +1715,10 @@ def _format_reachability_summary(consensus_data: dict) -> dict:
     
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
     ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    total = reachability.get('total_authorities', get_voting_authority_count())
+    stored_total = reachability.get('total_authorities')
+    if not isinstance(stored_total, int) or stored_total <= 0:
+        stored_total = consensus_data.get('total_authorities')
+    total, majority = resolve_voting_total(stored_total)
     ipv6_not_tested = reachability.get('ipv6_not_tested_authorities', [])
     
     # Calculate IPv6 tested total with reliability check
@@ -1715,7 +1736,7 @@ def _format_reachability_summary(consensus_data: dict) -> dict:
             'reachable_count': ipv4_count,
             'total': total,
             'display': f"{ipv4_count}/{total} authorities can reach IPv4",
-            'status_class': 'success' if ipv4_count >= 5 else 'danger',
+            'status_class': 'success' if ipv4_count >= majority else 'danger',
             'authorities': reachability.get('ipv4_reachable_authorities', []),
         },
         'ipv6': {
