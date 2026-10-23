@@ -1528,17 +1528,26 @@ class TestGuardNearThreshold:
         issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
         notes = [issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold']
         assert len(notes) == 1
-        assert '2.06 MB/s, need ≥2.1 MB/s' in notes[0]['description']
+        assert '2.06 MB/s, need ≥2.10 MB/s' in notes[0]['description']
         assert '2.1 MB/s, need ≥2.1 MB/s' not in notes[0]['description']
 
     def test_bandwidth_miss_stays_below_the_bar_in_bytes_and_bits(self):
         """Two decimals still print 1,999,900 bytes/s as equal to a 2,000,000 bar."""
         detail = _guard_detail('bastet', 0.99, 30 * SECONDS_PER_DAY, 1_999_900, top25=2_000_000)
         expected = {
-            False: 'bastet (1.9999 MB/s, need ≥2.0 MB/s)',
-            True: 'bastet (15.999 Mbit/s, need ≥16.0 Mbit/s)',
+            False: 'bastet (1.9999 MB/s, need ≥2.0000 MB/s)',
+            True: 'bastet (15.999 Mbit/s, need ≥16.000 Mbit/s)',
         }
         for use_bits, text in expected.items():
             issues = _issues_with_guard_details([detail], _HOLDING_GUARD, use_bits=use_bits)
             bandwidth = next(issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold')
             assert text in bandwidth['description']
+
+    def test_top25_bar_does_not_round_below_a_lower_measurement(self):
+        """2.04 MB/s rounds to 2.0, which would sit under a 2.03 MB/s miss."""
+        detail = _guard_detail('moria1', 0.99, 30 * SECONDS_PER_DAY, 2_030_000, top25=2_040_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold']
+        assert len(notes) == 1
+        assert '2.03 MB/s, need ≥2.04 MB/s' in notes[0]['description']
+        assert 'need ≥2.0 MB/s' not in notes[0]['description']

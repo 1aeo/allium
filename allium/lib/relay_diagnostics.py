@@ -1027,7 +1027,7 @@ def _near_phrase(entries: list, format_value, format_bar) -> str:
     groups = {}
     order = []
     for name, value, threshold in sorted(entries, key=lambda item: item[0]):
-        rendered = (format_value(value, threshold), format_bar(threshold))
+        rendered = (format_value(value, threshold), format_bar(value, threshold))
         names = groups.get(rendered)
         if names is None:
             groups[rendered] = names = []
@@ -1048,20 +1048,26 @@ def _near_clause(entries: list, requirement: str, format_value, format_bar) -> s
         for word, group in sides if group)
 
 
-def _format_near_rate(value, threshold, use_bits: bool) -> str:
-    """Bandwidth text. A miss does not round up onto the bar.
+def _bandwidth_pair(value, threshold, use_bits: bool):
+    """(measurement, bar) in one unit. A miss stays strictly below the displayed bar.
 
-    One decimal prints 2.06 MB/s, which is under the 2.097 MB/s guarantee, as
-    2.1 MB/s, the same text as the bar.
+    Rounding the bar alone can turn 2.04 MB/s into 2.0 MB/s while 2.03 MB/s still
+    shows two decimals, so a lower measurement looks higher than the bar.
     """
-    shown = _format_rate(value, use_bits, decimal_places=1)
-    if not _is_number(threshold) or value >= threshold or not _get_bw_formatter:
-        return shown
+    if not _get_bw_formatter or not _is_number(value) or not _is_number(threshold):
+        shown = _format_rate(value, use_bits, decimal_places=1)
+        bar = _format_rate(threshold, use_bits, decimal_places=1) if _is_number(threshold) else shown
+        return shown, '≥' + bar
     fmt = _get_bw_formatter(use_bits=use_bits)
-    unit = fmt.determine_unit(threshold)
+    unit = fmt.determine_unit(max(value, threshold))
     divisor = fmt.get_divisor_for_unit(unit)
-    number = format_keeping_below(value / divisor, threshold / divisor, start=1)
-    return f"{number} {unit}"
+    value_units, bar_units = value / divisor, threshold / divisor
+    decimals = 1
+    if value < threshold:
+        for decimals in range(1, 9):
+            if float(f"{value_units:.{decimals}f}") < float(f"{bar_units:.{decimals}f}"):
+                break
+    return f"{value_units:.{decimals}f} {unit}", f"≥{bar_units:.{decimals}f} {unit}"
 
 
 def _guard_bw_bar(detail: dict) -> Optional[float]:
@@ -1094,7 +1100,7 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
             _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
 
     def rate(value, threshold) -> str:
-        return _format_near_rate(value, threshold, use_bits)
+        return _bandwidth_pair(value, threshold, use_bits)[0]
 
     # The Notes box shows title and description only. Say which input, which
     # authorities, the published bar, and the one thing that can cross it.
@@ -1120,13 +1126,15 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
         'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
         "default) and that authority's top 25%."
     )
-    def bar_text(threshold) -> str:
-        return '≥' + _format_rate(threshold, use_bits, decimal_places=1)
+    def bar_text(value, threshold) -> str:
+        return _bandwidth_pair(value, threshold, use_bits)[1]
     specs = (
         (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
-         _format_near_wfu, _format_wfu_requirement, wfu_text, wfu_suggestion),
+         _format_near_wfu, lambda _value, threshold: _format_wfu_requirement(threshold),
+         wfu_text, wfu_suggestion),
         (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
-         _format_near_tk, _format_tk_requirement, tk_text, tk_suggestion),
+         _format_near_tk, lambda _value, threshold: _format_tk_requirement(threshold),
+         tk_text, tk_suggestion),
         (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
          'Bandwidth counted for Guard', rate, bar_text, bw_text, bw_suggestion),
     )
