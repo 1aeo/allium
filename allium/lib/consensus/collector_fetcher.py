@@ -1153,8 +1153,11 @@ class CollectorFetcher:
         uses a measurement from an earlier bandwidth file if it kept one: surely when it still
         votes Fast, and likely when its vote has no Measured= values at all.
         """
+        flags = vote_info.get('flags')
+        if not isinstance(flags, (list, tuple)):
+            flags = []
         unpublished = (
-            'Fast' in (vote_info.get('flags') or [])
+            'Fast' in flags
             or _authority_key(auth_name) not in self.measuring_authorities)
         return credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),

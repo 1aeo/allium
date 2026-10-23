@@ -684,6 +684,10 @@ class TestIpv6ReachabilityStates:
             'ABCD1234', {'measured': None, 'bandwidth': 50, 'flags': []})
         assert source == BW_SOURCE_UNMEASURED
         assert value == 0
+        value, source = fetcher._credible_bandwidth(
+            'ABCD1234', {'measured': None, 'bandwidth': 50, 'flags': 1})
+        assert source == BW_SOURCE_UNMEASURED
+        assert value == 0
 
 
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):
