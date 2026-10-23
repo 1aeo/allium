@@ -5,7 +5,8 @@ Tests all 25 issue types across 11 categories:
 - consensus (1): Not in consensus
 - reachability (3): IPv4 issues, IPv6 not reachable, Partial IPv4
 - fast (1): Not getting the Fast flag
-- guard (5): BW below, WFU below, TK below, requires Stable, requires Fast
+- guard: BW below, WFU below, TK below, requires Stable, requires Fast,
+  plus info notes when a relay that has Guard is near an authority's own bar
 - stable (1): Not eligible
 - hsdir (4): requires V2Dir, requires Stable, requires Fast, uptime below 96 hours
 - bandwidth (1): High deviation
@@ -24,6 +25,11 @@ from allium.lib.relay_diagnostics import (
     generate_issues_from_consensus,
     _check_overload_issues,
     OVERLOAD_THRESHOLD_HOURS,
+)
+from allium.lib.consensus.flag_thresholds import (
+    GUARD_BW_NEAR_FRACTION,
+    GUARD_TK_NEAR_MARGIN,
+    GUARD_WFU_NEAR_MARGIN,
 )
 from tests.conftest import ACTIVE_VOTING_AUTHORITIES_8, FOREST44_FINGERPRINT
 
@@ -1264,3 +1270,292 @@ class TestFastFlagIssue:
         assert 'faravahar judged it by bandwidth not shown in the votes.' in fast['description']
         assert 'measured this relay' not in fast['description']
         assert 'consensus weight' not in fast['description']
+
+
+_HOLDING_GUARD = ['Guard', 'Stable', 'Fast', 'V2Dir', 'HSDir', 'Running', 'Valid']
+_WFU_CONSEQUENCE = (
+    'Recent downtime weighs more than older downtime. Avoid restarts '
+    'while it is this close; a short outage can drop the Guard flag.'
+)
+_WFU_NEAR = (
+    'Weighted Fractional Uptime is just above the Guard bar at '
+    'bastet and dizum (95.2%, need ≥95%), maatuska (98.2%, need ≥98%) and moria1 (99.2%, need ≥99%). '
+    + _WFU_CONSEQUENCE
+)
+_TK_CONSEQUENCE = (
+    'This is weighted time, so the day count is shorter than calendar uptime, '
+    'and it falls while the relay is unreachable. Stay reachable so it can move clear of the bar.'
+)
+_BW_CONSEQUENCE = (
+    "The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
+    'top 25%. A dip in the bandwidth it counts can drop the Guard flag.'
+)
+
+
+def _guard_detail(authority, wfu, tk, bandwidth, wfu_threshold=GUARD_WFU_DEFAULT,
+                  tk_threshold=GUARD_TK_DEFAULT, top25=30_000_000, bw_met=True,
+                  publish_wfu=True):
+    """One authority's measured-vs-threshold Guard row, as flag_eligibility stores it."""
+    detail = {
+        'authority': authority,
+        'wfu_value': wfu,
+        'tk_value': tk,
+        'tk_threshold': tk_threshold,
+        'bw_value': bandwidth,
+        'bw_guarantee': GUARD_BW_GUARANTEE,
+        'bw_top25_threshold': top25,
+        'bw_met': bw_met,
+        'bw_source': 'measured',
+    }
+    wfu_bar = wfu_threshold if publish_wfu else GUARD_WFU_DEFAULT
+    if publish_wfu:
+        detail['wfu_threshold'] = wfu_threshold
+    detail['wfu_met'] = wfu is not None and wfu >= wfu_bar
+    detail['tk_met'] = tk is not None and tk >= tk_threshold
+    return detail
+
+
+def _issues_with_guard_details(details, flags, votes=None, observed=10_000_000, use_bits=False):
+    if votes is None:
+        votes = [{'wfu': 0.99, 'tk': 30 * SECONDS_PER_DAY}]
+    return generate_issues_from_consensus({
+        'in_consensus': True,
+        'total_authorities': 9,
+        'authority_votes': votes,
+        'reachability': {'ipv4_reachable_count': 9},
+        'flag_eligibility': {'guard': {'details': details}},
+    }, current_flags=list(flags), observed_bandwidth=observed, use_bits=use_bits)
+
+
+class TestGuardNearThreshold:
+    """Info notes for a relay that has Guard and is close to an authority's own bar.
+
+    Thresholds are the ones that authority published. 98% WFU and 8 days are the
+    dirauth defaults used only when a vote omits them. Bandwidth is near the lower
+    of AuthDirGuardBWGuarantee and that authority's top-25% cutoff.
+    """
+
+    def test_names_each_input_and_the_authorities_close_to_their_own_bar(self):
+        """Just above a published bar, including a stricter moria1 and an omitted default."""
+        wfu_slack = GUARD_WFU_NEAR_MARGIN * 0.4
+        tk_near = GUARD_TK_DEFAULT + GUARD_TK_NEAR_MARGIN * 0.4
+        comfortable_tk = 30 * SECONDS_PER_DAY
+        comfortable_bw = 20_000_000
+        details = [
+            _guard_detail('bastet', 0.95 + wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.95),
+            _guard_detail('dizum', 0.95 + wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.95),
+            # Vote omitted guard-wfu: the 98% dirauth default applies, and this value is inside half a point.
+            _guard_detail('maatuska', GUARD_WFU_DEFAULT + wfu_slack, comfortable_tk, comfortable_bw,
+                          publish_wfu=False),
+            _guard_detail('moria1', 0.99 + wfu_slack, tk_near,
+                          1_000_000 + int(1_000_000 * GUARD_BW_NEAR_FRACTION * 0.6),
+                          wfu_threshold=0.99, top25=1_000_000),
+            _guard_detail('longclaw', 0.995, 40 * SECONDS_PER_DAY, comfortable_bw),
+            _guard_detail('faravahar', 0.999, 40 * SECONDS_PER_DAY, None),
+        ]
+        issues = _issues_with_guard_details(details, _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['severity'] == 'info' and issue['category'] == 'guard']
+        by_title = {issue['title']: issue for issue in notes}
+
+        assert [issue['title'] for issue in notes] == [
+            'Guard: WFU near threshold',
+            'Guard: Time Known near threshold',
+            'Guard: bandwidth near threshold',
+        ]
+        assert not any(issue['category'] == 'guard' and issue['severity'] != 'info' for issue in issues)
+        assert by_title['Guard: WFU near threshold']['section'] == 'flag-guard-wfu'
+        assert by_title['Guard: WFU near threshold']['description'] == _WFU_NEAR
+        assert 'longclaw' not in by_title['Guard: WFU near threshold']['description']
+        assert 'faravahar' not in by_title['Guard: WFU near threshold']['description']
+        assert by_title['Guard: Time Known near threshold']['section'] == 'flag-guard-time-known'
+        assert by_title['Guard: Time Known near threshold']['description'] == (
+            'Time Known is just above the Guard bar at moria1 (8.4 days, need ≥8 days). '
+            + _TK_CONSEQUENCE
+        )
+        bandwidth = by_title['Guard: bandwidth near threshold']
+        assert bandwidth['section'] == 'flag-guard-bandwidth'
+        assert bandwidth['description'] == (
+            'Bandwidth counted for Guard is just above the Guard bar at '
+            'moria1 (1.1 MB/s, need ≥1.0 MB/s). ' + _BW_CONSEQUENCE
+        )
+        assert '2.1 MB/s' not in bandwidth['description']
+
+        bits = _issues_with_guard_details(details, _HOLDING_GUARD, use_bits=True)
+        bits_bw = next(issue for issue in bits if issue['title'] == 'Guard: bandwidth near threshold')
+        assert 'moria1 (8.5 Mbit/s, need ≥8.0 Mbit/s)' in bits_bw['description']
+
+    def test_comfortably_above_every_published_threshold_has_no_note(self):
+        """98.4% WFU and 2.2 MB/s stay quiet when the authority published a lower bar."""
+        top25 = 1_000_000
+        binding_margin = top25 * GUARD_BW_NEAR_FRACTION
+        # 2.2 MB/s is inside the guessed 2.0–2.5 MB/s band, and 1.2 MB above this top-25% cutoff.
+        guessed_bw_window = 2_200_000
+        assert guessed_bw_window - top25 > binding_margin
+        details = [
+            # 98.4% would be "near 98%" under a fixed band. This authority published 95%.
+            _guard_detail('bastet', 0.984, 30 * SECONDS_PER_DAY, guessed_bw_window,
+                          wfu_threshold=0.95, top25=top25),
+            _guard_detail('moria1', 0.999, 20 * SECONDS_PER_DAY, guessed_bw_window,
+                          wfu_threshold=0.97, tk_threshold=12 * SECONDS_PER_DAY, top25=top25),
+            # Exactly one WFU percentage point above the published bar is outside the open margin.
+            _guard_detail('gabelmoo', 0.95 + GUARD_WFU_NEAR_MARGIN, 30 * SECONDS_PER_DAY, 20_000_000,
+                          wfu_threshold=0.95),
+            _guard_detail('longclaw', 0.999, 60 * SECONDS_PER_DAY, 50_000_000, top25=40_000_000),
+            # A published 0 is a real measurement and is far from a 98% bar.
+            _guard_detail('tor26', 0.0, 40 * SECONDS_PER_DAY, 20_000_000),
+            _guard_detail('dizum', None, 40 * SECONDS_PER_DAY, 20_000_000),
+        ]
+        issues = _issues_with_guard_details(details, _HOLDING_GUARD)
+        assert [issue['title'] for issue in issues if 'near threshold' in issue['title']] == []
+        assert [issue for issue in issues if issue['category'] == 'guard'] == []
+
+    def test_just_under_one_authority_while_the_flag_is_held(self):
+        """A consensus Guard can still be just under one authority's published bar."""
+        wfu_slack = GUARD_WFU_NEAR_MARGIN * 0.4
+        comfortable_tk = 30 * SECONDS_PER_DAY
+        comfortable_bw = 20_000_000
+        details = [
+            _guard_detail('bastet', 0.95 + wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.95),
+            _guard_detail('moria1', 0.99 - wfu_slack, comfortable_tk, comfortable_bw, wfu_threshold=0.99),
+        ]
+        issues = _issues_with_guard_details(details, _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['category'] == 'guard']
+        assert [issue['title'] for issue in notes] == ['Guard: WFU near threshold']
+        assert notes[0]['severity'] == 'info'
+        assert notes[0]['description'] == (
+            'Weighted Fractional Uptime is just above the Guard bar at bastet (95.2%, need ≥95%) '
+            'and just under the Guard bar at moria1 (98.8%, need ≥99%). ' + _WFU_CONSEQUENCE
+        )
+
+    def test_guard_already_lost_keeps_majority_failure_text(self):
+        """Without Guard, the per-authority majority warning stays and the near note does not."""
+        flags = ['Stable', 'Fast', 'V2Dir', 'HSDir']
+        votes = [{'wfu': 0.90, 'tk': 3 * SECONDS_PER_DAY}]
+        # No per-authority rows: one vote's 90% WFU is not a warning. Bandwidth still is.
+        bare = _issues_with_guard_details([], flags, votes=votes, observed=1_000_000)
+        bare_guard = [issue for issue in bare if issue['category'] == 'guard']
+        assert [issue['title'] for issue in bare_guard] == ['Guard: bandwidth below threshold']
+        assert bare_guard[0]['description'] == (
+            'Observed bandwidth 1 MB/s is below the 2.1 MB/s AuthDirGuardBWGuarantee')
+
+        short = []
+        for name in _VOTING_AUTHORITIES:
+            row = _guard_detail(name, 0.90, 3 * SECONDS_PER_DAY, 20_000_000, bw_met=True)
+            short.append(row)
+        missed = _issues_with_guard_details(short, flags, votes=votes, observed=3_000_000)
+        guard = [issue for issue in missed if issue['category'] == 'guard']
+        names = ', '.join(_VOTING_AUTHORITIES[:-1]) + ' and ' + _VOTING_AUTHORITIES[-1]
+        assert [issue['title'] for issue in guard] == [
+            'Guard: WFU below threshold',
+            'Guard: Time Known below threshold',
+        ]
+        assert all(issue['severity'] == 'warning' for issue in guard)
+        assert guard[0]['description'] == (
+            '0/9 authorities meet guard-wfu (≥98%; 5 needed). ' + names + ' measured 90.0%.')
+        assert guard[1]['description'] == (
+            '0/9 authorities meet guard-tk (≥8 days; 5 needed). '
+            + names + ' have known this relay for 3.0 days.')
+        assert [issue['title'] for issue in missed if 'near threshold' in issue['title']] == []
+
+        # Just above every bar, but the consensus flag is already gone: no info note.
+        near = [
+            _guard_detail(name, 0.984, 30 * SECONDS_PER_DAY, 20_000_000, bw_met=True)
+            for name in _VOTING_AUTHORITIES
+        ]
+        held_off = _issues_with_guard_details(near, flags, votes=votes, observed=3_000_000)
+        assert [issue for issue in held_off if issue['category'] == 'guard'] == []
+
+    def test_short_time_known_bar_does_not_call_zero_near(self):
+        """A one-day window must not swallow every measurement under a shorter bar."""
+        short_bar = 12 * 3600
+        # 11 hours is within an eighth of a 12-hour bar. Zero is the empty measurement.
+        close = _guard_detail('moria1', 0.999, 11 * 3600, 20_000_000, tk_threshold=short_bar)
+        empty = _guard_detail('bastet', 0.999, 0, 20_000_000, tk_threshold=short_bar)
+        far = _guard_detail('dizum', 0.999, 10 * 3600, 20_000_000, tk_threshold=short_bar)
+        issues = _issues_with_guard_details([close, empty, far], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: Time Known near threshold']
+        assert len(notes) == 1
+        assert 'moria1' in notes[0]['description']
+        assert 'bastet' not in notes[0]['description']
+        assert 'dizum' not in notes[0]['description']
+
+    def test_zero_wfu_is_not_near_a_tiny_bar(self):
+        """0% is no uptime credit, even when a tiny published bar sits inside the margin of zero."""
+        detail = _guard_detail('moria1', 0.0, 30 * SECONDS_PER_DAY, 20_000_000, wfu_threshold=0.004)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        assert [issue for issue in issues if 'near threshold' in issue['title']] == []
+
+    def test_bad_guard_details_do_not_raise(self):
+        """None, a non-list, and a non-dict row must not abort the rest of the issues."""
+        for details in (None, 'votes', {'moria1': {}}, [None, 'moria1', 3]):
+            issues = generate_issues_from_consensus({
+                'in_consensus': True,
+                'total_authorities': 9,
+                'authority_votes': [],
+                'reachability': {'ipv4_reachable_count': 9},
+                'flag_eligibility': {'guard': {'details': details}},
+            }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'V2Dir'], observed_bandwidth=3_000_000)
+            assert [issue for issue in issues if issue['category'] == 'guard'] == []
+        mixed = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': [],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': [
+                None,
+                _guard_detail('moria1', 0.982, 30 * SECONDS_PER_DAY, 20_000_000),
+            ]}},
+        }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'V2Dir'], observed_bandwidth=3_000_000)
+        assert [issue['title'] for issue in mixed if issue['category'] == 'guard'] == [
+            'Guard: WFU near threshold']
+
+    def test_close_call_does_not_round_past_the_margin(self):
+        """One decimal must not print the first value outside the near window."""
+        detail = _guard_detail(
+            'moria1', 0.9846, GUARD_TK_DEFAULT + 23 * 3600, 20_000_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        by_title = {issue['title']: issue['description'] for issue in issues if 'near threshold' in issue['title']}
+        assert '98.46%' in by_title['Guard: WFU near threshold']
+        assert '98.5%' not in by_title['Guard: WFU near threshold']
+        assert '8.96 days' in by_title['Guard: Time Known near threshold']
+        assert '9.0 days' not in by_title['Guard: Time Known near threshold']
+
+        # Two decimals still land on the excluded edge: 98.50% and 9.00 days.
+        closer = _guard_detail('bastet', 0.98496, 8.9996 * SECONDS_PER_DAY, 20_000_000)
+        closer_issues = _issues_with_guard_details([closer], _HOLDING_GUARD)
+        closer_by = {issue['title']: issue['description']
+                     for issue in closer_issues if 'near threshold' in issue['title']}
+        assert '98.496%' in closer_by['Guard: WFU near threshold']
+        assert '98.50%' not in closer_by['Guard: WFU near threshold']
+        assert '8.9996 days' in closer_by['Guard: Time Known near threshold']
+        assert '9.00 days' not in closer_by['Guard: Time Known near threshold']
+
+    def test_bandwidth_just_under_does_not_round_onto_the_bar(self):
+        """2.06 MB/s is under the 2.097 MB/s guarantee but one decimal prints 2.1 MB/s."""
+        detail = _guard_detail('moria1', 0.999, 30 * SECONDS_PER_DAY, 2_060_000, top25=50_000_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold']
+        assert len(notes) == 1
+        assert '2.06 MB/s, need ≥2.10 MB/s' in notes[0]['description']
+        assert '2.1 MB/s, need ≥2.1 MB/s' not in notes[0]['description']
+
+    def test_bandwidth_miss_stays_below_the_bar_in_bytes_and_bits(self):
+        """Two decimals still print 1,999,900 bytes/s as equal to a 2,000,000 bar."""
+        detail = _guard_detail('bastet', 0.99, 30 * SECONDS_PER_DAY, 1_999_900, top25=2_000_000)
+        expected = {
+            False: 'bastet (1.9999 MB/s, need ≥2.0000 MB/s)',
+            True: 'bastet (15.999 Mbit/s, need ≥16.000 Mbit/s)',
+        }
+        for use_bits, text in expected.items():
+            issues = _issues_with_guard_details([detail], _HOLDING_GUARD, use_bits=use_bits)
+            bandwidth = next(issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold')
+            assert text in bandwidth['description']
+
+    def test_top25_bar_does_not_round_below_a_lower_measurement(self):
+        """2.04 MB/s rounds to 2.0, which would sit under a 2.03 MB/s miss."""
+        detail = _guard_detail('moria1', 0.99, 30 * SECONDS_PER_DAY, 2_030_000, top25=2_040_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold']
+        assert len(notes) == 1
+        assert '2.03 MB/s, need ≥2.04 MB/s' in notes[0]['description']
+        assert 'need ≥2.0 MB/s' not in notes[0]['description']
