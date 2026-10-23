@@ -2,6 +2,7 @@
 
 import filecmp
 import os
+import time
 
 import pytest
 
@@ -52,6 +53,40 @@ def _build(output_dir, mp_workers):
     )
     relay_set.enrich_with_api_data()
     return relay_set
+
+
+@pytest.fixture(autouse=True)
+def _one_overload_clock(monkeypatch):
+    """Two generations compared as one run share the overload clock.
+
+    enrich_with_api_data stores time.time() on every relay, and contact
+    precompute keeps those relay dicts. A moving clock makes the comparison
+    unequal and the assertion diff times out.
+    """
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_000)
+
+
+def _first_difference(left, right, path=""):
+    """One differing path, so a mismatch does not spend the timeout diffing every relay."""
+    if left == right:
+        return None
+    if isinstance(left, dict) and isinstance(right, dict):
+        for key in list(left) + [key for key in right if key not in left]:
+            if key not in left or key not in right:
+                return f"{path}.{key} missing"
+            found = _first_difference(left[key], right[key], f"{path}.{key}")
+            if found:
+                return found
+        return path or "<root>"
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return f"{path} length {len(left)} != {len(right)}"
+        for index, (item, other) in enumerate(zip(left, right)):
+            found = _first_difference(item, other, f"{path}[{index}]")
+            if found:
+                return found
+        return path or "<root>"
+    return f"{path} {left!r} != {right!r}"[:240]
 
 
 def _tree(root):
@@ -176,4 +211,6 @@ def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, gr
     # ending up exactly as the sequential path leaves it.
     assert died.exists()
     assert sorted(recomputed) == sorted(sequential.json["sorted"][group])
-    assert relay_set.json["sorted"][group] == sequential.json["sorted"][group]
+    difference = _first_difference(
+        relay_set.json["sorted"][group], sequential.json["sorted"][group])
+    assert difference is None, difference
