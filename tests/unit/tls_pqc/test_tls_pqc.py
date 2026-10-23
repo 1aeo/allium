@@ -98,8 +98,8 @@ def test_html_fixture_matches_the_published_table():
     assert document["relays"][EMPTY]["connected"] is False
     # An empty first row is replaced when a later row records a group.
     assert document["relays"][DUP]["key_exchange_group"] == PQC_GROUP
-    # The first negotiated group is kept when a later row disagrees.
-    assert document["relays"][KEEP]["key_exchange_group"] == "X25519"
+    # A later hybrid handshake wins over an earlier non-hybrid group.
+    assert document["relays"][KEEP]["key_exchange_group"] == PQC_GROUP
     assert "short" not in "".join(document["relays"])
     assert len(document["relays"]) == 6
 
@@ -123,6 +123,32 @@ def test_csv_fixture_is_the_margot_scanner_file():
 def test_index_selects_the_newest_dated_scan_and_skips_other_pages():
     latest = latest_scan_url(_read("index.html"), INDEX)
     assert latest == SCAN_URL
+
+
+def test_index_ignores_impossible_dates_off_host_links_and_http_downgrades():
+    html = """
+    <a href="/tor-tls-pqc/2026-02-26/">real</a>
+    <a href="/tor-tls-pqc/2026-99-99/">impossible</a>
+    <a href="/tor-tls-pqc/2026-02-31/">not a day</a>
+    <a href="https://evil.example/tor-tls-pqc/2099-01-01/">off host</a>
+    <a href="http://ahf.me/tor-tls-pqc/2099-01-02/">downgrade</a>
+    <a href="https://ahf.me/blog/2026-12-01/">other section</a>
+    """
+    assert latest_scan_url(html, INDEX) == "https://ahf.me/tor-tls-pqc/2026-02-26/"
+
+
+def test_script_rows_and_a_preamble_do_not_invent_relays():
+    fake = "C" * 40
+    html = """
+    <table id="tor_pqc_tls_table"><tr><td colspan="4">note</td></tr>
+    <tr><th>Nickname</th><th>Fingerprint</th><th>Cipher Suite</th><th>Group</th></tr>
+    <tr><td>keep</td><td>%s</td><td>TLS13_AES_256_GCM_SHA384</td><td>X25519</td></tr>
+    <script><tr><td>evil</td><td>%s</td><td>X</td><td>X25519MLKEM768</td></tr></script>
+    </table>
+    """ % (KEEP, fake)
+    document = parse_html_scan(html, SCAN_URL)
+    assert fake not in document["relays"]
+    assert document["relays"][KEEP]["key_exchange_group"] == "X25519"
 
 
 def test_index_then_html_and_a_direct_csv_both_parse():

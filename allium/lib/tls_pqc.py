@@ -11,6 +11,7 @@ scan". A Tor version string is not evidence of X25519MLKEM768.
 import csv
 import io
 import re
+from datetime import datetime
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
@@ -76,15 +77,27 @@ def _header_key(cell):
     return re.sub(r"[^a-z]", "", (cell or "").lower())
 
 
+def _real_date(candidate):
+    if not candidate or _DATE_RE.fullmatch(candidate) is None:
+        return ""
+    try:
+        datetime.strptime(candidate, "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return candidate
+
+
 def _scan_time_from_url(url):
-    path = urlsplit(url or "").path
-    match = _DATE_RE.search(path)
-    return match.group(1) if match else ""
+    for part in reversed(urlsplit(url or "").path.split("/")):
+        found = _real_date(part)
+        if found:
+            return found
+    return ""
 
 
 def _scan_time_from_html(text):
     match = _HEAD_DATE_RE.search(text[:4000])
-    return match.group(1) if match else ""
+    return _real_date(match.group(1) if match else "")
 
 
 class _TableCollector(HTMLParser):
@@ -94,8 +107,14 @@ class _TableCollector(HTMLParser):
         HTMLParser.__init__(self, convert_charrefs=True)
         self.tables = []
         self._stack = []
+        self._raw = 0
 
     def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._raw += 1
+            return
+        if self._raw:
+            return
         attributes = {}
         for key, value in attrs:
             attributes[key] = value or ""
@@ -112,7 +131,10 @@ class _TableCollector(HTMLParser):
             self._stack[-1]["cell"] = []
 
     def handle_endtag(self, tag):
-        if not self._stack:
+        if tag in ("script", "style") and self._raw:
+            self._raw -= 1
+            return
+        if self._raw or not self._stack:
             return
         frame = self._stack[-1]
         if tag in ("td", "th") and frame["cell"] is not None:
@@ -127,6 +149,8 @@ class _TableCollector(HTMLParser):
             self.tables.append(self._stack.pop())
 
     def handle_data(self, data):
+        if self._raw:
+            return
         if self._stack and self._stack[-1]["cell"] is not None:
             self._stack[-1]["cell"].append(data)
 
@@ -149,11 +173,10 @@ def _select_scan_table(tables):
     ordered = sorted(tables, key=lambda table: table.get("id") != "tor_pqc_tls_table")
     for table in ordered:
         rows = table.get("rows") or []
-        if not rows:
-            continue
-        mapping = _header_map(rows[0])
-        if "fingerprint" in mapping and "group" in mapping:
-            return rows, mapping
+        for header_at, header in enumerate(rows[:5]):
+            mapping = _header_map(header)
+            if "fingerprint" in mapping and "group" in mapping:
+                return rows[header_at:], mapping
     return None, None
 
 
@@ -164,7 +187,7 @@ def _cell(row, index):
 
 
 def _remember_row(relays, fingerprint, nickname, cipher, group, connected):
-    """Keep the first observed group when the same fingerprint appears twice."""
+    """One fingerprint can be listed twice. A hybrid handshake wins, then any group."""
     group = _clean_token(group)
     cipher = _clean_token(cipher)
     # HTML rows have no connected column. A recorded group is a completed
@@ -186,7 +209,11 @@ def _remember_row(relays, fingerprint, nickname, cipher, group, connected):
     if existing is None:
         relays[fingerprint] = row
         return
-    if not existing.get("key_exchange_group") and row["key_exchange_group"]:
+    old_group = (existing.get("key_exchange_group") or "").upper()
+    new_group = (row.get("key_exchange_group") or "").upper()
+    if new_group == PQC_GROUP.upper() and old_group != PQC_GROUP.upper():
+        relays[fingerprint] = row
+    elif not old_group and new_group:
         relays[fingerprint] = row
 
 
@@ -239,7 +266,7 @@ def _looks_like_csv(text):
 
 
 def _looks_like_html(text):
-    folded = text[:2000].lower()
+    folded = text[:20000].lower()
     return "<html" in folded or "<!doctype" in folded or "<table" in folded
 
 
@@ -325,20 +352,30 @@ def parse_scan_payload(payload, url):
 
 
 def latest_scan_url(html, index_url):
-    """Absolute URL of the newest dated scan linked from an index page."""
+    """Absolute URL of the newest dated scan linked from an index page.
+
+    Links stay on the index host. An https index does not follow an http URL.
+    A date that is not a real calendar day is ignored, so 2026-99-99 cannot
+    sort ahead of a real scan.
+    """
     found = []
-    index_path = urlsplit(index_url or "").path.rstrip("/")
+    index = urlsplit(index_url or "")
+    index_path = index.path.rstrip("/")
     for match in _HREF_RE.finditer(html or ""):
-        href = match.group("href")
-        absolute = urljoin(index_url or "", href)
-        path = urlsplit(absolute).path.rstrip("/")
-        date_match = re.search(r"/(\d{4}-\d{2}-\d{2})$", path)
-        if not date_match:
+        absolute = urljoin(index_url or "", match.group("href"))
+        link = urlsplit(absolute)
+        if link.scheme not in ("http", "https"):
             continue
-        date = date_match.group(1)
+        if index.scheme == "https" and link.scheme != "https":
+            continue
+        if index.netloc and link.netloc.lower() != index.netloc.lower():
+            continue
+        path = link.path.rstrip("/")
+        date = _real_date(path.rsplit("/", 1)[-1])
+        if not date:
+            continue
         direct = index_path + "/" + date
-        published = path.endswith("/tor-tls-pqc/" + date) or path == direct
-        if not published:
+        if not (path.endswith("/tor-tls-pqc/" + date) or path == direct):
             continue
         if not absolute.endswith("/"):
             absolute += "/"
