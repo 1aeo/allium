@@ -33,7 +33,7 @@
 <div id="relay-table"></div>
 {% if contact_sort_mode == 'overload' -%}
 <p class="al-status-danger-bold" style="margin: 20px 0 0;">
-    ⚡︎ Overloaded relays are shown first{% if overload_summary %} ({{ overload_summary.overloaded }} currently overloaded){% endif %}.
+    ⚡︎ Overloaded relays are shown first{% if overload_summary and overload_summary.overloaded %} ({{ overload_summary.overloaded }} currently overloaded){% endif %}.
 </p>
 {% endif -%}
 {%- endmacro %}
