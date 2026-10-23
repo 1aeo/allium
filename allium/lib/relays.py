@@ -30,6 +30,18 @@ from datetime import datetime, timedelta, timezone
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
+def _store_overload_diagnostics(relay, overload_issues):
+    """Store overload issues without dropping issues from another category."""
+    existing = relay.get('diagnostics') if isinstance(relay.get('diagnostics'), dict) else None
+    if existing is None:
+        relay['diagnostics'] = {'issues': list(overload_issues)}
+        return
+    kept = [issue for issue in existing.get('issues') or [] if issue.get('category') != 'overload']
+    updated = dict(existing)
+    updated['issues'] = kept + list(overload_issues)
+    relay['diagnostics'] = updated
+
+
 def _cache_age_label(api_name):
     """Age of Allium's cached API document, or None when no cache file exists.
 
@@ -789,10 +801,8 @@ class Relays:
             try:
                 relay.update(compute_relay_stability(
                     relay, now, self.bandwidth_formatter, source_meta=source_meta))
-                relay['diagnostics'] = {
-                    'issues': _check_overload_issues(
-                        relay, use_bits=self.use_bits, facts=relay.get('overload')),
-                }
+                overload_issues = _check_overload_issues(
+                    relay, use_bits=self.use_bits, facts=relay.get('overload'))
             except Exception as error:
                 print(f"Warning: Overload evaluation failed for one relay ({error})")
                 relay['stability_is_overloaded'] = False
@@ -800,7 +810,10 @@ class Relays:
                 relay['stability_color'] = '#6c757d'
                 relay['stability_tooltip'] = 'Overload signals could not be evaluated'
                 relay['overload'] = {'headline': 'incomplete', 'guidance': [], 'sources_line': ''}
-                relay['diagnostics'] = {'issues': []}
+                overload_issues = []
+            # Replace overload issues only. A second pass, after CollecTor has
+            # stored consensus issues on this relay, keeps those issues.
+            _store_overload_diagnostics(relay, overload_issues)
         self._overload_evaluated = True
 
     def _overload_source_meta(self, evaluated_at):

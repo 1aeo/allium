@@ -88,6 +88,24 @@ def test_windows_just_inside_at_and_outside(window_ms, field, payload):
     assert exact[field]['when']  # the cutoff timestamp is kept for display
 
 
+def test_float_clock_keeps_the_exact_cutoff():
+    """A float evaluation time is judged at millisecond resolution."""
+    now = float(NOW)
+    on_cutoff = NOW_MS - GENERAL_WINDOW_MS
+    just_inside = on_cutoff + 1
+    assert evaluate_overload(
+        {'overload_general_timestamp': on_cutoff}, now)['general']['state'] == 'historical'
+    assert evaluate_overload(
+        {'overload_general_timestamp': just_inside}, now)['general']['state'] == 'eligible'
+    # Sub-millisecond noise on either side of an integer cutoff stays on that millisecond.
+    almost_past = now + 0.0004
+    almost_early = now - 0.0004
+    assert evaluate_overload(
+        {'overload_general_timestamp': on_cutoff}, almost_past)['general']['state'] == 'historical'
+    assert evaluate_overload(
+        {'overload_general_timestamp': on_cutoff}, almost_early)['general']['state'] == 'historical'
+
+
 @pytest.mark.parametrize('bad', [
     0, -1, -HOUR_MS, True, False, '1700000000000', float('nan'), float('inf'),
     float('-inf'), 10 ** 30, [], {},
@@ -414,6 +432,18 @@ def test_collector_does_not_duplicate_overload_diagnostics(tmp_path):
     titles = [issue['title'] for issue in relay['diagnostics']['issues']]
     assert titles.count('General Overload Active') == 1
 
+    relay['diagnostics']['issues'].append({
+        'category': 'consensus', 'title': 'Not in consensus', 'severity': 'error',
+    })
+    relay['diagnostics']['issues'].append({
+        'category': 'overload', 'title': 'Stale duplicate', 'severity': 'error',
+    })
+    relay_set._evaluate_overload()
+    titles = [issue['title'] for issue in relay['diagnostics']['issues']]
+    assert titles.count('Not in consensus') == 1
+    assert titles.count('General Overload Active') == 1
+    assert 'Stale duplicate' not in titles
+
     no_collector = _build(tmp_path / 'noc', [
         _member(fingerprint, 'flagged', 1_000_000, overload_general_timestamp=recent),
     ])
@@ -473,6 +503,8 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     members = list(found.values())
     summary = compute_group_overload_summary(members)
     assert summary['overloaded'] == 4
+    assert summary['incomplete'] == 1
+    assert summary['incomplete_relays'][0]['fingerprint'] == fps['missing']
     ordered = sorted(members, key=lambda relay: relay_sort_key(relay, 'overload'))
     assert [relay['fingerprint'] for relay in ordered[:4]] == [
         fps['general'], fps['rate'], fps['fd'], fps['partial']]
@@ -520,6 +552,7 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     assert 'tor_relay_load_tcp_exhaustion_total' in pages['general']
     assert 'href="#overload-general"' in pages['general']
     assert 'hour precision' in pages['general']
+    assert 'does not say which trigger fired' in pages['general']
 
     assert 'Write Bandwidth Limit Hit' in pages['rate']
     assert 'tor_relay_load_global_rate_limit_reached_total' in pages['rate']
@@ -540,9 +573,15 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     assert '>0<' not in partial_read
 
     assert 'Not Overloaded' in pages['historical']
+    assert 'No overload conditions reported' not in pages['historical']
+    assert 'Last general overload:' in pages['historical']
     assert '[Warning] OVERLOADED' not in pages['historical']
     assert 'Historical report — outside the 72-hour window' in pages['historical']
+    assert 'does not say which trigger fired' in pages['historical']
     assert 'href="#overload-general"' in pages['historical']
+
+    assert 'does not say which trigger fired' not in pages['rate']
+    assert 'does not say which trigger fired' not in pages['missing']
 
     assert 'Incomplete' in pages['missing']
     assert 'No bandwidth record available for this relay' in pages['missing']

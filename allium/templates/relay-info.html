@@ -935,9 +935,11 @@ Platform: unknown
 {% elif ov_headline == 'clear' %}
 <div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <strong class="al-status-success">Overload Status:</strong>
-    <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
     {% if ov.get('historical_note') %}
-    <span style="color: #155724; font-size: 12px;"> ({{ ov.historical_note|escape }})</span>
+    <span class="al-status-success">Not Overloaded.</span>
+    <span style="color: #155724; font-size: 12px;">{{ ov.historical_note|escape }}</span>
+    {% else %}
+    <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
     {% endif %}
 {% else %}
 <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #6c757d;">
@@ -965,10 +967,12 @@ Platform: unknown
                 <dd>{{ ov_general.when|escape }} UTC{% if ov_general.get('age_label') %} <span class="al-status-muted">({{ ov_general.age_label|escape }})</span>{% endif %}</dd>
                 {% endif %}
             </dl>
+            {% if ov_general.get('state') in ('eligible', 'historical') %}
             <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
                 The general-overload flag does not say which trigger fired. Possible paths are Tor’s internal memory handling, dropped ntor handshakes, and TCP port exhaustion.
                 Allium treats a valid report as eligible for 72 hours; that cutoff is not proof the relay recovered then.
             </p>
+            {% endif %}
 
             <h5 id="overload-fd" style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>

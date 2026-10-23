@@ -161,14 +161,20 @@ _GUIDANCE = (
 
 
 def _now_ms(now_timestamp):
-    """Unix milliseconds for this evaluation. Integers stay exact."""
+    """Unix milliseconds for this evaluation, rounded to the nearest millisecond.
+
+    Integer seconds stay exact. A float clock is reduced to millisecond
+    resolution, which is the resolution of Onionoo's timestamps, so a report
+    sitting on the 24-hour or 72-hour cutoff does not flicker with
+    sub-millisecond noise from ``time.time()``.
+    """
     if isinstance(now_timestamp, bool) or not isinstance(now_timestamp, (int, float)):
         now_timestamp = time.time()
     elif isinstance(now_timestamp, float) and not math.isfinite(now_timestamp):
         now_timestamp = time.time()
     if isinstance(now_timestamp, int):
         return now_timestamp * 1000
-    return now_timestamp * 1000.0
+    return int(round(now_timestamp * 1000.0))
 
 
 def _valid_timestamp_ms(value):
@@ -681,28 +687,59 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None,
     return status
 
 
-def compute_group_overload_summary(members):
-    """Summarize overloaded relays in a group; None if zero (hides the bullet).
+def _impact_order(relays):
+    """Sort member dicts in place: highest observed bandwidth, then fingerprint."""
+    relays.sort(key=lambda r: (
+        -int(r.get('observed_bandwidth', 0) or 0),
+        r.get('fingerprint', ''),
+    ))
+    return relays
 
-    Returns a dict with the count fields plus 'relays': the overloaded member
-    dicts themselves (references, not copies) sorted by observed bandwidth
-    descending — impact order, matching the by-overload.html table sort — so
-    templates can link each relay (nickname/fingerprint/stability_tooltip).
+
+def _relay_overload_incomplete(relay):
+    """True when this relay's overload evaluation could not be completed.
+
+    A missing stability flag is not incomplete. Only an evaluation that stored
+    the incomplete headline, or the Incomplete stability label, counts.
+    """
+    if relay.get('stability_is_overloaded'):
+        return False
+    overload = relay.get('overload')
+    if isinstance(overload, dict) and overload.get('headline') == 'incomplete':
+        return True
+    return relay.get('stability_text') == 'Incomplete'
+
+
+def compute_group_overload_summary(members):
+    """Summarize overloaded and incompletely evaluated relays in a group.
+
+    Returns None when the group has neither, so the summary bullet stays hidden.
+    ``relays`` holds the overloaded member dicts themselves (references, not
+    copies), sorted by observed bandwidth descending. ``incomplete_relays``
+    is the same for relays whose signals could not all be evaluated. Those
+    relays are not counted in ``overloaded``.
     """
     total = len(members)
     if not total:
         return None
     overloaded = [r for r in members if r.get('stability_is_overloaded')]
-    if not overloaded:
+    incomplete = [r for r in members if _relay_overload_incomplete(r)]
+    if not overloaded and not incomplete:
         return None
-    overloaded.sort(key=lambda r: (
-        -int(r.get('observed_bandwidth', 0) or 0),
-        r.get('fingerprint', ''),
-    ))
+    _impact_order(overloaded)
+    _impact_order(incomplete)
     pct = 100.0 * len(overloaded) / total
+    if not overloaded:
+        pct_formatted = '0.0%'
+    elif pct >= 0.05:
+        pct_formatted = f'{pct:.1f}%'
+    else:
+        pct_formatted = '<0.1%'
     return {
         'overloaded': len(overloaded),
+        'incomplete': len(incomplete),
         'total': total,
-        'pct_formatted': f"{pct:.1f}%" if pct >= 0.05 else "<0.1%",
+        'pct_formatted': pct_formatted,
         'relays': overloaded,
+        'incomplete_relays': incomplete,
     }
