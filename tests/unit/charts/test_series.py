@@ -207,6 +207,21 @@ def test_network_uptime_averages_the_relays_that_have_the_period():
     assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
 
 
+def test_network_uptime_ignores_a_block_with_no_numeric_values():
+    relays = [relay("good"), relay("words"), relay("holes"), relay("mixed")]
+    uptime_map = {
+        "good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+        # Two lists with no numbers would outvote the real 4-hour history.
+        "words": {"uptime": {"1_month": block(["down", "down"], interval=DAY)}},
+        "holes": {"uptime": {"1_month": block([None, None], interval=DAY)}},
+        # A null beside a sample is still a history: the sample counts.
+        "mixed": {"uptime": {"1_month": block([None, 999], interval=14400, factor=1 / 999.0)}},
+    }
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 2]
+
+
 def test_network_ratio_bands_uses_the_relay_census_cut():
     """p10/p90 of per-relay sum(write)/sum(read), dropping quiet relays and histories under three points."""
     relays = [relay(str(i)) for i in range(40)]

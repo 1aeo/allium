@@ -239,7 +239,9 @@ def network_uptime(relays, uptime_map, key, windows):
         section = uptime_section(uptime_map, relay["fingerprint"])
         block = _mapping(section.get(key))
         values = block.get("values")
-        if not isinstance(values, (list, tuple)) or len(values) < 2:
+        # A list of nulls or strings has a length but no samples, so it must not cast the interval vote.
+        if not isinstance(values, (list, tuple)) or len(values) < 2 or not any(
+                isinstance(value, (int, float)) for value in values):
             continue
         try:
             step = int(block.get("interval") or 0)
