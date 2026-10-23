@@ -459,9 +459,9 @@ def test_operator_uptime_chart_uses_the_relay_chart_and_the_newest_restart(tmp_p
     assert list(bandwidth) == ["1m"] and list(uptime) == ["1m"]
     lines = texts(tmp_path / "uptime-1m.svg")
     assert lines[0] == "example.com  ·  3 relays"
-    assert "Uptime · last 30 days" in lines and "Uptime (%)" in lines and "Running flag" in lines
+    assert "Uptime · last 30 days" in lines and "Uptime (%)" in lines and "Mean running flag" in lines
     assert "Average 50.0%  ·  Onionoo Running flag" in lines
-    assert "Last restarted  Sep 20" in lines and "Last restarted  Sep 12" not in lines
+    assert "Last restarted  Sep 20  ·  relayC" in lines and "Last restarted  Sep 12" not in lines
     # Under 30 slots the relay page shows no figure, so the operator chart doesn't either.
     short = writer([relay("A")], {"A": history([100] * 30)}, {"A": [999] * 10}, uptime_first="2026-09-29 14:00:00")
     assert "1m" in short.contact([0], str(tmp_path))[1]

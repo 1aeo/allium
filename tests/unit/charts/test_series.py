@@ -169,6 +169,9 @@ def test_operator_uptime_fills_a_shorter_history_and_stops_where_everyone_runnin
     assert [(t.day, round(v)) for t, v in zip(ts, percent)] == [(3, 50), (5, 100), (7, 100), (9, 100)]
     assert operator_uptime([relay("B", running=False)], uptime_map, "1_year", {}) is None
     assert operator_uptime([relay("Z")], {}, "1_month", {}) is None
+    # A member whose history cannot be read is left out; the others still draw.
+    bad = {"uptime": {"1_month": dict(uptime_map["A"]["uptime"]["1_year"], factor="x")}}
+    assert operator_uptime([relay("A"), relay("X")], {"A": uptime_map["A"], "X": bad}, "1_year", {})[2] == 2 * day
 
 
 def test_family_key_is_the_effective_family_when_it_has_other_members():

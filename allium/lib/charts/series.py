@@ -102,6 +102,25 @@ def _slotted(pts, step, interval):
     return {t: sum(vs) / len(vs) for t, vs in slots.items() if len(vs) * step == interval}
 
 
+def _periods_from(key):
+    """``key`` and each shorter Onionoo period. A young relay's whole history lives in a shorter one."""
+    return ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]
+
+
+def _reported_end(lasts, interval):
+    """Newest time every still-running member has reached, or None when ``lasts`` is empty.
+
+    ``lasts`` is ``(timestamp, stopped)``. A stopped member does not hold the series. A running member more
+    than two slots behind has stopped updating, so later slots keep the members that remain.
+    """
+    newest = max((last for last, _stopped in lasts), default=None)
+    if newest is None:
+        return None
+    lag = timedelta(seconds=2 * interval)
+    reporting = [last for last, stopped in lasts if not stopped and newest - last <= lag]
+    return min(reporting, default=newest)
+
+
 def operator_throughput(members, bandwidth_map, key, since=None):
     """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
     members summed (their write plus read over the window, in Mbit/s per slot).
@@ -116,7 +135,7 @@ def operator_throughput(members, bandwidth_map, key, since=None):
     """
     histories = []
     for relay in members:
-        for k in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:  # this period, then shorter ones
+        for k in _periods_from(key):
             write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), k)
             if write.get("values") and read.get("values") and write.get("interval") == read.get("interval"):
                 histories.append((k == key, int(write.get("interval") or 0), write, read, relay))
@@ -137,64 +156,49 @@ def operator_throughput(members, bandwidth_map, key, since=None):
             read.update({t: r[t] for t in both})
             summed.append((relay, sum(w[t] + r[t] for t in both)))
             lasts.append((max(w.keys() | r.keys()), relay.get("running") is False))
-    newest = max((last for last, _stopped in lasts), default=None)
-    reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
-    end = min(reporting, default=newest)
-    return _aligned({t: v for t, v in write.items() if t <= end}, read, interval) if end else None, summed
+    end = _reported_end(lasts, interval)
+    return _aligned({t: v for t, v in write.items() if end and t <= end}, read, interval) if end else None, summed
 
 
 def operator_uptime(members, uptime_map, key, windows):
-    """Members' running-flag percentages averaged per timestamp: the series an uptime chart draws.
+    """Mean running-flag percent per timestamp (the uptime chart's series), or None under two points.
 
-    Averages on the period's most common sampling interval. Onionoo leaves out a
-    relay's period when a shorter one holds its whole history, so a member
-    without this period is averaged in from its next shorter one, into this
-    period's slots; members on other intervals are left out. Each member's
-    series is the one its own chart draws (``uptime_points``), including the 0%
-    Onionoo counts after a history stops. A slot is the mean of the members
-    that have a value there: a relay that has no history yet is not counted as
-    down.     The series stops at the newest slot every member still reporting has
-    reached, so a member Onionoo has not rewritten yet does not look like a
-    drop in the mean. A member no longer running has stopped for good: its end
-    is not a delay. None under two points.
+    Same period fallback, interval and reporting cut as ``operator_throughput``. A member contributes
+    ``uptime_points``, including the 0% after its history stops; a slot averages the members that have one.
+    A malformed history is left out.
     """
     histories = []
     for relay in members:
         section = ((uptime_map.get(relay["fingerprint"]) or {}).get("uptime") or {})
-        for period in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:
+        for period in _periods_from(key):
             block = section.get(period) or {}
-            values, step = block.get("values"), block.get("interval")
-            if values and isinstance(step, int) and step > 0:
-                histories.append((period == key, step,
-                                  uptime_points(block, period, windows, relay, section), relay))
+            step = block.get("interval")
+            if block.get("values") and isinstance(step, int) and step > 0:
+                histories.append((period == key, step, block, period, section, relay))
                 break
-    own = Counter(step for native, step, _pts, _relay in histories if native)
-    if not own:
+    steps = Counter(step for native, step, *_rest in histories if native)
+    if not steps:
         return None
-    interval = own.most_common(1)[0][0]
-    totals, counts, lasts = {}, {}, []
-    for native, step, pts, relay in histories:
-        if step <= 0 or interval % step:
+    interval = steps.most_common(1)[0][0]
+    bins, lasts = {}, []
+    for native, step, block, period, section, relay in histories:
+        if interval % step:
+            continue
+        try:
+            pts = uptime_points(block, period, windows, relay, section)
+        except Exception:  # noqa: BLE001 -- one bad history must not drop the operator chart
             continue
         if not native:
             pts = _slotted(pts, step, interval)
         if not pts:
             continue
         for t, value in pts.items():
-            totals[t] = totals.get(t, 0.0) + value
-            counts[t] = counts.get(t, 0) + 1
+            total, count = bins.get(t, (0.0, 0))
+            bins[t] = (total + value, count + 1)
         lasts.append((max(pts), relay.get("running") is False))
-    if not lasts:
-        return None
-    newest = max(last for last, _stopped in lasts)
-    # Within two slots of the newest point: still catching up, so hold the mean back. Further behind, it has
-    # stopped updating and dropping it out of later slots is the mean of whoever is left.
-    reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
-    end = min(reporting) if reporting else newest
-    ts = sorted(t for t in totals if t <= end)
-    if len(ts) < 2:
-        return None
-    return ts, [totals[t] / counts[t] for t in ts], interval
+    end = _reported_end(lasts, interval)
+    ts = sorted(t for t in bins if end is not None and t <= end)
+    return (ts, [bins[t][0] / bins[t][1] for t in ts], interval) if len(ts) >= 2 else None
 
 
 def family_key(relay):
