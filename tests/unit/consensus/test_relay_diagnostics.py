@@ -1456,3 +1456,58 @@ class TestGuardNearThreshold:
         ]
         held_off = _issues_with_guard_details(near, flags, votes=votes, observed=3_000_000)
         assert [issue for issue in held_off if issue['category'] == 'guard'] == []
+
+    def test_short_time_known_bar_does_not_call_zero_near(self):
+        """A one-day window must not swallow every measurement under a shorter bar."""
+        short_bar = 12 * 3600
+        # 11 hours is within an eighth of a 12-hour bar. Zero is the empty measurement.
+        close = _guard_detail('moria1', 0.999, 11 * 3600, 20_000_000, tk_threshold=short_bar)
+        empty = _guard_detail('bastet', 0.999, 0, 20_000_000, tk_threshold=short_bar)
+        far = _guard_detail('dizum', 0.999, 10 * 3600, 20_000_000, tk_threshold=short_bar)
+        issues = _issues_with_guard_details([close, empty, far], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: Time Known near threshold']
+        assert len(notes) == 1
+        assert 'moria1' in notes[0]['description']
+        assert 'bastet' not in notes[0]['description']
+        assert 'dizum' not in notes[0]['description']
+
+    def test_zero_wfu_is_not_near_a_tiny_bar(self):
+        """0% is no uptime credit, even when a tiny published bar sits inside the margin of zero."""
+        detail = _guard_detail('moria1', 0.0, 30 * SECONDS_PER_DAY, 20_000_000, wfu_threshold=0.004)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        assert [issue for issue in issues if 'near threshold' in issue['title']] == []
+
+    def test_bad_guard_details_do_not_raise(self):
+        """None, a non-list, and a non-dict row must not abort the rest of the issues."""
+        for details in (None, 'votes', {'moria1': {}}, [None, 'moria1', 3]):
+            issues = generate_issues_from_consensus({
+                'in_consensus': True,
+                'total_authorities': 9,
+                'authority_votes': [],
+                'reachability': {'ipv4_reachable_count': 9},
+                'flag_eligibility': {'guard': {'details': details}},
+            }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'V2Dir'], observed_bandwidth=3_000_000)
+            assert [issue for issue in issues if issue['category'] == 'guard'] == []
+        mixed = generate_issues_from_consensus({
+            'in_consensus': True,
+            'total_authorities': 9,
+            'authority_votes': [],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': [
+                None,
+                _guard_detail('moria1', 0.982, 30 * SECONDS_PER_DAY, 20_000_000),
+            ]}},
+        }, current_flags=['Guard', 'Stable', 'Fast', 'HSDir', 'V2Dir'], observed_bandwidth=3_000_000)
+        assert [issue['title'] for issue in mixed if issue['category'] == 'guard'] == [
+            'Guard: WFU near threshold']
+
+    def test_close_call_does_not_round_past_the_margin(self):
+        """One decimal must not print the first value outside the near window."""
+        detail = _guard_detail(
+            'moria1', 0.9846, GUARD_TK_DEFAULT + 23 * 3600, 20_000_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        by_title = {issue['title']: issue['description'] for issue in issues if 'near threshold' in issue['title']}
+        assert '98.46%' in by_title['Guard: WFU near threshold']
+        assert '98.5%' not in by_title['Guard: WFU near threshold']
+        assert '8.96 days' in by_title['Guard: Time Known near threshold']
+        assert '9.0 days' not in by_title['Guard: Time Known near threshold']

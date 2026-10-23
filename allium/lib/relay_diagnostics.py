@@ -21,11 +21,13 @@ the last detected overload event.
 """
 
 import html as _html
+import math
 from datetime import datetime, timezone
 from typing import List, Optional
 
 # Import flag thresholds from centralized module
 from .consensus.flag_thresholds import (
+    SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
     GUARD_TK_DEFAULT,
     GUARD_TK_NEAR_MARGIN,
@@ -41,7 +43,9 @@ from .consensus.flag_thresholds import (
     resolve_voting_total,
 )
 from .string_utils import (
+    format_days,
     format_known_duration,
+    format_percentage_from_fraction,
     format_wfu_display,
     _format_tk_requirement,
     _format_wfu_requirement,
@@ -268,7 +272,11 @@ def generate_issues_from_consensus(
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
-    guard_details = flag_eligibility.get('guard', {}).get('details', [])
+    # A missing or non-list details value used to raise in the majority count.
+    # Rows that are not dicts are not authority measurements.
+    guard_block = flag_eligibility.get('guard') if isinstance(flag_eligibility, dict) else None
+    raw_details = guard_block.get('details') if isinstance(guard_block, dict) else None
+    guard_details = [row for row in raw_details or [] if isinstance(row, dict)]
     guard_bw_votes = sum(1 for d in guard_details if d.get('bw_met'))
     if guard_details:
         guard_bw_eligible = guard_bw_votes >= majority_threshold
@@ -951,8 +959,8 @@ def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int,
 
 
 def _is_number(value) -> bool:
-    """True for int and float. bool is an int subclass and is not a measurement."""
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """True for a finite int or float. bool is an int subclass and is not a measurement."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _published_positive(detail: dict, key: str, default: float) -> Optional[float]:
@@ -964,12 +972,51 @@ def _published_positive(detail: dict, key: str, default: float) -> Optional[floa
 
 
 def _append_near(bucket: list, authority: str, value, threshold, margin) -> None:
-    """Record a measurement within the open margin on either side of its bar."""
-    if threshold is None or not _is_number(value) or not _is_number(margin) or margin <= 0:
+    """Record a measurement within the open margin on either side of its bar.
+
+    A zero on the failing side is an empty measurement (no WFU credit, no
+    time-known history), not a value sitting against the bar.
+    """
+    if threshold is None or not _is_number(value) or value < 0 or not _is_number(margin) or margin <= 0:
         return
     slack = value - threshold
+    if slack < 0 and value == 0:
+        return
     if -margin < slack < margin:
         bucket.append((authority, value, threshold))
+
+
+def _tk_near_margin(threshold: float) -> float:
+    """One day, but never more than an eighth of a shorter published bar.
+
+    A fixed one-day window is wider than a bar of a few hours, and would call
+    every smaller measurement, including zero, "just under" that bar. An eighth
+    of the 8-day cap is still one day.
+    """
+    return min(GUARD_TK_NEAR_MARGIN, threshold / 8.0)
+
+
+def _format_near_wfu(value, threshold) -> str:
+    """WFU text that does not round a close call up to the far edge of the margin."""
+    shown = format_wfu_display(value, threshold)
+    if not (threshold <= value < threshold + GUARD_WFU_NEAR_MARGIN):
+        return shown
+    edge = format_percentage_from_fraction(threshold + GUARD_WFU_NEAR_MARGIN, 1)
+    if shown == edge:
+        return format_percentage_from_fraction(value, 2)
+    return shown
+
+
+def _format_near_tk(value, threshold) -> str:
+    """Time-known text that does not round a close call up to the far edge of the margin."""
+    shown = format_known_duration(value, threshold=threshold)
+    margin = _tk_near_margin(threshold)
+    if not (threshold <= value < threshold + margin) or value < SECONDS_PER_DAY:
+        return shown
+    edge = format_days(threshold + margin, decimals=1, suffix=' days')
+    if shown == edge:
+        return format_days(value, decimals=2, suffix=' days', threshold=threshold)
+    return shown
 
 
 def _near_phrase(entries: list, format_value, format_bar) -> str:
@@ -1020,8 +1067,9 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
         authority = detail.get('authority') or '?'
         _append_near(wfu_near, authority, detail.get('wfu_value'),
                      _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT), GUARD_WFU_NEAR_MARGIN)
-        _append_near(tk_near, authority, detail.get('tk_value'),
-                     _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT), GUARD_TK_NEAR_MARGIN)
+        tk_bar = _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT)
+        if tk_bar:
+            _append_near(tk_near, authority, detail.get('tk_value'), tk_bar, _tk_near_margin(tk_bar))
         bar = _guard_bw_bar(detail)
         if bar:
             _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
@@ -1040,13 +1088,13 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
     # (rows, title, section, subject, value formatter, bar formatter, description tail, suggestion)
     specs = (
         (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
-         lambda value, threshold: format_wfu_display(value, threshold), _format_wfu_requirement,
+         _format_near_wfu, _format_wfu_requirement,
          wfu_text,
          'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
          'Restart=always, and watch for OOM kills until each authority has more room above '
          'its own guard-wfu.'),
         (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
-         lambda value, threshold: format_known_duration(value, threshold=threshold), _format_tk_requirement,
+         _format_near_tk, _format_tk_requirement,
          tk_text,
          'Weighted time-known falls while the relay is unreachable and resets if the identity '
          'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
