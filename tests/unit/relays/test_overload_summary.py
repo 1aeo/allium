@@ -23,22 +23,51 @@ SAMPLE_SUMMARY = {'overloaded': 2, 'total': 10, 'pct_formatted': '20.0%', 'relay
 # Helper unit tests (pure dicts, no Relays pipeline)
 # ---------------------------------------------------------------------------
 
+def _summary(overloaded, total, pct, relays, incomplete=0, incomplete_relays=None):
+    return {
+        'overloaded': overloaded,
+        'incomplete': incomplete,
+        'total': total,
+        'pct_formatted': pct,
+        'relays': relays,
+        'incomplete_relays': [] if incomplete_relays is None else incomplete_relays,
+    }
+
+
 @pytest.mark.parametrize('members,expected', [
     ([], None),                                                      # empty group
     ([{'stability_is_overloaded': False}, {}], None),                # zero overloaded / missing key
     ([{'stability_is_overloaded': True}] * 3
      + [{'stability_is_overloaded': False}] * 5,
-     {'overloaded': 3, 'total': 8, 'pct_formatted': '37.5%',
-      'relays': [{'stability_is_overloaded': True}] * 3}),           # mixed
+     _summary(3, 8, '37.5%', [{'stability_is_overloaded': True}] * 3)),
     ([{'stability_is_overloaded': True}] * 4,
-     {'overloaded': 4, 'total': 4, 'pct_formatted': '100.0%',
-      'relays': [{'stability_is_overloaded': True}] * 4}),           # all overloaded
+     _summary(4, 4, '100.0%', [{'stability_is_overloaded': True}] * 4)),
     ([{'stability_is_overloaded': True}, {}, {'nickname': 'x'}],
-     {'overloaded': 1, 'total': 3, 'pct_formatted': '33.3%',
-      'relays': [{'stability_is_overloaded': True}]}),               # missing keys mixed in
+     _summary(1, 3, '33.3%', [{'stability_is_overloaded': True}])),
 ])
 def test_compute_group_overload_summary(members, expected):
     assert compute_group_overload_summary(members) == expected
+
+
+def test_incomplete_relays_are_summarized_without_counting_as_overloaded():
+    """A group with no eligible signal still surfaces relays that could not be evaluated."""
+    clear = {'stability_is_overloaded': False, 'stability_text': 'Not Overloaded', 'nickname': 'ok'}
+    missing = {'stability_is_overloaded': False, 'stability_text': 'Incomplete',
+               'nickname': 'gap', 'fingerprint': 'B' * 40, 'observed_bandwidth': 5,
+               'stability_tooltip': 'Bandwidth data unavailable'}
+    flagged = {'stability_is_overloaded': True, 'nickname': 'hot', 'fingerprint': 'A' * 40,
+               'observed_bandwidth': 9}
+    summary = compute_group_overload_summary([clear, missing, flagged])
+    assert summary['overloaded'] == 1
+    assert summary['incomplete'] == 1
+    assert summary['relays'] == [flagged]
+    assert summary['incomplete_relays'] == [missing]
+
+    only_gap = compute_group_overload_summary([clear, missing])
+    assert only_gap['overloaded'] == 0
+    assert only_gap['incomplete'] == 1
+    assert only_gap['pct_formatted'] == '0.0%'
+    assert only_gap['incomplete_relays'][0] is missing
 
 
 def test_summary_relays_are_references_in_impact_order():
@@ -195,6 +224,21 @@ def test_overload_bullet_no_relay_list_without_path_prefix(jinja_env):
     """Do not expose relay-detail links without a path prefix."""
     rendered = _render_bullet(jinja_env, link_href='by-overload.html#relay-table')
     assert '#overload' not in rendered.replace('by-overload.html', '')
+
+
+def test_incomplete_bullet_is_separate_from_the_overloaded_count(jinja_env):
+    """Incomplete relays get their own bullet and are omitted from the red count."""
+    gap = {'nickname': 'gap', 'fingerprint': 'C' * 40,
+           'stability_tooltip': 'Bandwidth data unavailable'}
+    rendered = _render_bullet(jinja_env, path_prefix='../../', summary={
+        'overloaded': 0, 'incomplete': 1, 'total': 2, 'pct_formatted': '0.0%',
+        'relays': [], 'incomplete_relays': [gap],
+    })
+    assert 'Overloaded' not in rendered
+    assert 'Overload status incomplete' in rendered
+    assert '1 of 2 relays' in rendered
+    assert f'href="../../relay/{"C" * 40}/#overload"' in rendered
+    assert 'Bandwidth data unavailable' in rendered
 
 
 def _contact_context(overload_summary):

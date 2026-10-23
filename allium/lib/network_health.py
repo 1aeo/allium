@@ -833,7 +833,7 @@ def calculate_network_health_metrics(relay_set):
         is_stabledesc = 'StaleDesc' in flags
         is_sybil = 'Sybil' in flags
         is_running = relay.get('running', True)
-        # Use pre-computed stability field (computed in _reprocess_bandwidth_data)
+        # Pre-computed by overload evaluation. Historical and invalid records are not counted.
         is_overloaded = relay.get('stability_is_overloaded', False)
         
         # Counts
