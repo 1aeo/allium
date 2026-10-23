@@ -605,7 +605,8 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     assert 'tor_relay_load_global_rate_limit_reached_total' in pages['rate']
     assert 'href="#overload-write"' in pages['rate']
     assert 'href="#overload-rate-config"' in pages['rate']
-    assert '>12<' in pages['rate'] or '12' in pages['rate']
+    rate_write = pages['rate'].split('id="overload-write"', 1)[1].split('</dd>', 1)[0]
+    assert '>12<' in rate_write
 
     assert 'File Descriptor Exhaustion' in pages['fd']
     assert 'LimitNOFILE' in pages['fd']
@@ -635,11 +636,3 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     assert 'Incomplete' in pages['missing']
     assert 'No bandwidth record available for this relay' in pages['missing']
     assert 'Not Overloaded' not in pages['missing']
-
-    excerpt_dir = Path('/opt/cursor/artifacts')
-    if excerpt_dir.is_dir():
-        for name in ('general', 'rate', 'fd', 'partial', 'historical', 'missing'):
-            html = pages[name]
-            start = html.index('id="overload"')
-            end = html.index('id="operator"')
-            (excerpt_dir / f'overload-{name}.html').write_text(html[start:end], encoding='utf-8')
