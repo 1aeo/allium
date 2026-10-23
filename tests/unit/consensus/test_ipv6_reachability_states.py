@@ -561,6 +561,8 @@ class TestIpv6ReachabilityStates:
         assert is_ipv6_orport('[2001:db8::1]:0') is False
         assert is_ipv6_orport('[2001:db8::1]:99999') is False
         assert is_ipv6_orport('2001:db8::1') is False
+        assert is_ipv6_orport('[2001:db8::1]:900\u00b2') is False
+        assert is_ipv6_orport('[2001:db8::1]:\u0669\u0660\u0660\u0661') is False
         assert relay_publishes_ipv6(['[::1]:9001']) is False
         assert relay_publishes_ipv6(['[::ffff:192.0.2.1]:9001']) is False
         assert relay_publishes_ipv6('[2001:db8::1]:9001') is False
@@ -631,6 +633,54 @@ class TestIpv6ReachabilityStates:
         assert ipv6_testers_from_collector({
             'relay_index': {OK_FP: {'votes': {'moria1': {'ipv6_reachable': 'false'}}}},
         }) == set()
+        assert ipv6_testers_from_collector({
+            'relay_index': {
+                'AA': {'votes': ['not-a-dict']},
+                'BB': {'votes': {'moria1': {'ipv6_reachable': True}}},
+            },
+        }) == {'moria1'}
+
+    def test_carried_tester_expires_after_three_hours(self):
+        """Voting again does not refresh the last 'a' line. An old stamp drops."""
+        from datetime import datetime, timedelta, timezone
+
+        votes = {
+            'moria1': _vote_document([_relay_block(LONE_FP, 'LoneFail')]),
+        }
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(microsecond=0)
+        recent_stamp = recent.isoformat()
+        fetcher = _load(votes)
+        fetcher.prior_ipv6_testing_authorities = {'moria1'}
+        fetcher.prior_ipv6_tester_last_seen = {'moria1': recent_stamp}
+        fetcher._build_relay_index()
+        assert fetcher.ipv6_testing_authorities == {'moria1'}
+        assert fetcher.ipv6_tester_last_seen['moria1'] == recent_stamp
+
+        fetcher.prior_ipv6_tester_last_seen = {'moria1': '2020-01-01T00:00:00+00:00'}
+        fetcher._build_relay_index()
+        assert 'moria1' not in fetcher.ipv6_testing_authorities
+        assert ipv6_testers_from_collector({
+            'ipv6_testing_authorities': ['moria1'],
+            'ipv6_tester_last_seen': {'moria1': '2020-01-01T00:00:00+00:00'},
+        }) == set()
+
+    def test_uppercase_bandwidth_authority_matches_its_measurement(self):
+        from allium.lib.consensus.flag_thresholds import BW_SOURCE_UNMEASURED
+        fetcher = CollectorFetcher()
+        fetcher.bw_authorities = {'ABCD1234'}
+        fetcher.flag_thresholds = {'ABCD1234': {'ignoring-advertised-bws': 1}}
+        fetcher.relay_index = {
+            'A' * 40: {'votes': {'abcd1234': {'measured': 100, 'bandwidth': 50, 'flags': []}}},
+        }
+        bandwidth = fetcher._format_bandwidth({
+            'votes': {'ABCD1234': {'measured': 100, 'bandwidth': 50, 'flags': []}},
+        })
+        assert bandwidth['bw_auth_measured_count'] == 1
+        assert bandwidth['bw_auth_not_measured_names'] == []
+        value, source = fetcher._credible_bandwidth(
+            'ABCD1234', {'measured': None, 'bandwidth': 50, 'flags': []})
+        assert source == BW_SOURCE_UNMEASURED
+        assert value == 0
 
 
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):

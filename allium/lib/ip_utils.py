@@ -124,7 +124,8 @@ def is_ipv6_orport(address):
     if not (token.startswith('[') and ']:' in token):
         return False
     port_text = token.split(']:', 1)[1]
-    if not port_text.isdigit() or not 1 <= int(port_text) <= 65535:
+    # isdigit() is true for superscripts such as ², and int() then raises.
+    if not port_text.isascii() or not port_text.isdigit() or not 1 <= int(port_text) <= 65535:
         return False
     parsed, version = safe_parse_ip_address(token)
     if version != 6 or not parsed:

@@ -365,6 +365,11 @@ class CollectorFetcher:
         # Testers seen in an earlier fetch. An authority that voted this hour
         # but reached zero IPv6 relays has no 'a' line; it still tests IPv6.
         self.prior_ipv6_testing_authorities = set()
+        # name -> when that authority last published an IPv6 'a' line. Carried
+        # names keep this stamp; it is not refreshed merely because they voted.
+        self.prior_ipv6_tester_last_seen = {}
+        self.prior_ipv6_tester_origin = None
+        self.ipv6_tester_last_seen = {}
         self._timings = {}
     
     def fetch_all(self) -> dict:
@@ -440,6 +445,7 @@ class CollectorFetcher:
         
         result['bw_authorities'] = sorted(self.bw_authorities)
         result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
+        result['ipv6_tester_last_seen'] = dict(sorted(self.ipv6_tester_last_seen.items()))
         result['timings'] = self._timings
         
         # Log performance metrics
@@ -959,12 +965,13 @@ class CollectorFetcher:
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
 
-        self.ipv6_testing_authorities = _collect_ipv6_testers(self.relay_index, self.votes)
-        prior = _authority_keys(self.prior_ipv6_testing_authorities)
-        if prior:
-            voted = {_authority_key(name) for name, vote in self.votes.items() if vote}
-            voted.discard('')
-            self.ipv6_testing_authorities |= prior & voted
+        self.ipv6_testing_authorities, self.ipv6_tester_last_seen = _ipv6_testers_this_fetch(
+            _collect_ipv6_testers(self.relay_index, self.votes),
+            self.votes,
+            self.prior_ipv6_testing_authorities,
+            self.prior_ipv6_tester_last_seen,
+            self.prior_ipv6_tester_origin,
+        )
         # Derived from the index. A rebuild must not keep the previous hour's set.
         self.__dict__.pop('measuring_authorities', None)
         
@@ -1146,10 +1153,13 @@ class CollectorFetcher:
         uses a measurement from an earlier bandwidth file if it kept one: surely when it still
         votes Fast, and likely when its vote has no Measured= values at all.
         """
+        unpublished = (
+            'Fast' in (vote_info.get('flags') or [])
+            or _authority_key(auth_name) not in self.measuring_authorities)
         return credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),
             self.flag_thresholds.get(auth_name, {}).get('ignoring-advertised-bws') == 1,
-            unpublished='Fast' in vote_info.get('flags', []) or auth_name not in self.measuring_authorities)
+            unpublished=unpublished)
 
     def _format_authority_votes(self, relay: dict, published_ipv6: bool = False) -> List[dict]:
         """
@@ -1438,6 +1448,9 @@ class CollectorFetcher:
             median = low_median(values)
         if unmeasured and median is not None and len(self.measuring_authorities) >= 3:
             median = min(median, MAX_UNMEASURED_BW_KB * VOTE_BW_KB_BYTES)
+        bw_authorities = self.bw_authorities if isinstance(self.bw_authorities, (list, tuple, set, frozenset)) else ()
+        bw_keys = _authority_keys(bw_authorities)
+        measured_names = set(measured)
         return {
             'median': median,  # Consensus weight
             'unmeasured': unmeasured,
@@ -1446,9 +1459,10 @@ class CollectorFetcher:
             'max': values[-1] if values else None,
             'deviation': values[-1] - values[0] if not unmeasured else 0,
             'measurement_count': len(values),
-            'bw_auth_measured_count': len(self.bw_authorities & measured.keys()),
-            'bw_auth_total': len(self.bw_authorities),
-            'bw_auth_not_measured_names': sorted(self.bw_authorities - measured.keys()),
+            'bw_auth_measured_count': len(bw_keys & measured_names),
+            'bw_auth_total': len(bw_keys),
+            'bw_auth_not_measured_names': sorted(
+                name for name in bw_authorities if _authority_key(name) not in measured_names),
         }
     
     def _format_reachability(self, relay: dict, published_ipv6: bool = False,
@@ -1586,9 +1600,98 @@ def _collect_ipv6_testers(relay_index, votes=None):
         for relay in relay_index.values():
             if not isinstance(relay, dict):
                 continue
-            for auth_name, vote in (relay.get('votes') or {}).items():
+            relay_votes = relay.get('votes')
+            if not isinstance(relay_votes, dict):
+                continue
+            for auth_name, vote in relay_votes.items():
                 _note(auth_name, vote)
     return found
+
+
+# Same window as workers._validate_collector_cache. A carried tester whose last
+# 'a' line is older than this is no longer treated as testing IPv6.
+_IPV6_TESTER_MAX_AGE_SECONDS = 3 * 3600
+
+
+def _parse_utc(value):
+    """Parse a vote or cache timestamp. Naive values are UTC."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip().replace('Z', '+00:00')
+    if len(text) >= 19 and text[10] == ' ':
+        text = text[:10] + 'T' + text[11:]
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _tester_seen_current(value, now=None):
+    """True when ``value`` is a timestamp within the carry-forward window."""
+    parsed = _parse_utc(value)
+    if parsed is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    age = (now - parsed).total_seconds()
+    return -3600 <= age <= _IPV6_TESTER_MAX_AGE_SECONDS
+
+
+def _stamp_from_vote(vote):
+    """ISO time of a vote, from the consensus period it belongs to."""
+    if not isinstance(vote, dict):
+        return None
+    for key in ('vote_time', 'valid_after', 'published'):
+        parsed = _parse_utc(vote.get(key))
+        if parsed is not None:
+            return parsed.replace(microsecond=0).isoformat()
+    return None
+
+
+def _votes_folded(votes):
+    folded = {}
+    if not isinstance(votes, dict):
+        return folded
+    for name, vote in votes.items():
+        key = _authority_key(name)
+        if key and isinstance(vote, dict):
+            folded[key] = vote
+    return folded
+
+
+def _ipv6_testers_this_fetch(found, votes, prior_names, prior_last_seen, prior_origin):
+    """Testers for this run, and the last time each one published an 'a' line.
+
+    A prior tester who voted but published no 'a' line is kept only while that
+    earlier stamp is still inside the carry-forward window. Voting again does
+    not refresh the stamp.
+    """
+    folded = _votes_folded(votes)
+    now_stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    seen = {name: _stamp_from_vote(folded.get(name)) or now_stamp for name in found}
+    last_seen = prior_last_seen if isinstance(prior_last_seen, dict) else {}
+    carried = {}
+    for name in _authority_keys(prior_names):
+        if name in seen or name not in folded:
+            continue
+        stamp = last_seen.get(name) or prior_origin
+        if stamp is None or _tester_seen_current(stamp):
+            carried[name] = stamp or now_stamp
+    last = dict(carried)
+    last.update(seen)
+    return set(last), last
+
+
+def apply_prior_ipv6_testers(fetcher, collector_data):
+    """Copy testers from a cache that has already been validated."""
+    if not isinstance(collector_data, dict):
+        return
+    fetcher.prior_ipv6_testing_authorities = ipv6_testers_from_collector(collector_data)
+    last_seen = collector_data.get('ipv6_tester_last_seen')
+    fetcher.prior_ipv6_tester_last_seen = last_seen if isinstance(last_seen, dict) else {}
+    fetcher.prior_ipv6_tester_origin = collector_data.get('fetched_at')
 
 
 def ipv6_testers_from_collector(collector_data):
@@ -1596,6 +1699,13 @@ def ipv6_testers_from_collector(collector_data):
     if not isinstance(collector_data, dict):
         return set()
     saved = _authority_keys(collector_data.get('ipv6_testing_authorities'))
+    last_seen = collector_data.get('ipv6_tester_last_seen')
+    if isinstance(last_seen, dict) and last_seen:
+        origin = collector_data.get('fetched_at')
+        saved = {
+            name for name in saved
+            if _tester_seen_current(last_seen.get(name) or origin)
+        }
     return saved | _collect_ipv6_testers(
         collector_data.get('relay_index'), collector_data.get('votes'))
 
