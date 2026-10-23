@@ -1511,3 +1511,12 @@ class TestGuardNearThreshold:
         assert '98.5%' not in by_title['Guard: WFU near threshold']
         assert '8.96 days' in by_title['Guard: Time Known near threshold']
         assert '9.0 days' not in by_title['Guard: Time Known near threshold']
+
+    def test_bandwidth_just_under_does_not_round_onto_the_bar(self):
+        """2.06 MB/s is under the 2.097 MB/s guarantee but one decimal prints 2.1 MB/s."""
+        detail = _guard_detail('moria1', 0.999, 30 * SECONDS_PER_DAY, 2_060_000, top25=50_000_000)
+        issues = _issues_with_guard_details([detail], _HOLDING_GUARD)
+        notes = [issue for issue in issues if issue['title'] == 'Guard: bandwidth near threshold']
+        assert len(notes) == 1
+        assert '2.06 MB/s, need ≥2.1 MB/s' in notes[0]['description']
+        assert '2.1 MB/s, need ≥2.1 MB/s' not in notes[0]['description']

@@ -44,6 +44,7 @@ from .consensus.flag_thresholds import (
 )
 from .string_utils import (
     format_days,
+    format_keeping_below,
     format_known_duration,
     format_percentage_from_fraction,
     format_wfu_display,
@@ -1045,6 +1046,22 @@ def _near_clause(entries: list, requirement: str, format_value, format_bar) -> s
         for word, group in sides if group)
 
 
+def _format_near_rate(value, threshold, use_bits: bool) -> str:
+    """Bandwidth text. A miss does not round up onto the bar.
+
+    One decimal prints 2.06 MB/s, which is under the 2.097 MB/s guarantee, as
+    2.1 MB/s, the same text as the bar.
+    """
+    shown = _format_rate(value, use_bits, decimal_places=1)
+    if not _is_number(threshold) or value >= threshold or not _get_bw_formatter:
+        return shown
+    fmt = _get_bw_formatter(use_bits=use_bits)
+    unit = fmt.determine_unit(threshold)
+    divisor = fmt.get_divisor_for_unit(unit)
+    number = format_keeping_below(value / divisor, threshold / divisor, start=1)
+    return f"{number} {unit}"
+
+
 def _guard_bw_bar(detail: dict) -> Optional[float]:
     """Easier of this authority's guarantee and its top-25% cutoff."""
     guarantee = detail.get('bw_guarantee')
@@ -1074,8 +1091,8 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
         if bar:
             _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
 
-    def rate(value, _threshold):
-        return _format_rate(value, use_bits, decimal_places=1)
+    def rate(value, threshold):
+        return _format_near_rate(value, threshold, use_bits)
 
     # The Notes box shows title and description only. Say which input, which
     # authorities, the published bar, and the one thing that can cross it.
@@ -1100,7 +1117,8 @@ def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[d
          'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
          'a few weeks of continuous uptime. Stay up with the same key.'),
         (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
-         'Bandwidth counted for Guard', rate, lambda threshold: '≥' + rate(threshold, None),
+         'Bandwidth counted for Guard', rate,
+         lambda threshold: '≥' + _format_rate(threshold, use_bits, decimal_places=1),
          bw_text,
          'The bandwidth that counts is that authority\'s measurement when it has one, otherwise '
          'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
