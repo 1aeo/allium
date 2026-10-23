@@ -18,9 +18,9 @@ import base64
 
 import pytest
 
-from allium.lib.consensus.collector_fetcher import CollectorFetcher
+from allium.lib.consensus.collector_fetcher import CollectorFetcher, ipv6_testers_from_collector
 from allium.lib.consensus.consensus_evaluation import format_relay_consensus_evaluation
-from allium.lib.ip_utils import relay_publishes_ipv6
+from allium.lib.ip_utils import relay_ipv6_unconfirmed, relay_publishes_ipv6
 from allium.lib.relay_diagnostics import generate_issues_from_consensus
 
 WITNESS = '11' * 20
@@ -71,9 +71,10 @@ def _load(votes_by_authority):
     return fetcher
 
 
-def _evaluate(fetcher, fingerprint, published_ipv6):
+def _evaluate(fetcher, fingerprint, published_ipv6, declared_unreachable=False):
     raw = fetcher.get_relay_consensus_evaluation(
-        fingerprint, authority_count=9, published_ipv6=published_ipv6)
+        fingerprint, authority_count=9, published_ipv6=published_ipv6,
+        declared_unreachable=declared_unreachable)
     formatted = format_relay_consensus_evaluation(raw, current_flags=['Running', 'Valid'])
     return raw, formatted
 
@@ -159,7 +160,7 @@ class TestIpv6ReachabilityStates:
         assert set(reach['ipv6_failed_authorities']) == set(TESTERS)
         assert summary['state'] == 'failed'
         assert summary['display'] == '0/7 authorities can reach IPv6'
-        assert summary['status_class'] == 'muted'
+        assert summary['status_class'] == 'danger'
         assert summary['show_ipv6'] is True
         assert 'Not tested' not in summary['display']
 
@@ -240,11 +241,11 @@ class TestIpv6ReachabilityStates:
         summary = formatted['reachability_summary']['ipv6']
 
         assert raw['reachability']['ipv6_failed_authorities']  # testers voted, no 'a' line
-        assert raw['reachability']['ipv6_state'] == 'absent'
+        assert raw['reachability']['ipv6_state'] == 'none'
         assert summary['show_ipv6'] is False
-        assert summary['state'] == 'absent'
+        assert summary['state'] == 'none'
         assert summary['total'] == 0
-        assert summary['display'] == 'N/A'
+        assert summary['display'] == 'None configured'
         assert _ipv6_rows(formatted) == []
         assert 'IPv6 not reachable' not in _titles(raw)
         assert 'IPv6 not tested' not in _titles(raw)
@@ -260,6 +261,116 @@ class TestIpv6ReachabilityStates:
         relay = next(iter(with_a['relays'].values()))
         assert relay['ipv6_reachable'] is True
         assert '2001:db8::5' in relay['ipv6_address']
+
+    def test_non_voting_testers_are_not_in_the_denominator(self):
+        """Five testers reached it. Two testers did not vote and do not count as tested."""
+        voting_testers = TESTERS[:5]
+        silent_testers = TESTERS[5:]
+        tester_vote = _vote_document([
+            _relay_block(WITNESS, 'Witness', ipv6='2001:db8::99'),
+            _relay_block(OK_FP, 'OkRelay', ipv6='2001:db8::1'),
+        ])
+        non_tester_vote = _vote_document([_relay_block(OK_FP, 'OkRelay')])
+        votes = {name: tester_vote for name in voting_testers}
+        votes.update({name: non_tester_vote for name in NON_TESTERS})
+        fetcher = _load(votes)
+        assert fetcher.ipv6_testing_authorities == set(voting_testers)
+        assert not (fetcher.ipv6_testing_authorities & set(silent_testers))
+        raw, formatted = _evaluate(fetcher, OK_FP, published_ipv6=True)
+        summary = formatted['reachability_summary']['ipv6']
+        assert raw['reachability']['ipv6_tested_count'] == 5
+        assert summary['display'] == '5/5 authorities can reach IPv6'
+        assert summary['status_class'] == 'success'
+        assert summary['total'] == 5
+
+    def test_below_majority_is_not_full_success(self):
+        """One of seven testing votes reached the relay. That is partial, not green."""
+        reached = TESTERS[:1]
+        missed = TESTERS[1:]
+        reached_vote = _vote_document([
+            _relay_block(WITNESS, 'Witness', ipv6='2001:db8::99'),
+            _relay_block(OK_FP, 'OkRelay', ipv6='2001:db8::1'),
+        ])
+        missed_vote = _vote_document([
+            _relay_block(WITNESS, 'Witness', ipv6='2001:db8::99'),
+            _relay_block(OK_FP, 'OkRelay'),
+        ])
+        non_tester_vote = _vote_document([_relay_block(OK_FP, 'OkRelay')])
+        votes = {reached[0]: reached_vote}
+        votes.update({name: missed_vote for name in missed})
+        votes.update({name: non_tester_vote for name in NON_TESTERS})
+        fetcher = _load(votes)
+        raw, formatted = _evaluate(fetcher, OK_FP, published_ipv6=True)
+        summary = formatted['reachability_summary']['ipv6']
+        assert summary['display'] == '1/7 authorities can reach IPv6'
+        assert summary['status_class'] == 'warning'
+        row = _ipv6_rows(formatted)[0]
+        assert row['status'] == 'partial'
+
+    def test_prior_tester_with_no_a_lines_is_still_a_failure(self):
+        """A tester that reaches nobody this hour still has no 'a' line, and still tests."""
+        votes = {
+            name: _vote_document([_relay_block(LONE_FP, 'LoneFail')])
+            for name in TESTERS + NON_TESTERS
+        }
+        fetcher = _load(votes)
+        assert fetcher.ipv6_testing_authorities == set()
+        fetcher.prior_ipv6_testing_authorities = {'moria1'}
+        fetcher._build_relay_index()
+        assert fetcher.ipv6_testing_authorities == {'moria1'}
+        raw, formatted = _evaluate(fetcher, LONE_FP, published_ipv6=True)
+        summary = formatted['reachability_summary']['ipv6']
+        assert raw['reachability']['ipv6_state'] == 'failed'
+        assert summary['display'] == '0/1 authorities can reach IPv6'
+        assert summary['status_class'] == 'danger'
+        assert 'IPv6 not tested' not in _titles(raw)
+        assert 'IPv6 not reachable' in _titles(raw)
+
+    def test_testers_recovered_from_relay_index(self):
+        """A cache without ipv6_testing_authorities still records who published an 'a' line."""
+        data = {
+            'relay_index': {
+                OK_FP: {'votes': {
+                    'moria1': {'ipv6_reachable': True},
+                    'dizum': {'ipv6_reachable': None},
+                }},
+            },
+        }
+        assert ipv6_testers_from_collector(data) == {'moria1'}
+        assert ipv6_testers_from_collector({}) == set()
+        assert ipv6_testers_from_collector({'ipv6_testing_authorities': ['tor26']}) == {'tor26'}
+
+    def test_onionoo_unconfirmed_is_not_labeled_not_tested(self):
+        """unreachable_or_addresses is a failed confirmation when no vote tested it."""
+        assert relay_ipv6_unconfirmed(['[2001:db8::8]:9001']) is True
+        assert relay_ipv6_unconfirmed(['192.0.2.8:9001']) is False
+        votes = {
+            name: _vote_document([_relay_block(UNTESTED_FP, 'Untested')])
+            for name in TESTERS + NON_TESTERS
+        }
+        fetcher = _load(votes)
+        raw, formatted = _evaluate(
+            fetcher, UNTESTED_FP, published_ipv6=True, declared_unreachable=True)
+        summary = formatted['reachability_summary']['ipv6']
+        assert raw['reachability']['ipv6_state'] == 'failed'
+        assert raw['reachability']['ipv6_failure_source'] == 'onionoo'
+        assert summary['state'] == 'failed'
+        assert summary['display'] == 'Unreachable'
+        assert summary['status_class'] == 'danger'
+        assert summary['show_ipv6'] is False
+        row = _ipv6_rows(formatted)[0]
+        assert row['status'] == 'below'
+        assert row['status_text'] == 'Unreachable'
+        titles = _titles(raw)
+        assert 'IPv6 not reachable' in titles
+        assert 'IPv6 not tested' not in titles
+        failure = next(issue for issue in generate_issues_from_consensus(raw) if 'IPv6' in issue['title'])
+        assert 'not confirmed' in failure['description']
+
+    def test_a_line_wins_over_onionoo_unconfirmed(self, network):
+        raw, formatted = _evaluate(network, OK_FP, published_ipv6=True, declared_unreachable=True)
+        assert raw['reachability']['ipv6_state'] == 'ok'
+        assert formatted['reachability_summary']['ipv6']['display'] == '7/7 authorities can reach IPv6'
 
 
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):
@@ -340,8 +451,11 @@ def test_relay_pages_distinguish_the_three_states(network, tmp_path):
     assert 'Allium does not run the check' in untested_html
     assert '>Not tested<' not in v4_html
     assert 'IPv6 not reachable' not in v4_html
-    assert 'v6:' not in v4_html
+    assert 'None configured' in v4_html
     assert '>0/7<' not in v4_html
+    assert 'al-status-danger">0/7' in failed_html
+    assert 'Suggestion:' in untested_html
+    assert 'firewall' in untested_html
 
     env = Environment(loader=FileSystemLoader('allium/templates'))
     mark = env.from_string(

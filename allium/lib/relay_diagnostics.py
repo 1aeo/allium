@@ -246,8 +246,9 @@ def generate_issues_from_consensus(
                 "the check."
             ),
             'suggestion': (
-                "Confirm the ORPort is reachable on the published IPv6 address (firewall and routing). "
-                "An address in the relay descriptor is not evidence that an authority tested it."
+                "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
+                "address, and the route is public. An address in the descriptor is not evidence "
+                "that an authority tested it."
             ),
             'section': 'flag-running-ipv6-reachability',
             'doc_ref': 'https://spec.torproject.org/dir-spec/consensus-formats.html',
@@ -268,6 +269,23 @@ def generate_issues_from_consensus(
                 'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
                 'section': 'flag-running-ipv6-reachability',
                 'doc_ref': 'https://community.torproject.org/relay/setup/',
+            })
+        elif ipv6_state == 'failed':
+            issues.append({
+                'severity': 'warning',
+                'category': 'reachability',
+                'title': 'IPv6 not reachable',
+                'description': (
+                    "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
+                    "authorities. This fetch has no vote 'a' line for it either, so this is a "
+                    "failed confirmation, not an untested address."
+                ),
+                'suggestion': (
+                    "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
+                    "address, and the route is public."
+                ),
+                'section': 'flag-running-ipv6-reachability',
+                'doc_ref': 'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
             })
     
     # =========================================================================

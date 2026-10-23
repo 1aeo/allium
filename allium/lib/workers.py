@@ -1197,6 +1197,12 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             retry_count=2,           # Retry individual requests within CollectorFetcher
             retry_delay_base=1.0,    # 1s → 2s backoff per request
         )
+        # Keep last hour's testers when this vote reaches zero IPv6 relays and
+        # therefore contains no 'a' line. Also recover testers from an older
+        # cache that stored the 'a' lines on the relay index but not the set.
+        if cached_data:
+            from .consensus.collector_fetcher import ipv6_testers_from_collector
+            fetcher.prior_ipv6_testing_authorities = ipv6_testers_from_collector(cached_data)
         
         # Fetch all data (votes, bandwidth files, build index)
         data = fetcher.fetch_all()

@@ -684,13 +684,15 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'hsdir_uptime_meets_count': hsdir_uptime_meets_count,
         'hsdir_strict_note': hsdir_strict_note,
         
-        # Running flag (reachability). not_tested is its own state: the relay
-        # published an IPv6 ORPort and no authority vote contains a test.
+        # Running flag (reachability). not_tested is its own state. A zero
+        # tested count with state failed is Onionoo's unconfirmed address:
+        # there is no vote denominator, and it is still a failure.
         'running_ipv4_count': ipv4_reachable_count,
         'running_ipv6_count': ipv6_view['reachable_count'],
         'running_ipv6_tested': ipv6_view['tested_total'],
-        'running_has_ipv6': ipv6_view['state'] in ('ok', 'failed'),
+        'running_has_ipv6': ipv6_view['state'] in ('ok', 'failed') and ipv6_view['tested_total'] > 0,
         'running_ipv6_untested': ipv6_view['state'] == 'not_tested',
+        'running_ipv6_unconfirmed': ipv6_view['state'] == 'failed' and ipv6_view['tested_total'] <= 0,
         'running_ipv6_state': ipv6_view['state'],
         
         # Exit policy
@@ -1133,10 +1135,11 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     running_ipv4 = rv.get('running_ipv4_count', 0)
     running_has_ipv6 = rv.get('running_has_ipv6', False)
     running_ipv6_untested = rv.get('running_ipv6_untested', False)
+    running_ipv6_unconfirmed = rv.get('running_ipv6_unconfirmed', False)
     running_ipv6 = rv.get('running_ipv6_count', 0)
     running_ipv6_tested = rv.get('running_ipv6_tested', 0)
     
-    running_rowspan = 2 if (running_has_ipv6 or running_ipv6_untested) else 1
+    running_rowspan = 2 if (running_has_ipv6 or running_ipv6_untested or running_ipv6_unconfirmed) else 1
     ipv4_status = _majority_status(running_ipv4, majority_required)
     running_color = STATUS_COLORS[ipv4_status]
     
@@ -1164,6 +1167,19 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
             _vote_threshold(ipv6_threshold, ipv6_majority if running_ipv6_tested > 0 else 0, running_ipv6_tested),
             ipv6_status,
             _get_status_text(ipv6_status, da_count=running_ipv6, da_total=running_ipv6_tested),
+            anchor='flag-running-ipv6-reachability',
+        ))
+    elif running_ipv6_unconfirmed:
+        # Onionoo lists the address as unconfirmed and this fetch has no vote
+        # test. That is a failure with no N to divide by, not "not tested".
+        rows.append(_make_row(
+            'Running', running_tooltip, running_color,
+            'IPv6 Reachability', METRIC_TOOLTIPS.get('running_ipv6', ''),
+            'Unreachable',
+            'da',
+            "Onionoo unreachable_or_addresses: directory authorities did not confirm this IPv6 ORPort",
+            'below',
+            'Unreachable',
             anchor='flag-running-ipv6-reachability',
         ))
     elif running_ipv6_untested:
@@ -1722,22 +1738,41 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
     return summary
 
 
-def _classify_ipv6_reachability(reachability: dict, total_authorities: int = None) -> dict:
-    """Classify IPv6 as ok, failed, not_tested, or absent.
+def _ipv6_health_class(state, count, tested_total):
+    """Health color aligned with the Running IPv6 flag row.
 
-    A vote ``a`` line is a successful test (dir-spec consensus-formats: authorities
-    include the IPv6 ORPort only when it is reachable). ``ipv6_state`` from
-    CollectorFetcher is authoritative. Legacy aggregates that only have a
-    not-tested list still hide that list when more than two authorities are on
-    it, which is how those rows were shown before states existed. A real failure
-    is ``ipv6_state == 'failed'`` and is never folded into not_tested.
+    Not tested and no IPv6 address stay muted. A missed test is danger, so it
+    does not look like "not tested". Fewer than a majority of the authorities
+    that actually voted is warning, matching the flag row's Partial. A majority
+    is success.
+    """
+    if state in ('not_tested', 'none', 'absent'):
+        return 'muted'
+    if tested_total <= 0:
+        return 'danger' if state == 'failed' else 'muted'
+    if count <= 0:
+        return 'danger'
+    majority = (tested_total // 2) + 1
+    if count >= majority:
+        return 'success'
+    return 'warning'
+
+
+def _classify_ipv6_reachability(reachability: dict, total_authorities: int = None) -> dict:
+    """Classify IPv6 as ok, failed, not_tested, or none.
+
+    A vote ``a`` line is a successful test. ``ipv6_tested_count`` is the number
+    of IPv6-testing authorities that voted for this relay; authorities that did
+    not vote are not part of N. Legacy aggregates without ``ipv6_state`` still
+    use total minus a short not-tested list.
     """
     reachability = reachability or {}
     total = total_authorities or reachability.get('total_authorities') or get_voting_authority_count()
     count = reachability.get('ipv6_reachable_count', 0) or 0
     not_tested = list(reachability.get('ipv6_not_tested_authorities') or [])
     state = reachability.get('ipv6_state')
-    if state not in ('ok', 'failed', 'not_tested', 'absent'):
+    explicit = state in ('ok', 'failed', 'not_tested', 'none', 'absent')
+    if not explicit:
         if len(not_tested) <= 2:
             tested_total = total - len(not_tested)
         else:
@@ -1750,7 +1785,12 @@ def _classify_ipv6_reachability(reachability: dict, total_authorities: int = Non
         else:
             state = 'absent'
     else:
-        tested_total = 0 if state == 'not_tested' else max(0, total - len(not_tested))
+        if state in ('not_tested', 'none', 'absent'):
+            tested_total = 0
+        elif reachability.get('ipv6_tested_count') is not None:
+            tested_total = reachability.get('ipv6_tested_count') or 0
+        else:
+            tested_total = max(0, total - len(not_tested))
         if state in ('ok', 'failed') and tested_total < count:
             tested_total = count
 
@@ -1758,11 +1798,16 @@ def _classify_ipv6_reachability(reachability: dict, total_authorities: int = Non
         display = 'Not tested'
         tested_total = 0
         not_tested_display = []
-    elif state == 'absent':
-        # No published IPv6 ORPort and no 'a' line. A tester that omitted the
-        # line did not fail a test. Keep total at 0 so the row stays hidden.
+    elif state == 'none':
+        display = 'None configured'
+        tested_total = 0
+        not_tested_display = []
+    elif state in ('absent',) or (state == 'failed' and tested_total <= 0 and not explicit):
         display = 'N/A'
         tested_total = 0
+        not_tested_display = []
+    elif state == 'failed' and tested_total <= 0:
+        display = 'Unreachable'
         not_tested_display = []
     elif tested_total > 0:
         display = f"{count}/{tested_total} authorities can reach IPv6"
@@ -1776,9 +1821,8 @@ def _classify_ipv6_reachability(reachability: dict, total_authorities: int = Non
         'tested_total': tested_total,
         'not_tested': not_tested_display,
         'display': display,
-        # 0/N stays muted, matching the previous tested-and-failed health color.
-        'status_class': 'success' if count > 0 else 'muted',
-        'show_ipv6': state in ('ok', 'failed', 'not_tested'),
+        'status_class': _ipv6_health_class(state, count, tested_total),
+        'show_ipv6': state == 'not_tested' or (state in ('ok', 'failed') and tested_total > 0),
     }
 
 

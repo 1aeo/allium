@@ -13,6 +13,7 @@ import time
 from .aroileaders import _calculate_aroi_leaderboards
 from .ip_utils import (
     determine_ipv6_support,
+    relay_ipv6_unconfirmed,
     relay_publishes_ipv6,
     safe_parse_ip_address as _safe_parse_ip_address,
 )
@@ -822,7 +823,11 @@ class Relays:
         try:
             import time as _time
             from .consensus import CollectorFetcher, format_relay_consensus_evaluation
-            from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
+            from .consensus.collector_fetcher import (
+                calculate_consensus_requirement,
+                discover_authorities,
+                ipv6_testers_from_collector,
+            )
             from .relay_diagnostics import generate_relay_issues
             
             self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
@@ -859,7 +864,10 @@ class Relays:
             fetcher.relay_index = relay_index
             fetcher.flag_thresholds = flag_thresholds
             fetcher.bw_authorities = set(bw_authorities)
-            fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
+            # Union the saved set with 'a' lines still stored on the relay index
+            # so a cache from before ipv6_testing_authorities does not turn a
+            # real omission into "not tested".
+            fetcher.ipv6_testing_authorities = ipv6_testers_from_collector(collector_data)
             
             # Process consensus evaluation for each relay
             evaluation_count = 0
@@ -871,14 +879,16 @@ class Relays:
                 if not fingerprint:
                     continue
                 
-                # Get raw consensus evaluation from fetcher. published_ipv6 is the
-                # descriptor address only; votes decide whether IPv6 was tested.
+                # published_ipv6 is the descriptor address. unreachable_or_addresses
+                # is Onionoo's record that authorities failed to confirm it.
                 published_ipv6 = relay_publishes_ipv6(
                     relay.get('or_addresses'),
                     relay.get('unreachable_or_addresses'),
                 )
+                declared_unreachable = relay_ipv6_unconfirmed(relay.get('unreachable_or_addresses'))
                 raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(
-                    fingerprint, authority_count, published_ipv6=published_ipv6)
+                    fingerprint, authority_count, published_ipv6=published_ipv6,
+                    declared_unreachable=declared_unreachable)
                 
                 # Calculate relay uptime from last_restarted (Onionoo data)
                 # This is the relay's self-reported uptime from its descriptor

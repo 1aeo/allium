@@ -359,6 +359,9 @@ class CollectorFetcher:
         self.flag_thresholds = {}
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
+        # Testers seen in an earlier fetch. An authority that voted this hour
+        # but reached zero IPv6 relays has no 'a' line; it still tests IPv6.
+        self.prior_ipv6_testing_authorities = set()
         self._timings = {}
     
     def fetch_all(self) -> dict:
@@ -445,7 +448,7 @@ class CollectorFetcher:
         return result
     
     def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT,
-                                       published_ipv6: bool = False) -> dict:
+                                       published_ipv6: bool = False, declared_unreachable: bool = False) -> dict:
         """
         Get consensus evaluation for a single relay.
         O(1) lookup after index is built.
@@ -453,10 +456,10 @@ class CollectorFetcher:
         Args:
             fingerprint: Relay fingerprint (40 hex chars)
             authority_count: Total number of authorities (for consensus calculation)
-            published_ipv6: True when the relay descriptor publishes an IPv6 ORPort
-                (Onionoo or_addresses or unreachable_or_addresses). An address there
-                is not a reachability test; votes decide tested-ok, tested-failed,
-                and not-tested.
+            published_ipv6: True when the relay descriptor publishes an IPv6 ORPort.
+                Publishing an address is not a successful test.
+            declared_unreachable: True when Onionoo lists that IPv6 ORPort in
+                unreachable_or_addresses (authorities failed to confirm it).
         
         Returns:
             dict: Consensus evaluation information for the relay
@@ -482,10 +485,12 @@ class CollectorFetcher:
             'vote_count': vote_count,
             'total_authorities': authority_count,
             'majority_required': majority_required,
-            'authority_votes': self._format_authority_votes(relay, published_ipv6=published_ipv6),
+            'authority_votes': self._format_authority_votes(
+                relay, published_ipv6=published_ipv6 or declared_unreachable),
             'flag_eligibility': self._analyze_flag_eligibility(relay),
             'bandwidth': self._format_bandwidth(relay),
-            'reachability': self._format_reachability(relay, published_ipv6=published_ipv6),
+            'reachability': self._format_reachability(
+                relay, published_ipv6=published_ipv6, declared_unreachable=declared_unreachable),
         }
     
     def _fetch_url(self, url: str) -> str:
@@ -936,6 +941,19 @@ class CollectorFetcher:
         for fingerprint, bw_data in sorted(self.bandwidth_files.items()):
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
+
+        # An 'a' line on any relay means this authority tests IPv6. Recover that
+        # from the index too, so a cache written before tests_ipv6 existed still
+        # names the testers. A tester that voted this hour but reached nobody
+        # has no 'a' line; keep them if the previous fetch already saw them test.
+        for relay in self.relay_index.values():
+            for auth_name, vote in relay.get('votes', {}).items():
+                if vote.get('ipv6_reachable'):
+                    self.ipv6_testing_authorities.add(auth_name)
+        prior = self.prior_ipv6_testing_authorities or set()
+        if prior:
+            voted = {name for name, vote in self.votes.items() if vote}
+            self.ipv6_testing_authorities |= (set(prior) & voted)
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
@@ -1395,21 +1413,26 @@ class CollectorFetcher:
             'bw_auth_not_measured_names': sorted(self.bw_authorities - measured.keys()),
         }
     
-    def _format_reachability(self, relay: dict, published_ipv6: bool = False) -> dict:
+    def _format_reachability(self, relay: dict, published_ipv6: bool = False,
+                             declared_unreachable: bool = False) -> dict:
         """
         Reachability across voting authorities.
 
         IPv4: the relay is in an authority's vote only when that authority reached
         the IPv4 ORPort. IPv6: dir-spec includes an ``a`` line only when an
         authority with AuthDirHasIPv6Connectivity reached the IPv6 ORPort.
-        A published descriptor address is not that test.
+        A published descriptor address is not that test. Onionoo
+        ``unreachable_or_addresses`` means authorities failed to confirm it.
+
+        The tested count is authorities that test IPv6 and voted for this relay.
+        Authorities that did not vote are not in the denominator.
 
         ipv6_state:
         - ok: at least one ``a`` line
-        - failed: the relay published an IPv6 ORPort and an IPv6-testing authority
-          voted without an ``a`` line
-        - not_tested: the relay published an IPv6 ORPort and no vote contains a test
-        - absent: no IPv6 ORPort to report
+        - failed: a testing authority voted without an ``a`` line, or Onionoo
+          lists the IPv6 ORPort as unconfirmed
+        - not_tested: an IPv6 ORPort was published and no vote contains a test
+        - none: the relay has no IPv6 ORPort
         """
         votes = relay.get('votes', {})
         
@@ -1430,16 +1453,26 @@ class CollectorFetcher:
                 else:
                     ipv6_not_tested.append(auth_name)
 
-        # Failure requires a tester's vote that omitted the 'a' line. Publishing
-        # an address, by itself, is not_tested — never a hidden failure.
+        # Only testers who voted for this relay. A tester that did not vote
+        # published no result, so it is not part of N.
+        ipv6_tested_count = len(ipv6_reachable) + len(ipv6_failed)
         if ipv6_reachable:
             ipv6_state = 'ok'
+            failure_source = None
         elif ipv6_failed and published_ipv6:
             ipv6_state = 'failed'
+            failure_source = 'vote'
+        elif declared_unreachable:
+            # Onionoo already recorded a failed confirmation. Do not call that
+            # "not tested" just because this fetch has no 'a' line.
+            ipv6_state = 'failed'
+            failure_source = 'onionoo'
         elif published_ipv6:
             ipv6_state = 'not_tested'
+            failure_source = None
         else:
-            ipv6_state = 'absent'
+            ipv6_state = 'none'
+            failure_source = None
         
         return {
             'ipv4_reachable_count': len(ipv4_reachable),
@@ -1448,10 +1481,39 @@ class CollectorFetcher:
             'ipv6_reachable_authorities': ipv6_reachable,
             'ipv6_failed_authorities': ipv6_failed,
             'ipv6_not_tested_authorities': ipv6_not_tested,
+            'ipv6_tested_count': ipv6_tested_count,
             'ipv6_state': ipv6_state,
+            'ipv6_failure_source': failure_source,
             'published_ipv6': bool(published_ipv6),
             'total_authorities': get_voting_authority_count(),  # Use voting authorities (9) for consensus
         }
+
+
+def ipv6_testers_from_collector(collector_data):
+    """Authorities that test IPv6, including evidence in an older cache.
+
+    A fresh fetch stores ``ipv6_testing_authorities``. A cache written before
+    that field still has ``ipv6_reachable`` on relay votes wherever an ``a``
+    line was parsed. Either source is enough. An empty result means this
+    snapshot contains no ``a`` line at all.
+    """
+    if not isinstance(collector_data, dict):
+        return set()
+    found = set(collector_data.get('ipv6_testing_authorities') or [])
+    votes = collector_data.get('votes') or {}
+    if isinstance(votes, dict):
+        for auth_name, vote in votes.items():
+            if isinstance(vote, dict) and vote.get('tests_ipv6'):
+                found.add(auth_name)
+    index = collector_data.get('relay_index') or {}
+    if isinstance(index, dict):
+        for relay in index.values():
+            if not isinstance(relay, dict):
+                continue
+            for auth_name, vote in (relay.get('votes') or {}).items():
+                if isinstance(vote, dict) and vote.get('ipv6_reachable'):
+                    found.add(auth_name)
+    return found
 
 
 def discover_authorities(relays: list, update_registry: bool = True) -> list:

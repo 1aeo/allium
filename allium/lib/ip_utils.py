@@ -101,19 +101,31 @@ def is_private_ip_address(ip_str):
         return False  # If parsing fails, assume public
 
 
+def _address_list_has_ipv6(addresses):
+    """True when an Onionoo address list contains an IPv6 ORPort."""
+    return determine_ipv6_support(addresses) in ('both', 'ipv6_only')
+
+
 def relay_publishes_ipv6(or_addresses, unreachable_or_addresses=None):
     """True when the relay descriptor publishes an IPv6 ORPort.
 
     Onionoo ``or_addresses`` lists addresses the relay accepts connections on.
     ``unreachable_or_addresses`` lists extra addresses the descriptor published
     that authorities did not confirm. Either one means an IPv6 ORPort was
-    published. Neither field is a reachability test: directory authorities
-    record that test as an ``a`` line in a vote.
+    published. Neither field, by itself, is a successful reachability test.
     """
-    for addresses in (or_addresses, unreachable_or_addresses):
-        if determine_ipv6_support(addresses) in ('both', 'ipv6_only'):
-            return True
-    return False
+    return (_address_list_has_ipv6(or_addresses)
+            or _address_list_has_ipv6(unreachable_or_addresses))
+
+
+def relay_ipv6_unconfirmed(unreachable_or_addresses):
+    """True when Onionoo lists an IPv6 ORPort authorities did not confirm.
+
+    ``unreachable_or_addresses`` is not a published-only hint. Onionoo puts an
+    address there after directory authorities failed to confirm it. That is a
+    failure, and it must not be shown as "not tested".
+    """
+    return _address_list_has_ipv6(unreachable_or_addresses)
 
 
 def determine_ipv6_support(or_addresses):

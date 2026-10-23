@@ -328,11 +328,16 @@ Platform: unknown
             <dt title="Directory Auths connectivity to relay's OR port."><a href="#connectivity" class="anchor-link">Reachability</a></dt>
             <dd>
                 {% if diag and diag.reachability_summary -%}
+                    {% set v6 = diag.reachability_summary.ipv6 -%}
                     <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span class="{% if diag.reachability_summary.ipv4.status_class == 'success' %}al-status-success{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
-                    {% if diag.reachability_summary.ipv6.state == 'not_tested' -%}
+                    {% if v6.state == 'not_tested' -%}
                         | <span title="This relay publishes an IPv6 ORPort. No directory authority vote contains an IPv6 reachability test ('a' line). Allium does not connect to the relay.">v6: <span class="al-status-muted">Not tested</span></span>
-                    {% elif diag.reachability_summary.ipv6.total > 0 -%}
-                        | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span class="{% if diag.reachability_summary.ipv6.status_class == 'success' %}al-status-success{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}al-status-muted{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
+                    {% elif v6.state == 'none' -%}
+                        | <span title="This relay publishes no IPv6 ORPort.">v6: <span class="al-status-muted">None configured</span></span>
+                    {% elif v6.state == 'failed' and v6.total == 0 -%}
+                        | <span title="Onionoo lists this IPv6 ORPort as declared but not confirmed by directory authorities. No vote in this fetch contains an 'a' line test.">v6: <span class="al-status-danger">Unreachable</span></span>
+                    {% elif v6.total > 0 -%}
+                        | <span title="Directory authorities that test IPv6 and voted for this relay. A majority is green, fewer is yellow, none is red. Authorities that did not vote are not counted.">v6: <span class="{% if v6.status_class == 'success' %}al-status-success{% elif v6.status_class == 'warning' %}al-status-warning{% elif v6.status_class == 'danger' %}al-status-danger{% else %}al-status-muted{% endif %}">{{ v6.reachable_count }}/{{ v6.total }}</span></span>
                     {% endif -%}
                     <span title="Reachability tested by Directory Authorities.">(Directory Auths)</span>
                 {% else -%}
@@ -421,7 +426,9 @@ Platform: unknown
     <strong class="al-status-info">Notes:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for note in info_notes %}
-        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this note">{{ note.title }}</a>: {{ note.description }}</li>
+        <li style="font-size: 12px;"><a href="#{{ note.section|default('status') }}" class="issue-link" title="Jump to the section below with more details on this note">{{ note.title }}</a>: {{ note.description }}
+            {% if note.suggestion %}<br><span style="color: #666;"><strong>Suggestion:</strong> {{ note.suggestion }}</span>{% endif %}
+        </li>
     {% endfor %}
     </ul>
 </div>
@@ -506,12 +513,23 @@ Platform: unknown
     <dt>IPv6</dt>
     <dd>
         <span class="al-status-muted" title="No directory authority vote contains an IPv6 reachability test. A published ORPort is not a test. Allium does not connect to the relay.">Not tested</span>
-        <span class="al-status-note">{% if relay.get('ipv6_display_address') %}Published {{ relay['ipv6_display_address']|escape }}. {% endif %}No authority with AuthDirHasIPv6Connectivity published an 'a' line for this relay. Tor on the relay logs that an auto-discovered IPv6 address has not been found reachable while it waits for that vote.</span>
+        <span class="al-status-note">{% if relay.get('ipv6_display_address') %}Published {{ relay['ipv6_display_address']|escape }}. {% endif %}No authority with AuthDirHasIPv6Connectivity published an 'a' line for this relay. Check the firewall, the IPv6 binding, and routing. Tor on the relay logs that an auto-discovered IPv6 address has not been found reachable while it waits for that vote.</span>
+    </dd>
+    {% elif reach.ipv6.state == 'none' %}
+    <dt>IPv6</dt>
+    <dd>
+        <span class="al-status-muted" title="This relay publishes no IPv6 ORPort.">None configured</span>
+    </dd>
+    {% elif reach.ipv6.state == 'failed' and reach.ipv6.total == 0 %}
+    <dt>IPv6</dt>
+    <dd>
+        <span class="al-status-danger" title="Onionoo lists this IPv6 ORPort as declared but not confirmed. No vote in this fetch contains an 'a' line test.">Unreachable</span>
+        <span class="al-status-note">Directory authorities did not confirm the published IPv6 ORPort. This is a failed confirmation, not an untested address.</span>
     </dd>
     {% elif reach.ipv6.total > 0 %}
     <dt>IPv6</dt>
     <dd>
-        <span class="al-status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+        <span class="{% if reach.ipv6.status_class == 'success' %}al-status-success{% elif reach.ipv6.status_class == 'warning' %}al-status-warning{% elif reach.ipv6.status_class == 'danger' %}al-status-danger{% else %}al-status-muted{% endif %}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
     </dd>
     {% endif %}
     {% else %}
