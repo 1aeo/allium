@@ -205,6 +205,10 @@ def _valid_timestamp_ms(value):
     if isinstance(value, float):
         if not math.isfinite(value) or value <= 0:
             return None
+        # Whole milliseconds are integers. Keeping them as floats makes the
+        # 24h/72h comparison depend on binary rounding.
+        if value.is_integer():
+            value = int(value)
     elif value <= 0:
         return None
     try:
@@ -451,6 +455,22 @@ def _latest_eligible_ms(general, rate, fd):
     return max(stamps) if stamps else None
 
 
+def _safe_signal(classify):
+    """One signal's failure must not blank the other signals."""
+    try:
+        return classify()
+    except Exception:
+        return _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
+
+
+def ensure_overload_display(facts, use_bits=False):
+    """Add rate displays to an already classified record, without a new clock."""
+    if facts and 'rate_display' not in (facts.get('rate') or {}):
+        from .bandwidth_formatter import BandwidthFormatter
+        _attach_display(facts, BandwidthFormatter(use_bits=use_bits), None)
+    return facts
+
+
 def evaluate_overload(relay, now_timestamp=None):
     """
     Classify one relay's overload signals.
@@ -467,14 +487,9 @@ def evaluate_overload(relay, now_timestamp=None):
     now_ms = _now_ms(now_timestamp)
     relay = relay if isinstance(relay, dict) else {}
     availability = _bandwidth_availability(relay)
-    try:
-        general = _classify_general(relay, now_ms)
-        rate = _classify_rate(relay, availability, now_ms)
-        fd = _classify_fd(relay, availability, now_ms)
-    except (OverflowError, OSError, ValueError, TypeError, ArithmeticError):
-        general = _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
-        rate = _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
-        fd = _finish_signal(_blank_signal(), 'invalid', _INVALID_LABEL)
+    general = _safe_signal(lambda: _classify_general(relay, now_ms))
+    rate = _safe_signal(lambda: _classify_rate(relay, availability, now_ms))
+    fd = _safe_signal(lambda: _classify_fd(relay, availability, now_ms))
     headline = _headline(general, rate, fd)
     return {
         'evaluated_at': now_timestamp,

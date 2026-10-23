@@ -959,7 +959,7 @@ Platform: unknown
     <p style="font-size: 11px; color: #6c757d; margin: 8px 0 0 0;">{{ ov.sources_line|escape }}</p>
     {% endif %}
     {% if ov.get('show_time_note') %}
-    <p style="font-size: 11px; color: #6c757d; margin: 4px 0 0 0;">{{ ov.hour_note }}</p>
+    <p style="font-size: 11px; color: #6c757d; margin: 4px 0 0 0;">{{ ov.get('hour_note', '') }}</p>
     {% endif %}
 
     <div class="row" style="margin-top: 12px;">
@@ -1002,7 +1002,7 @@ Platform: unknown
             </dl>
             {% if ov_rate.get('show_counts') %}
             <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
-                {{ ov.rate_count_note }}
+                {{ ov.get('rate_count_note', '') }}
                 Rate is BandwidthRate and follows this site’s bits/bytes setting. Burst is BandwidthBurst, already a byte quantity. RelayBandwidthRate and RelayBandwidthBurst are extra torrc caps, not the names of these values.
                 A hit stays eligible for 24 hours.
             </p>

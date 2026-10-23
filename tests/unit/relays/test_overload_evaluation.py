@@ -88,6 +88,51 @@ def test_windows_just_inside_at_and_outside(window_ms, field, payload):
     assert exact[field]['when']  # the cutoff timestamp is kept for display
 
 
+def test_one_signal_failing_does_not_blank_the_others(monkeypatch):
+    """A crash inside one classifier leaves the other signals usable."""
+    def _boom(*_args, **_kwargs):
+        raise ValueError('fd classifier broke')
+
+    monkeypatch.setattr('allium.lib.stability_utils._classify_fd', _boom)
+    facts = evaluate_overload({'overload_general_timestamp': NOW_MS - HOUR_MS}, NOW)
+    assert facts['general']['state'] == 'eligible'
+    assert facts['fd']['state'] == 'invalid'
+    assert facts['is_overloaded'] is True
+
+
+def test_diagnostics_keep_the_callers_clock():
+    """Passed facts are not reclassified with time.time()."""
+    from allium.lib.relay_diagnostics import _check_overload_issues
+    relay = {'overload_general_timestamp': NOW_MS - HOUR_MS}
+    facts = evaluate_overload(relay, NOW)
+    assert 'rate_display' not in facts['rate']
+    issues = _check_overload_issues(relay, facts=facts)
+    assert [issue['title'] for issue in issues] == ['General Overload Active']
+
+
+def test_integral_float_timestamp_uses_integer_cutoff():
+    on_cutoff = float(NOW_MS - GENERAL_WINDOW_MS)
+    just_inside = float(NOW_MS - GENERAL_WINDOW_MS + 1)
+    assert evaluate_overload(
+        {'overload_general_timestamp': on_cutoff}, float(NOW))['general']['state'] == 'historical'
+    assert evaluate_overload(
+        {'overload_general_timestamp': just_inside}, float(NOW))['general']['state'] == 'eligible'
+
+
+def test_explicit_null_bandwidth_field_is_invalid():
+    relay = {'fingerprint': 'A' * 40}
+    apply_bandwidth_overload_fields([relay], {'relays': [{
+        'fingerprint': 'A' * 40,
+        'overload_ratelimits': None,
+        'overload_fd_exhausted': None,
+    }]})
+    assert relay['overload_ratelimits'] is None
+    facts = evaluate_overload(relay, NOW)
+    assert facts['rate']['state'] == 'invalid'
+    assert facts['fd']['state'] == 'invalid'
+    assert facts['headline'] == 'incomplete'
+
+
 def test_float_clock_keeps_the_exact_cutoff():
     """A float evaluation time is judged at millisecond resolution."""
     now = float(NOW)
@@ -552,6 +597,8 @@ def test_consumers_agree_and_pages_render_each_state(tmp_path):
     assert 'tor_relay_load_tcp_exhaustion_total' in pages['general']
     assert 'href="#overload-general"' in pages['general']
     assert 'hour precision' in pages['general']
+    assert '<dt>When</dt>' in pages['general']
+    assert '&lt;dt&gt;' not in pages['general']
     assert 'does not say which trigger fired' in pages['general']
 
     assert 'Write Bandwidth Limit Hit' in pages['rate']

@@ -65,6 +65,7 @@ from .stability_utils import (  # noqa: F401
     OVERLOAD_THRESHOLD_HOURS,
     RATE_COUNTER_NOTE,
     compute_relay_stability,
+    ensure_overload_display,
     guidance_text,
 )
 
@@ -559,9 +560,13 @@ def generate_issues_from_consensus(
 
 
 def _displayed_facts(relay, use_bits, now_timestamp, facts):
-    """Facts with the rate displays attached, reusing a generation's record when it has them."""
-    if facts and 'rate_display' in (facts.get('rate') or {}):
-        return facts
+    """Attach rate displays without reclassifying a record that already has a clock.
+
+    Recomputing from ``time.time()`` would let a later call expire a signal
+    the caller already judged eligible.
+    """
+    if facts:
+        return ensure_overload_display(facts, use_bits)
     from .bandwidth_formatter import BandwidthFormatter
     return compute_relay_stability(
         relay, now_timestamp, BandwidthFormatter(use_bits=use_bits))['overload']
