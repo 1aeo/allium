@@ -798,8 +798,9 @@ _TK_HISTORY_SUGGESTION = (
 
 
 def _guard_wfu_suggestion(short: list) -> str:
-    """History advice when every shortfall is 0 or unpublished. Otherwise the uptime advice."""
-    if short and all('wfu_value' in d and (d.get('wfu_value') is None or d.get('wfu_value') == 0) for d in short):
+    """History advice when every shortfall is unpublished or untracked. Recorded downtime gets uptime advice."""
+    if short and all(
+            'wfu_value' in d and _wfu_shortfall_bucket(d) in ('missing', 'history') for d in short):
         return _WFU_HISTORY_SUGGESTION
     return _WFU_MEASURED_SUGGESTION
 

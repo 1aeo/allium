@@ -370,6 +370,24 @@ class TestConsensusIssues:
         assert 'measured 0% (no uptime history for this relay).' in short_text
         assert 'no uptime credit).' not in short_text
 
+    def test_recorded_downtime_zero_uses_uptime_advice(self):
+        """0% beside days of time-known is recorded downtime, so the suggestion is uptime advice."""
+        details = [{
+            'authority': name, 'wfu_met': False, 'tk_met': True, 'bw_met': True,
+            'wfu_value': 0.0, 'wfu_threshold': 0.98,
+            'tk_value': 20 * SECONDS_PER_DAY, 'tk_threshold': GUARD_TK_DEFAULT,
+        } for name in _VOTING_AUTHORITIES]
+        issues = generate_issues_from_consensus({
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.0, 'tk': 20 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'details': details}},
+        }, current_flags=['Fast', 'Stable'], observed_bandwidth=3_000_000)
+        wfu = next(i for i in issues if 'WFU' in i['title'])
+        assert 'measured 0% (no uptime credit)' in wfu['description']
+        assert 'Minimize restarts' in wfu['suggestion']
+        assert 'has not observed this relay up yet' not in wfu['suggestion']
+
     def test_warning_uses_the_relay_total_not_the_registry(self):
         """Eight voters on the page stay 4/8 in the warning, even if the registry says 9."""
         details = [
