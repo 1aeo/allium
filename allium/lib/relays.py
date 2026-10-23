@@ -861,9 +861,12 @@ class Relays:
             # Create a CollectorFetcher instance with the pre-fetched data
             # to use its get_relay_consensus_evaluation method
             fetcher = CollectorFetcher()
-            fetcher.relay_index = relay_index
-            fetcher.flag_thresholds = flag_thresholds
-            fetcher.bw_authorities = set(bw_authorities)
+            fetcher.relay_index = relay_index if isinstance(relay_index, dict) else {}
+            fetcher.flag_thresholds = flag_thresholds if isinstance(flag_thresholds, dict) else {}
+            if isinstance(bw_authorities, (list, tuple, set, frozenset)):
+                fetcher.bw_authorities = set(bw_authorities)
+            else:
+                fetcher.bw_authorities = set()
             # Union the saved set with 'a' lines still stored on the relay index
             # so a cache from before ipv6_testing_authorities does not turn a
             # real omission into "not tested".
@@ -875,7 +878,10 @@ class Relays:
             now_timestamp = _time.time()
             
             for relay in self.json["relays"]:
-                fingerprint = relay.get('fingerprint', '').upper()
+                if not isinstance(relay, dict):
+                    continue
+                raw_fp = relay.get('fingerprint')
+                fingerprint = raw_fp.strip().upper() if isinstance(raw_fp, str) else ''
                 if not fingerprint:
                     continue
                 

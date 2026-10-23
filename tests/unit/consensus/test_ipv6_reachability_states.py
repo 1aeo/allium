@@ -338,7 +338,11 @@ class TestIpv6ReachabilityStates:
         }
         assert ipv6_testers_from_collector(data) == {'moria1'}
         assert ipv6_testers_from_collector({}) == set()
-        assert ipv6_testers_from_collector({'ipv6_testing_authorities': ['tor26']}) == {'tor26'}
+        assert ipv6_testers_from_collector({'ipv6_testing_authorities': ['Tor26']}) == {'tor26'}
+        # An older vote document stores the 'a' line on the relay, not tests_ipv6.
+        assert ipv6_testers_from_collector({
+            'votes': {'Bastet': {'relays': {'ABCD': {'ipv6_reachable': True}}}},
+        }) == {'bastet'}
 
     def test_onionoo_unconfirmed_is_not_labeled_not_tested(self):
         """unreachable_or_addresses is a failed confirmation when no vote tested it."""
@@ -371,6 +375,262 @@ class TestIpv6ReachabilityStates:
         raw, formatted = _evaluate(network, OK_FP, published_ipv6=True, declared_unreachable=True)
         assert raw['reachability']['ipv6_state'] == 'ok'
         assert formatted['reachability_summary']['ipv6']['display'] == '7/7 authorities can reach IPv6'
+
+    def test_ipv4_a_line_is_not_an_ipv6_test(self):
+        """An IPv4, empty, unspecified, or multicast 'a' line does not test IPv6."""
+        from allium.lib.ip_utils import is_ipv6_orport
+        assert is_ipv6_orport('[2001:db8::1]:9001') is True
+        assert is_ipv6_orport('1.2.3.4:9001') is False
+        assert is_ipv6_orport('[::]:9001') is False
+        assert is_ipv6_orport('[ff02::1]:9001') is False
+        assert is_ipv6_orport('not-an-ip') is False
+        fetcher = CollectorFetcher()
+        vote = fetcher._parse_vote(
+            "@type network-status-vote-3 1.0\n"
+            "r V4Aline {ident} AAAAAAAAAAAAAAAAAAAAAAAAAAA 2026-02-01 00:00:00 "
+            "192.0.2.10 9001 0\n"
+            "a 192.0.2.10:9001\n"
+            "s Running Valid\n"
+            "w Bandwidth=5000\n"
+            "stats wfu=0.99 tk=1000000 mtbf=2000000\n".format(ident=_identity(OK_FP)),
+            'AA' * 20)
+        relay = next(iter(vote['relays'].values()))
+        assert vote['tests_ipv6'] is False
+        assert relay.get('ipv6_reachable') is not True
+
+    def test_missing_ipv6_fields_are_not_a_failure(self):
+        """Reachability data that never mentions IPv6 is unknown, not 0/N."""
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({'ipv4_reachable_count': 9})
+        assert view['visible'] is False
+        assert view['show_row'] is False
+        assert view['display'] == 'N/A'
+        issues = generate_issues_from_consensus(
+            {'in_consensus': True, 'vote_count': 9, 'total_authorities': 9,
+             'reachability': {'ipv4_reachable_count': 9}, 'flag_eligibility': {},
+             'authority_votes': []},
+            current_flags=['Guard', 'Fast', 'Stable', 'Running', 'Valid', 'HSDir', 'V2Dir'],
+            observed_bandwidth=3_000_000)
+        assert 'IPv6 not reachable' not in [issue['title'] for issue in issues]
+
+    def test_bad_counts_do_not_raise(self):
+        """A corrupt count must not abort consensus formatting for every relay."""
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({
+            'ipv6_state': 'ok',
+            'ipv6_reachable_count': 'nope',
+            'ipv6_tested_count': False,
+            'ipv6_not_tested_authorities': 'dizum',
+        })
+        assert view['visible'] is False or view['label']
+        view_zero = _classify_ipv6_reachability({
+            'ipv6_state': 'ok',
+            'ipv6_reachable_count': 0,
+            'ipv6_tested_count': 5,
+        })
+        assert view_zero['state'] == 'failed'
+        assert view_zero['status_class'] == 'danger'
+        assert view_zero['label'] == '0/5'
+        issues = generate_issues_from_consensus({
+            'in_consensus': True, 'vote_count': 9, 'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_state': 'failed',
+                'ipv6_reachable_count': '0',
+                'ipv6_tested_count': '7',
+                'ipv6_failed_authorities': ['moria1'],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }, current_flags=['Running', 'Valid'])
+        assert any(issue['title'] == 'IPv6 not reachable' and '0/7' in issue['description']
+                   for issue in issues)
+
+    def test_prior_tester_name_is_case_insensitive(self):
+        votes = {
+            name: _vote_document([_relay_block(LONE_FP, 'LoneFail')])
+            for name in TESTERS + NON_TESTERS
+        }
+        fetcher = _load(votes)
+        fetcher.prior_ipv6_testing_authorities = {'Moria1'}
+        fetcher._build_relay_index()
+        assert 'moria1' in fetcher.ipv6_testing_authorities
+        raw, formatted = _evaluate(fetcher, LONE_FP, published_ipv6=True)
+        assert raw['reachability']['ipv6_state'] == 'failed'
+        assert formatted['reachability_summary']['ipv6']['display'] == '0/1 authorities can reach IPv6'
+
+    def test_recorded_success_outranks_a_not_tested_label(self):
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({
+            'ipv6_state': 'not_tested',
+            'ipv6_reachable_count': 4,
+            'ipv6_tested_count': 7,
+        })
+        assert view['state'] == 'ok'
+        assert view['label'] == '4/7'
+        assert view['status_class'] == 'success'
+
+    def test_not_tested_label_cannot_hide_a_failed_vote(self):
+        """A failed-authority list is a real miss. The label must not cover it."""
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({
+            'ipv6_state': 'not_tested',
+            'ipv6_reachable_count': 0,
+            'ipv6_failed_authorities': ['moria1', 'Moria1'],
+        })
+        assert view['state'] == 'failed'
+        assert view['label'] == '0/1'
+        assert view['status_class'] == 'danger'
+        issues = generate_issues_from_consensus({
+            'in_consensus': True, 'vote_count': 9, 'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_state': 'not_tested',
+                'ipv6_reachable_count': 0,
+                'ipv6_failed_authorities': ['moria1', 'Moria1'],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }, current_flags=['Running', 'Valid'])
+        titles = [issue['title'] for issue in issues]
+        assert 'IPv6 not tested' not in titles
+        assert any(issue['title'] == 'IPv6 not reachable' and '0/1' in issue['description']
+                   for issue in issues)
+
+    def test_reached_authorities_outrank_a_zero_count_and_a_failed_label(self):
+        from allium.lib.consensus.consensus_evaluation import (
+            _classify_ipv6_reachability, _format_reachability_summary,
+        )
+        reach = {
+            'ipv6_state': 'failed',
+            'ipv6_reachable_count': 0,
+            'ipv6_tested_count': 7,
+            'ipv6_reachable_authorities': ['bastet', 'bastet', 'longclaw'],
+            'ipv6_not_tested_authorities': ['dizum'],
+        }
+        view = _classify_ipv6_reachability(reach)
+        assert view['state'] == 'ok'
+        assert view['label'] == '2/7'
+        assert view['status_class'] == 'warning'
+        summary = _format_reachability_summary({'reachability': reach}, view)
+        summary['ipv6']['not_tested'].append('extra')
+        assert view['not_tested'] == ['dizum']
+        issues = generate_issues_from_consensus({
+            'in_consensus': True, 'vote_count': 9, 'total_authorities': 9,
+            'reachability': reach, 'flag_eligibility': {}, 'authority_votes': [],
+        }, current_flags=['Running', 'Valid'])
+        assert 'IPv6 not reachable' not in [issue['title'] for issue in issues]
+
+    def test_zero_tested_count_uses_the_failed_authority_list(self):
+        """failed + tested 0 + a named miss is 0/N, not Onionoo's Unreachable."""
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({
+            'ipv6_state': 'failed',
+            'ipv6_reachable_count': 0,
+            'ipv6_tested_count': 0,
+            'ipv6_failed_authorities': ['moria1'],
+        })
+        assert view['label'] == '0/1'
+        assert view['display'] == '0/1 authorities can reach IPv6'
+        assert view['state'] == 'failed'
+
+    def test_numeric_strings_and_non_finite_counts(self):
+        from allium.lib.consensus.consensus_evaluation import _classify_ipv6_reachability
+        view = _classify_ipv6_reachability({
+            'ipv6_state': 'ok',
+            'ipv6_reachable_count': '4.0',
+            'ipv6_tested_count': '7.0',
+        })
+        assert view['state'] == 'ok'
+        assert view['label'] == '4/7'
+        junk = _classify_ipv6_reachability({
+            'ipv6_state': 'ok',
+            'ipv6_reachable_count': float('inf'),
+            'ipv6_tested_count': float('nan'),
+        })
+        assert junk['state'] == 'absent'
+        assert junk['visible'] is False
+
+    def test_non_routable_or_addresses_are_not_a_published_ipv6_port(self):
+        from allium.lib.ip_utils import is_ipv6_orport
+        assert is_ipv6_orport('[::1]:9001') is False
+        assert is_ipv6_orport('[fe80::1]:9001') is False
+        assert is_ipv6_orport('[fc00::1]:9001') is False
+        assert is_ipv6_orport('[fec0::1]:9001') is False
+        assert is_ipv6_orport('[::ffff:192.0.2.1]:9001') is False
+        assert is_ipv6_orport('[2001:db8::1]:0') is False
+        assert is_ipv6_orport('[2001:db8::1]:99999') is False
+        assert is_ipv6_orport('2001:db8::1') is False
+        assert relay_publishes_ipv6(['[::1]:9001']) is False
+        assert relay_publishes_ipv6(['[::ffff:192.0.2.1]:9001']) is False
+        assert relay_publishes_ipv6('[2001:db8::1]:9001') is False
+        assert relay_publishes_ipv6(5) is False
+        assert relay_ipv6_unconfirmed('[2001:db8::1]:9001') is False
+        assert relay_ipv6_unconfirmed(None) is False
+
+    def test_non_routable_a_line_is_not_a_test_and_does_not_clear_a_real_one(self):
+        fetcher = CollectorFetcher()
+        vote = fetcher._parse_vote(
+            "@type network-status-vote-3 1.0\n"
+            "r Routed {ident} AAAAAAAAAAAAAAAAAAAAAAAAAAA 2026-02-01 00:00:00 "
+            "192.0.2.10 9001 0\n"
+            "a [fe80::1]:9001\n"
+            "a [::1]:9001\n"
+            "a [2001:db8::5]:9001\n"
+            "a 192.0.2.10:9001\n"
+            "a [::]:9001\n"
+            "s Running Valid\n"
+            "w Bandwidth=5000\n".format(ident=_identity(OK_FP)),
+            'AA' * 20)
+        relay = next(iter(vote['relays'].values()))
+        assert vote['tests_ipv6'] is True
+        assert relay['ipv6_reachable'] is True
+        assert relay['ipv6_address'] == '[2001:db8::5]:9001'
+        link_local = fetcher._parse_vote(
+            "@type network-status-vote-3 1.0\n"
+            "r Local {ident} AAAAAAAAAAAAAAAAAAAAAAAAAAA 2026-02-01 00:00:00 "
+            "192.0.2.10 9001 0\n"
+            "a [fe80::1]:9001\n"
+            "s Running\n".format(ident=_identity(V4_FP)),
+            'BB' * 20)
+        assert link_local['tests_ipv6'] is False
+
+    def test_mixed_case_vote_key_is_the_same_authority(self):
+        fetcher = CollectorFetcher()
+        fetcher.ipv6_testing_authorities = {'moria1'}
+        fetcher.relay_index = {
+            LONE_FP: {'fingerprint': LONE_FP, 'votes': {
+                'Moria1': {'flags': ['Running'], 'ipv6_reachable': None},
+            }},
+        }
+        raw, formatted = _evaluate(fetcher, LONE_FP.lower(), published_ipv6=True)
+        assert raw.get('error') is None
+        assert raw['reachability']['ipv6_state'] == 'failed'
+        assert raw['reachability']['ipv6_failed_authorities'] == ['moria1']
+        assert formatted['reachability_summary']['ipv6']['label'] == '0/1'
+
+    def test_corrupt_vote_and_fingerprint_do_not_raise(self):
+        fetcher = CollectorFetcher()
+        fetcher.ipv6_testing_authorities = {'moria1'}
+        fetcher.relay_index = {
+            LONE_FP.lower(): {'votes': {
+                'moria1': 'nope',
+                'dizum': {'flags': ['Running']},
+            }},
+        }
+        raw, _formatted = _evaluate(fetcher, LONE_FP, published_ipv6=True)
+        assert raw.get('error') is None
+        assert raw['reachability']['ipv6_state'] == 'not_tested'
+        assert fetcher.get_relay_consensus_evaluation(None).get('error')
+        assert fetcher.get_relay_consensus_evaluation(5).get('error')
+        assert ipv6_testers_from_collector({'ipv6_testing_authorities': 'moria1'}) == set()
+        assert ipv6_testers_from_collector({'ipv6_testing_authorities': [' Moria1 ']}) == {'moria1'}
+        assert ipv6_testers_from_collector({
+            'votes': {'moria1': {'tests_ipv6': 'false', 'relays': {}}},
+        }) == set()
+        assert ipv6_testers_from_collector({
+            'relay_index': {OK_FP: {'votes': {'moria1': {'ipv6_reachable': 'false'}}}},
+        }) == set()
 
 
 def test_relay_pages_distinguish_the_three_states(network, tmp_path):

@@ -121,23 +121,6 @@ def _ipv6_issue(severity, title, description, suggestion, doc_ref):
     }
 
 
-def _legacy_ipv6_was_tested(reachability: dict, auth_count: int) -> bool:
-    """True when a pre-state reachability dict says authorities tested IPv6 and missed.
-
-    A not-tested list longer than two was treated as incomplete, not as a failure,
-    so those rows stay quiet. Confirmed failures carry ipv6_state and do not use this.
-    """
-    ipv6_tested = reachability.get('ipv6_tested_count')
-    if ipv6_tested is None:
-        not_tested = reachability.get('ipv6_not_tested_authorities') or []
-        if len(not_tested) <= 2:
-            ipv6_tested = auth_count - len(not_tested)
-        else:
-            ipv6_tested = 0
-    ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    return ipv6_tested > 0 and ipv6_count == 0
-
-
 def generate_issues_from_consensus(
     consensus_data: dict,
     current_flags: list = None,
@@ -182,16 +165,25 @@ def generate_issues_from_consensus(
     if consensus_data.get('error'):
         return issues
     
-    # Extract data for analysis
-    authority_votes = consensus_data.get('authority_votes', [])
-    reachability = consensus_data.get('reachability', {})
-    flag_eligibility = consensus_data.get('flag_eligibility', {})
+    # Extract data for analysis. One corrupt value must not abort every relay:
+    # relays.py wraps this whole pass in a single try.
+    authority_votes = consensus_data.get('authority_votes') or []
+    if not isinstance(authority_votes, list):
+        authority_votes = []
+    reachability = consensus_data.get('reachability') or {}
+    if not isinstance(reachability, dict):
+        reachability = {}
+    flag_eligibility = consensus_data.get('flag_eligibility') or {}
+    if not isinstance(flag_eligibility, dict):
+        flag_eligibility = {}
     auth_count = get_voting_authority_count()
     majority_threshold = (auth_count // 2) + 1
     
     # Get relay metrics from first available vote
     relay_wfu = relay_tk = None
     for vote in authority_votes:
+        if not isinstance(vote, dict):
+            continue
         if relay_wfu is None and vote.get('wfu') is not None:
             relay_wfu = vote['wfu']
         if relay_tk is None and vote.get('tk') is not None:
@@ -218,8 +210,11 @@ def generate_issues_from_consensus(
     # =========================================================================
     # REACHABILITY ISSUES (3 issue types)
     # =========================================================================
-    ipv4_count = reachability.get('ipv4_reachable_count', 0)
-    ipv4_reachable = reachability.get('ipv4_reachable_authorities', [])
+    from .consensus.consensus_evaluation import _as_count, _classify_ipv6_reachability
+    ipv4_count = _as_count(reachability.get('ipv4_reachable_count'))
+    ipv4_reachable = reachability.get('ipv4_reachable_authorities') or []
+    if not isinstance(ipv4_reachable, (list, tuple, set, frozenset)):
+        ipv4_reachable = []
     
     # DRY: Compute unreachable list once, reuse for both error and info cases
     unreachable_ipv4 = [name for name in get_voting_authority_names() if name not in ipv4_reachable]
@@ -245,15 +240,10 @@ def generate_issues_from_consensus(
             'section': 'flag-running-ipv4-reachability',
         })
     
-    # IPv6 reachability. ipv6_state is set from vote 'a' lines:
-    # failed = an authority that tests IPv6 voted and omitted the line;
-    # not_tested = the relay published an IPv6 ORPort and no vote contains a test.
-    # A failure is never reported as not tested. Legacy aggregates without a state
-    # still ignore a long not-tested list (it was not a reliable failure signal).
-    ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    ipv6_state = reachability.get('ipv6_state')
-    not_tested = reachability.get('ipv6_not_tested_authorities') or []
-    if ipv6_state == 'not_tested':
+    # Same classification as the relay page, so a note cannot call a tested
+    # relay "not tested" or a reached relay "not confirmed".
+    ipv6 = _classify_ipv6_reachability(reachability, auth_count)
+    if ipv6['state'] == 'not_tested':
         issues.append(_ipv6_issue(
             'info', 'IPv6 not tested',
             "This relay publishes an IPv6 ORPort, but no directory authority vote contains an "
@@ -264,31 +254,24 @@ def generate_issues_from_consensus(
             _IPV6_CHECK + " An address in the descriptor is not evidence that an authority tested it.",
             'https://spec.torproject.org/dir-spec/consensus-formats.html',
         ))
-    elif ipv6_state == 'failed' or (ipv6_state is None and _legacy_ipv6_was_tested(reachability, auth_count)):
-        failed = reachability.get('ipv6_failed_authorities') or []
-        ipv6_tested = reachability.get('ipv6_tested_count')
-        if ipv6_tested is None:
-            ipv6_tested = auth_count - len(not_tested)
-        if ipv6_state == 'failed' and ipv6_tested <= 0:
-            ipv6_tested = len(failed)
-        if ipv6_tested > 0 and ipv6_count == 0:
-            issues.append(_ipv6_issue(
-                'warning', 'IPv6 not reachable',
-                f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
-                'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, '
-                '2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. '
-                'Test with: curl -6 http://ipv6.icanhazip.com/',
-                'https://community.torproject.org/relay/setup/',
-            ))
-        elif ipv6_state == 'failed':
-            issues.append(_ipv6_issue(
-                'warning', 'IPv6 not reachable',
-                "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
-                "authorities. This fetch has no vote 'a' line for it either, so this is a "
-                "failed confirmation, not an untested address.",
-                _IPV6_CHECK,
-                'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
-            ))
+    elif ipv6['state'] == 'failed' and ipv6['reachable_count'] <= 0 and ipv6['tested_total'] > 0:
+        issues.append(_ipv6_issue(
+            'warning', 'IPv6 not reachable',
+            "0/{0} authorities that test IPv6 can reach your IPv6 address".format(ipv6['tested_total']),
+            'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, '
+            '2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. '
+            'Test with: curl -6 http://ipv6.icanhazip.com/',
+            'https://community.torproject.org/relay/setup/',
+        ))
+    elif ipv6['state'] == 'failed' and ipv6['reachable_count'] <= 0:
+        issues.append(_ipv6_issue(
+            'warning', 'IPv6 not reachable',
+            "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
+            "authorities. This fetch has no vote 'a' line for it either, so this is a "
+            "failed confirmation, not an untested address.",
+            _IPV6_CHECK,
+            'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
+        ))
     
     # =========================================================================
     # FAST FLAG (1 issue type)

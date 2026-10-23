@@ -471,9 +471,15 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         dir_address: Relay's directory address from Onionoo (for V2Dir flag display).
     """
     current_flags = current_flags or []
-    authority_votes = consensus_data.get('authority_votes', [])
-    flag_eligibility = consensus_data.get('flag_eligibility', {})
-    reachability = consensus_data.get('reachability', {})
+    authority_votes = consensus_data.get('authority_votes') or []
+    if not isinstance(authority_votes, list):
+        authority_votes = []
+    flag_eligibility = consensus_data.get('flag_eligibility') or {}
+    if not isinstance(flag_eligibility, dict):
+        flag_eligibility = {}
+    reachability = consensus_data.get('reachability') or {}
+    if not isinstance(reachability, dict):
+        reachability = {}
     total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
     
     # Collect ALL values from all authorities for DA-measured metrics
@@ -483,6 +489,8 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     all_mtbf_values = []
     
     for vote in authority_votes:
+        if not isinstance(vote, dict):
+            continue
         if vote.get('wfu') is not None:
             all_wfu_values.append(vote['wfu'])
         if vote.get('tk') is not None:
@@ -626,7 +634,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     
     # IPv4/IPv6 reachability. IPv6 state comes from vote 'a' lines, not from the
     # descriptor address (see _classify_ipv6_reachability).
-    ipv4_reachable_count = reachability.get('ipv4_reachable_count', 0)
+    ipv4_reachable_count = _as_count(reachability.get('ipv4_reachable_count'))
     ipv6_view = _classify_ipv6_reachability(reachability, total_authorities)
     
     # Exit policy analysis (from Onionoo exit_policy_summary)
@@ -1452,7 +1460,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
                       Same value for all authorities (relay's self-reported uptime).
     """
-    authority_votes = consensus_data.get('authority_votes', [])
+    authority_votes = consensus_data.get('authority_votes') or []
+    if not isinstance(authority_votes, list):
+        authority_votes = []
     if ipv6 is None:
         ipv6 = _classify_ipv6_reachability(
             consensus_data.get('reachability'), consensus_data.get('total_authorities'))
@@ -1476,6 +1486,8 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
     
     rows = []
     for vote in authority_votes:
+        if not isinstance(vote, dict):
+            continue
         auth_name = vote.get('authority', 'Unknown')
         thresholds = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
         
@@ -1591,13 +1603,19 @@ def compute_flag_consensus(authority_votes: List[dict]) -> dict:
         - partial_flags: set of flags only some authorities assign
         - flag_counts: dict of flag_name -> count of authorities
     """
+    if not isinstance(authority_votes, list):
+        authority_votes = []
     flag_counts = {}
     for vote in authority_votes:
-        if vote.get('voted'):
-            for flag in vote.get('flags', []):
-                flag_counts[flag] = flag_counts.get(flag, 0) + 1
+        if not isinstance(vote, dict) or not vote.get('voted'):
+            continue
+        flags = vote.get('flags') or []
+        if not isinstance(flags, (list, tuple)):
+            continue
+        for flag in flags:
+            flag_counts[flag] = flag_counts.get(flag, 0) + 1
     
-    total_voting = sum(1 for v in authority_votes if v.get('voted'))
+    total_voting = sum(1 for v in authority_votes if isinstance(v, dict) and v.get('voted'))
     
     unanimous_flags = {f for f, c in flag_counts.items() if c == total_voting}
     partial_flags = {f for f, c in flag_counts.items() if 0 < c < total_voting}
@@ -1738,14 +1756,55 @@ _IPV6_FRACTION_TITLE = (
 )
 
 
+def _as_count(value):
+    """Non-negative int, or 0 when the value is missing or not a number.
+
+    Bool is rejected: ``int(True)`` is 1, and a JSON boolean is not a count.
+    Numeric strings such as ``"7.0"`` count. Infinity and NaN do not.
+    """
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, str):
+        try:
+            value = float(value.strip())
+        except ValueError:
+            return 0
+    if isinstance(value, float):
+        if value != value or value in (float('inf'), float('-inf')):
+            return 0
+        try:
+            value = int(value)
+        except (ValueError, OverflowError):
+            return 0
+    if isinstance(value, int):
+        return value if value > 0 else 0
+    return 0
+
+
+def _name_list(value):
+    """Unique authority names. A string is not a list of one-character names."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)):
+        return []
+    names = []
+    seen = set()
+    for item in value:
+        if item is None or isinstance(item, bool):
+            continue
+        text = str(item).strip()
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            names.append(text)
+    return names
+
+
 def _ipv6_fraction_status(count, tested_total):
     """meets / partial / below for the authorities that actually voted."""
     if tested_total <= 0 or count <= 0:
         return 'below'
-    majority = (tested_total // 2) + 1
-    if count >= majority:
+    if count >= (tested_total // 2) + 1:
         return 'meets'
-    return 'partial' if count > 0 else 'below'
+    return 'partial'
 
 
 def _classify_ipv6_reachability(reachability: dict, total_authorities: int = None) -> dict:
@@ -1755,14 +1814,31 @@ def _classify_ipv6_reachability(reachability: dict, total_authorities: int = Non
     IPv6-testing authorities that voted for this relay. Legacy aggregates
     without ``ipv6_state`` still use total minus a short not-tested list.
     """
-    reachability = reachability or {}
-    total = total_authorities or reachability.get('total_authorities') or get_voting_authority_count()
-    count = reachability.get('ipv6_reachable_count', 0) or 0
-    not_tested = list(reachability.get('ipv6_not_tested_authorities') or [])
+    if not isinstance(reachability, dict):
+        reachability = {}
+    # No IPv6 fields at all means "unknown", not "0/N failed". An explicit
+    # zero still means the authorities that were counted did not reach it.
+    _ipv6_fields = (
+        'ipv6_state', 'ipv6_reachable_count', 'ipv6_not_tested_authorities',
+        'ipv6_tested_count', 'ipv6_failed_authorities',
+    )
+    has_ipv6_fields = any(key in reachability for key in _ipv6_fields)
+    total = _as_count(total_authorities or reachability.get('total_authorities') or get_voting_authority_count())
+    # A list of authorities that reached the relay is a success even when the
+    # count field is missing, zero, or a different number.
+    reached = _name_list(reachability.get('ipv6_reachable_authorities'))
+    count = max(_as_count(reachability.get('ipv6_reachable_count')), len(reached))
+    not_tested = _name_list(reachability.get('ipv6_not_tested_authorities'))
+    failed = _name_list(reachability.get('ipv6_failed_authorities'))
     state = reachability.get('ipv6_state')
     explicit = state in ('ok', 'failed', 'not_tested', 'none', 'absent')
-    if not explicit:
-        tested_total = 0 if len(not_tested) > 2 else total - len(not_tested)
+    recorded = reachability.get('ipv6_tested_count')
+    recorded_count = _as_count(recorded) if recorded is not None else 0
+
+    if not has_ipv6_fields:
+        state, tested_total, not_tested = 'absent', 0, []
+    elif not explicit:
+        tested_total = 0 if len(not_tested) > 2 else max(0, total - len(not_tested))
         if len(not_tested) > 2:
             not_tested = []
         if count > 0 and tested_total > 0:
@@ -1774,10 +1850,22 @@ def _classify_ipv6_reachability(reachability: dict, total_authorities: int = Non
     elif state in ('not_tested', 'none', 'absent'):
         tested_total = 0
     else:
-        tested_total = reachability.get('ipv6_tested_count')
-        if tested_total is None:
-            tested_total = max(0, total - len(not_tested))
+        tested_total = recorded_count if recorded is not None else max(0, total - len(not_tested))
         tested_total = max(tested_total, count)
+    # A recorded success outranks a contradictory label. ok with no success is
+    # not a success. not_tested must not hide authorities that voted and missed.
+    # none keeps the failed list from the IPv4-only path (those relays did not
+    # publish an address, so the omission is not a failure).
+    if count > 0 and state in ('failed', 'not_tested', 'none', 'absent'):
+        state = 'ok'
+        tested_total = max(tested_total, count, recorded_count)
+    elif count <= 0 and state == 'ok':
+        state = 'failed' if tested_total > 0 else 'absent'
+    elif count <= 0 and state == 'not_tested' and failed:
+        state = 'failed'
+        tested_total = max(tested_total, len(failed), recorded_count)
+    if state == 'failed':
+        tested_total = max(tested_total, len(failed))
 
     kind = None
     if state == 'not_tested':
@@ -1851,15 +1939,20 @@ def _ipv6_vote_cell(vote: dict, show_ipv6: bool) -> str:
 
 def _format_reachability_summary(consensus_data: dict, ipv6: dict = None) -> dict:
     """Format reachability summary. ``ipv6`` is the shared classification when already computed."""
-    reachability = consensus_data.get('reachability', {})
+    reachability = consensus_data.get('reachability') or {}
+    if not isinstance(reachability, dict):
+        reachability = {}
     
-    ipv4_count = reachability.get('ipv4_reachable_count', 0)
+    ipv4_count = _as_count(reachability.get('ipv4_reachable_count'))
     total = reachability.get('total_authorities', get_voting_authority_count())
     if ipv6 is None:
         ipv6 = _classify_ipv6_reachability(reachability, total)
+    # Copy the name list. The classification dict is also stored on the relay,
+    # and a later append must not change both.
     summary = dict(ipv6)
+    summary['not_tested'] = list(ipv6.get('not_tested') or [])
     summary['total'] = ipv6['tested_total']
-    summary['authorities'] = reachability.get('ipv6_reachable_authorities', [])
+    summary['authorities'] = _name_list(reachability.get('ipv6_reachable_authorities'))
     return {
         'ipv4': {
             'reachable_count': ipv4_count,

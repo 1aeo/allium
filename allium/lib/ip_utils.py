@@ -10,6 +10,15 @@ This is the canonical home for safe_parse_ip_address (formerly in aroileaders.py
 import ipaddress
 
 
+# Not a public ORPort. 2001:db8::/32 is documentation space and is accepted:
+# vote fixtures and Onionoo samples use it, and it is not link-local or mapped.
+_NON_PUBLIC_IPV6 = (
+    ipaddress.ip_network('fe80::/10'),  # link-local
+    ipaddress.ip_network('fc00::/7'),   # unique local
+    ipaddress.ip_network('fec0::/10'),  # deprecated site-local
+)
+
+
 def safe_parse_ip_address(address_string):
     """
     Safely parse IP address from or_addresses string with validation.
@@ -101,9 +110,43 @@ def is_private_ip_address(ip_str):
         return False  # If parsing fails, assume public
 
 
+def is_ipv6_orport(address):
+    """True when ``address`` is a routable IPv6 ORPort, ``[addr]:port``.
+
+    Directory votes and Onionoo use brackets. An IPv4 ``a`` line, a missing
+    or out-of-range port, or an address that cannot be reached from an
+    authority (unspecified, loopback, link-local, unique-local, multicast,
+    or IPv4-mapped) is not an IPv6 reachability result.
+    """
+    if not isinstance(address, str):
+        return False
+    token = address.strip().split()[0] if address.strip() else ''
+    if not (token.startswith('[') and ']:' in token):
+        return False
+    port_text = token.split(']:', 1)[1]
+    if not port_text.isdigit() or not 1 <= int(port_text) <= 65535:
+        return False
+    parsed, version = safe_parse_ip_address(token)
+    if version != 6 or not parsed:
+        return False
+    try:
+        ip_obj = ipaddress.ip_address(parsed)
+    except ValueError:
+        return False
+    if (ip_obj.is_unspecified or ip_obj.is_loopback or ip_obj.is_multicast
+            or ip_obj.is_link_local or ip_obj.ipv4_mapped):
+        return False
+    return not any(ip_obj in network for network in _NON_PUBLIC_IPV6)
+
+
 def _address_list_has_ipv6(addresses):
-    """True when an Onionoo address list contains an IPv6 ORPort."""
-    return determine_ipv6_support(addresses) in ('both', 'ipv6_only')
+    """True when an Onionoo address list contains an IPv6 ORPort.
+
+    A string is not a one-address list: iterating it would test each character.
+    """
+    if not isinstance(addresses, (list, tuple)):
+        return False
+    return any(is_ipv6_orport(address) for address in addresses)
 
 
 def relay_publishes_ipv6(or_addresses, unreachable_or_addresses=None):
@@ -139,7 +182,7 @@ def determine_ipv6_support(or_addresses):
     Returns:
         str: 'ipv4_only', 'ipv6_only', 'both', or 'none'
     """
-    if not or_addresses:
+    if not isinstance(or_addresses, (list, tuple)) or not or_addresses:
         return 'none'
         
     has_ipv4 = False
