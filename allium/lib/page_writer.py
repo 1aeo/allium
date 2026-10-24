@@ -1880,7 +1880,28 @@ class _RelayPageRenderer:
             relay, self.chart_writer.folder('relay', relay["fingerprint"], relay_dir)
         ) if self.chart_writer else ({}, {})
 
-        rendered = self.template.render(
+        # Format this relay's vote series here, then put the marker back so the
+        # relay dict does not keep the chart after the page is written.
+        history_marker = relay.get('vote_history')
+        history_store = getattr(self.relay_set, 'vote_history_store', None)
+        if history_store is not None and history_marker:
+            from .consensus.vote_history import format_relay_history
+            relay['vote_history'] = format_relay_history(
+                history_store, relay.get('fingerprint'),
+                use_bits=getattr(self.relay_set, 'use_bits', False))
+        try:
+            rendered = self._render_relay(
+                relay, page_ctx, contact_display_data, contact_validation_status,
+                aroi_section_hrefs, bandwidth_periods, uptime_periods)
+        finally:
+            if history_marker is True:
+                relay['vote_history'] = True
+        _write_html(os.path.join(relay_dir, "index.html"), rendered)
+
+    def _render_relay(self, relay, page_ctx, contact_display_data, contact_validation_status,
+                      aroi_section_hrefs, bandwidth_periods, uptime_periods):
+        """Render one relay page. Split out so the history marker can be restored."""
+        return self.template.render(
             relay=relay, page_ctx=page_ctx, relays=self.relay_set,
             contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
@@ -1897,7 +1918,6 @@ class _RelayPageRenderer:
             bandwidth_periods=bandwidth_periods,
             uptime_periods=uptime_periods,
         )
-        _write_html(os.path.join(relay_dir, "index.html"), rendered)
 
 
 def write_relay_info(relay_set):

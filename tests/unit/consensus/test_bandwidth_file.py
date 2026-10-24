@@ -104,6 +104,12 @@ class TestBandwidthDownload:
 
 
 class TestBandwidthFileRows:
+    def test_superscript_digit_does_not_abort_the_file(self):
+        body = 'dirauth_nickname=moria1\nbw=² node_id=%s\nbw=4 node_id=%s\n' % (FP, 'B' * 40)
+        parsed = CollectorFetcher()._parse_bandwidth_file(body)
+        assert FP not in parsed
+        assert parsed['B' * 40]['bw'] == 4
+
     def test_parses_bare_node_id_rtt_and_omitted_rtt(self):
         fetcher = CollectorFetcher()
         with_rtt = _file('bastet', 'US', [(

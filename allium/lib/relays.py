@@ -945,8 +945,10 @@ class Relays:
                 # drop the per-authority table already stored on each relay.
                 try:
                     from .consensus.vote_history import attach_relay_vote_views, load_history
+                    self.vote_history_store = load_history()
                     self.vote_agreement_summary = attach_relay_vote_views(
-                        self.json['relays'], load_history(), index if isinstance(index, dict) else {},
+                        self.json['relays'], self.vote_history_store,
+                        index if isinstance(index, dict) else {},
                         use_bits=self.use_bits, bw_authorities=measuring)
                     tracked = self.vote_agreement_summary.get('compared', 0)
                     stored = sum(1 for item in self.json['relays'] if isinstance(item, dict) and item.get('vote_history'))

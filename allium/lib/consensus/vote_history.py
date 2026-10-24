@@ -489,9 +489,15 @@ def attach_relay_vote_views(relays, history, relay_index, use_bits=False, bw_aut
                 _note_agreement(summary, by_flag, agreement)
             else:
                 relay.pop('vote_agreement', None)
-            view = format_relay_history(history, fp, use_bits=use_bits) if fp is not None else None
-            if view:
-                relay['vote_history'] = view
+            # A marker only. The relay page formats this fingerprint when it
+            # renders, so forked workers do not inherit an SVG per relay.
+            has_history = False
+            if fp is not None and isinstance(history, dict):
+                relays_hist = history.get('relays')
+                entry = relays_hist.get(fp) if isinstance(relays_hist, dict) else None
+                has_history = isinstance(entry, dict) and bool(entry.get('t'))
+            if has_history:
+                relay['vote_history'] = True
             else:
                 relay.pop('vote_history', None)
         except Exception as exc:  # noqa: BLE001 -- one corrupt relay must not blank the rest
@@ -1001,7 +1007,13 @@ def _svg_chart(times, medians, series, labels):
 
     def points_for(series_values):
         drawn = []
+        previous = None
         for index, when in parsed:
+            # A skipped consensus hour is a gap. Connecting across it draws a
+            # measurement Allium never fetched.
+            if previous is not None and (when - previous).total_seconds() > 90 * 60:
+                drawn.append((x_of(when), None))
+            previous = when
             value = series_values[index] if index < len(series_values) else None
             if not isinstance(value, int):
                 drawn.append((x_of(when), None))

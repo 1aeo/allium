@@ -4,6 +4,7 @@ Votes are built in memory. These tests do not download CollecTor.
 """
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -296,11 +297,16 @@ class TestFormatAndAgreement:
                 'longclaw': _vote(when, {FP: _relay(500, 10)}),
             })
         view = format_relay_history(store, FP, use_bits=False)
-        points = view['svg'].split('points="', 1)[1].split('"', 1)[0]
-        xs = [int(pair.split(',')[0]) for pair in points.split()]
+        segments = re.findall(r'points="([^"]+)"', view['svg'])
+        xs = sorted({
+            int(pair.split(',')[0])
+            for segment in segments
+            for pair in segment.split()
+        } | {int(value) for value in re.findall(r'cx="(\d+)"', view['svg'])})
         # One hour after the first document sits near the left edge, not halfway
-        # across a ten-day span.
-        assert xs[1] - xs[0] < (xs[2] - xs[0]) / 5
+        # across a ten-day span. The ten-day jump is a gap, not one polyline.
+        assert xs[1] - xs[0] < (xs[-1] - xs[0]) / 5
+        assert all(len(segment.split()) < 3 for segment in segments)
 
     def test_reported_value_is_gray_when_measurements_decide_the_median(self):
         store, _changed = record_votes(empty_store(), _measured_votes(HOUR_1, {
@@ -378,7 +384,8 @@ class TestFormatAndAgreement:
         summary = attach_relay_vote_views(relays, store, index, use_bits=False)
         assert summary['compared'] == 2
         assert summary['split'] == 1
-        assert relays[0]['vote_history']['rows'][0]['valid_after'] == HOUR_1
+        assert relays[0]['vote_history'] is True
+        assert format_relay_history(store, FP)['rows'][0]['valid_after'] == HOUR_1
         assert relays[1]['vote_agreement']['split_flags'] == ['Guard']
         assert any(item['flag'] == 'Guard' and item['count'] == 1 for item in summary['split_flags'])
 

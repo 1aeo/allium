@@ -412,10 +412,18 @@ def select_bandwidth_filenames(filenames, digests) -> List[str]:
 
 
 def _bw_int(value):
-    """Non-negative int from a bandwidth-file key. Bools and junk are None."""
-    if isinstance(value, bool) or not isinstance(value, str) or not value.isdigit():
+    """Non-negative int from a bandwidth-file key. Bools and junk are None.
+
+    ``isdigit`` is true for characters such as ``²``, and ``int`` then raises.
+    A bad token must not abort the rest of the file.
+    """
+    if (isinstance(value, bool) or not isinstance(value, str)
+            or not value.isascii() or not value.isdigit()):
         return None
-    return int(value)
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def _vote_kb(value):
