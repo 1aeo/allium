@@ -135,6 +135,25 @@ def _slotted(pts, step, interval):
     return {t: sum(vs) / len(vs) for t, vs in slots.items() if len(vs) * step == interval}
 
 
+def _periods_from(key):
+    """``key`` and each shorter Onionoo period. A young relay's whole history lives in a shorter one."""
+    return ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]
+
+
+def _reported_end(lasts, interval):
+    """Newest time every still-running member has reached, or None when ``lasts`` is empty.
+
+    ``lasts`` is ``(timestamp, stopped)``. A stopped member does not hold the series. A running member more
+    than two slots behind has stopped updating, so later slots keep the members that remain.
+    """
+    newest = max((last for last, _stopped in lasts), default=None)
+    if newest is None:
+        return None
+    lag = timedelta(seconds=2 * interval)
+    reporting = [last for last, stopped in lasts if not stopped and newest - last <= lag]
+    return min(reporting, default=newest)
+
+
 def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=True, ratios=None):
     """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
     members summed (their write plus read over the window, in Mbit/s per slot).
@@ -152,7 +171,7 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
     """
     histories = []
     for relay in members:
-        for k in ONIONOO_HISTORY_PERIODS[ONIONOO_HISTORY_PERIODS.index(key)::-1]:  # this period, then shorter ones
+        for k in _periods_from(key):
             write, read = _blocks(bandwidth_map.get(relay["fingerprint"]), k)
             if not (write.get("values") and read.get("values") and write.get("interval") == read.get("interval")):
                 continue
@@ -193,14 +212,55 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
             summed.append((relay, sum(wpts[t] + rpts[t] for t in both)))
             lasts.append((max(wpts.keys() | rpts.keys()), relay.get("running") is False))
     if until_slowest:
-        newest = max((last for last, _stopped in lasts), default=None)
-        reporting = [last for last, stopped in lasts if not stopped and newest - last <= timedelta(seconds=2 * interval)]
-        end = min(reporting, default=newest)
-        if end:
-            write = {t: value for t, value in write.items() if t <= end}
-        else:
-            write = {}
+        end = _reported_end(lasts, interval)
+        write = {t: value for t, value in write.items() if end and t <= end}
     return _aligned(write, read, interval), summed
+
+
+def operator_uptime(members, uptime_map, key, windows):
+    """Mean running-flag percent per timestamp (the uptime chart's series), or None under two points.
+
+    Same period fallback, interval and reporting cut as ``operator_throughput``. A member contributes
+    ``uptime_points``, including the 0% after its history stops; a slot averages the members that have one.
+    A malformed history is left out.
+    """
+    histories = []
+    for relay in members:
+        section = uptime_section(uptime_map, relay["fingerprint"])
+        for period in _periods_from(key):
+            block = _mapping(section.get(period))
+            step = block.get("interval")
+            if isinstance(step, bool) or not isinstance(step, int) or step <= 0:
+                continue
+            try:
+                raw = uptime_points(block, period, windows, relay, section)
+            except Exception:  # noqa: BLE001 -- one bad history must not drop the operator chart
+                continue
+            pts = {t: value for t, value in raw.items()
+                   if value == value and value not in (float("inf"), float("-inf"))}
+            if not pts:  # nulls or NaN only: try a shorter period instead of voting this interval
+                continue
+            histories.append((period == key, step, pts, relay))
+            break
+    steps = Counter(step for native, step, *_rest in histories if native)
+    if not steps:
+        return None
+    interval = steps.most_common(1)[0][0]
+    bins, lasts = {}, []
+    for _native, step, pts, relay in histories:
+        if interval % step:
+            continue
+        if step != interval:
+            pts = _slotted(pts, step, interval)
+        if not pts:
+            continue
+        for t, value in pts.items():
+            total, count = bins.get(t, (0.0, 0))
+            bins[t] = (total + value, count + 1)
+        lasts.append((max(pts), relay.get("running") is False))  # latest finite point, not a trailing NaN
+    end = _reported_end(lasts, interval)
+    ts = sorted(t for t in bins if end is not None and t <= end)
+    return (ts, [bins[t][0] / bins[t][1] for t in ts], interval) if len(ts) >= 2 else None
 
 
 def network_ratio_bands(ratios):

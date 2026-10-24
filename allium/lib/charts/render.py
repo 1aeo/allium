@@ -21,7 +21,7 @@ from .identity import chart_identity, operator_from_contact, operator_identity
 from .outcome import YEAR_PERIODS, format_day, format_day_span, mbit, ratio_subtitle, ratio_text, throughput_subtitle
 from .series import (
     MBIT, PERIOD_SPAN, PERIODS, WINDOW, active_ratio, family_key, network_uptime, operator_throughput,
-    peer_medians, throughput, uptime_points, uptime_section,
+    operator_uptime, peer_medians, throughput, uptime_points, uptime_section,
 )
 from .svg import (
     AXIS, BLUE, CALLOUT_BG, CYAN, DASHDOT, DASHED, DOTTED, GREEN, MUTED, ORANGE, PURPLE, RED, TEXT,
@@ -136,11 +136,24 @@ def _spike_callout(svg, panel, high, yhi, clear_of, period, bands, interval, val
     svg.text(box_x + 7, clear_of + 22.5, label, 11.5, RED, bold=True)
 
 
-def _restart_entry(restart, ts, end=None):
-    """``[]``, or the restart's legend entry when the restart is on the time axis."""
+def _restart_entry(restart, ts, end=None, who=""):
+    """``[]``, or the restart's legend entry when the restart is on the time axis. ``who`` names that relay."""
     if restart and ts[0] <= restart <= view_end(ts, end):
-        return [("line", PURPLE, DASHDOT, "Last restarted  " + format_day(restart))]
+        label = "Last restarted  " + format_day(restart) + ("  ·  " + who if who else "")
+        return [("line", PURPLE, DASHDOT, label)]
     return []
+
+
+def _latest_restart(members):
+    """``(datetime, nickname)`` of the newest ``last_restarted``, or ``(None, "")``.
+
+    The nickname is one line and at most 19 characters (Tor's limit) so the legend stays on the canvas.
+    """
+    found = ((parse_onionoo_timestamp(relay.get("last_restarted")), relay) for relay in members)
+    stamp, relay = max((item for item in found if item[0]), default=(None, None), key=lambda item: item[0])
+    raw = relay.get("nickname") if relay else ""
+    nick = " ".join(raw.split()) if isinstance(raw, str) else ""
+    return stamp, nick if len(nick) <= 19 else nick[:18] + "…"
 
 
 def bandwidth_chart(period, series, advertised, bands, identity, restart=None, overload=None,
@@ -267,18 +280,20 @@ def _advertised_mbit(summed):
     return sum((relay.get("advertised_bandwidth") or 0) for relay, _traffic in summed) * MBIT
 
 
-def uptime_chart(period, ts, percent, interval, identity, restart, average, counts=None):
+def uptime_chart(period, ts, percent, interval, identity, restart, average, counts=None,
+                 series="Running flag", who=""):
     """Running-flag uptime percent over one period, its legend above the plot. ``average`` is the relay page's
     figure for the period, the mean of what is drawn (0.0 when the page shows none: under 30 slots, or 1% or less).
 
     ``counts``, when given, is how many relays were averaged at each timestamp: a second panel, used by the
-    network chart. A relay chart passes none, and draws exactly as before.
+    network chart. A relay chart passes none. An operator chart passes ``series`` ``Mean running flag`` and
+    ``who``, the relay that restarted last.
     """
     svg = Svg(WIDTH)
     subtitle = "Average {:.1f}%  ·  Onionoo Running flag".format(average) if average else ""
     y = _header(svg, identity, "Uptime · " + PERIOD_SPAN[period], subtitle)
-    restarted = _restart_entry(restart, ts)
-    y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, "Running flag")] + restarted])
+    restarted = _restart_entry(restart, ts, who=who)
+    y += 8 + legend(svg, LEFT, y, [[("line", GREEN, None, series)] + restarted])
     show_counts = bool(counts) and len(counts) == len(ts)
     panel = Panel(svg, "u", LEFT, y, PLOT_WIDTH, 220, ts, 0, 105, interval=interval)
     panel.yaxis(range(0, 101, 20), "Uptime (%)")
@@ -502,13 +517,30 @@ class ChartWriter(object):
                             common["restart"], average)
 
     def contact(self, member_indexes, directory):
-        """Write ``bandwidth-<period>`` charts for an operator's summed members; return ``{period: height}``."""
+        """Write bandwidth and uptime charts for an operator's members: ``({period: height}, {period: height})``.
+
+        Uptime averages each member's running-flag series. Its restart line is the newest ``last_restarted`` in
+        the contact, named. No contact, or a contact of ``none``, is not an operator.
+        """
         members = [self.relays[i] for i in member_indexes]
-        # Relays without contact info share one hash, but they are not an operator; nor are relays whose contact is
-        # exactly "none", which the contact page treats alike.
         if not any((relay.get("contact") or "").strip() and relay["contact"] != "none" for relay in members):
-            return {}
-        return self._charts(directory, "bandwidth", self._contact_bandwidth, members, operator_identity(members))
+            return {}, {}
+        identity, restart = operator_identity(members), _latest_restart(members)
+        charts = (("bandwidth", self._contact_bandwidth, (members, identity)),
+                  ("uptime", self._contact_uptime, (members, identity, restart)))
+        return tuple(self._charts(directory, name, draw, *args) for name, draw, args in charts)
+
+    def _contact_uptime(self, members, identity, restart, key, period):
+        series = operator_uptime(members, self.uptime, key, self.uptime_windows)
+        if not series:
+            return None
+        ts, percent, interval = series
+        average = sum(percent) / len(percent)
+        if len(percent) < 30 or average <= 1.0:  # blank subtitle, as on a relay page
+            average = 0.0
+        stamp, who = restart
+        return uptime_chart(period, ts, percent, interval, identity, stamp, average,
+                            series="Mean running flag", who=who)
 
     def _contact_bandwidth(self, members, identity, key, period):
         series, summed = operator_throughput(members, self.bandwidth, key, self._since(period))
