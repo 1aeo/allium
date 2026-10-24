@@ -1,0 +1,72 @@
+{# Per-relay authority measurement history. Included from relay-info.html.
+   Values are preformatted in allium/lib/consensus/vote_history.py. #}
+<section id="vote-history" class="section-box relay-section">
+<h3 id="vote-measurement-history" style="margin-top: 0;">
+<div class="section-header">
+<a href="#vote-history" class="anchor-link">Vote Measurement History</a>
+</div>
+</h3>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 8px;">
+Each point is an authority vote Allium already fetched.
+The time is that document's <code>valid-after</code> (<code>published</code> when <code>valid-after</code> is absent).
+<strong>{{ relay.vote_history.point_count }}</strong> document{{ 's' if relay.vote_history.point_count != 1 else '' }}
+stored, from {{ relay.vote_history.oldest }} to {{ relay.vote_history.newest }} (kept {{ relay.vote_history.retention_days }} days).
+The median is the low median the consensus weight uses: <code>Measured=</code> when 3 or more authorities measured the relay, otherwise <code>Bandwidth=</code>, capped at maxunmeasuredbw while 3 or more authorities publish measurements.
+Onionoo write/read charts elsewhere on this page are traffic.
+</p>
+{% if relay.vote_history.point_count == 1 %}
+<p class="text-muted" style="font-size: 12px;">One vote document so far. Later runs add a point when <code>valid-after</code> changes. Allium does not download the CollecTor vote archive, so hours it never fetched are absent.</p>
+{% endif %}
+{% if relay.vote_history.svg %}
+<div style="margin: 8px 0 4px 0;">{{ relay.vote_history.svg|safe }}</div>
+<p style="font-size: 11px; color: #444; margin: 0 0 8px 0;">
+<span style="color: #111; font-weight: bold;">Black</span> = median the consensus weight uses (KB/s).
+{% for column in relay.vote_history.columns %}
+<span style="color: {{ column.color }}; font-weight: bold;">{{ column.name }}</span> = <code>Measured=</code>{% if not loop.last %},{% endif %}
+{% endfor %}
+{% if relay.vote_history.chart_truncated %}
+Chart shows the latest {{ relay.vote_history.chart_count }} stored documents.
+{% endif %}
+</p>
+{% endif %}
+<div style="overflow-x: auto;">
+<table class="table table-condensed table-striped" style="font-size: 11px;">
+<thead>
+<tr>
+    <th title="valid-after of the authority vote documents Allium fetched for this consensus period. published is used when valid-after is absent. This is the document time, not the time Allium ran.">Vote valid-after</th>
+    <th title="Low median the consensus weight uses, from the votes in this document. Measured= when 3 or more authorities measured the relay; otherwise Bandwidth=, capped at maxunmeasuredbw.">Median</th>
+    <th title="How many voting authorities in this document assigned Guard.">Guard</th>
+    <th title="How many voting authorities in this document assigned Fast.">Fast</th>
+    <th title="How many voting authorities in this document assigned Stable.">Stable</th>
+    {% for column in relay.vote_history.columns %}
+    <th title="Measured= from {{ column.name }}'s vote for this valid-after. (M) scanner measurement. (R) relay-reported Bandwidth=, gray when it does not count toward the median.">{{ column.name }}</th>
+    {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in relay.vote_history.rows %}
+<tr>
+    <td>{{ row.valid_after }}</td>
+    <td title="{{ row.median_title }}">{{ row.median_display }}{% if row.unmeasured %} <span class="al-status-warning">(Unmeasured)</span>{% endif %}</td>
+    <td title="{{ row.guard_title }}">{% if row.guard_delta is not none and row.guard_delta < 0 %}<span class="al-status-danger">{{ row.guard }}</span>{% elif row.guard_delta is not none and row.guard_delta > 0 %}<span class="al-status-success">{{ row.guard }}</span>{% else %}{{ row.guard }}{% endif %}</td>
+    <td>{{ row.fast }}</td>
+    <td>{{ row.stable }}</td>
+    {% for cell in row.cells %}
+    <td>{% if cell.kind == 'absent' %}<span class="al-status-muted">—</span>{% elif cell.counts %}<span title="{{ cell.title }}">{{ cell.display }}{% if cell.mark %} ({{ cell.mark }}){% endif %}</span>{% else %}<span class="al-status-muted" title="{{ cell.title }}">{{ cell.display }}{% if cell.mark %} ({{ cell.mark }}){% endif %}</span>{% endif %}</td>
+    {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<p style="font-size: 10px; color: #666; margin-top: 5px;">
+The table lists the latest {{ relay.vote_history.rows|length }} stored document{{ 's' if relay.vote_history.rows|length != 1 else '' }}, newest first.
+Guard in red lost assignments since the older document; green gained them.
+(M) = <code>Measured=</code> (bandwidth scanner). (R) = <code>Bandwidth=</code> (relay-reported).
+— = that authority has no vote in the document.
+Rules: <a href="https://spec.torproject.org/dir-spec/computing-consensus.html" target="_blank" rel="noopener">Computing a consensus</a>,
+<a href="https://spec.torproject.org/bandwidth-file-spec/" target="_blank" rel="noopener">Bandwidth file</a>,
+<a href="https://collector.torproject.org/archive/relay-descriptors/votes/" target="_blank" rel="noopener">CollecTor votes</a>.
+</p>
+</section>
+
