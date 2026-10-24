@@ -6,7 +6,8 @@ Fetched ONCE per hour, indexed by fingerprint for O(1) lookup.
 
 Data sources:
 - CollecTor votes: https://collector.torproject.org/recent/relay-descriptors/votes/
-- CollecTor bandwidth files: https://collector.torproject.org/recent/relay-descriptors/bandwidths/
+- CollecTor bandwidth files named by each vote's bandwidth-file-digest:
+  https://collector.torproject.org/recent/relay-descriptors/bandwidths/
 """
 
 import re
@@ -310,12 +311,10 @@ from .flag_thresholds import (
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
     GUARD_WFU_DEFAULT,
-    MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
     check_stable_eligibility,
     credible_bandwidth,
     guard_bw_top_threshold,
-    low_median,
     parse_wfu_threshold,
 )
 
@@ -326,9 +325,183 @@ BANDWIDTH_PATH = '/recent/relay-descriptors/bandwidths/'
 # Maximum response size to prevent DoS
 MAX_RESPONSE_SIZE = 100 * 1024 * 1024  # 100MB limit
 
-# Pre-compiled regex patterns for bandwidth file parsing (compiled once, used many times)
-_BW_NODE_ID_PATTERN = re.compile(r'node_id=\$([A-F0-9]+)', re.IGNORECASE)
-_BW_VALUE_PATTERN = re.compile(r'bw=(\d+)')
+# Bandwidth-file relay keys kept for the relay page. bw* are KB/s (same unit as
+# a vote's Measured=). desc_bw_obs_last is bytes/s. rtt is milliseconds and is
+# optional: sbws 1.9 files omit it.
+_BW_ROW_INTS = {
+    'bw': 'bw',
+    'bw_mean': 'bw_mean',
+    'bw_median': 'bw_median',
+    'rtt': 'rtt',
+    'desc_bw_obs_last': 'obs_last',
+    'error_stream': 'error_stream',
+    'success': 'success',
+}
+_B64_ALPHABET = frozenset(
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
+
+
+def _decode_sha256(token: str) -> Optional[str]:
+    """One base64 SHA-256 token, or None. Characters after padding are rejected."""
+    if not token or any(char not in _B64_ALPHABET for char in token):
+        return None
+    pad_at = token.find('=')
+    if pad_at != -1 and any(char != '=' for char in token[pad_at:]):
+        return None
+    padded = token + ('=' * ((4 - len(token) % 4) % 4))
+    try:
+        raw = base64.b64decode(padded)
+    except Exception:
+        return None
+    if len(raw) != 32:
+        return None
+    return raw.hex().upper()
+
+
+def bandwidth_digest_hex(line: str) -> Optional[str]:
+    """SHA-256 from a bandwidth-file-digest line, as uppercase hex.
+
+    Votes publish ``sha256=<base64>``. CollecTor names the file with that
+    digest in hex. The last token that decodes to 32 bytes wins, so a leading
+    placeholder does not hide the real digest. Returns None when none do.
+    """
+    if not isinstance(line, str):
+        return None
+    found = None
+    for part in line.split():
+        if part.lower().startswith('sha256='):
+            decoded = _decode_sha256(part.split('=', 1)[1].strip())
+            if decoded:
+                found = decoded
+    return found
+
+
+def select_bandwidth_filenames(filenames, digests) -> List[str]:
+    """Filenames whose digest is in ``digests``, in digest order.
+
+    The newest filename is used only when the caller did not name a digest.
+    A digest that is not in the listing selects nothing: the newest unrelated
+    scanner file is not a substitute for the file the vote included.
+    """
+    names = [name for name in (filenames or ()) if isinstance(name, str) and name]
+    wanted = []
+    seen = set()
+    for digest in digests or ():
+        if not isinstance(digest, str):
+            continue
+        key = digest.strip().upper()
+        if key and key not in seen:
+            seen.add(key)
+            wanted.append(key)
+    chosen = {}
+    marker = '-bandwidth-'
+    for name in names:
+        index = name.lower().rfind(marker)
+        if index == -1:
+            continue
+        suffix = name[index + len(marker):].upper()
+        if suffix in seen and (suffix not in chosen or name > chosen[suffix]):
+            chosen[suffix] = name
+    if chosen:
+        return [chosen[key] for key in wanted if key in chosen]
+    if wanted:
+        return []
+    if names:
+        return [max(names)]
+    return []
+
+
+def _bw_int(value):
+    """Non-negative int from a bandwidth-file key. Bools and junk are None.
+
+    ``isdigit`` is true for characters such as ``²``, and ``int`` then raises.
+    A bad token must not abort the rest of the file.
+    """
+    if (isinstance(value, bool) or not isinstance(value, str)
+            or not value.isascii() or not value.isdigit()):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _vote_kb(value):
+    """A vote Bandwidth= or Measured= keyword, in KB/s.
+
+    Bools, negatives, and non-finite floats are not measurements. Finite
+    numbers are truncated the way the vote parser's ``int()`` truncates.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and (value != value or abs(value) == float('inf')):
+        return None
+    if value < 0:
+        return None
+    return int(value)
+
+
+def _display_rate(value, scale, use_bits):
+    """Format a non-negative count of bytes (scale=1) or vote KB/s (scale=1000)."""
+    from .consensus_evaluation import _format_bandwidth_value
+    number = _vote_kb(value)
+    if number is None:
+        return '—'
+    return _format_bandwidth_value(number * scale, use_bits)
+
+
+def _stream_counts(success, errors):
+    parts = []
+    if isinstance(success, int) and not isinstance(success, bool):
+        parts.append('%d ok' % success)
+    if isinstance(errors, int) and not isinstance(errors, bool):
+        parts.append('%d stream errors' % errors)
+    return ', '.join(parts) if parts else '—'
+
+
+def format_scanner_measurements(measurements, use_bits: bool = False):
+    """Template rows for one relay's bandwidth-file scanners, or None.
+
+    ``measurements`` is the relay-index value: ``{'scanners': [row, ...]}``.
+    ``bw`` is the voted value in KB/s. ``bw_mean``, ``bw_median``, and
+    ``obs_last`` are bytes/s, as sbws writes them. ``rtt`` is milliseconds
+    when the file published it.
+    """
+    if not isinstance(measurements, dict):
+        return None
+    scanners = measurements.get('scanners')
+    if not isinstance(scanners, list) or not scanners:
+        return None
+    rows = []
+    any_rtt = False
+    for item in scanners:
+        if not isinstance(item, dict) or _vote_kb(item.get('bw')) is None:
+            continue
+        rtt = item.get('rtt')
+        if isinstance(rtt, bool) or not isinstance(rtt, (int, float)) or rtt < 0 or rtt != rtt:
+            rtt_display = '—'
+        else:
+            any_rtt = True
+            rtt_display = '%d ms' % int(rtt)
+        measured_at = item.get('measured_at') or ''
+        if not isinstance(measured_at, str):
+            measured_at = ''
+        rows.append({
+            'scanner': item.get('scanner') or 'unknown',
+            'country': item.get('scanner_country') or '',
+            'bw_display': _display_rate(item.get('bw'), VOTE_BW_KB_BYTES, use_bits),
+            'mean_display': _display_rate(item.get('bw_mean'), 1, use_bits),
+            'median_display': _display_rate(item.get('bw_median'), 1, use_bits),
+            'rtt_display': rtt_display,
+            'obs_display': _display_rate(item.get('obs_last'), 1, use_bits),
+            'measured_at': measured_at.replace('T', ' ').replace('Z', ''),
+            'file_created': item.get('file_created') or '',
+            'streams': _stream_counts(item.get('success'), item.get('error_stream')),
+        })
+    if not rows:
+        return None
+    rows.sort(key=lambda row: (row['scanner'] or '').lower())
+    return {'rows': rows, 'any_rtt': any_rtt}
 
 
 class CollectorFetcher:
@@ -392,13 +565,17 @@ class CollectorFetcher:
             'timings': {},
         }
         
-        # Fetch votes and bandwidth files in parallel
+        # Votes and the bandwidth-file listing run together. The files themselves
+        # are chosen from each vote's bandwidth-file-digest, so they wait until
+        # the votes have been parsed. recent/bandwidths/ has hundreds of scanner
+        # publications; only the files the voting authorities included are fetched.
         start_time = time.time()
+        listing = []
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 votes_future = executor.submit(self._fetch_all_votes)
-                bw_future = executor.submit(self._fetch_all_bandwidth_files)
-                
+                listing_future = executor.submit(self._fetch_bandwidth_listing)
+
                 try:
                     self.votes = votes_future.result(timeout=120)
                     result['votes'] = self.votes
@@ -406,18 +583,25 @@ class CollectorFetcher:
                     logger.error(f"Failed to fetch votes: {e}")
                     result['errors'].append(f"votes: {e}")
                     self.votes = {}
-                
+
                 try:
-                    self.bandwidth_files = bw_future.result(timeout=120)
-                    result['bandwidth_files'] = self.bandwidth_files
+                    listing = listing_future.result(timeout=60) or []
                 except Exception as e:
-                    logger.error(f"Failed to fetch bandwidth: {e}")
-                    result['errors'].append(f"bandwidth: {e}")
-                    self.bandwidth_files = {}
-                    
+                    logger.error(f"Failed to list bandwidth files: {e}")
+                    result['errors'].append(f"bandwidth_listing: {e}")
+                    listing = []
         except Exception as e:
             logger.error(f"Failed to execute parallel fetches: {e}")
             result['errors'].append(f"parallel_fetch: {e}")
+
+        try:
+            self.bandwidth_files = self._download_bandwidth_files(
+                listing, self._bandwidth_digests_from_votes())
+            result['bandwidth_files'] = self.bandwidth_files
+        except Exception as e:
+            logger.error(f"Failed to fetch bandwidth: {e}")
+            result['errors'].append(f"bandwidth: {e}")
+            self.bandwidth_files = {}
         
         self._timings['fetch'] = time.time() - start_time
         
@@ -429,6 +613,9 @@ class CollectorFetcher:
                 self._build_relay_index()
                 result['relay_index'] = self.relay_index
                 result['flag_thresholds'] = self.flag_thresholds
+                # Scanner rows are on each relay in the index. The top-level copy
+                # would be serialized a second time into the collector cache.
+                result['bandwidth_files'] = {}
             except Exception as e:
                 logger.error(f"Failed to build relay index: {e}")
                 result['errors'].append(f"relay_index: {e}")
@@ -697,8 +884,10 @@ class CollectorFetcher:
                 vote['flag_thresholds'] = self._parse_flag_thresholds(line)
             
             # Check for bandwidth-file-headers (indicates bandwidth authority)
-            elif line.startswith('bandwidth-file-headers'):
+            elif line.startswith('bandwidth-file-headers') and not current_relay:
                 vote['has_bandwidth_file_headers'] = True
+            elif line.startswith('bandwidth-file-digest ') and not current_relay:
+                vote['bandwidth_file_digest'] = bandwidth_digest_hex(line)
 
             # Header times only. Relay r-lines carry a descriptor date, not the vote time.
             elif line.startswith('published ') and not current_relay:
@@ -864,52 +1053,120 @@ class CollectorFetcher:
         
         return thresholds
     
-    def _fetch_all_bandwidth_files(self) -> Dict[str, dict]:
-        """Fetch and parse bandwidth measurement files."""
-        bandwidth_files = {}
-        
-        # Get listing of available bandwidth files
-        bw_files = self._fetch_bandwidth_listing()
-        if not bw_files:
-            logger.info("No bandwidth files found")
-            return bandwidth_files
-        
-        # Get the most recent bandwidth file
-        if bw_files:
-            latest_file = max(bw_files)
-            url = f"{COLLECTOR_BASE}{BANDWIDTH_PATH}{latest_file}"
-            
-            try:
-                content = self._fetch_url(url)
-                bandwidth_files = self._parse_bandwidth_file(content)
-            except Exception as e:
-                logger.warning(f"Failed to fetch bandwidth file: {e}")
-        
-        return bandwidth_files
-    
+    def _bandwidth_digests_from_votes(self) -> List[str]:
+        """SHA-256 hex digests named by the votes already parsed."""
+        digests = []
+        votes = self.votes if isinstance(self.votes, dict) else {}
+        for auth_name in sorted(votes):
+            vote = votes.get(auth_name)
+            if not isinstance(vote, dict):
+                continue
+            digest = vote.get('bandwidth_file_digest')
+            if isinstance(digest, str) and digest:
+                digests.append(digest)
+        return digests
+
+    def _download_bandwidth_files(self, filenames, digests) -> Dict[str, dict]:
+        """Download the bandwidth files those digests name and index them by relay.
+
+        One row per directory authority. A relay absent from a file is absent
+        from that authority's list. Returns ``{fingerprint: {'scanners': [...]}}``.
+        """
+        chosen = select_bandwidth_filenames(filenames, digests)
+        merged = {}
+        if not chosen:
+            logger.info("No bandwidth files selected")
+            return merged
+
+        def _fetch_one(filename):
+            url = f"{COLLECTOR_BASE}{BANDWIDTH_PATH}{filename}"
+            return self._parse_bandwidth_file(self._fetch_url(url))
+
+        workers = min(6, len(chosen))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_name = {executor.submit(_fetch_one, name): name for name in chosen}
+            for future in concurrent.futures.as_completed(future_to_name):
+                filename = future_to_name[future]
+                try:
+                    parsed = future.result()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch bandwidth file {filename}: {e}")
+                    continue
+                for fingerprint, row in parsed.items():
+                    bucket = merged.get(fingerprint)
+                    if bucket is None:
+                        bucket = {'scanners': []}
+                        merged[fingerprint] = bucket
+                    scanners = bucket['scanners']
+                    scanner = row.get('scanner') or ''
+                    row['source_file'] = filename
+                    if scanner:
+                        previous = next((item for item in scanners if item.get('scanner') == scanner), None)
+                        # Filenames start with the publication time, so the
+                        # greater name is the later file. Completion order must
+                        # not decide which of two same-nickname files is shown.
+                        if previous is not None and (previous.get('source_file') or '') > filename:
+                            continue
+                        scanners[:] = [item for item in scanners if item.get('scanner') != scanner]
+                    scanners.append(row)
+        for bucket in merged.values():
+            bucket['scanners'].sort(key=lambda item: (item.get('scanner') or '').lower())
+            for item in bucket['scanners']:
+                item.pop('source_file', None)
+        logger.info(f"Parsed bandwidth files for {len(merged)} relays from {len(chosen)} files")
+        return merged
+
     def _parse_bandwidth_file(self, content: str) -> Dict[str, dict]:
-        """Parse a bandwidth measurement file using pre-compiled regex patterns."""
+        """One bandwidth file: fingerprint to the scanner's measurement row.
+
+        ``node_id`` may be ``$`` plus 40 hex or bare 40 hex. Header
+        ``dirauth_nickname`` labels the scanner. ``rtt`` is kept when present.
+        """
         measurements = {}
-        
-        for line in content.split('\n'):
-            line = line.strip()
+        if not isinstance(content, str):
+            return measurements
+        header = {}
+        in_relays = False
+        for raw_line in content.split('\n'):
+            line = raw_line.strip()
             if not line or line.startswith('@') or line.startswith('#'):
                 continue
-            
-            # Format: bw=<value> node_id=$<fingerprint> ...
-            if 'node_id=$' in line:
-                try:
-                    # Use pre-compiled patterns for better performance
-                    fp_match = _BW_NODE_ID_PATTERN.search(line)
-                    bw_match = _BW_VALUE_PATTERN.search(line)
-                    
-                    if fp_match and bw_match:
-                        fingerprint = fp_match.group(1).upper()
-                        bandwidth = int(bw_match.group(1))
-                        measurements[fingerprint] = {'bw': bandwidth}
-                except Exception:
+            if '=' not in line:
+                continue
+            parts = line.split()
+            is_relay = 'node_id=' in line and any(part.startswith('bw=') for part in parts)
+            if not is_relay:
+                # Header keys stop at the first relay. A later dirauth_nickname
+                # must not relabel the measurements above it.
+                if not in_relays and ' ' not in line.split('=', 1)[0]:
+                    key, value = line.split('=', 1)
+                    if key:
+                        header[key] = value
+                continue
+            in_relays = True
+            fingerprint = None
+            row = {}
+            for part in line.split():
+                if '=' not in part:
                     continue
-        
+                key, value = part.split('=', 1)
+                if key == 'node_id':
+                    if value.startswith('$'):
+                        value = value[1:]
+                    if len(value) == 40 and all(ch in '0123456789abcdefABCDEF' for ch in value):
+                        fingerprint = value.upper()
+                elif key == 'time':
+                    row['measured_at'] = value
+                elif key in _BW_ROW_INTS:
+                    parsed = _bw_int(value)
+                    if parsed is not None:
+                        row[_BW_ROW_INTS[key]] = parsed
+            if fingerprint is None or 'bw' not in row:
+                continue
+            row['scanner'] = header.get('dirauth_nickname') or ''
+            row['scanner_country'] = header.get('scanner_country') or ''
+            row['file_created'] = header.get('file_created') or ''
+            measurements[fingerprint] = row
         return measurements
     
     def _build_relay_index(self):
@@ -1440,28 +1697,34 @@ class CollectorFetcher:
         - measurement_count: Number of Measured= values in the votes
         """
         votes = _votes_by_name(relay)
-
-        def _kb(value):
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                return None
-            if isinstance(value, float) and (value != value or abs(value) == float('inf')):
-                return None
-            return value * VOTE_BW_KB_BYTES
+        # One consensus hour. A fetch can still hold an authority's previous vote;
+        # mixing those hours produces a median no consensus computed.
+        # Page generation must copy collector_data['votes'] onto this fetcher.
+        # relay_index alone has no valid-after.
+        from .vote_history import consensus_weight_median
+        newest, times = self._document_hours()
+        hour_measuring = 0
+        for name in self.measuring_authorities:
+            when = times.get(_authority_key(name))
+            if newest is None or when in (None, newest):
+                hour_measuring += 1
 
         measured = {}
+        measured_kb = []
+        reported_kb = []
         for auth_name, vote in votes.items():
-            kb = _kb(vote.get('measured'))
-            if kb is not None:
-                measured[auth_name] = kb
+            when = times.get(_authority_key(auth_name))
+            if newest and when and when != newest:
+                continue
+            measured_value = _vote_kb(vote.get('measured'))
+            reported_kb.append(_vote_kb(vote.get('bandwidth')))
+            measured_kb.append(measured_value)
+            if measured_value is not None:
+                measured[auth_name] = measured_value * VOTE_BW_KB_BYTES
         values = sorted(measured.values())
-        unmeasured = len(values) < 3
-        if unmeasured:
-            reported = [kb for kb in (_kb(vote.get('bandwidth')) for vote in votes.values()) if kb is not None]
-            median = low_median(reported)
-        else:
-            median = low_median(values)
-        if unmeasured and median is not None and len(self.measuring_authorities) >= 3:
-            median = min(median, MAX_UNMEASURED_BW_KB * VOTE_BW_KB_BYTES)
+        median_kb, unmeasured, _cap = consensus_weight_median(
+            measured_kb, reported_kb, hour_measuring)
+        median = None if median_kb is None else median_kb * VOTE_BW_KB_BYTES
         bw_authorities = self.bw_authorities if isinstance(self.bw_authorities, (list, tuple, set, frozenset)) else ()
         bw_keys = _authority_keys(bw_authorities)
         measured_names = set(measured)
@@ -1478,6 +1741,29 @@ class CollectorFetcher:
             'bw_auth_not_measured_names': sorted(
                 name for name in bw_authorities if _authority_key(name) not in measured_names),
         }
+
+    def _document_hours(self):
+        """Newest valid-after in ``self.votes``, and each authority's own hour.
+
+        Computed once. An empty vote map means the caller did not attach the
+        documents, and the median keeps every measurement.
+        """
+        cached = self.__dict__.get('_document_hour_cache')
+        if cached is not None:
+            return cached
+        from .vote_history import document_time
+        newest, times = None, {}
+        source = self.votes if isinstance(self.votes, dict) else {}
+        for name, vote in source.items():
+            when = document_time(vote) if isinstance(vote, dict) else None
+            key = _authority_key(name)
+            if key and when:
+                times[key] = when
+                if newest is None or when > newest:
+                    newest = when
+        cached = (newest, times)
+        self.__dict__['_document_hour_cache'] = cached
+        return cached
     
     def _format_reachability(self, relay: dict, published_ipv6: bool = False,
                              declared_unreachable: bool = False) -> dict:

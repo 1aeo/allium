@@ -636,6 +636,14 @@
 {# Kept empty for backwards compatibility during transition #}
 {%- endmacro %}
 
+{#- Shared sentences for the operator page and the directory-authorities page. -#}
+{% macro vote_agreement_clauses(vote_sum) -%}
+{{ vote_sum.agreed }} of {{ vote_sum.compared }} relay{{ 's' if vote_sum.compared != 1 else '' }} in agreement across voting authorities.
+{%- if vote_sum.split %} {{ vote_sum.split }} with a split vote{% if vote_sum.split_flags %} ({% for item in vote_sum.split_flags %}{{ item.flag }} {{ item.count }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}.{% endif %}
+{%- if vote_sum.measurement_split %} {{ vote_sum.measurement_split }} measured by some bandwidth authorities and not others.{% endif %}
+{%- if vote_sum.unmeasured %} {{ vote_sum.unmeasured }} with fewer than 3 Measured= values, so the consensus weight uses relay-reported bandwidth.{% endif %}
+{%- endmacro %}
+
 {#- History charts, one per period. The first shows; a thumbnail link shows its period
     through CSS :target instead (no JavaScript, no page copy). As in the AROI pagination,
     the default chart is last in the DOM so the ~ combinator can hide it. Deep links:

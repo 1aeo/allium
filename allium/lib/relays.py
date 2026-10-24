@@ -928,6 +928,7 @@ class Relays:
             from .consensus.collector_fetcher import (
                 calculate_consensus_requirement,
                 discover_authorities,
+                format_scanner_measurements,
                 ipv6_testers_from_collector,
             )
             from .relay_diagnostics import _check_overload_issues, generate_issues_from_consensus
@@ -939,8 +940,27 @@ class Relays:
             flag_thresholds = collector_data.get('flag_thresholds', {})
             bw_authorities = collector_data.get('bw_authorities', [])
             
-            if not relay_index:
+            def _attach_history(index, measuring):
+                # Isolated from the evaluation loop: a bad history row must not
+                # drop the per-authority table already stored on each relay.
+                try:
+                    from .consensus.vote_history import attach_relay_vote_views, load_history
+                    self.vote_history_store = load_history()
+                    self.vote_agreement_summary = attach_relay_vote_views(
+                        self.json['relays'], self.vote_history_store,
+                        index if isinstance(index, dict) else {},
+                        use_bits=self.use_bits, bw_authorities=measuring)
+                    tracked = self.vote_agreement_summary.get('compared', 0)
+                    stored = sum(1 for item in self.json['relays'] if isinstance(item, dict) and item.get('vote_history'))
+                    self.progress_logger.log_without_increment(
+                        f"Vote agreement: {tracked} relays compared; measurement history on {stored} relay pages")
+                except Exception as history_error:
+                    self.vote_agreement_summary = None
+                    print(f"Warning: Vote measurement history failed ({history_error}), continuing without it")
+
+            if not isinstance(relay_index, dict) or not relay_index:
                 self.progress_logger.log_without_increment("No relay index in collector data, skipping consensus evaluation")
+                _attach_history({}, set())
                 return
             
             # Use the number of voting authorities from flag_thresholds (actual voters)
@@ -964,6 +984,10 @@ class Relays:
             # to use its get_relay_consensus_evaluation method
             fetcher = CollectorFetcher()
             fetcher.relay_index = relay_index if isinstance(relay_index, dict) else {}
+            # The same-hour consensus weight reads valid-after from these documents.
+            # The relay index does not store it.
+            raw_votes = collector_data.get('votes') if isinstance(collector_data, dict) else None
+            fetcher.votes = raw_votes if isinstance(raw_votes, dict) else {}
             fetcher.flag_thresholds = flag_thresholds if isinstance(flag_thresholds, dict) else {}
             if isinstance(bw_authorities, (list, tuple, set, frozenset)):
                 fetcher.bw_authorities = set(bw_authorities)
@@ -1070,6 +1094,13 @@ class Relays:
                 
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
+
+                indexed = fetcher._index_relay(fingerprint)
+                measurements = indexed.get('bandwidth_measurements') if isinstance(indexed, dict) else None
+                relay['bandwidth_file_details'] = format_scanner_measurements(
+                    measurements, use_bits=self.use_bits)
+            
+            _attach_history(relay_index, fetcher.measuring_authorities)
             
             self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             

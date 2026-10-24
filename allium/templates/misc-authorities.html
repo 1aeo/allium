@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, vote_agreement_clauses %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     Relay Radar :: Directory Authorities by Network Health
@@ -100,6 +100,14 @@
     <p class="text-muted" style="margin-bottom: 15px;">
     <small>Last updated: {{ relays.timestamp }}. Data from <a href="https://onionoo.torproject.org/">Onionoo API</a> + <a href="https://collector.torproject.org" target="_blank" rel="noopener">CollecTor</a> (votes, thresholds).</small>
     </p>
+    {% if relays.vote_agreement_summary and relays.vote_agreement_summary.compared %}
+    {% set vote_sum = relays.vote_agreement_summary %}
+    <div style="background: #f8f9fa; border-left: 3px solid #007bff; padding: 10px 12px; margin-bottom: 15px; font-size: 13px;">
+        <strong>Latest vote agreement.</strong>
+        {{ vote_agreement_clauses(vote_sum) }}
+        Per-relay measurement history, with each vote's <code>valid-after</code>, is on the relay page.
+    </div>
+    {% endif %}
     
     <!-- UPTIME DATA STATUS NOTIFICATION -->
     {% if relays.uptime_metadata -%}
