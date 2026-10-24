@@ -11,7 +11,12 @@ import hashlib
 import os
 import time
 from .aroileaders import _calculate_aroi_leaderboards
-from .ip_utils import determine_ipv6_support, safe_parse_ip_address as _safe_parse_ip_address
+from .ip_utils import (
+    determine_ipv6_support,
+    relay_ipv6_unconfirmed,
+    relay_publishes_ipv6,
+    safe_parse_ip_address as _safe_parse_ip_address,
+)
 from .network_health import calculate_network_health_metrics
 from .operator_analysis import calculate_uptime_display
 from .progress_logger import ProgressLogger
@@ -920,7 +925,11 @@ class Relays:
         
         try:
             from .consensus import CollectorFetcher, format_relay_consensus_evaluation
-            from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
+            from .consensus.collector_fetcher import (
+                calculate_consensus_requirement,
+                discover_authorities,
+                ipv6_testers_from_collector,
+            )
             from .relay_diagnostics import _check_overload_issues, generate_issues_from_consensus
             
             self.progress_logger.log_without_increment("Processing CollecTor consensus data for relay consensus evaluation...")
@@ -954,21 +963,38 @@ class Relays:
             # Create a CollectorFetcher instance with the pre-fetched data
             # to use its get_relay_consensus_evaluation method
             fetcher = CollectorFetcher()
-            fetcher.relay_index = relay_index
-            fetcher.flag_thresholds = flag_thresholds
-            fetcher.bw_authorities = set(bw_authorities)
-            fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
+            fetcher.relay_index = relay_index if isinstance(relay_index, dict) else {}
+            fetcher.flag_thresholds = flag_thresholds if isinstance(flag_thresholds, dict) else {}
+            if isinstance(bw_authorities, (list, tuple, set, frozenset)):
+                fetcher.bw_authorities = set(bw_authorities)
+            else:
+                fetcher.bw_authorities = set()
+            # Union the saved set with 'a' lines still stored on the relay index
+            # so a cache from before ipv6_testing_authorities does not turn a
+            # real omission into "not tested".
+            fetcher.ipv6_testing_authorities = ipv6_testers_from_collector(collector_data)
             
             # Process consensus evaluation for each relay
             evaluation_count = 0
             
             for relay in self.json["relays"]:
-                fingerprint = relay.get('fingerprint', '').upper()
+                if not isinstance(relay, dict):
+                    continue
+                raw_fp = relay.get('fingerprint')
+                fingerprint = raw_fp.strip().upper() if isinstance(raw_fp, str) else ''
                 if not fingerprint:
                     continue
                 
-                # Get raw consensus evaluation from fetcher
-                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count)
+                # published_ipv6 is the descriptor address. unreachable_or_addresses
+                # is Onionoo's record that authorities failed to confirm it.
+                published_ipv6 = relay_publishes_ipv6(
+                    relay.get('or_addresses'),
+                    relay.get('unreachable_or_addresses'),
+                )
+                declared_unreachable = relay_ipv6_unconfirmed(relay.get('unreachable_or_addresses'))
+                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(
+                    fingerprint, authority_count, published_ipv6=published_ipv6,
+                    declared_unreachable=declared_unreachable)
                 
                 # Calculate relay uptime from last_restarted (Onionoo data)
                 # This is the relay's self-reported uptime from its descriptor
@@ -1008,6 +1034,12 @@ class Relays:
                 
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
+                ipv6 = ((formatted_consensus_evaluation.get('reachability_summary') or {}).get('ipv6') or {})
+                state = ipv6.get('state')
+                # Onionoo unconfirmed, with no vote 'a' line, is not a tester omission.
+                if state == 'failed' and ipv6.get('label') == 'Unreachable':
+                    state = 'unreachable'
+                relay['ipv6_authority_test'] = state if state in ('ok', 'failed', 'not_tested', 'unreachable') else ''
                 
                 # Consensus issues join the overload issues already stored by
                 # _evaluate_overload(). Regenerating overload here would duplicate

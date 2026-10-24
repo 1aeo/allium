@@ -655,8 +655,11 @@
     </div>
 </div>
 {# The charts live in contact/<hash>/, or charts/contact/<hash>/ with --chart-layout charts: a src from the site root keeps them resolving from the vanity-domain copy of this page #}
-{% if contact_chart_periods %}{{ chart_period_anchors() }}{% endif %}
-{{ chart_history('bandwidth', contact_chart_periods, 'Operator throughput and write/read', src=page_ctx.path_prefix ~ chart_root ~ 'contact/' ~ value ~ '/', ext=chart_ext) }}
+{% set contact_chart_src = page_ctx.path_prefix ~ chart_root ~ 'contact/' ~ value ~ '/' %}
+{% if contact_chart_periods or contact_uptime_periods %}{{ chart_period_anchors() }}{% endif %}
+{% for name, periods, alt in (('bandwidth', contact_chart_periods, 'Operator throughput and write/read'), ('uptime', contact_uptime_periods, 'Operator uptime')) %}
+{{ chart_history(name, periods, alt, src=contact_chart_src, ext=chart_ext, heading=name|capitalize) }}
+{% endfor %}
 {% endblock %}
 
 {# AROI Validation Issues are now integrated into the 4-section relay tables #}
