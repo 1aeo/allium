@@ -144,6 +144,12 @@ class TestConsensusWeightMedian:
         # Newest hour has two measuring authorities, so 80 KB/s is not capped at 20.
         assert formatted['unmeasured'] is True
         assert formatted['median'] == 80 * 1000
+        # Page generation used to leave votes empty. That disables the hour filter.
+        bare = CollectorFetcher()
+        bare.relay_index = fetcher.relay_index
+        bare.bw_authorities = set()
+        mixed = bare._format_bandwidth(bare.relay_index[FP])
+        assert mixed['median'] == 20 * 1000
 
     def test_unmeasured_without_three_measuring_authorities_is_not_capped(self):
         median_kb, unmeasured, cap = consensus_weight_median(

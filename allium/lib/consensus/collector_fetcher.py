@@ -1699,16 +1699,10 @@ class CollectorFetcher:
         votes = _votes_by_name(relay)
         # One consensus hour. A fetch can still hold an authority's previous vote;
         # mixing those hours produces a median no consensus computed.
-        from .vote_history import consensus_weight_median, document_time
-        newest, times = None, {}
-        source = self.votes if isinstance(self.votes, dict) else {}
-        for name, vote in source.items():
-            when = document_time(vote) if isinstance(vote, dict) else None
-            key = _authority_key(name)
-            if key and when:
-                times[key] = when
-                if newest is None or when > newest:
-                    newest = when
+        # Page generation must copy collector_data['votes'] onto this fetcher.
+        # relay_index alone has no valid-after.
+        from .vote_history import consensus_weight_median
+        newest, times = self._document_hours()
         hour_measuring = 0
         for name in self.measuring_authorities:
             when = times.get(_authority_key(name))
@@ -1747,6 +1741,29 @@ class CollectorFetcher:
             'bw_auth_not_measured_names': sorted(
                 name for name in bw_authorities if _authority_key(name) not in measured_names),
         }
+
+    def _document_hours(self):
+        """Newest valid-after in ``self.votes``, and each authority's own hour.
+
+        Computed once. An empty vote map means the caller did not attach the
+        documents, and the median keeps every measurement.
+        """
+        cached = self.__dict__.get('_document_hour_cache')
+        if cached is not None:
+            return cached
+        from .vote_history import document_time
+        newest, times = None, {}
+        source = self.votes if isinstance(self.votes, dict) else {}
+        for name, vote in source.items():
+            when = document_time(vote) if isinstance(vote, dict) else None
+            key = _authority_key(name)
+            if key and when:
+                times[key] = when
+                if newest is None or when > newest:
+                    newest = when
+        cached = (newest, times)
+        self.__dict__['_document_hour_cache'] = cached
+        return cached
     
     def _format_reachability(self, relay: dict, published_ipv6: bool = False,
                              declared_unreachable: bool = False) -> dict:

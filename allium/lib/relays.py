@@ -984,6 +984,10 @@ class Relays:
             # to use its get_relay_consensus_evaluation method
             fetcher = CollectorFetcher()
             fetcher.relay_index = relay_index if isinstance(relay_index, dict) else {}
+            # The same-hour consensus weight reads valid-after from these documents.
+            # The relay index does not store it.
+            raw_votes = collector_data.get('votes') if isinstance(collector_data, dict) else None
+            fetcher.votes = raw_votes if isinstance(raw_votes, dict) else {}
             fetcher.flag_thresholds = flag_thresholds if isinstance(flag_thresholds, dict) else {}
             if isinstance(bw_authorities, (list, tuple, set, frozenset)):
                 fetcher.bw_authorities = set(bw_authorities)
