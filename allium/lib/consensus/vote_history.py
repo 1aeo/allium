@@ -23,6 +23,7 @@ import gzip
 import json
 import logging
 import os
+from functools import lru_cache
 from bisect import bisect_left
 from datetime import datetime, timedelta, timezone
 from xml.sax.saxutils import escape as xml_escape
@@ -391,7 +392,9 @@ def format_relay_history(history, fingerprint, use_bits=False):
 
     rows = []
     previous_guard = None
-    for index in range(count):
+    # The page shows the newest RECENT_ROWS. One older document supplies guard_delta.
+    row_start = max(0, count - RECENT_ROWS - 1)
+    for index in range(row_start, count):
         measured = _row(entry, 'm', index, width)
         bandwidth = _row(entry, 'b', index, width)
         flags = _row(entry, 'f', index, width)
@@ -1057,13 +1060,25 @@ def _svg_chart(times, medians, series, labels):
     )
 
 
-def _parse_time(value):
-    """UTC time of a vote stamp. Offsets are applied; naive values are UTC."""
+@lru_cache(maxsize=2048)
+def _parse_time_cached(value):
+    """Parse one canonical vote stamp. Callers must pass a string."""
     from .collector_fetcher import _parse_utc
     parsed = _parse_utc(value)
     if parsed is None:
         return None
     return parsed.replace(microsecond=0)
+
+
+def _parse_time(value):
+    """UTC time of a vote stamp. Offsets are applied; naive values are UTC.
+
+    Non-strings stay out of the cache. A corrupt history value is not hashable
+    as a cache key and must not raise.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    return _parse_time_cached(value)
 
 
 def _fingerprint(value):
