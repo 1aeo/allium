@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation, aroi_validation_icon, aroi_section_header, aroi_relay_detail_box %}
+{% from "macros.html" import navigation, aroi_validation_icon, aroi_section_header, aroi_relay_detail_box, ipv6_test_mark %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     Tor Relays
@@ -317,7 +317,7 @@
     {% if table_has_ipv6 -%}
     <td>
         {% if relay.get('ipv6_display_address') -%}
-            {{ relay['ipv6_display_address']|escape }}
+            {{ relay['ipv6_display_address']|escape }} {{ ipv6_test_mark(relay) }}
         {% else -%}
             N/A
         {% endif -%}
