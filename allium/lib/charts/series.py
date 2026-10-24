@@ -23,6 +23,12 @@ MIN_ACTIVE_KBYTES = 50
 MIN_ACTIVE_MBIT = MIN_ACTIVE_KBYTES * 1000 * MBIT
 # p2 and p98 of a handful of relays are not a census. The live network is thousands.
 MIN_NETWORK_CENSUS = 30
+# A trailing bandwidth slot with fewer than this share of the previous slot's relays is still
+# being filled in. Onionoo's daily graphs do not all end on the same noon (on 2026-10-23 the
+# newest 1-month slot had about 3/4 of the relays and 70% of the write). Summing it draws a
+# false drop. Exactly 9/10 stays. A lower count that continues is relays leaving, and stays.
+PARTIAL_TAIL_NUMERATOR = 9
+PARTIAL_TAIL_DENOMINATOR = 10
 # Fewest family members counted (see active_ratio) for a family median: the median includes the relay
 # itself, so with two members it is the mean of this relay and the other, and moves half as far as this relay.
 MIN_FAMILY = 3
@@ -154,6 +160,23 @@ def _reported_end(lasts, interval):
     return min(reporting, default=newest)
 
 
+def _without_partial_tail(write, read, counts):
+    """``write`` without a trailing slot much thinner than the slot before it.
+
+    ``counts`` is how many relays were summed at each timestamp. The cut repeats while the new
+    end is still that thin, and always leaves at least two timestamps. ``_aligned`` drops the
+    matching read values. Nothing is removed from the start: a long period opens with fewer relays.
+    """
+    ts = sorted(write.keys() & read.keys())
+    kept = len(ts)
+    while len(ts) > 2 and counts[ts[-1]] * PARTIAL_TAIL_DENOMINATOR < counts[ts[-2]] * PARTIAL_TAIL_NUMERATOR:
+        ts.pop()
+    if len(ts) == kept:
+        return write
+    keep = set(ts)
+    return {t: value for t, value in write.items() if t in keep}
+
+
 def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=True, ratios=None):
     """Members' write and read summed per timestamp, like ``throughput``, plus ``(member, traffic)`` for the
     members summed (their write plus read over the window, in Mbit/s per slot).
@@ -166,6 +189,8 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
     every member still reporting has reached, not on a partial sum. A member no
     longer running has stopped for good: its end is a real drop, not a delay.
     The network chart passes ``until_slowest=False``: one relay a slot behind must not hide the rest.
+    A trailing slot under 9/10 of the previous slot's relays is left off instead (``_without_partial_tail``):
+    that slot is still incomplete, and summing it draws a false drop. A lower count that continues stays.
     ``ratios``, when a list, collects each member's own-period census ratio from that same parse
     (``network_ratio_bands``).
     """
@@ -188,6 +213,8 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
         return None, []
     interval = own.most_common(1)[0][0]
     write, read, summed, lasts = Counter(), Counter(), [], []
+    # Relay counts for the network chart's incomplete-tail cut. Operator charts do not use it.
+    covered = Counter() if not until_slowest else None
     for native, step, wblock, rblock, relay in histories:
         on_grid = step and interval % step == 0
         if not on_grid and not (ratios is not None and native):
@@ -211,9 +238,13 @@ def operator_throughput(members, bandwidth_map, key, since=None, until_slowest=T
             read.update({t: rpts[t] for t in both})
             summed.append((relay, sum(wpts[t] + rpts[t] for t in both)))
             lasts.append((max(wpts.keys() | rpts.keys()), relay.get("running") is False))
+            if covered is not None:
+                covered.update(both)
     if until_slowest:
         end = _reported_end(lasts, interval)
         write = {t: value for t, value in write.items() if end and t <= end}
+    elif covered:
+        write = _without_partial_tail(write, read, covered)
     return _aligned(write, read, interval), summed
 
 
