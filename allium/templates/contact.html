@@ -216,12 +216,12 @@
 
                     {% if contact_display_data and contact_display_data.vote_agreement %}
                     {% set vote_sum = contact_display_data.vote_agreement %}
-                    <li><strong><span title="Latest authority votes for this operator's relays. Agreement means every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. A split flag was assigned by some authorities and not others. Measurement history for each relay is on its relay page.">Authority vote agreement</span>:</strong>
+                    <li><strong><span title="Latest authority votes for this operator's relays. Agreement means every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. A split flag was assigned by some authorities and not others. The per-authority table is on the relay page.">Authority vote agreement</span>:</strong>
                         {{ vote_agreement_clauses(vote_sum) }}
                         {% if vote_sum.examples %}
                         <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 0;">
                         {% for example in vote_sum.examples %}
-                            <li><a href="{{ page_ctx.path_prefix }}relay/{{ example.fingerprint }}/#{{ example.anchor|default('consensus-evaluation') }}">{{ example.nickname }}</a> — split on {{ example.flags_display }}</li>
+                            <li><a href="{{ page_ctx.path_prefix }}relay/{{ example.fingerprint }}/#consensus-evaluation">{{ example.nickname }}</a> — split on {{ example.flags_display }}</li>
                         {% endfor %}
                         </ul>
                         {% endif %}

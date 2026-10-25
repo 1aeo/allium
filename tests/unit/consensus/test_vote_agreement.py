@@ -1,0 +1,138 @@
+"""Current-hour vote agreement and the consensus-weight median. No stored history."""
+
+from allium.lib.consensus.collector_fetcher import (
+    CollectorFetcher,
+    consensus_weight_median,
+    document_time,
+)
+from allium.lib.consensus.vote_agreement import (
+    attach_vote_agreement,
+    classify_authority_votes,
+    summarize_operator_votes,
+)
+
+FP = 'A' * 40
+FP_B = 'B' * 40
+HOUR_1 = '2026-10-17 11:00:00'
+HOUR_2 = '2026-10-17 12:00:00'
+FLAGS = ['Fast', 'Guard', 'Running', 'Stable', 'Valid']
+
+
+class TestConsensusWeightMedian:
+    def _fetcher(self, votes_for_a, extra_measured=True):
+        fetcher = CollectorFetcher()
+        votes_a = {
+            name: {'measured': measured, 'bandwidth': bandwidth, 'flags': FLAGS}
+            for name, (measured, bandwidth) in votes_for_a.items()
+        }
+        index = {FP: {'votes': votes_a}}
+        if extra_measured:
+            index[FP_B] = {'votes': {
+                name: {'measured': 5, 'bandwidth': 5, 'flags': FLAGS}
+                for name in votes_for_a
+            }}
+        fetcher.relay_index = index
+        fetcher.bw_authorities = set()
+        return fetcher
+
+    def test_low_median_of_measured_matches_fetcher(self):
+        votes = {
+            'bastet': (100, 10),
+            'longclaw': (400, 10),
+            'moria1': (200, 10),
+            'tor26': (300, 10),
+            'dizum': (None, 999),
+        }
+        fetcher = self._fetcher(votes)
+        formatted = fetcher._format_bandwidth(fetcher.relay_index[FP])
+        median_kb, unmeasured, cap = consensus_weight_median(
+            [100, 400, 200, 300, None], [10, 10, 10, 10, 999], measuring_count=5)
+        assert formatted['unmeasured'] is False
+        assert formatted['median'] == 200 * 1000
+        assert (median_kb, unmeasured, cap) == (200, False, False)
+
+    def test_unmeasured_bandwidth_median_is_capped(self):
+        votes = {
+            'bastet': (None, 100),
+            'longclaw': (None, 80),
+            'moria1': (None, 40),
+        }
+        fetcher = self._fetcher(votes)
+        formatted = fetcher._format_bandwidth(fetcher.relay_index[FP])
+        assert formatted['median'] == 20 * 1000
+        assert consensus_weight_median([None, None, None], [100, 80, 40], 3) == (20, True, True)
+
+    def test_live_median_uses_only_the_newest_vote_hour(self):
+        fetcher = CollectorFetcher()
+        fetcher.votes = {
+            'bastet': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'longclaw': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'moria1': {'valid_after': HOUR_1, 'vote_time': HOUR_1},
+        }
+        fetcher.relay_index = {
+            FP: {'votes': {
+                'bastet': {'measured': None, 'bandwidth': 100},
+                'longclaw': {'measured': None, 'bandwidth': 80},
+                'moria1': {'measured': None, 'bandwidth': 40},
+            }},
+            FP_B: {'votes': {
+                name: {'measured': 5, 'bandwidth': 5}
+                for name in ('bastet', 'longclaw', 'moria1')
+            }},
+        }
+        fetcher.bw_authorities = set()
+        assert fetcher._format_bandwidth(fetcher.relay_index[FP])['median'] == 80 * 1000
+        bare = CollectorFetcher()
+        bare.relay_index = fetcher.relay_index
+        bare.bw_authorities = set()
+        assert bare._format_bandwidth(bare.relay_index[FP])['median'] == 20 * 1000
+
+    def test_document_time_prefers_vote_time(self):
+        assert document_time({'vote_time': HOUR_1, 'valid_after': HOUR_2}) == HOUR_1
+        assert document_time({'published': '2026-10-17T12:00:00Z'}) == HOUR_2
+
+
+class TestAgreement:
+    def test_classify_and_operator_summary(self):
+        agreed = classify_authority_votes({
+            'moria1': {'flags': FLAGS, 'measured': 100},
+            'bastet': {'flags': list(FLAGS), 'measured': 120},
+        })
+        assert agreed['agreed'] is True
+        assert agreed['unmeasured'] is True
+        split = classify_authority_votes({
+            'moria1': {'flags': FLAGS, 'measured': 100},
+            'bastet': {'flags': ['Fast', 'Running', 'Stable', 'Valid'], 'measured': None},
+            'longclaw': {'flags': FLAGS, 'measured': 80},
+        })
+        assert 'Guard' in split['split_flags']
+        assert split['measurement_split'] is True
+        folded = classify_authority_votes({
+            'Moria1': {'flags': FLAGS, 'measured': 100},
+            'bastet': {'flags': FLAGS, 'measured': None},
+        }, measuring_authorities={'moria1', 'bastet'})
+        assert folded['measurement_split'] is True
+        quiet = classify_authority_votes({
+            'moria1': {'flags': FLAGS, 'measured': False},
+            'bastet': {'flags': FLAGS, 'measured': None},
+        }, measuring_authorities=set())
+        assert quiet['measurement_split'] is False
+        duplicated = classify_authority_votes({
+            'moria1': {'flags': ['Guard', 'Guard'] + FLAGS[1:], 'measured': 10},
+            'bastet': {'flags': ['Fast', 'Running', 'Stable', 'Valid'], 'measured': 10},
+        })
+        assert 'Guard' in duplicated['split_flags']
+        summary = summarize_operator_votes([
+            {'nickname': 'split-guard', 'fingerprint': FP, 'vote_agreement': split},
+            {'nickname': 'ok', 'fingerprint': FP_B, 'vote_agreement': agreed},
+            {'nickname': 'no-votes', 'fingerprint': 'C' * 40},
+        ])
+        assert summary['compared'] == 2
+        assert summary['examples'][0]['nickname'] == 'split-guard'
+
+    def test_lowercase_index_key_still_counts(self):
+        relays = [{'fingerprint': FP, 'nickname': 'x'}]
+        index = {FP.lower(): {'votes': {'Moria1': {'flags': FLAGS, 'measured': 1}}}}
+        summary = attach_vote_agreement(relays, index)
+        assert summary['compared'] == 1
+        assert relays[0]['vote_agreement']['agreed'] is True

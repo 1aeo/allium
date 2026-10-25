@@ -311,7 +311,9 @@ from .flag_thresholds import (
     GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
     GUARD_TK_DEFAULT,
     GUARD_WFU_DEFAULT,
+    MAX_UNMEASURED_BW_KB,
     VOTE_BW_KB_BYTES,
+    low_median,
     check_stable_eligibility,
     credible_bandwidth,
     guard_bw_top_threshold,
@@ -424,6 +426,37 @@ def _bw_int(value):
         return int(value)
     except ValueError:
         return None
+
+
+def consensus_weight_median(measured_kb, bandwidth_kb, measuring_count):
+    """Low median the consensus weight uses, in KB/s.
+
+    ``measured_kb`` and ``bandwidth_kb`` are aligned. None means that
+    authority did not publish that keyword. Returns ``(median_kb or None,
+    unmeasured, cap_in_force)``. The cap is maxunmeasuredbw while fewer than
+    three Measured= values are present and three or more authorities publish
+    measurements.
+    """
+    measured_vals = [value for value in measured_kb if value is not None]
+    if len(measured_vals) >= 3:
+        return low_median(measured_vals), False, False
+    bandwidths = [value for value in bandwidth_kb if value is not None]
+    median = low_median(bandwidths)
+    cap_in_force = measuring_count >= 3
+    if median is not None and cap_in_force and median > MAX_UNMEASURED_BW_KB:
+        median = MAX_UNMEASURED_BW_KB
+    return median, True, cap_in_force
+
+
+def document_time(vote):
+    """``valid-after`` of a vote as ``YYYY-MM-DD HH:MM:SS`` UTC, else published."""
+    if not isinstance(vote, dict):
+        return None
+    for key in ('vote_time', 'valid_after', 'published'):
+        parsed = _parse_utc(vote.get(key))
+        if parsed is not None:
+            return parsed.replace(microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+    return None
 
 
 def _vote_kb(value):
@@ -1701,7 +1734,6 @@ class CollectorFetcher:
         # mixing those hours produces a median no consensus computed.
         # Page generation must copy collector_data['votes'] onto this fetcher.
         # relay_index alone has no valid-after.
-        from .vote_history import consensus_weight_median
         newest, times = self._document_hours()
         hour_measuring = 0
         for name in self.measuring_authorities:
@@ -1751,7 +1783,6 @@ class CollectorFetcher:
         cached = self.__dict__.get('_document_hour_cache')
         if cached is not None:
             return cached
-        from .vote_history import document_time
         newest, times = None, {}
         source = self.votes if isinstance(self.votes, dict) else {}
         for name, vote in source.items():

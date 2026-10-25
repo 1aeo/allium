@@ -808,13 +808,7 @@ Platform: unknown
 {% if relay.bandwidth_file_details %}
 {% include "bandwidth-file.html" %}
 {% endif %}
-{% if bandwidth_periods %}
-<p class="text-muted" style="font-size: 11px; margin-top: 12px; margin-bottom: 0;">
-Onionoo traffic: write and read throughput.
-{%- if relay.vote_history %} Authority measurements are in <a href="#vote-history">Vote Measurement History</a>.{% endif %}
-</p>
-{% endif %}
-{{ chart_history('bandwidth', bandwidth_periods, 'Onionoo traffic: throughput and write/read', src=chart_src, ext=chart_ext, heading='Traffic history') }}
+{{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
 </section>
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
@@ -1570,9 +1564,6 @@ N/T = this authority does not test IPv6 • — = not in this vote • Format: r
 </div>
 
 </section>
-{% endif %}
-{% if relay.vote_history %}
-{% include "vote-history.html" %}
 {% endif %}
 
 </div>

@@ -984,9 +984,8 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     operator_flag_bandwidth_analysis = compute_contact_flag_bandwidth_analysis(v, members, relay_set)
     display_data['flag_bandwidth_analysis'] = operator_flag_bandwidth_analysis
 
-    # Latest authority-vote agreement. The per-relay Measured= series is on
-    # each relay page. Members carry vote_agreement from collector processing.
-    from .consensus.vote_history import summarize_operator_votes
+    # Latest authority-vote agreement. Members carry vote_agreement from collector processing.
+    from .consensus.vote_agreement import summarize_operator_votes
     display_data['vote_agreement'] = summarize_operator_votes(members)
     
     return display_data
