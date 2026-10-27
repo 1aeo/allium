@@ -694,11 +694,14 @@ On {{ line.count }}, {% if line.only %}only {% endif %}{{ authority_list(line.na
     {% set bw = vote_sum.bandwidth %}
     {% if bw and bw.publishing %}
     <br><strong>Bandwidth measurements:</strong>
-    {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published votes by
-    {% if bw.full_count == bw.compared %}{{ bw.publishing|length }} of {{ bw.scanners|length }}{% else %}all {{ bw.publishing|length }} of {{ bw.scanners|length }}{% endif %}
-    authorities ({{ authority_list(bw.publishing, page_ctx) }}).
-    {% if bw.silent %}No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
+    {% if bw.full_count == bw.compared %}
+    {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published votes by {{ bw.publishing|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.publishing, page_ctx) }}).
+    {% if bw.silent %} No relays are missing Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
+    {% else %}
+    {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published votes by all {{ bw.publishing|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.publishing, page_ctx) }}).
+    {% if bw.silent %} No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
     {% for miss in bw.misses %} {{ authority_list([miss.name], page_ctx) }} did not publish Measured= on {{ miss.count }} relay{{ 's' if miss.count != 1 else '' }}.{% endfor %}
+    {% endif %}
     {% endif %}
     {% if vote_sum.unmeasured %}
     {{ vote_sum.unmeasured }} relay{{ 's' if vote_sum.unmeasured != 1 else '' }} {{ 'have' if vote_sum.unmeasured != 1 else 'has' }} fewer than 3 Measured= values, so the consensus weight uses relay-reported bandwidth.
