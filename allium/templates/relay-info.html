@@ -805,9 +805,6 @@ Platform: unknown
     </div>
     {% endif %}
 </div>
-{% if relay.bandwidth_file_details %}
-{% include "bandwidth-file.html" %}
-{% endif %}
 {{ chart_history('bandwidth', bandwidth_periods, 'Throughput and write/read', src=chart_src, ext=chart_ext) }}
 </section>
 
@@ -1498,7 +1495,7 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 </thead>
 <tbody>
 {% for vote in diag.authority_table %}
-<tr class="{% if not vote.voted %}row-not-voted{% endif %}">
+<tr id="vote-{{ vote.authority|lower }}" class="{% if not vote.voted %}row-not-voted{% endif %}">
     <td>
         {# vote.fingerprint is the authority's V3 signing key, not its relay fingerprint #}
         {% set authority_fp = authority_page_fps.get(vote.authority|lower) if authority_page_fps else none %}
@@ -1547,6 +1544,9 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
 <p style="font-size: 10px; color: #666; margin-top: 5px;">
 N/T = this authority does not test IPv6 • — = not in this vote • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known • Bandwidth source: (M) bandwidth-scanner measurement, (R) relay-reported, (U) unmeasured, counted as 0
 </p>
+{% if relay.bandwidth_file_details %}
+{% include "bandwidth-file.html" %}
+{% endif %}
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
 <strong>Bandwidth Values Explained:</strong><br>
@@ -1563,6 +1563,10 @@ N/T = this authority does not test IPv6 • — = not in this vote • Format: r
 <em>Why two sources?</em> Vote files contain authority thresholds but not per-relay uptime values. Onionoo aggregates relay descriptors which include uptime.
 </div>
 
+</section>
+{% elif relay.bandwidth_file_details %}
+<section class="section-box relay-section">
+{% include "bandwidth-file.html" %}
 </section>
 {% endif %}
 

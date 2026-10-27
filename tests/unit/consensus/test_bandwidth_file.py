@@ -5,6 +5,7 @@ import base64
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from allium.lib.consensus.collector_fetcher import (
+    _column_tones,
     CollectorFetcher,
     bandwidth_digest_hex,
     format_scanner_measurements,
@@ -143,7 +144,8 @@ class TestBandwidthFileRows:
         quiet = format_scanner_measurements(merged[other], use_bits=False)
         assert quiet['any_rtt'] is False
         assert quiet['rows'][0]['rtt_display'] == '—'
-        assert quiet['rows'][0]['streams'] == '—'
+        assert quiet['rows'][0]['ok_count'] is None
+        assert quiet['rows'][0]['error_count'] is None
 
     def test_mean_and_median_are_bytes_and_bw_is_kilobytes(self):
         # sbws 1.9: bw is divided down to KB/s; bw_mean and bw_median stay bytes/s.
@@ -213,8 +215,22 @@ class TestBandwidthFileRows:
         )
         html = env.get_template('bandwidth-file.html').render(
             relay={'bandwidth_file_details': details})
-        assert 'id="bandwidth-file"' in html
+        assert 'id="bandwidth-authority-details"' in html
+        assert 'Bandwidth Voted Value' in html
         assert 'moria1' in html
         assert 'do not include a per-relay round-trip time' in html
         assert '2026-10-24 05:36:11' in html
-        assert '8 ok, 2 stream errors' in html
+        assert 'al-status-success">8 ok' in html
+        assert 'al-status-danger">2 stream errors' in html
+
+    def test_values_within_twice_the_median_agree(self):
+        assert _column_tones([100, 200, None]) == ['agree', 'agree', 'unknown']
+        assert _column_tones([8, 2100])[0] == 'disagree'
+        assert _column_tones([8]) == ['unknown']
+        details = format_scanner_measurements({'scanners': [
+            {'scanner': 'bastet', 'bw': 1, 'success': 0, 'error_stream': 4},
+            {'scanner': 'moria1', 'bw': 1, 'success': 0, 'error_stream': 2},
+        ]})
+        assert details['all_failed'] is True
+        assert details['rows'][0]['ok_count'] == 0
+        assert details['rows'][0]['error_count'] == 4

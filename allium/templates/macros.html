@@ -636,7 +636,87 @@
 {# Kept empty for backwards compatibility during transition #}
 {%- endmacro %}
 
-{#- Shared sentences for the operator page and the directory-authorities page. -#}
+{#- Authority nicknames linking to that authority's row on the directory authorities page. -#}
+{% macro authority_list(names, page_ctx) -%}
+{%- for name in names -%}
+<a href="{{ page_ctx.path_prefix }}misc/authorities.html#authority-{{ name }}">{{ name }}</a>
+{%- if not loop.last -%}
+{%- if loop.revindex0 == 1 -%}{% if names|length > 2 %}, and {% else %} and {% endif -%}
+{%- else %}, {% endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endmacro %}
+
+{#- Oxford-comma list of flag names. -#}
+{% macro flag_list(names) -%}
+{%- for name in names -%}
+{{ name }}
+{%- if not loop.last -%}
+{%- if loop.revindex0 == 1 -%}{% if names|length > 2 %}, and {% else %} and {% endif -%}
+{%- else %}, {% endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endmacro %}
+
+{#- One withheld or assigned sentence. The flag name is always repeated. -#}
+{% macro vote_pattern_line(line, flag, page_ctx) -%}
+{%- if line.scope == 'all' -%}
+On all {{ line.count }}, {{ authority_list(line.names, page_ctx) }} {% if line.kind == 'did_not' %}did not assign{% else %}assigned{% endif %} {{ flag }}.
+{%- elif line.scope == 'of_those' -%}
+On {{ line.count }} of those, {{ authority_list(line.names, page_ctx) }} also did not assign {{ flag }}.
+{%- else -%}
+On {{ line.count }}, {% if line.only %}only {% endif %}{{ authority_list(line.names, page_ctx) }} {% if line.kind == 'did_not' %}did not assign{% else %}assigned{% endif %} {{ flag }}.
+{%- endif -%}
+{%- endmacro %}
+
+{#- Operator-page agreement: flag groups, bandwidth authorities, and the first relays. -#}
+{% macro vote_agreement_block(vote_sum, page_ctx) -%}
+<li><strong><span title="Latest authority votes for this operator's relays. Agreement means every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. A split flag was assigned by some authorities and not others. Measured= is the bandwidth value an authority published in its vote.">Authority vote agreement</span>:</strong>
+    {{ vote_sum.agreed }} of {{ vote_sum.compared }} relay{{ 's' if vote_sum.compared != 1 else '' }} in agreement.
+    {%- if vote_sum.all_agreed %}
+        {% if vote_sum.voters %}All {{ vote_sum.voters|length }} voting authorities ({{ authority_list(vote_sum.voters, page_ctx) }}){% else %}All voting authorities{% endif %}
+        {%- if vote_sum.assigned_flags %} assigned the same flags on every relay: {{ flag_list(vote_sum.assigned_flags) }}.
+            {%- if vote_sum.absent_flags %} {{ flag_list(vote_sum.absent_flags) }} {{ 'was' if vote_sum.absent_flags|length == 1 else 'were' }} not assigned.{% endif %}
+        {%- else %} assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state on each relay.
+        {%- endif %}
+    {%- elif vote_sum.split %}
+        {{ vote_sum.split }} {{ 'is' if vote_sum.split == 1 else 'are' }} not in agreement.
+        {% if vote_sum.split_flags %}Not in agreement, by flag: {% for item in vote_sum.split_flags %}{{ item.flag }} {{ item.count }}{% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+        {% if vote_sum.flag_patterns %}
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 0;">
+        {% for pattern in vote_sum.flag_patterns %}
+            <li><strong>{{ pattern.flag }}, {{ pattern.relays }} relay{{ 's' if pattern.relays != 1 else '' }}.</strong>
+            {% for line in pattern.lines %}{{ vote_pattern_line(line, pattern.flag, page_ctx) }} {% endfor %}</li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+    {%- endif %}
+    {% set bw = vote_sum.bandwidth %}
+    {% if bw and bw.publishing %}
+    <br><strong>Bandwidth measurements:</strong>
+    {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published votes by
+    {% if bw.full_count == bw.compared %}{{ bw.publishing|length }} of {{ bw.scanners|length }}{% else %}all {{ bw.publishing|length }} of {{ bw.scanners|length }}{% endif %}
+    authorities ({{ authority_list(bw.publishing, page_ctx) }}).
+    {% if bw.silent %}No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
+    {% for miss in bw.misses %} {{ authority_list([miss.name], page_ctx) }} did not publish Measured= on {{ miss.count }} relay{{ 's' if miss.count != 1 else '' }}.{% endfor %}
+    {% endif %}
+    {% if vote_sum.unmeasured %}
+    {{ vote_sum.unmeasured }} relay{{ 's' if vote_sum.unmeasured != 1 else '' }} {{ 'have' if vote_sum.unmeasured != 1 else 'has' }} fewer than 3 Measured= values, so the consensus weight uses relay-reported bandwidth.
+    {% endif %}
+    {% if vote_sum.examples %}
+        {% if vote_sum.example_total > vote_sum.examples|length %}
+        <br>Showing {{ vote_sum.examples|length }} of {{ vote_sum.example_total }} relays, first alphabetically.
+        {% endif %}
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 0;">
+        {% for example in vote_sum.examples %}
+            <li><a href="{{ page_ctx.path_prefix }}relay/{{ example.fingerprint }}/#consensus-evaluation">{{ example.nickname }}</a> — split on {{ example.flags_display }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+</li>
+{%- endmacro %}
+
+{#- Shared sentences for the directory-authorities page. -#}
 {% macro vote_agreement_clauses(vote_sum) -%}
 {{ vote_sum.agreed }} of {{ vote_sum.compared }} relay{{ 's' if vote_sum.compared != 1 else '' }} in agreement across voting authorities.
 {%- if vote_sum.split %} {{ vote_sum.split }} with a split vote{% if vote_sum.split_flags %} ({% for item in vote_sum.split_flags %}{{ item.flag }} {{ item.count }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}.{% endif %}

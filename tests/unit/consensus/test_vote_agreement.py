@@ -129,6 +129,72 @@ class TestAgreement:
         ])
         assert summary['compared'] == 2
         assert summary['examples'][0]['nickname'] == 'split-guard'
+        assert summary['flag_rows'][0]['flag'] == 'Running'
+        guard = [row for row in summary['flag_rows'] if row['flag'] == 'Guard'][0]
+        assert guard == {'flag': 'Guard', 'agreed': 1, 'split': 1}
+
+    def test_fast_pattern_names_who_withheld_then_who_assigned(self):
+        relays = []
+        for index in range(64):
+            no = ['faravahar'] if index < 61 else ['faravahar', 'moria1']
+            yes = ['bastet', 'dannenberg', 'gabelmoo', 'tor26']
+            if index < 61:
+                yes.append('moria1')
+            relays.append({
+                'nickname': 'r%02d' % index,
+                'fingerprint': 'A' * 39 + '%X' % (index % 16),
+                'vote_agreement': {
+                    'agreed': False,
+                    'split_flags': ['Fast'],
+                    'measurement_split': False,
+                    'unmeasured': False,
+                    'flag_sides': {'Fast': {'no': sorted(no), 'yes': sorted(yes)}},
+                    'measured_by': ['bastet', 'gabelmoo'],
+                    'voters': ['bastet'],
+                    'assigned_flags': [],
+                    'absent_flags': [],
+                },
+            })
+        summary = summarize_operator_votes(relays, measurement_authorities={
+            'publishing': ['bastet', 'gabelmoo'],
+            'silent': ['faravahar', 'longclaw'],
+            'scanners': ['bastet', 'faravahar', 'gabelmoo', 'longclaw'],
+        })
+        lines = summary['flag_patterns'][0]['lines']
+        assert lines[0]['kind'] == 'did_not' and lines[0]['scope'] == 'all'
+        assert lines[0]['names'] == ['faravahar'] and lines[0]['count'] == 64
+        assert lines[1]['scope'] == 'of_those' and lines[1]['names'] == ['moria1'] and lines[1]['count'] == 3
+        assert lines[2]['kind'] == 'assigned' and lines[2]['scope'] == 'all'
+        assert lines[2]['names'] == ['bastet', 'dannenberg', 'gabelmoo', 'tor26']
+        assert summary['example_total'] == 64
+        assert len(summary['examples']) == 5
+        assert summary['examples'][0]['nickname'] == 'r00'
+        assert summary['bandwidth']['full_count'] == 64
+        assert summary['bandwidth']['silent'] == ['faravahar', 'longclaw']
+
+    def test_guard_groups_list_withheld_flags_before_assigned_flags(self):
+        def relay(name, no, yes):
+            return {
+                'nickname': name, 'fingerprint': 'B' * 40,
+                'vote_agreement': {
+                    'agreed': False, 'split_flags': ['Guard'], 'measurement_split': False,
+                    'unmeasured': False, 'measured_by': ['bastet'],
+                    'flag_sides': {'Guard': {'no': no, 'yes': yes}},
+                    'voters': [], 'assigned_flags': [], 'absent_flags': [],
+                },
+            }
+        relays = (
+            [relay('a%d' % i, ['bastet'], ['moria1', 'dannenberg', 'tor26']) for i in range(4)]
+            + [relay('b%d' % i, ['bastet', 'dannenberg'], ['moria1', 'tor26']) for i in range(2)]
+            + [relay('c%d' % i, ['bastet', 'dannenberg', 'tor26'], ['moria1']) for i in range(3)]
+            + [relay('d0', ['dannenberg'], ['bastet', 'moria1', 'tor26'])]
+        )
+        lines = summarize_operator_votes(relays)['flag_patterns'][0]['lines']
+        assert [(line['kind'], line['count'], line['names'], line['only']) for line in lines] == [
+            ('did_not', 4, ['bastet'], True),
+            ('did_not', 2, ['bastet', 'dannenberg'], False),
+            ('assigned', 3, ['moria1'], True),
+        ]
 
     def test_lowercase_index_key_still_counts(self):
         relays = [{'fingerprint': FP, 'nickname': 'x'}]

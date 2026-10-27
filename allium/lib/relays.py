@@ -930,6 +930,7 @@ class Relays:
                 discover_authorities,
                 format_scanner_measurements,
                 ipv6_testers_from_collector,
+                scanner_failure_issue,
             )
             from .relay_diagnostics import _check_overload_issues, generate_issues_from_consensus
             
@@ -940,17 +941,20 @@ class Relays:
             flag_thresholds = collector_data.get('flag_thresholds', {})
             bw_authorities = collector_data.get('bw_authorities', [])
             
-            def _attach_agreement(index, measuring):
+            def _attach_agreement(index, measuring, scanners=None):
                 try:
                     from .consensus.vote_agreement import attach_vote_agreement
                     self.vote_agreement_summary = attach_vote_agreement(
                         self.json['relays'], index if isinstance(index, dict) else {},
-                        bw_authorities=measuring)
-                    tracked = self.vote_agreement_summary.get('compared', 0)
+                        bw_authorities=measuring, scanner_authorities=scanners)
+                    tracked = self.vote_agreement_summary.get('compared', 0) if self.vote_agreement_summary else 0
+                    authorities = (self.vote_agreement_summary or {}).get('measurement_authorities')
+                    self.vote_measurement_authorities = authorities if isinstance(authorities, dict) else None
                     self.progress_logger.log_without_increment(
                         f"Vote agreement: {tracked} relays compared")
                 except Exception as agreement_error:
                     self.vote_agreement_summary = None
+                    self.vote_measurement_authorities = None
                     print(f"Warning: Vote agreement failed ({agreement_error}), continuing without it")
 
             if not isinstance(relay_index, dict) or not relay_index:
@@ -1094,8 +1098,13 @@ class Relays:
                 measurements = indexed.get('bandwidth_measurements') if isinstance(indexed, dict) else None
                 relay['bandwidth_file_details'] = format_scanner_measurements(
                     measurements, use_bits=self.use_bits)
+                failure = scanner_failure_issue(relay.get('bandwidth_file_details'))
+                if failure and isinstance(relay.get('diagnostics'), dict):
+                    issues = relay['diagnostics'].get('issues')
+                    if isinstance(issues, list):
+                        issues.append(failure)
             
-            _attach_agreement(relay_index, fetcher.measuring_authorities)
+            _attach_agreement(relay_index, fetcher.measuring_authorities, bw_authorities)
             
             self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             

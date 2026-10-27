@@ -220,8 +220,15 @@
     .metric-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+.ribbon-row.vote-cards { grid-template-columns: 1fr 1fr; }
+.vote-flag-counts { width: 100%; border-collapse: collapse; font-size: 1.15rem; margin-top: 4px; }
+.vote-flag-counts th, .vote-flag-counts td { padding: 3px 6px; text-align: left; }
+.vote-flag-counts th.count, .vote-flag-counts td.count { text-align: right; }
+.vote-card-copy { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--nh-text-value); }
+
 @media (max-width: 768px) {
     .ribbon-row { grid-template-columns: 1fr; gap: 6px; }
+    .ribbon-row.vote-cards { grid-template-columns: 1fr; }
     .network-health-ribbon { padding: 6px 0; }
     .ribbon-row, .ribbon-footer { padding-left: 6px; padding-right: 6px; }
     .ribbon-card { padding: 8px; min-height: 80px; }

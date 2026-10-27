@@ -483,13 +483,47 @@ def _display_rate(value, scale, use_bits):
     return _format_bandwidth_value(number * scale, use_bits)
 
 
-def _stream_counts(success, errors):
-    parts = []
-    if isinstance(success, int) and not isinstance(success, bool):
-        parts.append('%d ok' % success)
-    if isinstance(errors, int) and not isinstance(errors, bool):
-        parts.append('%d stream errors' % errors)
-    return ', '.join(parts) if parts else '—'
+def _stream_count(value):
+    """A published stream count. Bools and other types are unpublished."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _column_tones(values):
+    """Green when a value is within 2× of the column median, red outside.
+
+    One published value, or a missing value, stays unknown: black on the page.
+    """
+    present = sorted(value for value in values if value is not None)
+    if len(present) < 2:
+        return ['unknown'] * len(values)
+    middle = len(present) // 2
+    if len(present) % 2:
+        median = float(present[middle])
+    else:
+        median = (present[middle - 1] + present[middle]) / 2.0
+    tones = []
+    for value in values:
+        if value is None:
+            tones.append('unknown')
+        elif median == 0:
+            tones.append('agree' if value == 0 else 'disagree')
+        elif value == 0:
+            tones.append('disagree')
+        else:
+            high = value if value >= median else median
+            low = median if value >= median else value
+            tones.append('agree' if high / float(low) <= 2 else 'disagree')
+    return tones
+
+
+def _rtt_ms(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < 0 or value != value:
+        return None
+    return float(value)
 
 
 def format_scanner_measurements(measurements, use_bits: bool = False):
@@ -510,31 +544,66 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
     for item in scanners:
         if not isinstance(item, dict) or _vote_kb(item.get('bw')) is None:
             continue
-        rtt = item.get('rtt')
-        if isinstance(rtt, bool) or not isinstance(rtt, (int, float)) or rtt < 0 or rtt != rtt:
-            rtt_display = '—'
-        else:
+        rtt = _rtt_ms(item.get('rtt'))
+        if rtt is not None:
             any_rtt = True
-            rtt_display = '%d ms' % int(rtt)
         measured_at = item.get('measured_at') or ''
         if not isinstance(measured_at, str):
             measured_at = ''
         rows.append({
             'scanner': item.get('scanner') or 'unknown',
             'country': item.get('scanner_country') or '',
+            'bw_value': _vote_kb(item.get('bw')),
+            'mean_value': _vote_kb(item.get('bw_mean')),
+            'median_value': _vote_kb(item.get('bw_median')),
+            'obs_value': _vote_kb(item.get('obs_last')),
+            'rtt_value': rtt,
             'bw_display': _display_rate(item.get('bw'), VOTE_BW_KB_BYTES, use_bits),
             'mean_display': _display_rate(item.get('bw_mean'), 1, use_bits),
             'median_display': _display_rate(item.get('bw_median'), 1, use_bits),
-            'rtt_display': rtt_display,
+            'rtt_display': '—' if rtt is None else '%d ms' % int(rtt),
             'obs_display': _display_rate(item.get('obs_last'), 1, use_bits),
             'measured_at': measured_at.replace('T', ' ').replace('Z', ''),
             'file_created': item.get('file_created') or '',
-            'streams': _stream_counts(item.get('success'), item.get('error_stream')),
+            'ok_count': _stream_count(item.get('success')),
+            'error_count': _stream_count(item.get('error_stream')),
         })
     if not rows:
         return None
     rows.sort(key=lambda row: (row['scanner'] or '').lower())
-    return {'rows': rows, 'any_rtt': any_rtt}
+    for key, tone_key in (
+        ('bw_value', 'bw_tone'), ('mean_value', 'mean_tone'), ('median_value', 'median_tone'),
+        ('obs_value', 'obs_tone'), ('rtt_value', 'rtt_tone'),
+    ):
+        for row, tone in zip(rows, _column_tones([row[key] for row in rows])):
+            row[tone_key] = tone
+    failed = all(not row['ok_count'] for row in rows)
+    bw_values = {row['bw_display'] for row in rows}
+    return {
+        'rows': rows,
+        'any_rtt': any_rtt,
+        'all_failed': failed,
+        'failed_bw_display': bw_values.pop() if failed and len(bw_values) == 1 else '',
+    }
+
+
+def scanner_failure_issue(details):
+    """Issue for a relay whose every bandwidth-file row has 0 successful streams."""
+    if not isinstance(details, dict) or not details.get('all_failed'):
+        return None
+    description = (
+        'Every scanner that published a bandwidth file for this relay recorded 0 successful streams.'
+    )
+    voted = details.get('failed_bw_display')
+    if voted:
+        description += ' The Bandwidth Voted Value is %s.' % voted
+    return {
+        'severity': 'warning',
+        'category': 'consensus',
+        'title': 'Bandwidth scanners failed',
+        'description': description,
+        'section': 'bandwidth-authority-details',
+    }
 
 
 class CollectorFetcher:

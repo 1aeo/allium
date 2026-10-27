@@ -158,7 +158,7 @@
         </tr>
         <tbody>
         {% for authority in relays.authorities_data -%}
-            <tr>
+            <tr id="authority-{{ authority.nickname|lower }}">
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
                     {% if authority.is_known_offline %}

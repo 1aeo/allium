@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation, chart_history, chart_period_anchors, history_jump %}
+{% from "macros.html" import navigation, chart_history, chart_period_anchors, history_jump, authority_list %}
 {% extends "skeleton.html" -%}
 
 {% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/network-health.css">{% endblock %}
@@ -19,7 +19,73 @@ Network Health Dashboard
 
 <!-- COMPREHENSIVE HEALTH DASHBOARD -->
 <div class="network-health-ribbon">
-    
+
+    {% if relays.vote_agreement_summary and relays.vote_agreement_summary.compared %}
+    {% set vote_sum = relays.vote_agreement_summary %}
+    {% set bw = vote_sum.bandwidth %}
+    <div class="ribbon-row vote-cards">
+        <div class="ribbon-card flag-agreement">
+            <div class="card-header" id="flag-agreement">
+                <h4><a href="#flag-agreement" class="al-link-plain">Flag agreement</a></h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. Agreement on one flag means every voting authority gave that flag the same yes or no.">
+                    <span class="metric-value">{{ "{:,}".format(vote_sum.agreed) }}</span>
+                    <span class="metric-label">of {{ "{:,}".format(vote_sum.compared) }} relays in agreement</span>
+                </div>
+                <table class="vote-flag-counts">
+                    <thead>
+                        <tr>
+                            <th>Flag</th>
+                            <th class="count">In agreement</th>
+                            <th class="count">Not in agreement</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in vote_sum.flag_rows %}
+                        <tr>
+                            <td>{{ row.flag }}</td>
+                            <td class="count al-status-success">{{ "{:,}".format(row.agreed) }}</td>
+                            <td class="count{% if row.split %} al-status-danger{% endif %}">{{ "{:,}".format(row.split) }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="ribbon-card bandwidth-agreement">
+            <div class="card-header" id="bandwidth-agreement">
+                <h4><a href="#bandwidth-agreement" class="al-link-plain">Bandwidth measurements</a></h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Measured= is the bandwidth value an authority published in its vote. A relay is missing one when an authority that publishes Measured= left it off this relay.">
+                    <span class="metric-value">{{ "{:,}".format(vote_sum.measurement_split) }}</span>
+                    <span class="metric-label">relays missing Measured= from an authority that publishes it</span>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="metric-item" title="Relays where every authority that publishes Measured= published one for this relay.">
+                        <span class="metric-value">{% if bw %}{{ "{:,}".format(bw.full_count) }}{% else %}0{% endif %}</span>
+                        <span class="metric-label">Measured by all publishing authorities</span>
+                    </div>
+                    <div class="metric-item" title="Fewer than 3 Measured= values, so the consensus weight uses the relay-reported bandwidth.">
+                        <span class="metric-value">{{ "{:,}".format(vote_sum.unmeasured) }}</span>
+                        <span class="metric-label">Fewer than 3 Measured= values</span>
+                    </div>
+                </div>
+                {% if bw and bw.publishing %}
+                <p class="vote-card-copy">
+                    {{ "{:,}".format(bw.full_count) }} of {{ "{:,}".format(bw.compared) }} relays have Measured= published votes by
+                    {% if bw.full_count == bw.compared %}{{ bw.publishing|length }} of {{ bw.scanners|length }}{% else %}all {{ bw.publishing|length }} of {{ bw.scanners|length }}{% endif %}
+                    authorities ({{ authority_list(bw.publishing, page_ctx) }}).
+                    {% if bw.silent %}No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
+                    {% for miss in bw.misses %} {{ authority_list([miss.name], page_ctx) }} did not publish Measured= on {{ "{:,}".format(miss.count) }} relay{{ 's' if miss.count != 1 else '' }}.{% endfor %}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- FIRST ROW -->
     <div class="ribbon-row">
         

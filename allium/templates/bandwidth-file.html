@@ -1,22 +1,27 @@
 {# Scanner bandwidth-file rows. Included from relay-info.html.
    Values are preformatted in allium/lib/consensus/collector_fetcher.py. #}
-<div id="bandwidth-file" style="margin-top: 12px;">
+<div id="bandwidth-authority-details" style="margin-top: 12px;">
+<span id="bandwidth-file" class="compat-anchor"></span>
 <h5 class="subsection-header" style="margin-top: 0;">
-    <a href="#bandwidth-file" class="anchor-link">Bandwidth file details</a>
+    <a href="#bandwidth-authority-details" class="anchor-link">Bandwidth authority details</a>
 </h5>
 <p class="text-muted" style="font-size: 12px; margin-bottom: 8px;">
 Latest bandwidth file each directory authority included in its vote
 (<a href="https://collector.torproject.org/recent/relay-descriptors/bandwidths/" target="_blank" rel="noopener">CollecTor</a>).
-<code>bw</code> is the scanner's vote in kilobytes per second.
+<strong>Bandwidth Voted Value</strong> is <code>bw=</code>, the scanner's vote in kilobytes per second.
 Mean and median (<code>bw_mean</code>, <code>bw_median</code>) and observed (<code>desc_bw_obs_last</code>) are bytes per second, as sbws writes them.
 RTT is the scanner's round-trip time when the file publishes <code>rtt</code>.
+<span class="al-status-success">Green</span> values agree with the other scanners in that column (within 2× of the median).
+<span class="al-status-danger">Red</span> values disagree.
+Black values are missing, or are not a good or bad result.
+Successful stream counts are green and stream errors are red.
 </p>
 <div style="overflow-x: auto;">
-<table class="table table-condensed table-striped" style="font-size: 11px;">
+<table class="table table-condensed" style="font-size: 11px;">
 <thead>
 <tr>
     <th title="dirauth_nickname from the bandwidth file this authority included in its vote.">Scanner</th>
-    <th title="bw= in the bandwidth file, kilobytes per second. This is the scanner's vote for the relay.">bw</th>
+    <th title="bw= in the bandwidth file, kilobytes per second. This is the scanner's vote for the relay.">Bandwidth Voted Value</th>
     <th title="bw_mean= in bytes per second. sbws does not scale this the way it scales bw.">Mean</th>
     <th title="bw_median= in bytes per second. sbws does not scale this the way it scales bw.">Median</th>
     <th title="rtt= in milliseconds. Absent when the scanner did not publish a round-trip time.">RTT</th>
@@ -28,14 +33,27 @@ RTT is the scanner's round-trip time when the file publishes <code>rtt</code>.
 <tbody>
 {% for row in relay.bandwidth_file_details.rows %}
 <tr>
-    <td title="Bandwidth file created {{ row.file_created }}. Scanner country {{ row.country }}.">{{ row.scanner }}{% if row.country %} <span class="al-text-small-muted">({{ row.country }})</span>{% endif %}</td>
-    <td>{{ row.bw_display }}</td>
-    <td>{{ row.mean_display }}</td>
-    <td>{{ row.median_display }}</td>
-    <td>{% if row.rtt_display == '—' %}<span class="al-status-muted">—</span>{% else %}{{ row.rtt_display }}{% endif %}</td>
-    <td>{{ row.obs_display }}</td>
+    <td title="Bandwidth file created {{ row.file_created }}. Scanner country {{ row.country }}."><a href="#vote-{{ row.scanner|lower }}">{{ row.scanner }}</a>{% if row.country %} <span class="al-text-small-muted">({{ row.country }})</span>{% endif %}</td>
+    <td><span class="{% if row.bw_tone == 'agree' %}al-status-success{% elif row.bw_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.bw_display }}</span></td>
+    <td><span class="{% if row.mean_tone == 'agree' %}al-status-success{% elif row.mean_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.mean_display }}</span></td>
+    <td><span class="{% if row.median_tone == 'agree' %}al-status-success{% elif row.median_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.median_display }}</span></td>
+    <td><span class="{% if row.rtt_tone == 'agree' %}al-status-success{% elif row.rtt_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.rtt_display }}</span></td>
+    <td><span class="{% if row.obs_tone == 'agree' %}al-status-success{% elif row.obs_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.obs_display }}</span></td>
     <td>{{ row.measured_at }}</td>
-    <td>{{ row.streams }}</td>
+    <td>
+        {%- if row.ok_count is not none and row.ok_count > 0 -%}
+        <span class="al-status-success">{{ row.ok_count }} ok</span>
+        {%- elif row.ok_count == 0 -%}
+        0 ok
+        {%- endif -%}
+        {%- if row.ok_count is not none and row.error_count is not none and row.error_count > 0 -%}, {% endif -%}
+        {%- if row.error_count is not none and row.error_count > 0 -%}
+        <span class="al-status-danger">{{ row.error_count }} stream errors</span>
+        {%- endif -%}
+        {%- if row.ok_count is none and (row.error_count is none or row.error_count == 0) -%}
+        —
+        {%- endif -%}
+    </td>
 </tr>
 {% endfor %}
 </tbody>
