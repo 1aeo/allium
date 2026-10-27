@@ -1469,28 +1469,35 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 Each cell shows: <strong>your measured value | authority threshold</strong>. 
 <span class="al-status-success">Green</span> = meets, <span class="al-status-danger">red</span> = below.
 Flags: <span class="al-status-success-bold">green</span> = all authorities agree, <span class="al-status-warning-bold">yellow</span> = partial.
+Columns run from least important on the left to most important on the right.
 </p>
 <div style="overflow-x: auto; overflow-y: visible; padding-top: 60px; margin-top: -50px;">
 <table class="table table-condensed table-striped" style="font-size: 11px;">
+{# Left to right follows relay-operator troubleshooting frequency
+   (support.torproject.org relays FAQ, tor-relays, forum.torproject.org):
+   authority metadata and rare restrictions, descriptor age, v4, v6,
+   Cons Wt, Flags, then Fast/Guard bandwidth, Stable, Guard time, Running.
+   Cons Wt stays after v4 and v6 and before Flags. Running is last because
+   a No means this authority did not vote the relay in. #}
 <thead>
 <tr>
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
-    <th id="col-running" title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
+    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
-    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
-    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
+    <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | Yes = authority reached the IPv6 ORPort | No = authority tests IPv6 and omitted the 'a' line | N/T = authority does not test IPv6">v6</th>{% endif %}
+    <th id="col-cons-wt" title="Each vote's input to the consensus weight. When 3 or more authorities measured the relay, the consensus weight is the median of their measurements (M); relay-reported values (R) then don't count and are grayed out. Otherwise it is the median of the relay-reported values, capped at maxunmeasuredbw.">Cons Wt (Authority)</th>
     <th id="col-flags" title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
     <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
     <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
-    <th title="Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
-    <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>
-    <th title="Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
     <th title="Stable Uptime: Relay's uptime | Authority's threshold">Stable Uptime (Relay|T)</th>
-    <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
-    <th id="col-cons-wt" title="Each vote's input to the consensus weight. When 3 or more authorities measured the relay, the consensus weight is the median of their measurements (M); relay-reported values (R) then don't count and are grayed out. Otherwise it is the median of the relay-reported values, capped at maxunmeasuredbw.">Cons Wt (Authority)</th>
+    <th title="Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
+    <th title="Guard TK: Measured | Threshold">Guard TK (M|T)</th>
+    <th title="Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
+    <th id="col-running" title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
 </tr>
 </thead>
 <tbody>
@@ -1507,15 +1514,16 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
         <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
         {% endif %}
     </td>
-    <td headers="col-running">{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
+    <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-muted">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
+    <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.ipv4_reachable %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     {% if has_ipv6 %}
     <td>{% if vote.ipv6_cell == 'yes' %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_cell == 'no' %}<span class="al-status-danger">No</span>{% elif vote.ipv6_cell == 'not_tested' %}<span class="al-status-muted" title="This authority's vote has no 'a' line for any relay, so it did not test IPv6.">N/T</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     {% endif %}
+    <td headers="col-cons-wt">{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
             {% for flag_info in vote.flags_with_consensus %}
@@ -1529,12 +1537,11 @@ Flags: <span class="al-status-success-bold">green</span> = all authorities agree
     </td>
     <td headers="col-fast">{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Guard needs this authority's top-25% cutoff ({{ vote.guard_bw_top25_display }}) OR AuthDirGuardBWGuarantee ({{ vote.guard_bw_guarantee_display }}).">{{ vote.guard_bw_value_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span class="{% if vote.stable_uptime_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span class="al-status-muted">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td headers="col-cons-wt">{% if vote.voted and vote.measured %}<span{% if not vote.cons_wt_counts %} class="al-status-muted"{% endif %} title="{{ vote.cons_wt_title }}">{{ vote.measured_display }}{% if vote.cons_wt_mark %} ({{ vote.cons_wt_mark }}){% endif %}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td headers="col-running">{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
