@@ -577,7 +577,8 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
     ):
         for row, tone in zip(rows, _column_tones([row[key] for row in rows])):
             row[tone_key] = tone
-    failed = all(not row['ok_count'] for row in rows)
+    # Unpublished success is not a recorded failure. Only an explicit 0 counts.
+    failed = all(row['ok_count'] == 0 for row in rows)
     bw_values = {row['bw_display'] for row in rows}
     return {
         'rows': rows,

@@ -146,6 +146,7 @@ class TestBandwidthFileRows:
         assert quiet['rows'][0]['rtt_display'] == '—'
         assert quiet['rows'][0]['ok_count'] is None
         assert quiet['rows'][0]['error_count'] is None
+        assert quiet['all_failed'] is False
 
     def test_mean_and_median_are_bytes_and_bw_is_kilobytes(self):
         # sbws 1.9: bw is divided down to KB/s; bw_mean and bw_median stay bytes/s.
@@ -234,3 +235,8 @@ class TestBandwidthFileRows:
         assert details['all_failed'] is True
         assert details['rows'][0]['ok_count'] == 0
         assert details['rows'][0]['error_count'] == 4
+        omitted = format_scanner_measurements({'scanners': [
+            {'scanner': 'bastet', 'bw': 20},
+            {'scanner': 'moria1', 'bw': 1, 'success': 0, 'error_stream': 2},
+        ]})
+        assert omitted['all_failed'] is False
