@@ -673,8 +673,8 @@ On {{ line.count }}, {% if line.only %}only {% endif %}{{ authority_list(line.na
 {% macro vote_agreement_block(vote_sum, page_ctx) -%}
 <li><strong><span title="Latest authority votes for this operator's relays. Agreement means every voting authority assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state. A split flag was assigned by some authorities and not others. Measured= is the bandwidth value an authority published in its vote.">Authority vote agreement</span>:</strong>
     {{ vote_sum.agreed }} of {{ vote_sum.compared }} relay{{ 's' if vote_sum.compared != 1 else '' }} in agreement.
-    {%- if vote_sum.all_agreed %}
-        {% if vote_sum.voters %}All {{ vote_sum.voters|length }} voting authorities ({{ authority_list(vote_sum.voters, page_ctx) }}){% else %}All voting authorities{% endif %}
+    {% if vote_sum.all_agreed %}
+        {% if vote_sum.voters %} All {{ vote_sum.voters|length }} voting authorities ({{ authority_list(vote_sum.voters, page_ctx) }}){% else %} All voting authorities{% endif %}
         {%- if vote_sum.assigned_flags %} assigned the same flags on every relay: {{ flag_list(vote_sum.assigned_flags) }}.
             {%- if vote_sum.absent_flags %} {{ flag_list(vote_sum.absent_flags) }} {{ 'was' if vote_sum.absent_flags|length == 1 else 'were' }} not assigned.{% endif %}
         {%- else %} assigned the same Running, Valid, Fast, Stable, Guard, Exit, and HSDir state on each relay.
