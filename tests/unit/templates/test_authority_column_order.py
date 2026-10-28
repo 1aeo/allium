@@ -1,9 +1,8 @@
-"""Per-authority columns run from least important on the left to most on the right.
+"""Per-authority columns run from most important on the left to least on the right.
 
-Cons Wt sits after v4 and v6 and before Flags. The order matches the problems
-relay operators actually debug: rare authority and policy context first, then
-reachability and consensus weight, then the flag list and the thresholds that
-explain a missing Fast, Guard, or Stable flag, with Running last.
+Authority and BW Scan are context for the row. Cons Wt sits after v4 and v6
+and before Flags. Running comes next, then the measurements that explain a
+missing Stable, Guard, or Fast flag, with rare restrictions at the right edge.
 """
 
 import re
@@ -18,26 +17,26 @@ PUBLISHED = "2026-10-11 12:00:00"
 RELAY_V6 = "A" * 40
 RELAY_V4 = "B" * 40
 
-# Visible header text, least important first. v6 is omitted when the relay
-# has no IPv6 ORPort for authorities to test.
+# Visible header text. Authority and BW Scan are context; the rest run from
+# most important to least. v6 is omitted when the relay has no IPv6 ORPort.
 HEADER_ORDER = [
     "Authority",
     "BW Scan (Authority)",
-    "MiddleOnly",
-    "Valid",
-    "Exit",
-    "Desc Published",
+    "Running",
     "v4",
     "v6",
     "Cons Wt (Authority)",
     "Flags",
-    "Fast (BW|T)",
-    "Guard BW (BW|Threshold)",
-    "Stable Uptime (Relay|T)",
     "Stable MTBF (M|T)",
-    "Guard TK (M|T)",
+    "Stable Uptime (Relay|T)",
     "Guard WFU (M|T)",
-    "Running",
+    "Guard TK (M|T)",
+    "Guard BW (BW|Threshold)",
+    "Fast (BW|T)",
+    "Desc Published",
+    "Exit",
+    "Valid",
+    "MiddleOnly",
 ]
 
 # One marker per body cell, in the same order as HEADER_ORDER. Each marker
@@ -45,21 +44,21 @@ HEADER_ORDER = [
 ROW_MARKERS = [
     "authority_page_fps",
     "vote.is_bw_authority",
-    "'MiddleOnly' in vote.flags",
-    "'Valid' in vote.flags",
-    "'Exit' in vote.flags",
-    'headers="col-desc-published"',
+    'headers="col-running"',
     "vote.ipv4_reachable",
     "vote.ipv6_cell",
     'headers="col-cons-wt"',
     'headers="col-flags"',
-    'headers="col-fast"',
-    "vote.guard_bw_guarantee_display",
-    "vote.stable_uptime_threshold",
     "vote.stable_mtbf_display",
-    "vote.tk is not none",
+    "vote.stable_uptime_threshold",
     "vote.wfu is not none",
-    'headers="col-running"',
+    "vote.tk is not none",
+    "vote.guard_bw_guarantee_display",
+    'headers="col-fast"',
+    'headers="col-desc-published"',
+    "'Exit' in vote.flags",
+    "'Valid' in vote.flags",
+    "'MiddleOnly' in vote.flags",
 ]
 
 
@@ -101,7 +100,8 @@ def test_template_orders_headers_and_cells_together():
     assert labels.index("v6") == labels.index("v4") + 1
     assert labels.index("Cons Wt (Authority)") == labels.index("v6") + 1
     assert labels.index("Flags") == labels.index("Cons Wt (Authority)") + 1
-    assert labels[-1] == "Running"
+    assert labels[:3] == ["Authority", "BW Scan (Authority)", "Running"]
+    assert labels[-1] == "MiddleOnly"
 
 
 def _relay(fingerprint, nickname):
@@ -268,7 +268,7 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
 
     with_v6 = _page_table(relay_dir, RELAY_V6)
     assert _header_labels(with_v6) == HEADER_ORDER
-    assert "least important on the left" in (relay_dir / RELAY_V6 / "index.html").read_text()
+    assert "most important on the left" in (relay_dir / RELAY_V6 / "index.html").read_text()
     rows = _rows(with_v6)
     assert rows
     assert all(len(row) == len(HEADER_ORDER) for row in rows)
@@ -282,8 +282,10 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
     assert "[Stale]" in moria[labels.index("Desc Published")][0]
     assert "N/T" in next(row for row in rows if "longclaw" in row[0][0])[labels.index("v6")][0]
     assert moria[labels.index("Cons Wt (Authority)")][0].endswith("(M)")
-    assert moria[-1][0] == "Yes"
-    assert next(row for row in rows if row[0][0].startswith("bastet"))[-1][0] == "No"
+    running = labels.index("Running")
+    assert moria[running][0] == "Yes"
+    assert next(row for row in rows if row[0][0].startswith("bastet"))[running][0] == "No"
+    assert moria[-1][0] == "—"
 
     v4_only = _page_table(relay_dir, RELAY_V4)
     without_v6 = [label for label in HEADER_ORDER if label != "v6"]
