@@ -1,8 +1,8 @@
 """Per-authority columns run from most important on the left to least on the right.
 
-Authority and BW Scan are context for the row. Cons Wt sits after v4 and v6
-and before Flags. Running comes next, then the measurements that explain a
-missing Stable, Guard, or Fast flag, with rare restrictions at the right edge.
+Authority and BW Scan are context for the row. Valid comes before Running.
+Cons Wt sits after v4 and v6 and before Flags. Exit and MiddleOnly are names
+in Flags, not their own columns.
 """
 
 import re
@@ -22,6 +22,7 @@ RELAY_V4 = "B" * 40
 HEADER_ORDER = [
     "Authority",
     "BW Scan (Authority)",
+    "Valid",
     "Running",
     "v4",
     "v6",
@@ -34,9 +35,6 @@ HEADER_ORDER = [
     "Guard BW (BW|Threshold)",
     "Fast (BW|T)",
     "Desc Published",
-    "Exit",
-    "Valid",
-    "MiddleOnly",
 ]
 
 # One marker per body cell, in the same order as HEADER_ORDER. Each marker
@@ -44,6 +42,7 @@ HEADER_ORDER = [
 ROW_MARKERS = [
     "authority_page_fps",
     "vote.is_bw_authority",
+    "'Valid' in vote.flags",
     'headers="col-running"',
     "vote.ipv4_reachable",
     "vote.ipv6_cell",
@@ -56,9 +55,6 @@ ROW_MARKERS = [
     "vote.guard_bw_guarantee_display",
     'headers="col-fast"',
     'headers="col-desc-published"',
-    "'Exit' in vote.flags",
-    "'Valid' in vote.flags",
-    "'MiddleOnly' in vote.flags",
 ]
 
 
@@ -100,8 +96,10 @@ def test_template_orders_headers_and_cells_together():
     assert labels.index("v6") == labels.index("v4") + 1
     assert labels.index("Cons Wt (Authority)") == labels.index("v6") + 1
     assert labels.index("Flags") == labels.index("Cons Wt (Authority)") + 1
-    assert labels[:3] == ["Authority", "BW Scan (Authority)", "Running"]
-    assert labels[-1] == "MiddleOnly"
+    assert labels[:4] == ["Authority", "BW Scan (Authority)", "Valid", "Running"]
+    assert labels[-1] == "Desc Published"
+    assert "Exit" not in labels
+    assert "MiddleOnly" not in labels
 
 
 def _relay(fingerprint, nickname):
@@ -200,7 +198,10 @@ def _render(tmp_path):
         descriptor_published="2020-01-01 00:00:00",
     )
     bastet = _vote("bastet", voted=False, flags=[], ipv4_reachable=False, measured=None, bandwidth=None)
-    longclaw = _vote("longclaw", tests_ipv6=False, ipv6_reachable=None)
+    longclaw = _vote(
+        "longclaw", tests_ipv6=False, ipv6_reachable=None,
+        flags=["Running", "Valid", "Exit", "MiddleOnly"],
+    )
     names = ["moria1", "bastet", "longclaw"]
     details = {
         "version": "8.0",
@@ -283,9 +284,19 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
     assert "N/T" in next(row for row in rows if "longclaw" in row[0][0])[labels.index("v6")][0]
     assert moria[labels.index("Cons Wt (Authority)")][0].endswith("(M)")
     running = labels.index("Running")
+    valid = labels.index("Valid")
+    assert valid == running - 1
+    assert moria[valid][0] == "Yes"
     assert moria[running][0] == "Yes"
-    assert next(row for row in rows if row[0][0].startswith("bastet"))[running][0] == "No"
-    assert moria[-1][0] == "—"
+    bastet = next(row for row in rows if row[0][0].startswith("bastet"))
+    assert bastet[running][0] == "No"
+    assert bastet[valid][0] == "—"
+    flags = next(row for row in rows if "longclaw" in row[0][0])[labels.index("Flags")][0]
+    assert "Exit" in flags and "MiddleOnly" in flags
+    assert "al-status-danger" in next(
+        cell for cell in re.findall(r"<td\b[^>]*>(.*?)</td>", 
+            _section(with_v6, "tbody"), flags=re.S)
+        if "MiddleOnly" in cell)
 
     v4_only = _page_table(relay_dir, RELAY_V4)
     without_v6 = [label for label in HEADER_ORDER if label != "v6"]

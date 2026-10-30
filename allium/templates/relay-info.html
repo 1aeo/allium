@@ -1474,14 +1474,15 @@ Columns run from most important on the left to least important on the right. Aut
 <div style="overflow-x: auto; overflow-y: visible; padding-top: 60px; margin-top: -50px;">
 <table class="table table-condensed table-striped" style="font-size: 11px;">
 {# Authority and BW Scan are context. After that, left to right is most
-   important to least (support.torproject.org relays FAQ, tor-relays,
-   forum.torproject.org): Running, v4, v6, Cons Wt, Flags, then Stable,
-   Guard time, Guard/Fast bandwidth, descriptor age, and rare restrictions.
-   Cons Wt stays after v4 and v6 and before Flags. #}
+   important to least: Valid, Running, v4, v6, Cons Wt, Flags, then Stable,
+   Guard time, Guard/Fast bandwidth, and descriptor age. Exit and MiddleOnly
+   are names in Flags, not their own columns. Cons Wt stays after v4 and v6
+   and before Flags. #}
 <thead>
 <tr>
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner?">BW Scan<br>(Authority)</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
     <th id="col-running" title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | Yes = authority reached the IPv6 ORPort | No = authority tests IPv6 and omitted the 'a' line | N/T = authority does not test IPv6">v6</th>{% endif %}
@@ -1494,9 +1495,6 @@ Columns run from most important on the left to least important on the right. Aut
     <th title="Bandwidth this authority uses for Guard (the same as for Fast) | its top-25% cutoff OR AuthDirGuardBWGuarantee">Guard BW (BW|Threshold)</th>
     <th id="col-fast" title="Bandwidth this authority uses for Fast | its Fast threshold (fast-speed). (M) = its bandwidth scanner's measurement (Measured=), (R) = relay-reported bandwidth (Bandwidth=), (U) = unmeasured, counted as 0 (ignoring-advertised-bws=1).">Fast (BW|T)</th>
     <th id="col-desc-published" title="Descriptor Published timestamp">Desc Published</th>
-    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
-    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
-    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only.">MiddleOnly</th>
 </tr>
 </thead>
 <tbody>
@@ -1514,6 +1512,7 @@ Columns run from most important on the left to least important on the right. Aut
         {% endif %}
     </td>
     <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-running">{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     <td>{% if vote.ipv4_reachable %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     {% if has_ipv6 %}
@@ -1523,7 +1522,8 @@ Columns run from most important on the left to least important on the right. Aut
     <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
             {% for flag_info in vote.flags_with_consensus %}
-                {%- if flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
+                {%- if flag_info.name in ['MiddleOnly', 'BadExit'] %}<span class="al-status-danger">{{ flag_info.name }}</span>
+                {%- elif flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
                 {%- elif flag_info.partial %}<span class="al-status-warning-bold">{{ flag_info.name }}</span>
                 {%- else %}{{ flag_info.name }}{%- endif %}
                 {%- if not loop.last %}, {% endif %}
@@ -1538,9 +1538,6 @@ Columns run from most important on the left to least important on the right. Aut
     <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Guard needs this authority's top-25% cutoff ({{ vote.guard_bw_top25_display }}) OR AuthDirGuardBWGuarantee ({{ vote.guard_bw_guarantee_display }}).">{{ vote.guard_bw_value_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-fast">{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="{{ vote.flag_bw_title }} Fast threshold (fast-speed): {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }}{% if vote.flag_bw_mark %} ({{ vote.flag_bw_mark }}){% endif %} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     <td headers="col-desc-published">{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-muted">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
