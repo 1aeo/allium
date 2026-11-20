@@ -7,6 +7,54 @@ import textwrap
 from pathlib import Path
 
 
+def test_operator_flags_apply_before_relay_data_is_fetched(tmp_path):
+    """--no-consensus-evaluation and --no-pressure-history are applied before any fetch."""
+    script = textwrap.dedent("""\
+        import runpy
+        import sys
+        from types import SimpleNamespace
+
+        import lib.consensus
+        import lib.coordinator
+
+        def fake(args, progress_logger=None):
+            names = [
+                config.api_name
+                for config in lib.coordinator.Coordinator.iter_enabled_worker_entries(
+                    args.enabled_apis)
+            ]
+            print("consensus=%s pressure=%s workers=%s" % (
+                lib.consensus.is_consensus_evaluation_enabled(),
+                args.pressure_history,
+                ",".join(names)))
+            return SimpleNamespace(json={"relays": []})
+
+        lib.coordinator.create_relay_set_with_coordinator = fake
+        sys.argv = ["allium.py"] + sys.argv[1:]
+        runpy.run_path("allium.py", run_name="__main__")
+    """)
+    out = tmp_path / "www"
+    common = ["--apis", "all", "--no-charts", "--out", str(out)]
+    cases = (
+        (common, "consensus=True pressure=True", True),
+        (common + ["--no-consensus-evaluation", "--no-pressure-history"],
+         "consensus=False pressure=False", False),
+    )
+    for options, shown, collectors in cases:
+        result = subprocess.run(
+            [sys.executable, "-c", script] + options,
+            cwd=Path(__file__).resolve().parents[2] / "allium",
+            capture_output=True,
+            text=True,
+            timeout=25,
+        )
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert shown in result.stdout
+        line = next(line for line in result.stdout.splitlines() if line.startswith("consensus="))
+        present = "collector_consensus" in line.split("workers=", 1)[1].split(",")
+        assert present is collectors
+
+
 def test_empty_relays_exit_before_site_generation(tmp_path):
     """An empty details document exits with status 1 without generating a site."""
     generator_called = tmp_path / "generator_called"

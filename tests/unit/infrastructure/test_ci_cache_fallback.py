@@ -384,6 +384,8 @@ def test_setup_job_keeps_the_hang_backstop_and_opts_into_every_cache():
     assert "ALLIUM_CI_DETAILS_FALLBACK" not in workflow
     assert "seed_ci_api_caches" in setup
     assert "ci_generate_once" in setup
+    invocation = 'python3 "$allium_py" --progress --no-pressure-history $mode --out "$out"'
+    assert HELPER.read_text(encoding="utf-8").count(invocation) == 2
     assert "generate_from_ci_onionoo_fixture" not in setup
     assert 'echo "❌ Setup script exited with code $setup_exit_code"' in workflow
     assert "exit 1" in workflow[workflow.find("Setup script exited"):workflow.find("Setup script exited") + 200]

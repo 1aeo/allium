@@ -108,13 +108,14 @@ For any change that affects HTML output (templates, data processing, page
 generation), run a before/after comparison to verify nothing unexpected broke:
 
 ```bash
-# 1. Generate baseline BEFORE your change
-python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# 1. Generate baseline BEFORE your change.
+#    --no-pressure-history skips the CollecTor archive backfill.
+python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 
 # 2. Make your code changes
 
 # 3. Generate output AFTER your change
-python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 
 # 4. Compare (~8 seconds for ~22k files)
 python3 compare_outputs.py

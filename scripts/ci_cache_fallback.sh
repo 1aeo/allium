@@ -149,7 +149,8 @@ ci_generate_once() {
     local out="$1" allium_py="$2" code outcome mode
     mode="${API_MODE:---apis details}"
     set +e
-    python3 "$allium_py" --progress $mode --out "$out"
+    # The fixture job must not backfill the CollecTor pressure archive.
+    python3 "$allium_py" --progress --no-pressure-history $mode --out "$out"
     code=$?
     set -e
     outcome=$(ci_live_generation_outcome "$code" "${out}/index.html")
@@ -198,7 +199,7 @@ generate_from_ci_fixtures() {
     fi
     echo "🤖 CI: generating from committed API fixtures at http://127.0.0.1:${port}/"
     set +e
-    python3 "$allium_py" --progress $mode --out "$out" \
+    python3 "$allium_py" --progress --no-pressure-history $mode --out "$out" \
         --onionoo-details-url "http://127.0.0.1:${port}/onionoo_details.json" \
         --onionoo-uptime-url "http://127.0.0.1:${port}/onionoo_uptime.json" \
         --onionoo-bandwidth-url "http://127.0.0.1:${port}/onionoo_bandwidth.json" \

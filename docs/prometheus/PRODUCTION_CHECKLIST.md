@@ -31,11 +31,11 @@ promtool check rules docs/prometheus/alerts_aroi.yml docs/prometheus/alerts_dns_
 If you changed generation/templating/metrics behavior:
 
 ```bash
-# BEFORE
-python3 allium/allium.py --out allium/www_prodcheck_before --apis all --progress
+# BEFORE. --no-pressure-history skips the CollecTor archive backfill.
+python3 allium/allium.py --out allium/www_prodcheck_before --apis all --progress --no-pressure-history
 
 # AFTER
-python3 allium/allium.py --out allium/www_prodcheck_after --apis all --progress
+python3 allium/allium.py --out allium/www_prodcheck_after --apis all --progress --no-pressure-history
 
 # Compare output
 python3 compare_outputs.py --baseline allium/www_prodcheck_before --after allium/www_prodcheck_after --quiet
