@@ -215,12 +215,18 @@ class Panel(object):
     def vline(self, t, color, width, dash=None):
         self.svg.line(self.x(t), self.top, self.x(t), self.top + self.height, color, width, dash)
 
-    def yaxis(self, ticks, label, size=13, fmt="{:,g}"):
-        """Grid lines and their labels."""
+    def yaxis(self, ticks, label, size=13, fmt="{:,g}", close=False):
+        """Grid lines and their labels. ``close`` puts the rotated name just left of the tick numbers; the
+        default stays at the canvas edge, clear of a ``band_label`` that reaches past those numbers."""
         for tick in ticks:
             self.hline(tick, GRID, 1)
             self.svg.text(self.left - 8, self.y(tick) + size * 0.35, fmt.format(tick), size, MUTED, "end")
-        self.svg.text(12 + size, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
+        if close:
+            widest = max((text_width(fmt.format(tick), size) for tick in ticks), default=0)
+            x = self.left - 8 - widest - 12  # center of the rotated word, one em left of the numbers
+        else:
+            x = 12 + size
+        self.svg.text(x, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
 
     def band_label(self, text, lo, hi, color, ticks, fmt="{:.1f}", size=12, room=13):
         """Name the y range ``lo``–``hi`` beside the axis, inside the range: at its middle, or the spot nearest the

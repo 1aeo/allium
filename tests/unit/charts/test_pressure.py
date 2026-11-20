@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from allium.lib.charts.pressure import directory_chart, guard_chart, overload_chart
+from allium.lib.charts.pressure import directory_chart, guard_chart, hsdir_chart, overload_chart
 
 
 def _document():
@@ -41,6 +41,7 @@ def test_overload_chart_names_the_percentile_band_and_has_no_release_mark():
 
 def test_guard_chart_marks_both_sides_of_the_usual_range():
     text = guard_chart(_document(), "1m").document()
+    assert "Relays with Guard Flag" in text
     assert "Outside usual range" in text
     assert "#ff6b6b" in text
 
@@ -52,6 +53,17 @@ def test_earlier_series_names_its_last_day():
     document["days"]["2026-11-10"]["guard"] = None
     text = guard_chart(document, "1m").document()
     assert "through Nov 9" in text
+
+
+def test_hsdir_chart_marks_both_sides_of_the_usual_range():
+    document = _document()
+    document["days"]["2026-11-10"]["hsdir"] = 1000  # below the frozen p10, so the line is redrawn in red
+    text = hsdir_chart(document, "1m").document()
+    assert "Relays with HSDir Flag" in text
+    assert "Outside usual range" in text
+    assert 'stroke="#ff6b6b" stroke-width="2.4"' in text
+    overload = overload_chart(_document(), "1m").document()
+    assert "Relays reporting overload" in overload and "Tor network" not in overload
 
 
 def test_directory_chart_says_bytes_served():

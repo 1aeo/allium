@@ -11,9 +11,20 @@ Network Pressure
 {% block body -%}
 
 <style>
-/* One column: layout A stacks the four charts under a single period switcher. */
-.pressure-stack.network-history { width: min(1094px, calc(100vw - 16px)); }
-.pressure-stack .pressure-charts { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* Wide screens: two charts across, each shrinking to the column and never past its native 1080px.
+   Narrow screens: one column. 1400px keeps a chart about 680px wide, still readable. */
+.pressure-stack.network-history { width: min(2200px, calc(100vw - 16px)); max-width: none; }
+.pressure-stack .pressure-charts { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; align-items: start; }
+.pressure-stack .history-chart { width: 100%; scroll-margin-top: 12px; }
+.pressure-stack .chart-history { max-width: none; }
+.pressure-stack .history-periods a { font-size: 1.5rem; font-weight: 700; padding: 8px 16px; }
+.pressure-stack .chart-spark { font-size: 16px; font-weight: 700; }
+.pressure-index { margin: 0 0 12px; }
+.pressure-index-label { margin-right: 8px; font-weight: 700; }
+.pressure-index a { display: inline-block; margin: 0 14px 6px 0; font-size: 1.15rem; font-weight: 700; }
+@media (min-width: 1400px) {
+    .pressure-stack .pressure-charts { grid-template-columns: 1fr 1fr; }
+}
 </style>
 
 <div class="aroi-center-text aroi-subsection">
@@ -31,22 +42,34 @@ Network Pressure
         <div class="card-header">
             <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
         </div>
-        <p class="history-lead">Overload is the status: the share of relays whose server descriptor that day includes an overload-general line. It is a level, about a day late, because a relay writes the line into its next descriptor and keeps it for 72 hours. It is pressure, not a cause. Guard confirms a problem that lasts for weeks. HSDir is context. Directory bytes served are the bytes relays sent while answering directory requests. The same 1 month, 6 months, 1 year, and 5 years as a relay page. A thumbnail changes that chart. A period link changes all four.</p>
-        <p class="history-periods">
-            {% for period in chart_spans %}<a href="#{{ period }}">{{ period|upper }}</a>{% endfor %}
+        <p class="pressure-index">
+            <span class="pressure-index-label">Jump to</span>
+            <a href="#pressure-overload">Relays reporting overload</a>
+            <a href="#pressure-guard">Relays with Guard Flag</a>
+            <a href="#pressure-hsdir">Relays with HSDir Flag</a>
+            <a href="#pressure-directory">Directory bytes served</a>
         </p>
+        <p class="history-periods">
+            {#- ?period= reloads, which clears a chart's own radio so these buttons set all four. -#}
+            {% for period in chart_spans %}<a href="?period={{ period }}#{{ period }}">{{ period|upper }}</a>{% endfor %}
+        </p>
+        <p class="history-lead">Tor's goal is more diverse relays and more trusted relays. More relays, run by more operators, spread risk and give end users a more anonymous, safer, and more secure network. Minimizing overloaded relays, maximizing the number of high-quality Guard and HSDir relays, and minimizing excessive directory requests keep that network safer.</p>
+        <p class="history-lead">Relays reporting overload is the share of relays whose server descriptor that day includes an overload-general line (CollecTor server descriptors): a level, about a day late, that measures pressure rather than a cause.</p>
+        <p class="history-lead">Relays with Guard Flag is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
+        <p class="history-lead">Relays with HSDir Flag is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range.</p>
+        <p class="history-lead">Directory bytes served is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
+        <p class="history-lead">The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. The 1M, 6M, 1Y, and 5Y buttons set all four charts, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
             {% for name, alt, heading in (
                 ('overload', 'Relays reporting overload', 'Relays reporting overload'),
-                ('guard', 'Relays with the Guard flag', 'Guard'),
-                ('hsdir', 'Relays with the HSDir flag', 'HSDir'),
+                ('guard', 'Relays with Guard Flag', 'Relays with Guard Flag'),
+                ('hsdir', 'Relays with HSDir Flag', 'Relays with HSDir Flag'),
                 ('directory', 'Directory bytes served', 'Directory bytes served')) %}
             {% if relays.pressure_periods.get(name) %}
-            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading) }}</div>
+            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>
             {% endif %}
             {% endfor %}
         </div>
-        <p class="history-lead">Sources: CollecTor server descriptors for the overload line. Tor Metrics relay flags and dirwrite (directory bytes served) for the other series. The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. Days missing from Tor Metrics, and incomplete consensus days, are left as gaps.</p>
     </section>
     {% else %}
     <section class="ribbon-card" id="network-pressure">

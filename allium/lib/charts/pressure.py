@@ -113,7 +113,7 @@ def _band(document, key):
 
 def _panel(svg, clip_id, y, stamps, yhi, ticks, ylabel, yfmt, period, height=200):
     panel = Panel(svg, clip_id, LEFT, y, PLOT_WIDTH, height, stamps, 0, yhi, _axis_end(stamps), 86400)
-    panel.yaxis(ticks, ylabel, fmt=yfmt)
+    panel.yaxis(ticks, ylabel, fmt=yfmt, close=True)
     panel.xaxis(period, labels=True)
     return panel
 
@@ -137,7 +137,7 @@ def overload_chart(document, period):
         subtitle = "%s since %s %d · %.1f%% on %s %d" % (
             status.capitalize(), began.strftime("%b"), began.day, latest, latest_day.strftime("%b"), latest_day.day)
     svg = Svg(WIDTH)
-    y = _header(svg, "Tor network", "Relays reporting overload · " + PERIOD_SPAN[period], subtitle)
+    y = _header(svg, "", "Relays reporting overload · " + PERIOD_SPAN[period], subtitle)
     svg.text(LEFT, y, "A level, about a day late. Pressure, not a cause.", 12, MUTED)
     y += 18
     if p10 is not None and p90 is not None:
@@ -179,7 +179,7 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
         usual = "%s–%s" % (point.format(p10), point.format(p90)) if p10 is not None and p90 is not None else ""
     svg = Svg(WIDTH)
     y = _header(svg, "", title + " · " + PERIOD_SPAN[period], subtitle)
-    entries = [("line", color, None, "Daily average" if field == "hsdir" else "Inside usual range")]
+    entries = [("line", color, None, "Inside usual range" if outside else "Daily average")]
     if field == "directory" or (outside and p10 is not None):
         entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
     if usual:
@@ -213,7 +213,7 @@ def guard_chart(document, period):
     if began:
         subtitle = "Confirms a sustained problem · under the usual range since %s %d · %d days" % (
             began.strftime("%b"), began.day, days)
-    return _count_chart(document, period, "guard", "Relays with the Guard flag", subtitle, GREEN, "both", 2.2, 0.14)
+    return _count_chart(document, period, "guard", "Relays with Guard Flag", subtitle, GREEN, "both", 2.2, 0.14)
 
 
 def hsdir_chart(document, period):
@@ -221,7 +221,7 @@ def hsdir_chart(document, period):
     subtitle = "Daily average count, for context"
     if counted:
         subtitle = "Context · %d of %d quiet-year days were more than 10%% off a 28-day median" % (off, counted)
-    return _count_chart(document, period, "hsdir", "Relays with the HSDir flag", subtitle, BLUE, None, 1.8, 0.12)
+    return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, BLUE, "both", 1.8, 0.12)
 
 
 def directory_chart(document, period):
