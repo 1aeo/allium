@@ -38,9 +38,10 @@ python3 allium/allium.py --out allium/www_prodcheck_before --apis all --progress
 python3 allium/allium.py --out allium/www_prodcheck_after --apis all --progress --no-pressure-history
 
 # When the change is the pressure-history refresh, omit --no-pressure-history
-# on both commands. Copy allium/data/cache/pressure_history.json and
-# pressure_descriptor_files.json aside first, and restore them before the
-# after run, so both runs refresh from the same cache.
+# on both commands. Before the baseline, copy each of
+# allium/data/cache/pressure_history.json and pressure_descriptor_files.json
+# that exists, and note each file that is absent. Before the after run, put
+# each copy back and delete each file that was absent.
 
 # Compare output
 python3 compare_outputs.py --baseline allium/www_prodcheck_before --after allium/www_prodcheck_after --quiet

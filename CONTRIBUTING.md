@@ -122,10 +122,12 @@ python3 compare_outputs.py
 ```
 
 When the change is the pressure-history refresh, omit `--no-pressure-history`
-on both commands. Copy `allium/data/cache/pressure_history.json` and
-`allium/data/cache/pressure_descriptor_files.json` aside before the baseline,
-and put those copies back before the after run, so both runs refresh from the
-same cache.
+on both commands. Before the baseline, copy each of
+`allium/data/cache/pressure_history.json` and
+`allium/data/cache/pressure_descriptor_files.json` that exists, and note each
+file that is absent. Before the after run, put each copy back and delete each
+file that was absent. Both runs then refresh from the same cache. A file the
+baseline creates is a finished month, and the after run skips it.
 
 The comparison tool classifies every file as:
 - **Identical** — no change at all
