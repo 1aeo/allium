@@ -398,7 +398,16 @@ def apply_overload_maps(document, day_maps, now, seal_on=None):
             continue
         for raw_day, fingerprints in source.items():
             day = _as_day(raw_day)
-            if day is None or day < HISTORY_START or _sealed(document, day):
+            if day is None or day < HISTORY_START or not isinstance(fingerprints, dict):
+                continue
+            # A day can sit in two monthly archives. The smaller row is the
+            # previous month's leftover. Keep the census with more relays.
+            if _sealed(document, day):
+                stored = (document["days"].get(day.isoformat()) or {}).get("overload_publishers") or 0
+                chosen = combined.get(day)
+                current = len(chosen) if chosen is not None else stored
+                if len(fingerprints) > current:
+                    combined[day] = dict(fingerprints)
                 continue
             _merge_fingerprints(combined, day, fingerprints)
     horizon = seal_before(now)
@@ -722,6 +731,9 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
 
     if fetch_archives:
         _repair_processed_months(document, today)
+        thin = _thin_sealed_months(document)
+        if thin:
+            document["processed_months"] = [month for month in document.get("processed_months") or [] if month not in thin]
         for month in months_to_backfill(document, today):
             saved = _safe(log, "archive %s" % month, lambda month=month: _archive_month(
                 document, month, cache_dir, opener, log, now, True))
@@ -793,18 +805,68 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
     return document
 
 
+def _thin_sealed_months(document):
+    """Months whose sealed overload census is a small slice of the surrounding days.
+
+    Those rows come from the previous month's archive. Fetching the month again
+    replaces them when the fuller archive has more relays.
+    """
+    dated = []
+    for day, row in _dated_rows(document):
+        pubs = row.get("overload_publishers")
+        if row.get("overload_sealed") and isinstance(pubs, int):
+            dated.append((day, pubs))
+    months = set()
+    for index, (day, pubs) in enumerate(dated):
+        window = [dated[other][1] for other in range(max(0, index - 3), min(len(dated), index + 4)) if other != index]
+        if len(window) < 4:
+            continue
+        typical = sorted(window)[len(window) // 2]
+        if typical and pubs < 0.5 * typical:
+            months.add(_month(day))
+    return months
+
+
+def partial_overload_days(document):
+    """Trailing overload days that are still missing most of the day's relays.
+
+    A full day has nearly the same publisher count as the days around it. The
+    newest day, caught mid-publication, does not, and is not a status reading.
+    """
+    points = []
+    for day, row in _dated_rows(document):
+        pubs = row.get("overload_publishers")
+        share = row.get("overload_share")
+        if isinstance(pubs, int) and pubs > 0 and isinstance(share, (int, float)):
+            points.append((day, pubs))
+    partial = set()
+    while len(points) >= 8:
+        window = [pubs for _day, pubs in points[-15:-1]]
+        if len(window) < 4:
+            break
+        typical = sorted(window)[len(window) // 2]
+        if typical and points[-1][1] < 0.75 * typical:
+            partial.add(points.pop()[0])
+            continue
+        break
+    return partial
+
+
 def series_window(document, field, end, period, flags=False):
     """``(datetimes, values)`` for one chart period ending at ``end``.
 
     Missing days and, for flag series, incomplete consensus days are None.
     """
     last = end.date() if isinstance(end, datetime) else end
+    partial = partial_overload_days(document) if field == "overload_share" else set()
     cursor = last - WINDOW[period] + timedelta(days=1)
     stamps, values = [], []
     while cursor <= last:
         row = document["days"].get(cursor.isoformat()) or {}
         value = row.get(field)
-        if (flags and row.get("flags_ok") is False) or not isinstance(value, (int, float)):
+        if cursor in partial:
+            value = None
+        elif (flags and row.get("flags_ok") is False) or not isinstance(value, (int, float)):
             value = None
         stamps.append(_stamp(cursor))
         values.append(value)
@@ -813,8 +875,9 @@ def series_window(document, field, end, period, flags=False):
 
 
 def _numeric_points(document, field, flags=False):
+    partial = partial_overload_days(document) if field == "overload_share" else set()
     for day, row in _dated_rows(document):
-        if flags and row.get("flags_ok") is False:
+        if day in partial or (flags and row.get("flags_ok") is False):
             continue
         value = row.get(field)
         if isinstance(value, (int, float)):

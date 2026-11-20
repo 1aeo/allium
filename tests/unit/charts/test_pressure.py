@@ -45,6 +45,15 @@ def test_guard_chart_marks_both_sides_of_the_usual_range():
     assert "#ff6b6b" in text
 
 
+def test_earlier_series_names_its_last_day():
+    document = _document()
+    for key, row in document["days"].items():
+        row["overload_publishers"] = 9000
+    document["days"]["2026-11-10"]["guard"] = None
+    text = guard_chart(document, "1m").document()
+    assert "through Nov 9" in text
+
+
 def test_directory_chart_says_bytes_served():
     text = directory_chart(_document(), "1m").document()
     assert "Directory bytes served" in text

@@ -64,17 +64,40 @@ def _enough(values):
     return sum(value is not None for value in values) >= 2
 
 
-def _open(document, field, period, flags=False):
+def _shared_end(document):
+    """One end date for all four panels, so their x-axes line up."""
     newest = None
-    for key, row in (document.get("days") or {}).items():
-        if not isinstance(row, dict) or not isinstance(row.get(field), (int, float)):
+    for field, flags in (("overload_share", False), ("guard", True), ("hsdir", True), ("directory", False)):
+        day, _value = latest_value(document, field, flags)
+        if day is None:
             continue
-        try:
-            day = datetime.strptime(key, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except (TypeError, ValueError):
-            continue
-        if newest is None or day > newest:
-            newest = day
+        stamp = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+        if newest is None or stamp > newest:
+            newest = stamp
+    return newest
+
+
+def _through(document, field, flags, text):
+    """Name the last day when this series stops before the shared axis."""
+    end = _shared_end(document)
+    day, _value = latest_value(document, field, flags)
+    if end is None or day is None or day >= end.date():
+        return text
+    return "%s · through %s %d" % (text, day.strftime("%b"), day.day)
+
+
+def _open(document, field, period, flags=False, end=None):
+    newest = end
+    if newest is None:
+        for key, row in (document.get("days") or {}).items():
+            if not isinstance(row, dict) or not isinstance(row.get(field), (int, float)):
+                continue
+            try:
+                day = datetime.strptime(key, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if newest is None or day > newest:
+                newest = day
     if newest is None:
         return None
     stamps, values = series_window(document, field, newest, period, flags)
@@ -102,7 +125,7 @@ def _scale(values, floor, stay_under, headroom, floor_ticks):
 
 
 def overload_chart(document, period):
-    opened = _open(document, "overload_share", period)
+    opened = _open(document, "overload_share", period, end=_shared_end(document))
     if not opened:
         return None
     stamps, values = opened
@@ -139,7 +162,9 @@ def overload_chart(document, period):
 
 
 def _count_chart(document, period, field, title, subtitle, color, outside, width, opacity, height=200):
-    opened = _open(document, field, period, flags=field != "directory")
+    flags = field != "directory"
+    subtitle = _through(document, field, flags, subtitle)
+    opened = _open(document, field, period, flags=flags, end=_shared_end(document))
     if not opened:
         return None
     stamps, values = opened

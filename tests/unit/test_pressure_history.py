@@ -66,6 +66,53 @@ def test_sealed_overload_day_is_not_replaced():
     assert document["days"][day.isoformat()]["overload_share"] == 10.0
 
 
+def test_larger_archive_replaces_a_sealed_partial_day():
+    document = pressure.empty_document()
+    day = datetime(2026, 10, 2).date()
+    document["days"][day.isoformat()] = {
+        "overload_publishers": 1296, "overload_overloaded": 260, "overload_share": 20.0617, "overload_sealed": True,
+    }
+    fuller = {day: {("%02x" % index).ljust(40, "A"): index == 0 for index in range(9000)}}
+    pressure.apply_overload_maps(document, [fuller], datetime(2026, 10, 20, tzinfo=timezone.utc))
+    row = document["days"][day.isoformat()]
+    assert row["overload_publishers"] == 9000
+    assert row["overload_sealed"] is True
+    assert row["overload_share"] < 1
+
+
+def test_partial_latest_day_is_not_the_status():
+    document = pressure.empty_document()
+    start = datetime(2026, 11, 1).date()
+    for offset in range(19):
+        day = start + timedelta(days=offset)
+        document["days"][day.isoformat()] = {
+            "overload_publishers": 9900, "overload_share": 10.4, "overload_sealed": True,
+        }
+    document["days"]["2026-11-20"] = {
+        "overload_publishers": 2601, "overload_share": 6.4, "overload_sealed": False,
+    }
+    day, share = pressure.latest_value(document, "overload_share")
+    assert day.isoformat() == "2026-11-19"
+    assert share == 10.4
+    status, since, _latest = pressure.status_since(document, 1.9)
+    assert status == "high"
+    assert since != datetime(2026, 11, 20).date()
+
+
+def test_thin_sealed_day_reopens_its_month():
+    document = pressure.empty_document()
+    start = datetime(2026, 9, 28).date()
+    for offset in range(8):
+        day = start + timedelta(days=offset)
+        document["days"][day.isoformat()] = {
+            "overload_publishers": 9700, "overload_share": 8.0, "overload_sealed": True,
+        }
+    document["days"]["2026-10-02"] = {
+        "overload_publishers": 1296, "overload_share": 20.0, "overload_sealed": True,
+    }
+    assert pressure._thin_sealed_months(document) == {"2026-10"}
+
+
 def test_percentile_is_linear():
     assert pressure.percentile([1, 2, 3, 4], 0.5) == 2.5
     assert pressure.percentile([10], 0.9) == 10
