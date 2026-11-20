@@ -293,8 +293,8 @@ def test_failed_recent_file_does_not_seal_the_day(tmp_path, monkeypatch):
             return _response(_descriptor("B" * 40, "2021-11-02", True))
         return opener(request, timeout)
 
-    # The file is no longer in the 36-hour listing. The saved name is still fetched.
-    sealed = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=3), opener=opener_later,
+    # The file has left the 36-hour listing and is still inside the 72-hour window.
+    sealed = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=1), opener=opener_later,
                               log=lambda _message: None)
     assert any("2021-11-19-00-00-00-server-descriptors" in url for url in calls)
     row = sealed["days"]["2021-11-02"]
@@ -335,11 +335,59 @@ def test_gone_recent_file_does_not_block_sealing(tmp_path, monkeypatch):
             return _response("")
         return opener(request, timeout)
 
-    later = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=3), opener=gone,
+    later = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=1), opener=gone,
                              log=lambda _message: None)
-    assert name not in pressure.load_descriptor_files(str(tmp_path))
+    assert pressure.load_descriptor_files(str(tmp_path))[name]["gone"] is True
     assert later["days"]["2021-11-02"]["overload_sealed"] is True
     assert later["days"]["2021-11-02"]["overload_publishers"] == 1
+
+
+def test_expired_pending_file_clears_when_the_archive_covers_its_day(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    name = "2021-11-19-00-00-00-server-descriptors"
+    early = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    covered = _tar_xz([
+        _descriptor("A" * 40, "2021-11-19", False),
+        _descriptor("B" * 40, "2021-11-19", True),
+    ])
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    hold = {"archive": early}
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        if name in url and not url.endswith("/"):
+            raise OSError("down")
+        if "relayflags.csv" in url:
+            return _response("date,flag,relays\n")
+        if "dirbytes.csv" in url:
+            return _response("date,dirwrite\n")
+        if url.endswith("server-descriptors/"):
+            return _response('<a href="%s">x</a>' % name)
+        if url.endswith(".tar.xz"):
+            return _response(hold["archive"])
+        raise AssertionError(url)
+
+    first = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
+    assert first["days"]["2021-11-02"]["overload_sealed"] is False
+    assert pressure.load_descriptor_files(str(tmp_path))[name] == {"pending": True}
+
+    calls = []
+    hold["archive"] = covered
+
+    def later_opener(request, timeout=None):
+        calls.append(request.full_url)
+        if request.full_url.endswith("server-descriptors/"):
+            return _response("")
+        return opener(request, timeout)
+
+    later = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=4), opener=later_opener,
+                             log=lambda _message: None)
+    assert not any(name in url and not url.endswith("/") for url in calls)
+    assert name not in pressure.load_descriptor_files(str(tmp_path))
+    row = later["days"]["2021-11-19"]
+    assert row["overload_sealed"] is True
+    assert row["overload_publishers"] == 2
+    assert row["overload_share"] == 50.0
 
 
 def _quiet_opener(request, timeout=None):

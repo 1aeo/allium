@@ -33,6 +33,8 @@ RECENT = COLLECTOR + "/recent/relay-descriptors/server-descriptors/"
 USER_AGENT = "Allium/1.0"
 # Relays publish about every 18 hours. A day stays open this long after it ends.
 SEAL_AFTER = timedelta(hours=36)
+# CollecTor keeps an hourly descriptor file in /recent/ for about three days.
+RECENT_AVAILABLE = timedelta(hours=72)
 HISTORY_START = datetime(2021, 11, 1, tzinfo=timezone.utc).date()
 BASELINE_START = datetime(2025, 5, 1, tzinfo=timezone.utc).date()
 BASELINE_END = datetime(2026, 5, 31, tzinfo=timezone.utc).date()
@@ -623,8 +625,33 @@ def _saved_day(document, key):
 
 
 def _is_pending(days):
-    """A descriptor file we still have to download."""
-    return isinstance(days, dict) and list(days) == ["pending"]
+    """A descriptor file we still have to download, or one CollecTor has removed."""
+    return isinstance(days, dict) and days.get("pending") is True and set(days) <= {"pending", "gone"}
+
+
+def _file_time(name):
+    try:
+        return datetime.strptime(name[:19], "%Y-%m-%d-%H-%M-%S").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _recent_available(name, now):
+    """True while CollecTor may still be serving this hourly file."""
+    stamp = _file_time(name)
+    return stamp is not None and _utc(now) - stamp < RECENT_AVAILABLE
+
+
+def _archive_has_file(document, name):
+    """True when a saved archive already covers the day this file was published."""
+    stamp = _file_time(name)
+    if stamp is None:
+        return True
+    day = stamp.date()
+    if _month(day) in set(document.get("processed_months") or []):
+        return True
+    through = _as_day(document.get("current_month_through"))
+    return through is not None and through >= day
 
 
 def _cache_lock(cache_dir):
@@ -686,8 +713,9 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
                 document, _month(today), cache_dir, opener, log, now, False))
 
     listing_body = _safe(log, "recent descriptors", lambda: _http_text(RECENT, 120, opener))
-    # A missing listing or file can still hold the relay that changes a share.
-    # Leave every open day unsealed until that input succeeds.
+    # A file still inside the 72-hour window can hold the relay that changes a share.
+    # Leave open days unsealed until that download succeeds. An older pending file
+    # waits for the monthly archive instead, and does not block every other day.
     recent_incomplete = listing_body is None
     listing = listing_body or ""
     names = _recent_names(listing, now)
@@ -697,15 +725,19 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
     for name in names:
         if name in file_cache and not _is_pending(file_cache[name]):
             continue
+        stored = file_cache.get(name)
+        if _is_pending(stored) and (stored.get("gone") or not _recent_available(name, now)):
+            continue
         log("pressure descriptor file %s" % name)
         body, gone = _recent_body(RECENT + name, opener)
         if gone:
-            # A 404 means the file has left CollecTor. Retrying it would block sealing forever.
-            file_cache.pop(name, None)
+            # The file has left CollecTor. Keep the marker until an archive covers its day.
+            file_cache[name] = {"gone": True, "pending": True}
             continue
         if not body:
             file_cache[name] = {"pending": True}
-            recent_incomplete = True
+            if _recent_available(name, now):
+                recent_incomplete = True
             continue
         parsed = defaultdict(dict)
         accumulate_descriptors([body], parsed)
@@ -714,8 +746,11 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
     kept, recent_maps = {}, []
     for name, days in file_cache.items():
         if _is_pending(days):
+            if _archive_has_file(document, name):
+                continue
             kept[name] = days
-            recent_incomplete = True
+            if _recent_available(name, now) and not days.get("gone"):
+                recent_incomplete = True
             continue
         if not isinstance(days, dict):
             continue
