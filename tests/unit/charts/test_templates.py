@@ -87,19 +87,18 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert "CollecTor server descriptors" in html
     assert "Tor Metrics relay flags" in html
     assert "Tor Metrics dirwrite" in html
-    assert 'for="jump-overload"' in html and 'id="jump-directory"' in html
-    assert 'href="#pressure-overload"' not in html
-    assert 'action="#5y"' in html and 'name="period" value="5y"' in html
-    assert 'action="#1m"' in html and ">1M</button>" in html
+    assert 'href="#pressure-overload"' in html and 'href="#pressure-directory"' in html
+    assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
+    assert 'name="pressure-period"' in html and ">1M</label>" in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
-    assert 'id="jump-hsdir"' in html and ">Relays with HSDir Flag</button>" in html
+    assert ">Relays with HSDir Flag</h5>" in html
     missing = ENV.get_template("network-pressure.html").render(
         page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
         relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={"overload": periods}),
     )
-    assert 'for="jump-overload"' in missing and 'id="jump-overload"' in missing
-    assert "jump-directory" not in missing and "jump-guard" not in missing
+    assert 'href="#pressure-overload"' in missing and 'id="pressure-overload"' in missing
+    assert 'href="#pressure-directory"' not in missing and 'href="#pressure-guard"' not in missing
 
 
 def test_contact_charts_resolve_from_vanity_copies():

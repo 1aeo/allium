@@ -748,10 +748,28 @@ th[title]::after {
     box-shadow: none;
     color: var(--aeo-text-dim);
 }
-/* A chart's own period control (pressure page). The repeated class ties the
-   page-wide #1m/#5y show rule, and these rules come later, so a checked radio
-   replaces that target for this chart only. Another chart's radio does not
-   clear it: radios do not share a name, and the URL hash can target only one. */
+/* Shared 1M/6M/1Y/5Y on the pressure page. Stronger than a #5y bookmark, weaker than
+   a chart's own radio below (that block repeats a class so it wins). A jump link
+   can change the hash without clearing this radio. */
+.pressure-all:checked ~ .pressure-charts .chart-hero.chart-hero { display: none; }
+.pressure-all-1m:checked ~ .pressure-charts .chart-hero.chart-on-1m,
+.pressure-all-6m:checked ~ .pressure-charts .chart-hero.chart-on-6m,
+.pressure-all-1y:checked ~ .pressure-charts .chart-hero.chart-on-1y,
+.pressure-all-5y:checked ~ .pressure-charts .chart-hero.chart-on-5y { display: block; }
+.pressure-all:checked ~ .pressure-charts .chart-spark.chart-spark {
+    box-shadow: none;
+    color: var(--aeo-text-dim);
+}
+.pressure-all-1m:checked ~ .pressure-charts .chart-spark.chart-on-1m,
+.pressure-all-6m:checked ~ .pressure-charts .chart-spark.chart-on-6m,
+.pressure-all-1y:checked ~ .pressure-charts .chart-spark.chart-on-1y,
+.pressure-all-5y:checked ~ .pressure-charts .chart-spark.chart-on-5y {
+    box-shadow: 0 0 0 1px var(--aeo-green);
+    color: var(--aeo-green);
+}
+/* A chart's own period control (pressure page). The repeated classes outrank the
+   shared radios above and a #1m/#5y bookmark, so choosing 5Y on one chart does not
+   clear another. Radios do not share a name, and the URL hash can target only one. */
 .chart-pick {
     position: absolute;
     width: 1px;
@@ -763,24 +781,23 @@ th[title]::after {
     white-space: nowrap;
     border: 0;
 }
-.chart-history .chart-pick:checked ~ .chart-hero.chart-hero {
+.chart-history.chart-history .chart-pick:checked ~ .chart-hero.chart-hero.chart-hero {
     display: none;
 }
-.chart-history .chart-pick-1m:checked ~ .chart-hero.chart-on-1m,
-.chart-history .chart-pick-6m:checked ~ .chart-hero.chart-on-6m,
-.chart-history .chart-pick-1y:checked ~ .chart-hero.chart-on-1y,
-.chart-history .chart-pick-5y:checked ~ .chart-hero.chart-on-5y {
+.chart-history.chart-history .chart-pick-1m:checked ~ .chart-hero.chart-hero.chart-on-1m,
+.chart-history.chart-history .chart-pick-6m:checked ~ .chart-hero.chart-hero.chart-on-6m,
+.chart-history.chart-history .chart-pick-1y:checked ~ .chart-hero.chart-hero.chart-on-1y,
+.chart-history.chart-history .chart-pick-5y:checked ~ .chart-hero.chart-hero.chart-on-5y {
     display: block;
 }
-.chart-history .chart-pick:checked ~ .chart-sparks .chart-spark {
+.chart-history.chart-history .chart-pick:checked ~ .chart-sparks .chart-spark.chart-spark {
     box-shadow: none;
     color: var(--aeo-text-dim);
 }
-/* One class past the reset above, so the chosen thumbnail stays green. */
-.chart-history .chart-pick-1m:checked ~ .chart-sparks .chart-spark.chart-on-1m,
-.chart-history .chart-pick-6m:checked ~ .chart-sparks .chart-spark.chart-on-6m,
-.chart-history .chart-pick-1y:checked ~ .chart-sparks .chart-spark.chart-on-1y,
-.chart-history .chart-pick-5y:checked ~ .chart-sparks .chart-spark.chart-on-5y {
+.chart-history.chart-history .chart-pick-1m:checked ~ .chart-sparks .chart-spark.chart-spark.chart-on-1m,
+.chart-history.chart-history .chart-pick-6m:checked ~ .chart-sparks .chart-spark.chart-spark.chart-on-6m,
+.chart-history.chart-history .chart-pick-1y:checked ~ .chart-sparks .chart-spark.chart-spark.chart-on-1y,
+.chart-history.chart-history .chart-pick-5y:checked ~ .chart-sparks .chart-spark.chart-spark.chart-on-5y {
     box-shadow: 0 0 0 1px var(--aeo-green);
     color: var(--aeo-green);
 }
