@@ -121,6 +121,12 @@ python3 allium/allium.py --out allium/www_after --apis all --progress --no-press
 python3 compare_outputs.py
 ```
 
+When the change is the pressure-history refresh, omit `--no-pressure-history`
+on both commands. Copy `allium/data/cache/pressure_history.json` and
+`allium/data/cache/pressure_descriptor_files.json` aside before the baseline,
+and put those copies back before the after run, so both runs refresh from the
+same cache.
+
 The comparison tool classifies every file as:
 - **Identical** — no change at all
 - **Timestamp only** — only volatile data changed (timestamps, uptimes, time-ago strings)

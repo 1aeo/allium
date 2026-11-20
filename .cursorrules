@@ -36,6 +36,13 @@ python3 compare_outputs.py
 #    Use --max-diffs N to limit diff output
 ```
 
+When the change is the pressure-history refresh, omit `--no-pressure-history`
+on both commands. Copy `allium/data/cache/pressure_history.json` and
+`allium/data/cache/pressure_descriptor_files.json` aside before the baseline,
+and put those copies back before the after run. Both runs then refresh from
+the same cache. The baseline otherwise saves finished months, and the after
+run skips them.
+
 **Interpreting results**:
 - "Identical" and "Timestamp only" files are expected — no action needed
 - "Content diffs" need review — verify each matches your intended change

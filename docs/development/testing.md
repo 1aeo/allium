@@ -119,6 +119,8 @@ python3 allium/allium.py --out allium/www_after --apis all --progress --no-press
 python3 compare_outputs.py
 ```
 
+When the change is the pressure-history refresh, omit `--no-pressure-history` on both commands. Copy `allium/data/cache/pressure_history.json` and `allium/data/cache/pressure_descriptor_files.json` aside before the baseline, and put those copies back before the after run, so both runs refresh from the same cache.
+
 Classifies every file as **identical**, **timestamp-only**, or **content diff**.
 Shows normalized unified diffs (timestamps stripped) for content diffs only.
 Takes ~8 seconds for 22k files using parallel processing across all CPUs.

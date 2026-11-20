@@ -142,15 +142,28 @@ ci_live_generation_outcome() {
     printf 'ok\n'
 }
 
+# Print --no-pressure-history when this allium.py accepts it.
+# setup.sh clones the default branch, so this helper from a pull request can be
+# newer than the allium.py it runs. An older entrypoint still skips the archive
+# while ALLIUM_CI_CACHE_FALLBACK=1.
+_no_pressure_history_arg() {
+    local allium_py="$1" help_text
+    help_text=$(python3 "$allium_py" --help 2>&1 || true)
+    if printf '%s\n' "$help_text" | grep -q -- '--no-pressure-history'; then
+        printf '%s\n' --no-pressure-history
+    fi
+}
+
 # One live attempt, then fixtures if allium exits 0 without a page.
 # Uses API_MODE (setup.sh's --apis flag). Collector has no URL flag; its
 # seeded cache is the substitute when the live CollecTor fetch times out.
 ci_generate_once() {
-    local out="$1" allium_py="$2" code outcome mode
+    local out="$1" allium_py="$2" code outcome mode pressure_arg
     mode="${API_MODE:---apis details}"
+    pressure_arg=$(_no_pressure_history_arg "$allium_py")
     set +e
     # The fixture job must not backfill the CollecTor pressure archive.
-    python3 "$allium_py" --progress --no-pressure-history $mode --out "$out"
+    python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} $mode --out "$out"
     code=$?
     set -e
     outcome=$(ci_live_generation_outcome "$code" "${out}/index.html")
@@ -198,8 +211,10 @@ generate_from_ci_fixtures() {
         return 1
     fi
     echo "🤖 CI: generating from committed API fixtures at http://127.0.0.1:${port}/"
+    local pressure_arg
+    pressure_arg=$(_no_pressure_history_arg "$allium_py")
     set +e
-    python3 "$allium_py" --progress --no-pressure-history $mode --out "$out" \
+    python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} $mode --out "$out" \
         --onionoo-details-url "http://127.0.0.1:${port}/onionoo_details.json" \
         --onionoo-uptime-url "http://127.0.0.1:${port}/onionoo_uptime.json" \
         --onionoo-bandwidth-url "http://127.0.0.1:${port}/onionoo_bandwidth.json" \
