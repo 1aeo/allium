@@ -1,12 +1,9 @@
-"""Pressure history: parse, seal, freeze, and do not backfill twice."""
+"""Pressure history: parse, seal, freeze, and do not backfill a finished month twice."""
 
 import io
-import tarfile
 import lzma
-from datetime import datetime, timezone
-from email.message import Message
-
-import pytest
+import tarfile
+from datetime import datetime, timedelta, timezone
 
 from allium.lib import pressure_history as pressure
 
@@ -26,7 +23,7 @@ def _descriptor(fingerprint, published, overload=False):
 
 def test_descriptor_share_counts_a_relay_once():
     text = _descriptor("A" * 40, "2026-11-01", True) + _descriptor("A" * 40, "2026-11-01", False)
-    text += _descriptor("B" * 40, "2026-11-01", False)
+    text += _descriptor("B" * 40, "2026-11-01", False) + _descriptor("G" * 40, "2026-11-01", True)
     found = {}
     pressure.accumulate_descriptors([text], found)
     day = datetime(2026, 11, 1).date()
@@ -38,16 +35,23 @@ def test_descriptor_share_counts_a_relay_once():
 
 def test_incomplete_consensus_day_is_not_a_flag_census():
     document = pressure.empty_document()
-    # Six ordinary days around one collapsed Running count.
     parsed = {}
     for offset in range(7):
         day = datetime(2025, 6, 6 + offset).date()
         parsed[day] = {"Guard": 1000 if offset == 3 else 5000, "HSDir": 1000 if offset == 3 else 4000,
                        "Running": 1000 if offset == 3 else 8000}
     pressure.apply_relayflags(document, parsed)
-    collapsed = document["days"]["2025-06-09"]
-    assert collapsed["flags_ok"] is False
+    assert document["days"]["2025-06-09"]["flags_ok"] is False
     assert document["days"]["2025-06-08"]["flags_ok"] is True
+
+
+def test_flag_census_ignores_days_outside_the_calendar_window():
+    document = pressure.empty_document()
+    pressure.apply_relayflags(document, {
+        datetime(2025, 6, 1).date(): {"Guard": 5000, "HSDir": 4000, "Running": 8000},
+        datetime(2025, 7, 1).date(): {"Guard": 100, "HSDir": 100, "Running": 100},
+    })
+    assert document["days"]["2025-07-01"]["flags_ok"] is True
 
 
 def test_sealed_overload_day_is_not_replaced():
@@ -57,14 +61,20 @@ def test_sealed_overload_day_is_not_replaced():
         "overload_publishers": 10, "overload_overloaded": 1, "overload_share": 10.0, "overload_sealed": True,
     }
     later = {day: {"F" * 40: True, "E" * 40: True}}
-    pressure.apply_overload_maps(document, [later], pressure.HISTORY_START,
-                                 datetime(2026, 1, 10, tzinfo=timezone.utc))
+    pressure.apply_overload_maps(document, [later], datetime(2026, 1, 10, tzinfo=timezone.utc))
     assert document["days"][day.isoformat()]["overload_share"] == 10.0
 
 
 def test_percentile_is_linear():
     assert pressure.percentile([1, 2, 3, 4], 0.5) == 2.5
     assert pressure.percentile([10], 0.9) == 10
+
+
+def test_csv_skips_bad_lines_and_finds_dirwrite():
+    flags = pressure.parse_relayflags("date,flag,relays\n2026-01-01,Guard,nope\n2026-01-01,Guard,5\n")
+    assert flags[datetime(2026, 1, 1).date()]["Guard"] == 5
+    directory = pressure.parse_dirbytes("date,dirwrite,dirread\n2026-01-01,7.5,1\nbad\n")
+    assert directory[datetime(2026, 1, 1).date()] == 7.5
 
 
 def _response(body):
@@ -101,14 +111,9 @@ def _tar_xz(descriptors):
     return lzma.compress(raw.read())
 
 
-def test_second_refresh_does_not_download_the_archive_again(tmp_path):
-    archive = _tar_xz([
-        _descriptor("A" * 40, "2021-11-02", True),
-        _descriptor("B" * 40, "2021-11-02", False),
-    ])
+def _refresh(tmp_path, now, archive, recent="<html></html>", descriptor=None):
     flags = "date,flag,relays\n2021-11-02,Guard,5000\n2021-11-02,HSDir,4000\n2021-11-02,Running,8000\n"
     directory = "date,dirread,dirwrite,dirauthread,dirauthwrite\n2021-11-02,1,4.5,0,0\n"
-    recent = '<a href="2021-11-15-00-00-00-server-descriptors">x</a>'
     calls = []
 
     def opener(request, timeout=None):
@@ -120,43 +125,160 @@ def test_second_refresh_does_not_download_the_archive_again(tmp_path):
             return _response(directory)
         if url.endswith("server-descriptors/"):
             return _response(recent)
-        if "server-descriptors-2021-11.tar.xz" in url:
+        if url.endswith(".tar.xz"):
             return _response(archive)
-        if "2021-11-15-00-00-00-server-descriptors" in url:
-            return _response(_descriptor("C" * 40, "2021-11-15", True))
+        if descriptor and "server-descriptors" in url:
+            return _response(descriptor)
         raise AssertionError(url)
 
+    document = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
+    return document, calls
+
+
+def test_open_month_is_not_marked_finished(tmp_path):
+    archive = _tar_xz([
+        _descriptor("A" * 40, "2021-11-02", True),
+        _descriptor("B" * 40, "2021-11-02", False),
+    ])
     now = datetime(2021, 11, 20, tzinfo=timezone.utc)
-    first = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _m: None)
-    assert "2021-11" in first["processed_months"]
+    first, calls = _refresh(tmp_path, now, archive)
+    assert "2021-11" not in first["processed_months"]
+    assert first["current_month_through"] == "2021-11-02"
     assert first["days"]["2021-11-02"]["overload_share"] == 50.0
     assert first["days"]["2021-11-02"]["overload_sealed"] is True
-    archive_calls = [url for url in calls if url.endswith(".tar.xz")]
-    assert len(archive_calls) == 1
+    assert len([url for url in calls if url.endswith(".tar.xz")]) == 1
 
-    calls.clear()
-    second = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _m: None)
+    _second, again = _refresh(tmp_path, now, archive)
+    assert not any(url.endswith(".tar.xz") for url in again)
+    assert _second["days"]["2021-11-02"]["overload_share"] == 50.0
+
+
+def test_finished_month_is_downloaded_once(tmp_path):
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", True)])
+    now = datetime(2021, 12, 15, tzinfo=timezone.utc)
+    first, calls = _refresh(tmp_path, now, archive)
+    tar_calls = [url for url in calls if url.endswith(".tar.xz")]
+    assert any(url.endswith("server-descriptors-2021-11.tar.xz") for url in tar_calls)
+    assert "2021-11" in first["processed_months"]
+    assert "2021-12" not in first["processed_months"]
+
+    _second, again = _refresh(tmp_path, now, archive)
+    assert not any(url.endswith(".tar.xz") for url in again)
+
+
+def test_month_marked_done_too_early_is_fetched_again(tmp_path):
+    document = pressure.empty_document()
+    document["processed_months"] = ["2021-11"]
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    refreshed, calls = _refresh(tmp_path, now, archive)
+    assert "2021-11" not in refreshed["processed_months"]
+    assert any(url.endswith("server-descriptors-2021-11.tar.xz") for url in calls)
+    assert refreshed["days"]["2021-11-02"]["overload_publishers"] == 1
+
+
+def test_old_cache_redownloads_only_its_newest_month(tmp_path):
+    document = pressure.empty_document()
+    document["processed_months"] = ["2021-10", "2021-11"]
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    now = datetime(2021, 12, 15, tzinfo=timezone.utc)
+    refreshed, calls = _refresh(tmp_path, now, archive)
+    tar = [url for url in calls if url.endswith(".tar.xz")]
+    assert any(url.endswith("server-descriptors-2021-11.tar.xz") for url in tar)
+    assert not any("2021-10" in url for url in tar)
+    assert "2021-11" in refreshed["processed_months"]
+    assert refreshed["archive_revision"] == 2
+    _again, later = _refresh(tmp_path, now, archive)
+    assert not any(url.endswith("2021-11.tar.xz") or url.endswith("2021-10.tar.xz") for url in later)
+
+
+def test_open_month_is_fetched_again_when_a_sealed_day_is_missing(tmp_path):
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    _refresh(tmp_path, now, archive)
+    later = now + timedelta(days=2)
+    _document, calls = _refresh(tmp_path, later, archive)
+    assert any(url.endswith(".tar.xz") for url in calls)
+
+
+def test_open_month_stays_cached_when_sealed_days_are_present(tmp_path):
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    document, _calls = _refresh(tmp_path, now, archive)
+    last = pressure.seal_before(now + timedelta(days=2)) - timedelta(days=1)
+    day = datetime(2021, 11, 3).date()
+    while day <= last:
+        document["days"][day.isoformat()] = {"overload_sealed": True, "overload_share": 1.0}
+        day += timedelta(days=1)
+    pressure.save_document(document, str(tmp_path))
+    _again, calls = _refresh(tmp_path, now + timedelta(days=2), archive)
     assert not any(url.endswith(".tar.xz") for url in calls)
-    assert second["days"]["2021-11-02"]["overload_share"] == 50.0
-    assert second["processed_months"] == first["processed_months"]
+
+
+def test_recent_day_past_the_archive_stays_open(tmp_path):
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    recent = '<a href="2021-11-19-00-00-00-server-descriptors">x</a>'
+    body = _descriptor("C" * 40, "2021-11-10", True)
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    document, _calls = _refresh(tmp_path, now, archive, recent=recent, descriptor=body)
+    row = document["days"]["2021-11-10"]
+    assert row["overload_sealed"] is False
+    assert row["overload_share"] == 100.0
+    assert document["days"]["2021-11-02"]["overload_sealed"] is True
+
+
+def test_recent_relay_is_counted_before_the_day_seals(tmp_path):
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    recent = '<a href="2021-11-19-00-00-00-server-descriptors">x</a>'
+    body = _descriptor("B" * 40, "2021-11-02", True)
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+    document, _calls = _refresh(tmp_path, now, archive, recent=recent, descriptor=body)
+    row = document["days"]["2021-11-02"]
+    assert row["overload_sealed"] is True
+    assert row["overload_publishers"] == 2
+    assert row["overload_share"] == 50.0
+
+
+def test_status_run_stops_at_a_missing_day():
+    document = pressure.empty_document()
+    document["bands"]["guard"] = {"p10": 1000, "p90": 2000}
+    for day, guard in ((1, 100), (19, 100)):
+        current = datetime(2021, 11, day).date()
+        document["days"][current.isoformat()] = {"guard": guard, "flags_ok": True, "overload_share": 20.0}
+    began, days = pressure.guard_below_since(document, 1000)
+    assert began == datetime(2021, 11, 19).date()
+    assert days == 0
+    status, since, _share = pressure.status_since(document, 1.9)
+    assert status == "high"
+    assert since == datetime(2021, 11, 19).date()
+
+
+def test_failed_fetch_keeps_the_saved_document(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["days"]["2021-11-02"] = {"overload_share": 3.0, "overload_sealed": True}
+    pressure.save_document(document, str(tmp_path))
+
+    def opener(_request, timeout=None):
+        raise OSError("down")
+
+    got = pressure.refresh(cache_dir=str(tmp_path), now=datetime(2021, 11, 20, tzinfo=timezone.utc),
+                           opener=opener, log=lambda _message: None)
+    assert got["days"]["2021-11-02"]["overload_share"] == 3.0
 
 
 def test_bands_freeze_once():
     document = pressure.empty_document()
+    day = datetime(2025, 5, 1, tzinfo=timezone.utc).date()
     for offset in range(320):
-        day = datetime(2025, 5, 1, tzinfo=timezone.utc).date() + __import__("datetime").timedelta(days=offset)
-        if day > pressure.BASELINE_END:
+        current = day + timedelta(days=offset)
+        if current > pressure.BASELINE_END:
             break
-        document["days"][day.isoformat()] = {
-            "guard": 5000 + (offset % 10),
-            "hsdir": 4500,
-            "running": 8000,
-            "flags_ok": True,
-            "flags_sealed": True,
-            "directory": 5.0,
-            "directory_sealed": True,
-            "overload_share": 1.0,
-            "overload_sealed": True,
+        document["days"][current.isoformat()] = {
+            "guard": 5000 + (offset % 10), "hsdir": 4500, "running": 8000, "flags_ok": True, "flags_sealed": True,
+            "directory": 5.0, "directory_sealed": True, "overload_share": 1.0, "overload_sealed": True,
         }
     pressure.freeze_bands(document)
     guard = document["bands"]["guard"]["p10"]

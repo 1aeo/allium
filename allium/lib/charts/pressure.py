@@ -1,7 +1,6 @@
-"""Network pressure charts: overload, Guard, HSDir, and directory bytes served.
+"""Network pressure charts for the 1M, 6M, 1Y, and 5Y switcher.
 
-One image per Allium period (1M, 6M, 1Y, 5Y). The usual range is the frozen
-May 2025–May 2026 p10–p90, drawn the same way on every period.
+The usual range is the frozen May 2025–May 2026 p10–p90 on every period.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -11,33 +10,26 @@ from ..pressure_history import (
 )
 from .render import CREDIT, LEFT, PLOT_WIDTH, WIDTH, _header
 from .series import PERIOD_SPAN
-from .svg import (
-    BLUE, GREEN, MUTED, ORANGE, RED, Panel, Svg, legend, nice_ticks, text_width,
-)
+from .svg import BLUE, GREEN, MUTED, ORANGE, RED, Panel, Svg, legend, nice_ticks, text_width
+
+_FOOT = "Usual range is the May 2025–May 2026 p10–p90, frozen."
+_COUNT_TICKS = [0, 1500, 3000, 4500, 6000, 7500]
 
 
 def _finish(svg, panel):
     foot = panel.top + panel.height + 42
-    svg.text(12, foot, "Usual range is the May 2025–May 2026 p10–p90, frozen.", 11, MUTED)
+    svg.text(12, foot, _FOOT, 11, MUTED)
     svg.text(WIDTH - 12, foot, CREDIT, 11, MUTED, "end")
     return svg.finish(foot + 14)
 
 
 def _axis_end(stamps):
     span = max((stamps[-1] - stamps[0]).days, 1)
-    pad = min(36, max(5, int(round(span * 0.1))))
-    end = stamps[-1] + timedelta(days=pad)
+    end = stamps[-1] + timedelta(days=min(36, max(5, int(round(span * 0.1)))))
     cap = datetime(stamps[-1].year, 12, 20, tzinfo=timezone.utc)
     if stamps[-1].month == 12 and stamps[-1].day > 20:
         cap = stamps[-1] + timedelta(days=4)
     return end if end < cap else cap
-
-
-def _frame(svg, clip_id, y, stamps, y_hi, ticks, ylabel, yfmt, period, height=200):
-    panel = Panel(svg, clip_id, LEFT, y, PLOT_WIDTH, height, stamps, 0, y_hi, _axis_end(stamps), 86400)
-    panel.yaxis(ticks, ylabel, fmt=yfmt)
-    panel.xaxis(period, labels=True)
-    return panel
 
 
 def _latest(svg, panel, values, text, color):
@@ -60,6 +52,7 @@ def _marked(values, pred):
 
 
 def _clip_band(svg, panel, values, lo, hi, color, clip_id, width=2.4):
+    """Redraw the line inside ``lo``–``hi``. The clip keeps the stroke in that band."""
     top, bottom = panel.y(hi), panel.y(lo)
     if bottom - top <= 1:
         return
@@ -71,162 +64,145 @@ def _enough(values):
     return sum(value is not None for value in values) >= 2
 
 
-def _end(document, fields):
+def _open(document, field, period, flags=False):
     newest = None
-    for key, row in document.get("days", {}).items():
-        if any(isinstance(row.get(field), (int, float)) for field in fields):
+    for key, row in (document.get("days") or {}).items():
+        if not isinstance(row, dict) or not isinstance(row.get(field), (int, float)):
+            continue
+        try:
             day = datetime.strptime(key, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            if newest is None or day > newest:
-                newest = day
-    return newest
+        except (TypeError, ValueError):
+            continue
+        if newest is None or day > newest:
+            newest = day
+    if newest is None:
+        return None
+    stamps, values = series_window(document, field, newest, period, flags)
+    if not _enough(values):
+        return None
+    return stamps, values
+
+
+def _band(document, key):
+    band = (document.get("bands") or {}).get(key) or {}
+    return band.get("p10"), band.get("p90")
+
+
+def _panel(svg, clip_id, y, stamps, yhi, ticks, ylabel, yfmt, period, height=200):
+    panel = Panel(svg, clip_id, LEFT, y, PLOT_WIDTH, height, stamps, 0, yhi, _axis_end(stamps), 86400)
+    panel.yaxis(ticks, ylabel, fmt=yfmt)
+    panel.xaxis(period, labels=True)
+    return panel
+
+
+def _scale(values, floor, stay_under, headroom, floor_ticks):
+    peak = max(value for value in values if value is not None)
+    yhi = floor if peak <= stay_under else max(floor, peak * headroom)
+    return yhi, (floor_ticks if yhi <= floor else nice_ticks(yhi))
 
 
 def overload_chart(document, period):
-    end = _end(document, ("overload_share",))
-    if end is None:
+    opened = _open(document, "overload_share", period)
+    if not opened:
         return None
-    stamps, values = series_window(document, "overload_share", end, period)
-    if not _enough(values):
-        return None
-    band = (document.get("bands") or {}).get("overload") or {}
-    p10, p90 = band.get("p10"), band.get("p90")
+    stamps, values = opened
+    p10, p90 = _band(document, "overload")
     status, began, _share = status_since(document, p90 if p90 is not None else HIGH_SHARE)
     latest_day, latest = latest_value(document, "overload_share")
-    latest_text = ""
-    if latest_day is not None:
-        latest_text = "%.1f%% on %s %d" % (latest, latest_day.strftime("%b"), latest_day.day)
-    status_text = (status.capitalize() + " since %s %d · " % (began.strftime("%b"), began.day)
-                   if status and began else "")
+    subtitle = "Share of relays publishing a descriptor that day"
+    if status and began and latest_day is not None:
+        subtitle = "%s since %s %d · %.1f%% on %s %d" % (
+            status.capitalize(), began.strftime("%b"), began.day, latest, latest_day.strftime("%b"), latest_day.day)
     svg = Svg(WIDTH)
-    y = _header(svg, "Tor network", "Relays reporting overload · " + PERIOD_SPAN[period],
-                (status_text + latest_text).strip(" ·") or "Share of relays publishing a descriptor that day")
+    y = _header(svg, "Tor network", "Relays reporting overload · " + PERIOD_SPAN[period], subtitle)
     svg.text(LEFT, y, "A level, about a day late. Pressure, not a cause.", 12, MUTED)
     y += 18
-    rows = []
     if p10 is not None and p90 is not None:
-        rows.append([("patch", GREEN, 0.28, "Usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90))])
-        rows.append([
-            ("patch", ORANGE, 0.28, "Elevated  to %.0f%%" % HIGH_SHARE),
-            ("patch", RED, 0.28, "High  above %.0f%%" % HIGH_SHARE),
+        y += legend(svg, LEFT, y, [
+            [("patch", GREEN, 0.28, "Usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90))],
+            [("patch", ORANGE, 0.28, "Elevated  to %.0f%%" % HIGH_SHARE),
+             ("patch", RED, 0.28, "High  above %.0f%%" % HIGH_SHARE)],
         ])
-    if rows:
-        y += legend(svg, LEFT, y, rows)
-    peak = max(value for value in values if value is not None)
-    yhi = 30 if peak <= 24 else max(30, peak * 1.15)
-    ticks = [0, 6, 12, 18, 24] if yhi <= 30 else nice_ticks(yhi)
-    panel = _frame(svg, "o" + period, y + 6, stamps, yhi, ticks, "Share (%)", "{:.0f}", period)
+    yhi, ticks = _scale(values, 30, 24, 1.15, [0, 6, 12, 18, 24])
+    panel = _panel(svg, "o" + period, y + 6, stamps, yhi, ticks, "Share (%)", "{:.0f}", period)
+    panel.series(values, GREEN, 2.2)
     if p10 is not None and p90 is not None:
         panel.hband(p10, p90, GREEN, 0.18)
-        panel.hband(p90, HIGH_SHARE, ORANGE, 0.08)
+        if p90 < HIGH_SHARE:
+            panel.hband(p90, HIGH_SHARE, ORANGE, 0.08)
+            _clip_band(svg, panel, values, p90, HIGH_SHARE, ORANGE, "oe" + period)
         panel.hband(HIGH_SHARE, yhi, RED, 0.07)
-        panel.series(values, GREEN, 2.2)
-        _clip_band(svg, panel, values, p90, HIGH_SHARE, ORANGE, "oe" + period)
         _clip_band(svg, panel, values, HIGH_SHARE, yhi, RED, "oh" + period)
-    else:
-        panel.series(values, GREEN, 2.2)
     if latest is not None:
-        color = RED if p90 is not None and latest > p90 else GREEN
-        _latest(svg, panel, values, "%.1f%%" % latest, color)
+        _latest(svg, panel, values, "%.1f%%" % latest, RED if p90 is not None and latest > p90 else GREEN)
+    return _finish(svg, panel)
+
+
+def _count_chart(document, period, field, title, subtitle, color, outside, width, opacity, height=200):
+    opened = _open(document, field, period, flags=field != "directory")
+    if not opened:
+        return None
+    stamps, values = opened
+    p10, p90 = _band(document, field)
+    if field == "directory":
+        yhi, ticks = _scale(values, 80, 70, 1.15, [0, 20, 40, 60, 80])
+        ylabel, yfmt, point = "Gbit/s", "{:.0f}", "%.0f"
+        usual = "%.1f–%.1f" % (p10, p90) if p10 is not None and p90 is not None else ""
+    else:
+        yhi, ticks = _scale(values, 7500, 7500, 1.1, _COUNT_TICKS)
+        ylabel, yfmt, point = "Relays", "{:,.0f}", "{:,}"
+        usual = "%s–%s" % (point.format(p10), point.format(p90)) if p10 is not None and p90 is not None else ""
+    svg = Svg(WIDTH)
+    y = _header(svg, "", title + " · " + PERIOD_SPAN[period], subtitle)
+    entries = [("line", color, None, "Daily average" if field == "hsdir" else "Inside usual range")]
+    if field == "directory" or (outside and p10 is not None):
+        entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
+    if usual:
+        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  " + usual))
+    y += legend(svg, LEFT, y, [entries])
+    panel = _panel(svg, field[:1] + period, y + 6, stamps, yhi, ticks, ylabel, yfmt, period, height)
+    if p10 is not None and p90 is not None:
+        panel.hband(p10, p90, GREEN, opacity)
+    panel.series(values, color, width)
+    if outside == "both" and p10 is not None and p90 is not None:
+        _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period)
+        _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period)
+    elif outside == "above" and p90 is not None:
+        _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period, width=2.2)
+    _day, latest = latest_value(document, field, flags=field != "directory")
+    if latest is not None:
+        if outside == "above":
+            hot = p90 is not None and latest > p90
+        elif outside == "both":
+            hot = p10 is not None and (latest < p10 or (p90 is not None and latest > p90))
+        else:
+            hot = False
+        _latest(svg, panel, values, point % latest if field == "directory" else point.format(latest), RED if hot else color)
     return _finish(svg, panel)
 
 
 def guard_chart(document, period):
-    end = _end(document, ("guard",))
-    if end is None:
-        return None
-    stamps, values = series_window(document, "guard", end, period, flags=True)
-    if not _enough(values):
-        return None
-    band = (document.get("bands") or {}).get("guard") or {}
-    p10, p90 = band.get("p10"), band.get("p90")
+    p10, _p90 = _band(document, "guard")
     began, days = guard_below_since(document, p10)
+    subtitle = "Daily average count"
     if began:
         subtitle = "Confirms a sustained problem · under the usual range since %s %d · %d days" % (
             began.strftime("%b"), began.day, days)
-    else:
-        subtitle = "Daily average count"
-    latest_day, latest = latest_value(document, "guard", flags=True)
-    svg = Svg(WIDTH)
-    y = _header(svg, "", "Relays with the Guard flag · " + PERIOD_SPAN[period], subtitle)
-    entries = [("line", GREEN, None, "Inside usual range")]
-    if p10 is not None:
-        entries.append(("line", RED, None, "Outside usual range"))
-        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  %s–%s" % ("{:,}".format(p10), "{:,}".format(p90))))
-    y += legend(svg, LEFT, y, [entries])
-    panel = _frame(svg, "g" + period, y + 6, stamps, 7500, [0, 1500, 3000, 4500, 6000, 7500],
-                   "Relays", "{:,.0f}", period)
-    panel.series(values, GREEN, 2.2)
-    if p10 is not None and p90 is not None:
-        panel.hband(p10, p90, GREEN, 0.14)
-        _clip_band(svg, panel, values, p90, 7500, RED, "ga" + period)
-        _clip_band(svg, panel, values, 0, p10, RED, "gb" + period)
-    if latest is not None:
-        color = RED if p10 is not None and latest < p10 else GREEN
-        _latest(svg, panel, values, "{:,}".format(latest), color)
-    return _finish(svg, panel)
+    return _count_chart(document, period, "guard", "Relays with the Guard flag", subtitle, GREEN, "both", 2.2, 0.14)
 
 
 def hsdir_chart(document, period):
-    end = _end(document, ("hsdir",))
-    if end is None:
-        return None
-    stamps, values = series_window(document, "hsdir", end, period, flags=True)
-    if not _enough(values):
-        return None
-    band = (document.get("bands") or {}).get("hsdir") or {}
-    p10, p90 = band.get("p10"), band.get("p90")
     off, counted = hsdir_noise(document)
+    subtitle = "Daily average count, for context"
     if counted:
         subtitle = "Context · %d of %d quiet-year days were more than 10%% off a 28-day median" % (off, counted)
-    else:
-        subtitle = "Daily average count, for context"
-    svg = Svg(WIDTH)
-    y = _header(svg, "", "Relays with the HSDir flag · " + PERIOD_SPAN[period], subtitle)
-    entries = [("line", BLUE, None, "Daily average")]
-    if p10 is not None:
-        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  %s–%s" % (
-            "{:,}".format(p10), "{:,}".format(p90))))
-    y += legend(svg, LEFT, y, [entries])
-    panel = _frame(svg, "h" + period, y + 6, stamps, 7500, [0, 1500, 3000, 4500, 6000, 7500],
-                   "Relays", "{:,.0f}", period)
-    if p10 is not None and p90 is not None:
-        panel.hband(p10, p90, GREEN, 0.12)
-    panel.series(values, BLUE, 1.8)
-    _latest_day, latest = latest_value(document, "hsdir", flags=True)
-    if latest is not None:
-        _latest(svg, panel, values, "{:,}".format(latest), BLUE)
-    return _finish(svg, panel)
+    return _count_chart(document, period, "hsdir", "Relays with the HSDir flag", subtitle, BLUE, None, 1.8, 0.12)
 
 
 def directory_chart(document, period):
-    end = _end(document, ("directory",))
-    if end is None:
-        return None
-    stamps, values = series_window(document, "directory", end, period)
-    if not _enough(values):
-        return None
-    band = (document.get("bands") or {}).get("directory") or {}
-    p10, p90 = band.get("p10"), band.get("p90")
-    svg = Svg(WIDTH)
-    y = _header(svg, "", "Directory bytes served · " + PERIOD_SPAN[period],
-                "Bytes relays sent while answering directory requests")
-    entries = [("line", GREEN, None, "Inside usual range"), ("line", RED, None, "Above usual range")]
-    if p10 is not None and p90 is not None:
-        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  %.1f–%.1f" % (p10, p90)))
-    y += legend(svg, LEFT, y, [entries])
-    peak = max(value for value in values if value is not None)
-    yhi = 80 if peak <= 70 else max(80, peak * 1.15)
-    ticks = [0, 20, 40, 60, 80] if yhi <= 80 else nice_ticks(yhi)
-    panel = _frame(svg, "d" + period, y + 6, stamps, yhi, ticks, "Gbit/s", "{:.0f}", period, height=176)
-    panel.series(values, GREEN, 2.0)
-    if p10 is not None and p90 is not None:
-        panel.hband(p10, p90, GREEN, 0.16)
-        _clip_band(svg, panel, values, p90, yhi, RED, "dw" + period, width=2.2)
-    _latest_day, latest = latest_value(document, "directory")
-    if latest is not None:
-        color = RED if p90 is not None and latest > p90 else GREEN
-        _latest(svg, panel, values, "%.0f" % latest, color)
-    return _finish(svg, panel)
+    return _count_chart(
+        document, period, "directory", "Directory bytes served",
+        "Bytes relays sent while answering directory requests", GREEN, "above", 2.0, 0.16, height=176)
 
 
 CHARTS = (

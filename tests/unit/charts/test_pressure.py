@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from allium.lib.charts.pressure import directory_chart, overload_chart
+from allium.lib.charts.pressure import directory_chart, guard_chart, overload_chart
 
 
 def _document():
@@ -37,6 +37,12 @@ def test_overload_chart_names_the_percentile_band_and_has_no_release_mark():
     assert "onset" not in text
     assert "0.4.9" not in text
     assert "High since" in text
+
+
+def test_guard_chart_marks_both_sides_of_the_usual_range():
+    text = guard_chart(_document(), "1m").document()
+    assert "Outside usual range" in text
+    assert "#ff6b6b" in text
 
 
 def test_directory_chart_says_bytes_served():

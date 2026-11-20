@@ -449,13 +449,13 @@ if __name__ == "__main__":
 
     # Daily pressure history is independent of Onionoo's four windows. The first
     # run backfills it. Later runs only refresh days that are not sealed.
-    from lib.pressure_history import refresh as refresh_pressure_history
+    from lib.pressure_history import load_document, refresh as refresh_pressure_history
     try:
         RELAY_SET.pressure_history = refresh_pressure_history(log=progress_logger.log)
     except Exception as pressure_error:  # noqa: BLE001 -- the rest of the site still builds
         progress_logger.log("pressure history unavailable: %s" % pressure_error)
         print("⚠️ pressure history unavailable: %s" % pressure_error)
-        RELAY_SET.pressure_history = None
+        RELAY_SET.pressure_history = load_document()
 
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid
