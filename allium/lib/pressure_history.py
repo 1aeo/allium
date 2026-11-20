@@ -431,6 +431,23 @@ def freeze_bands(document):
         bands["frozen"] = True
 
 
+def baseline_months():
+    """UTC months from May 2025 through May 2026, the frozen usual-range window."""
+    year, month = BASELINE_START.year, BASELINE_START.month
+    last = (BASELINE_END.year, BASELINE_END.month)
+    names = []
+    while (year, month) <= last:
+        names.append("%04d-%02d" % (year, month))
+        month, year = (1, year + 1) if month == 12 else (month + 1, year)
+    return names
+
+
+def baseline_archives_ready(document):
+    """True when every baseline month was saved from a finished archive."""
+    done = set(document.get("processed_months") or [])
+    return all(name in done for name in baseline_months())
+
+
 def months_to_backfill(document, today):
     """Complete months from HISTORY_START through the month before ``today``."""
     done = set(document.get("processed_months") or [])
@@ -645,13 +662,18 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
             _safe(log, "archive %s" % _month(today), lambda: _archive_month(
                 document, _month(today), cache_dir, opener, log, now, False))
 
-    listing = _safe(log, "recent descriptors", lambda: _http_text(RECENT, 120, opener)) or ""
+    listing_body = _safe(log, "recent descriptors", lambda: _http_text(RECENT, 120, opener))
+    # A missing listing or file can still hold the relay that changes a share.
+    # Leave every open day unsealed until that input succeeds.
+    recent_incomplete = listing_body is None
+    listing = listing_body or ""
     for name in _recent_names(listing, now):
         if name in file_cache:
             continue
         log("pressure descriptor file %s" % name)
         body = _safe(log, "descriptor file %s" % name, lambda name=name: _http_text(RECENT + name, 180, opener))
         if not body:
+            recent_incomplete = True
             continue
         parsed = defaultdict(dict)
         accumulate_descriptors([body], parsed)
@@ -671,9 +693,11 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
         if day_map:
             kept[name] = days
             recent_maps.append(day_map)
-    apply_overload_maps(document, recent_maps, now, _seal_limit(_as_day(document.get("current_month_through"))))
+    seal = (lambda _day: False) if recent_incomplete else _seal_limit(_as_day(document.get("current_month_through")))
+    apply_overload_maps(document, recent_maps, now, seal)
     save_descriptor_files(kept, cache_dir)
-    freeze_bands(document)
+    if baseline_archives_ready(document):
+        freeze_bands(document)
     save_document(document, cache_dir)
     log("pressure history %d days, %d archive months" % (len(document["days"]), len(document.get("processed_months") or [])))
     return document

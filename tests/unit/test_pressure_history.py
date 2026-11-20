@@ -255,6 +255,62 @@ def test_status_run_stops_at_a_missing_day():
     assert since == datetime(2021, 11, 19).date()
 
 
+def test_failed_recent_file_does_not_seal_the_day(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    archive = _tar_xz([_descriptor("A" * 40, "2021-11-02", False)])
+    recent = '<a href="2021-11-19-00-00-00-server-descriptors">x</a>'
+    now = datetime(2021, 11, 20, tzinfo=timezone.utc)
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        if "2021-11-19-00-00-00-server-descriptors" in url:
+            raise OSError("missing")
+        if "relayflags.csv" in url:
+            return _response("date,flag,relays\n2021-11-02,Guard,5000\n2021-11-02,Running,8000\n")
+        if "dirbytes.csv" in url:
+            return _response("date,dirread,dirwrite\n2021-11-02,1,4.5\n")
+        if url.endswith("server-descriptors/"):
+            return _response(recent)
+        if url.endswith(".tar.xz"):
+            return _response(archive)
+        raise AssertionError(url)
+
+    document = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
+    assert document["days"]["2021-11-02"]["overload_sealed"] is False
+    assert document["overload_open"]["2021-11-02"]["A" * 40] is False
+
+    def opener_ok(request, timeout=None):
+        url = request.full_url
+        if "2021-11-19-00-00-00-server-descriptors" in url:
+            return _response(_descriptor("B" * 40, "2021-11-02", True))
+        return opener(request, timeout)
+
+    sealed = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener_ok, log=lambda _message: None)
+    row = sealed["days"]["2021-11-02"]
+    assert row["overload_sealed"] is True
+    assert row["overload_publishers"] == 2
+    assert row["overload_share"] == 50.0
+
+
+def test_bands_wait_until_every_baseline_month_is_archived():
+    document = pressure.empty_document()
+    day = datetime(2025, 5, 1, tzinfo=timezone.utc).date()
+    for offset in range(320):
+        current = day + timedelta(days=offset)
+        if current > pressure.BASELINE_END:
+            break
+        document["days"][current.isoformat()] = {
+            "guard": 5000, "hsdir": 4500, "running": 8000, "flags_ok": True,
+            "directory": 5.0, "overload_share": 1.0, "overload_sealed": True,
+        }
+    document["processed_months"] = [name for name in pressure.baseline_months() if name != "2026-03"]
+    assert pressure.baseline_archives_ready(document) is False
+    document["processed_months"] = pressure.baseline_months()
+    assert pressure.baseline_archives_ready(document) is True
+    pressure.freeze_bands(document)
+    assert document["bands"]["frozen"] is True
+
+
 def test_failed_fetch_keeps_the_saved_document(tmp_path, monkeypatch):
     monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
     document = pressure.empty_document()

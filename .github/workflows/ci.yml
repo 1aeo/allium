@@ -41,8 +41,8 @@ jobs:
 
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
-    # ubuntu-latest is 26.04, and setup-python has no 3.8 or 3.9 build for it.
-    runs-on: ${{ (matrix.python-version == '3.8' || matrix.python-version == '3.9') && 'ubuntu-22.04' || 'ubuntu-latest' }}
+    # ubuntu-latest is 26.04. setup-python publishes 3.8 and 3.9 for 24.04, not for 26.04.
+    runs-on: ${{ (matrix.python-version == '3.8' || matrix.python-version == '3.9') && 'ubuntu-24.04' || 'ubuntu-latest' }}
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
@@ -202,8 +202,8 @@ jobs:
         
   setup-script-validation:
     name: "Setup Script End-to-End Test"
-    # ubuntu-latest is 26.04, and setup-python has no 3.8 build for it.
-    runs-on: ${{ matrix.python-version == '3.8' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+    # ubuntu-latest is 26.04. setup-python publishes 3.8 for 24.04, not for 26.04.
+    runs-on: ${{ matrix.python-version == '3.8' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     env:
       CI: true
       GITHUB_ACTIONS: true
