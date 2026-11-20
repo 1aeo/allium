@@ -738,6 +738,10 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
             saved = _safe(log, "archive %s" % month, lambda month=month: _archive_month(
                 document, month, cache_dir, opener, log, now, True))
             if saved is None and month not in set(document.get("processed_months") or []):
+                # A repair replaces one month's slice. Its failure must not stop a later month.
+                # A month that was never saved still stops the first backfill, so the gap stays obvious.
+                if month in thin:
+                    continue
                 break
         if needs_current_month(document, now):
             _safe(log, "archive %s" % _month(today), lambda: _archive_month(
