@@ -278,22 +278,43 @@ def test_failed_recent_file_does_not_seal_the_day(tmp_path, monkeypatch):
     document = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
     assert document["days"]["2021-11-02"]["overload_sealed"] is False
     assert document["overload_open"]["2021-11-02"]["A" * 40] is False
+    pending = pressure.load_descriptor_files(str(tmp_path))
+    assert pending["2021-11-19-00-00-00-server-descriptors"] == {"pending": True}
 
-    def opener_ok(request, timeout=None):
+    calls = []
+
+    def opener_later(request, timeout=None):
         url = request.full_url
+        calls.append(url)
+        if url.endswith("server-descriptors/"):
+            return _response("")
         if "2021-11-19-00-00-00-server-descriptors" in url:
             return _response(_descriptor("B" * 40, "2021-11-02", True))
         return opener(request, timeout)
 
-    sealed = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener_ok, log=lambda _message: None)
+    # The file is no longer in the 36-hour listing. The saved name is still fetched.
+    sealed = pressure.refresh(cache_dir=str(tmp_path), now=now + timedelta(days=3), opener=opener_later,
+                              log=lambda _message: None)
+    assert any("2021-11-19-00-00-00-server-descriptors" in url for url in calls)
     row = sealed["days"]["2021-11-02"]
     assert row["overload_sealed"] is True
     assert row["overload_publishers"] == 2
     assert row["overload_share"] == 50.0
 
 
-def test_bands_wait_until_every_baseline_month_is_archived():
+def _quiet_opener(request, timeout=None):
+    url = request.full_url
+    if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+        return _response("date,flag,relays\n")
+    if url.endswith(".tar.xz"):
+        raise OSError("archive unavailable")
+    raise AssertionError(url)
+
+
+def test_bands_wait_until_every_baseline_month_is_archived(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
     document = pressure.empty_document()
+    document["archive_revision"] = 2
     day = datetime(2025, 5, 1, tzinfo=timezone.utc).date()
     for offset in range(320):
         current = day + timedelta(days=offset)
@@ -304,11 +325,16 @@ def test_bands_wait_until_every_baseline_month_is_archived():
             "directory": 5.0, "overload_share": 1.0, "overload_sealed": True,
         }
     document["processed_months"] = [name for name in pressure.baseline_months() if name != "2026-03"]
-    assert pressure.baseline_archives_ready(document) is False
-    document["processed_months"] = pressure.baseline_months()
-    assert pressure.baseline_archives_ready(document) is True
-    pressure.freeze_bands(document)
-    assert document["bands"]["frozen"] is True
+    pressure.save_document(document, str(tmp_path))
+    now = datetime(2026, 6, 15, tzinfo=timezone.utc)
+    first = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_quiet_opener, log=lambda _message: None)
+    assert "frozen" not in first["bands"]
+
+    first["processed_months"] = pressure.baseline_months()
+    first["archive_revision"] = 2
+    pressure.save_document(first, str(tmp_path))
+    second = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_quiet_opener, log=lambda _message: None)
+    assert second["bands"]["frozen"] is True
 
 
 def test_failed_fetch_keeps_the_saved_document(tmp_path, monkeypatch):

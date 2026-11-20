@@ -24,7 +24,6 @@ from datetime import date, datetime, timedelta, timezone
 from statistics import median
 
 from .charts.series import WINDOW
-from .workers import CACHE_DIR
 
 METRICS = "https://metrics.torproject.org"
 COLLECTOR = "https://collector.torproject.org"
@@ -46,8 +45,16 @@ _HEX = set("0123456789ABCDEF")
 _PATHS = {"days": "pressure_history.json", "files": "pressure_descriptor_files.json"}
 
 
+def _root(cache_dir=None):
+    """Resolve the cache directory when a call asks for one."""
+    if cache_dir:
+        return cache_dir
+    from .workers import CACHE_DIR
+    return CACHE_DIR
+
+
 def _path(kind, cache_dir=None):
-    return os.path.join(cache_dir or CACHE_DIR, _PATHS[kind])
+    return os.path.join(_root(cache_dir), _PATHS[kind])
 
 
 def empty_document():
@@ -604,9 +611,14 @@ def _saved_day(document, key):
         return HISTORY_START
 
 
+def _is_pending(days):
+    """A descriptor file we still have to download."""
+    return isinstance(days, dict) and list(days) == ["pending"]
+
+
 def _cache_lock(cache_dir):
     """One writer at a time. Two builds otherwise share a temp file and can drop the cache."""
-    directory = cache_dir or CACHE_DIR
+    directory = _root(cache_dir)
     os.makedirs(directory, exist_ok=True)
     handle = open(os.path.join(directory, "pressure_history.lock"), "a+")
     try:
@@ -667,12 +679,17 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
     # Leave every open day unsealed until that input succeeds.
     recent_incomplete = listing_body is None
     listing = listing_body or ""
-    for name in _recent_names(listing, now):
-        if name in file_cache:
+    names = _recent_names(listing, now)
+    for name, days in file_cache.items():
+        if _is_pending(days) and name not in names:
+            names.append(name)
+    for name in names:
+        if name in file_cache and not _is_pending(file_cache[name]):
             continue
         log("pressure descriptor file %s" % name)
         body = _safe(log, "descriptor file %s" % name, lambda name=name: _http_text(RECENT + name, 180, opener))
         if not body:
+            file_cache[name] = {"pending": True}
             recent_incomplete = True
             continue
         parsed = defaultdict(dict)
@@ -681,6 +698,10 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
 
     kept, recent_maps = {}, []
     for name, days in file_cache.items():
+        if _is_pending(days):
+            kept[name] = days
+            recent_incomplete = True
+            continue
         if not isinstance(days, dict):
             continue
         day_map = {}

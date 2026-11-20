@@ -457,9 +457,9 @@ if __name__ == "__main__":
         RELAY_SET.pressure_history = load_document()
     else:
         try:
-            RELAY_SET.pressure_history = refresh_pressure_history(log=progress_logger.log)
+            RELAY_SET.pressure_history = refresh_pressure_history(log=progress_logger.log_without_increment)
         except Exception as pressure_error:  # noqa: BLE001 -- the rest of the site still builds
-            progress_logger.log("pressure history unavailable: %s" % pressure_error)
+            progress_logger.log_without_increment("pressure history unavailable: %s" % pressure_error)
             print("⚠️ pressure history unavailable: %s" % pressure_error)
             RELAY_SET.pressure_history = load_document()
 
