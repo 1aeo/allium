@@ -66,6 +66,235 @@ def test_sealed_overload_day_is_not_replaced():
     assert document["days"][day.isoformat()]["overload_share"] == 10.0
 
 
+def test_larger_archive_replaces_a_sealed_partial_day():
+    document = pressure.empty_document()
+    day = datetime(2026, 10, 2).date()
+    document["days"][day.isoformat()] = {
+        "overload_publishers": 1296, "overload_overloaded": 260, "overload_share": 20.0617, "overload_sealed": True,
+    }
+    fuller = {day: {("%02x" % index).ljust(40, "A"): index == 0 for index in range(9000)}}
+    pressure.apply_overload_maps(document, [fuller], datetime(2026, 10, 20, tzinfo=timezone.utc))
+    row = document["days"][day.isoformat()]
+    assert row["overload_publishers"] == 9000
+    assert row["overload_sealed"] is True
+    assert row["overload_share"] < 1
+
+
+def test_partial_latest_day_is_not_the_status():
+    document = pressure.empty_document()
+    start = datetime(2026, 11, 1).date()
+    for offset in range(19):
+        day = start + timedelta(days=offset)
+        document["days"][day.isoformat()] = {
+            "overload_publishers": 9900, "overload_share": 10.4, "overload_sealed": True,
+        }
+    document["days"]["2026-11-20"] = {
+        "overload_publishers": 2601, "overload_share": 6.4, "overload_sealed": False,
+    }
+    day, share = pressure.latest_value(document, "overload_share")
+    assert day.isoformat() == "2026-11-19"
+    assert share == 10.4
+    status, since, _latest = pressure.status_since(document, 1.9)
+    assert status == "high"
+    assert since != datetime(2026, 11, 20).date()
+
+
+def test_thin_sealed_day_reopens_its_month():
+    document = pressure.empty_document()
+    start = datetime(2026, 9, 28).date()
+    for offset in range(8):
+        day = start + timedelta(days=offset)
+        document["days"][day.isoformat()] = {
+            "overload_publishers": 9700, "overload_share": 8.0, "overload_sealed": True,
+        }
+    document["days"]["2026-10-02"] = {
+        "overload_publishers": 1296, "overload_share": 20.0, "overload_sealed": True,
+    }
+    assert pressure._thin_sealed_months(document) == {"2026-10"}
+
+
+def test_failed_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(
+        document, datetime(2026, 11, 1).date())
+    for day_text in ("2026-05-01", "2026-10-02"):
+        current = datetime.strptime(day_text, "%Y-%m-%d").date()
+        for offset in range(-3, 4):
+            stamp = current + timedelta(days=offset)
+            pubs = 100 if offset == 0 else 9000
+            document["days"][stamp.isoformat()] = {
+                "overload_publishers": pubs, "overload_share": 1.0, "overload_sealed": True,
+            }
+    pressure.save_document(document, str(tmp_path))
+    calls = []
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith("server-descriptors-2026-05.tar.xz"):
+            raise OSError("repair unavailable")
+        if url.endswith("server-descriptors-2026-10.tar.xz"):
+            return _response(_tar_xz([_descriptor("A" * 40, "2026-10-02", False)]))
+        if url.endswith(".tar.xz"):
+            raise OSError("unexpected %s" % url)
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2026, 11, 20, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    saved = pressure.load_document(str(tmp_path))
+    assert "2026-10" in saved["processed_months"]
+    assert "2026-05" not in saved["processed_months"]
+
+
+def test_unreadable_archive_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, datetime(2026, 11, 1).date())
+    _thin_day(document, "2026-05-01")
+    _thin_day(document, "2026-10-02")
+    pressure.save_document(document, str(tmp_path))
+    calls = []
+    bad = lzma.compress(b"this is not a tar")
+    good = _tar_xz([_descriptor("A" * 40, "2026-10-02", False)])
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith("server-descriptors-2026-05.tar.xz"):
+            return _response(bad)
+        if url.endswith("server-descriptors-2026-10.tar.xz"):
+            return _response(good)
+        if url.endswith(".tar.xz"):
+            raise OSError("unexpected %s" % url)
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2026, 11, 20, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    saved = pressure.load_document(str(tmp_path))
+    assert "2026-10" in saved["processed_months"]
+    assert "2026-05" not in saved["processed_months"]
+
+
+def test_truncated_archive_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, datetime(2026, 11, 1).date())
+    _thin_day(document, "2026-05-01")
+    _thin_day(document, "2026-10-02")
+    pressure.save_document(document, str(tmp_path))
+    calls = []
+    whole = _tar_xz([_descriptor("A" * 40, "2026-05-01", False), _descriptor("B" * 40, "2026-10-02", False)])
+    short = whole[:len(whole) // 2]
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith("server-descriptors-2026-05.tar.xz"):
+            return _response(short)
+        if url.endswith("server-descriptors-2026-10.tar.xz"):
+            return _response(_tar_xz([_descriptor("B" * 40, "2026-10-02", False)]))
+        if url.endswith(".tar.xz"):
+            raise OSError("unexpected %s" % url)
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2026, 11, 20, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    saved = pressure.load_document(str(tmp_path))
+    assert "2026-10" in saved["processed_months"]
+    assert "2026-05" not in saved["processed_months"]
+
+
+def test_unreadable_archive_stops_the_first_backfill(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith(".tar.xz"):
+            return _response(lzma.compress(b"this is not a tar"))
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2022, 1, 15, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2021-11.tar.xz") for url in calls)
+    assert not any(url.endswith("server-descriptors-2021-12.tar.xz") for url in calls)
+
+
+def _thin_day(document, day_text):
+    current = datetime.strptime(day_text, "%Y-%m-%d").date()
+    for offset in range(-3, 4):
+        stamp = current + timedelta(days=offset)
+        document["days"][stamp.isoformat()] = {
+            "overload_publishers": 100 if offset == 0 else 9000,
+            "overload_share": 1.0, "overload_sealed": True,
+        }
+
+
+def _csv_opener(archive, calls):
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith(".tar.xz"):
+            return _response(archive)
+        raise AssertionError(url)
+    return opener
+
+
+def test_genuine_thin_day_is_downloaded_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, datetime(2026, 11, 1).date())
+    _thin_day(document, "2026-10-02")
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("A" * 40, "2026-10-02", False)])
+    now = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    calls = []
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    calls.clear()
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert not any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    assert "2026-10" in pressure.load_document(str(tmp_path))["thin_checked_months"]
+
+
+def test_open_month_thin_day_is_fetched_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    now = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, now.date())
+    document["current_month_through"] = "2026-11-18"
+    document["current_month_fetched_at"] = now.isoformat()
+    _thin_day(document, "2026-11-01")
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("B" * 40, "2026-11-01", False)])
+    calls = []
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert any(url.endswith("server-descriptors-2026-11.tar.xz") for url in calls)
+    calls.clear()
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert not any(url.endswith(".tar.xz") for url in calls)
+
+
 def test_percentile_is_linear():
     assert pressure.percentile([1, 2, 3, 4], 0.5) == 2.5
     assert pressure.percentile([10], 0.9) == 10
