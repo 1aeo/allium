@@ -123,11 +123,13 @@ python3 compare_outputs.py
 
 A pressure-chart change keeps `--no-pressure-history` and uses the same cache
 that already contains days. An empty cache makes both runs omit the charts.
-An archive-parsing change omits the flag. Move
+An archive-parsing change omits the flag. Move any existing
 `allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json`
-aside, and start both runs from the same cache that does not already list the
-months under test in `processed_months`. Put that starting cache back before
-the after run, and put the saved files back when the comparison is finished.
+aside, then delete them so both runs backfill. Delete them again before the
+after run. Put the saved copies back when the comparison is finished, and
+delete a file that had no copy. Each run's log must not contain `pressure
+history unavailable`. A sealed day already stored in the file changes only
+when the new census has more relays.
 
 The comparison tool classifies every file as:
 - **Identical** — no change at all
