@@ -32,8 +32,11 @@ def _document():
 def test_overload_chart_names_the_percentile_band_and_has_no_release_mark():
     svg = overload_chart(_document(), "1m")
     text = svg.document()
-    assert "Usual range (p10–p90)" in text
-    assert "0.3%–1.9%" in text
+    assert "Relays Reporting Overload" in text
+    assert "Inside usual range" in text and "0.3%–1.9%" in text
+    assert "Up to 10% outside usual range" in text
+    assert "More than 10% outside usual range" in text
+    assert "Pressure, not a cause" not in text
     assert "onset" not in text
     assert "0.4.9" not in text
     assert "High since" in text
@@ -70,7 +73,20 @@ def test_hsdir_chart_marks_both_sides_of_the_usual_range():
     assert "Outside usual range" in text
     assert 'stroke="#ff6b6b" stroke-width="2.4"' in text
     overload = overload_chart(_document(), "1m").document()
-    assert "Relays reporting overload" in overload and "Tor network" not in overload
+    assert "Relays Reporting Overload" in overload and "Tor network" not in overload
+    assert "quiet-year" not in text
+
+
+def test_hsdir_subtitle_names_the_baseline_in_plain_language():
+    document = {"days": {}, "bands": {"hsdir": {"p10": 4372, "p90": 5878, "n": 300}}}
+    start = datetime(2025, 6, 1, tzinfo=timezone.utc).date()
+    for offset in range(40):
+        document["days"][(start + timedelta(days=offset)).isoformat()] = {
+            "hsdir": 5000 if offset < 30 else 2000, "flags_ok": True,
+        }
+    text = hsdir_chart(document, "1m").document()
+    assert "quiet-year" not in text
+    assert "May 2025–May 2026" in text and "previous 28 days" in text
 
 
 def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
@@ -83,7 +99,7 @@ def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
 
 def test_directory_chart_says_bytes_served():
     text = directory_chart(_document(), "1m").document()
-    assert "Directory bytes served" in text
+    assert "Directory Bytes Served" in text
     assert "Usual range (p10–p90)" in text
     assert "2.9–11.8" in text
     assert "onset" not in text

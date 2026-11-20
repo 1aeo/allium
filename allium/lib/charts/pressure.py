@@ -142,15 +142,14 @@ def overload_chart(document, period):
         subtitle = "%s since %s %d · %.1f%% on %s %d" % (
             status.capitalize(), began.strftime("%b"), began.day, latest, latest_day.strftime("%b"), latest_day.day)
     svg = Svg(WIDTH)
-    y = _header(svg, "", "Relays reporting overload · " + PERIOD_SPAN[period], subtitle)
-    svg.text(LEFT, y, "A level, about a day late. Pressure, not a cause.", 12, MUTED)
-    y += 18
+    y = _header(svg, "", "Relays Reporting Overload · " + PERIOD_SPAN[period], subtitle)
     if p10 is not None and p90 is not None:
-        y += legend(svg, LEFT, y, [
-            [("patch", GREEN, 0.28, "Usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90))],
-            [("patch", ORANGE, 0.28, "Elevated  to %.0f%%" % HIGH_SHARE),
-             ("patch", RED, 0.28, "High  above %.0f%%" % HIGH_SHARE)],
-        ])
+        band = "Inside usual range  %.1f%%–%.1f%%" % (p10, p90)
+        y += legend(svg, LEFT, y, [[
+            ("line", GREEN, None, band),
+            ("line", ORANGE, None, "Up to %.0f%% outside usual range" % HIGH_SHARE),
+            ("line", RED, None, "More than %.0f%% outside usual range" % HIGH_SHARE),
+        ]], min_width=PLOT_WIDTH)
     yhi, ticks = _scale(values, 30, 24, 1.15, [0, 6, 12, 18, 24])
     panel = _panel(svg, "o" + period, y + 6, stamps, yhi, ticks, "Share (%)", "{:.0f}", period)
     panel.series(values, GREEN, 2.2)
@@ -189,7 +188,7 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
         entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
     if usual:
         entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  " + usual))
-    y += legend(svg, LEFT, y, [entries])
+    y += legend(svg, LEFT, y, [entries], min_width=PLOT_WIDTH)
     panel = _panel(svg, field[:1] + period, y + 6, stamps, yhi, ticks, ylabel, yfmt, period, height)
     if p10 is not None and p90 is not None:
         panel.hband(p10, p90, GREEN, opacity)
@@ -223,15 +222,16 @@ def guard_chart(document, period):
 
 def hsdir_chart(document, period):
     off, counted = hsdir_noise(document)
-    subtitle = "Daily average count, for context"
+    subtitle = "Daily average count"
     if counted:
-        subtitle = "Context · %d of %d quiet-year days were more than 10%% off a 28-day median" % (off, counted)
+        # The counted days are the May 2025–May 2026 baseline, the same window as the usual range.
+        subtitle = "May 2025–May 2026 · %d of %d days moved more than 10%% from the previous 28 days" % (off, counted)
     return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, BLUE, "both", 1.8, 0.12)
 
 
 def directory_chart(document, period):
     return _count_chart(
-        document, period, "directory", "Directory bytes served",
+        document, period, "directory", "Directory Bytes Served",
         "Bytes relays sent while answering directory requests", GREEN, "above", 2.0, 0.16, height=176)
 
 

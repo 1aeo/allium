@@ -257,20 +257,25 @@ class Panel(object):
         self.svg.line(self.left, bottom, self.left + self.width, bottom, AXIS, 1)
 
 
-def legend(svg, x, y, rows, size=11.5):
+def legend(svg, x, y, rows, size=11.5, min_width=0):
     """Framed rows of ``(kind, color, style, label)`` entries. Returns the height.
 
     ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity), ``marker``
     (a diamond) or ``dot`` (a line with a dot, as the write/read strip's red marks).
-    A legend too wide for the canvas moves left.
+    A legend too wide for the canvas moves left. ``min_width`` stretches the frame and
+    spreads that row's gaps so a short key can span the plot.
     """
     pad, swatch, gap, row_h = 8, 22, 16, size * 1.55
     widths = [[swatch + 6 + text_width(entry[3], size) for entry in row] for row in rows]
-    total = max(sum(row) + gap * (len(row) - 1) for row in widths) + pad * 2
+    content = max(sum(row) + gap * (len(row) - 1) for row in widths)
+    total = max(content + pad * 2, min_width)
     height = pad * 2 + row_h * len(rows) - (row_h - size * 1.2)
     x = min(x, svg.width - 12 - total)
     svg.rect(x, y, total, height, LEGEND_BG, stroke=LEGEND_EDGE, rx=4)
     for r, (row, row_widths) in enumerate(zip(rows, widths)):
+        natural = sum(row_widths) + gap * max(len(row_widths) - 1, 0)
+        extra = (total - pad * 2 - natural) if min_width else 0
+        step = gap + (extra / (len(row_widths) - 1) if len(row_widths) > 1 and extra else 0)
         cy, cx = y + pad + size * 0.6 + r * row_h, x + pad
         for (kind, color, style, label), width in zip(row, row_widths):
             if kind == "line":
@@ -283,5 +288,5 @@ def legend(svg, x, y, rows, size=11.5):
                 svg.line(cx, cy, cx + swatch, cy, color, 2.4)
                 svg.dot(cx + swatch / 2, cy, 3.5, color)
             svg.text(cx + swatch + 6, cy + size * 0.35, label, size)
-            cx += width + gap
+            cx += width + step
     return height

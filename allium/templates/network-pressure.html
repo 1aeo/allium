@@ -6,7 +6,7 @@
 {% block title -%}
 Network Pressure
 {% endblock -%}
-{% block meta_description %}Daily Tor network pressure: relays reporting overload, Guard and HSDir counts, and directory bytes served, against their usual range.{% endblock %}
+{% block meta_description %}Daily Tor network pressure: Relays Reporting Overload, Relays with Guard Flag, Relays with HSDir Flag, and Directory Bytes Served, against their usual range.{% endblock %}
 
 {% block body -%}
 
@@ -17,12 +17,15 @@ Network Pressure
 .pressure-stack .pressure-charts { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; align-items: start; }
 .pressure-stack .history-chart { width: 100%; scroll-margin-top: 12px; }
 .pressure-stack .chart-history { max-width: none; }
+.pressure-stack .pressure-index,
 .pressure-stack .history-periods { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pressure-stack .history-periods label {
-    display: inline-block; margin: 0; padding: 8px 16px; border-radius: 3px;
+.pressure-stack .pressure-pill {
+    display: inline-block; margin: 0; padding: 8px 14px; border-radius: 3px;
     background: var(--nh-bg-metric); color: var(--color-link);
-    font-size: 1.5rem; font-weight: 700; cursor: pointer;
+    font-size: 1.2rem; font-weight: 700; line-height: 1.2; cursor: pointer; text-decoration: none;
 }
+.pressure-stack .pressure-pill:hover,
+.pressure-stack .pressure-pill:focus { outline: 2px solid var(--color-link); outline-offset: 2px; }
 .pressure-all {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
     clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -38,9 +41,9 @@ Network Pressure
     outline: 2px solid var(--color-link); outline-offset: 2px;
 }
 .pressure-stack .chart-spark { font-size: 16px; font-weight: 700; }
-.pressure-index { margin: 0 0 12px; }
-.pressure-index-label { margin-right: 8px; font-weight: 700; }
-.pressure-index a { display: inline-block; margin: 0 14px 6px 0; font-size: 1.15rem; font-weight: 700; }
+.pressure-index { margin: 0 0 8px; }
+.pressure-index-label { font-size: 1.2rem; font-weight: 700; }
+.history-lead a { font-weight: 700; }
 @media (min-width: 1400px) {
     .pressure-stack .pressure-charts { grid-template-columns: 1fr 1fr; }
 }
@@ -62,10 +65,10 @@ Network Pressure
             <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
         </div>
         {% set charts = [
-            ('overload', 'Relays reporting overload'),
+            ('overload', 'Relays Reporting Overload'),
             ('guard', 'Relays with Guard Flag'),
             ('hsdir', 'Relays with HSDir Flag'),
-            ('directory', 'Directory bytes served')] %}
+            ('directory', 'Directory Bytes Served')] %}
         {#- Radios, not #1m/#5y: a jump link changes the hash, and the hash can target only one element. -#}
         {% for period in chart_spans %}
         <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period" id="pressure-all-{{ period }}">
@@ -73,19 +76,22 @@ Network Pressure
         <p class="pressure-index">
             <span class="pressure-index-label">Jump to</span>
             {% for name, heading in charts if relays.pressure_periods.get(name) %}
-            <a href="#pressure-{{ name }}">{{ heading }}</a>
+            <a class="pressure-pill" href="#pressure-{{ name }}">{{ heading }}</a>
             {% endfor %}
         </p>
         <div class="history-periods">
             {% for period in chart_spans %}
-            <label for="pressure-all-{{ period }}">{{ period|upper }}</label>
+            <label class="pressure-pill" for="pressure-all-{{ period }}">{{ period|upper }}</label>
             {% endfor %}
         </div>
         <p class="history-lead">Tor's goal is more diverse relays and more trusted relays. More relays, run by more operators, spread risk and give end users a more anonymous, safer, and more secure network. Minimizing overloaded relays, maximizing the number of high-quality Guard and HSDir relays, and minimizing excessive directory requests keep that network safer.</p>
-        <p class="history-lead">Relays reporting overload is the share of relays whose server descriptor that day includes an overload-general line (CollecTor server descriptors): a level, about a day late, that measures pressure rather than a cause.</p>
-        <p class="history-lead">Relays with Guard Flag is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
-        <p class="history-lead">Relays with HSDir Flag is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range.</p>
-        <p class="history-lead">Directory bytes served is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
+        {% macro pressure_name(name, heading) -%}
+        {%- if relays.pressure_periods.get(name) -%}<a href="#pressure-{{ name }}">{{ heading }}</a>{%- else -%}{{ heading }}{%- endif -%}
+        {%- endmacro %}
+        <p class="history-lead">{{ pressure_name('overload', 'Relays Reporting Overload') }} is the share of relays whose server descriptor that day includes an overload-general line (CollecTor server descriptors): a level, about a day late.</p>
+        <p class="history-lead">{{ pressure_name('guard', 'Relays with Guard Flag') }} is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
+        <p class="history-lead">{{ pressure_name('hsdir', 'Relays with HSDir Flag') }} is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range. The note under the title counts days in May 2025–May 2026 that moved more than 10% from the previous 28 days.</p>
+        <p class="history-lead">{{ pressure_name('directory', 'Directory Bytes Served') }} is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
         <p class="history-lead">The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. The 1M, 6M, 1Y, and 5Y buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
             {% for name, heading in charts if relays.pressure_periods.get(name) %}

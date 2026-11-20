@@ -87,7 +87,8 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert "CollecTor server descriptors" in html
     assert "Tor Metrics relay flags" in html
     assert "Tor Metrics dirwrite" in html
-    assert 'href="#pressure-overload"' in html and 'href="#pressure-directory"' in html
+    assert html.count('href="#pressure-overload"') == 2 and html.count('href="#pressure-directory"') == 2
+    assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
     assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
     assert 'name="pressure-period"' in html and ">1M</label>" in html
     assert html.count('name="chart-guard"') == 4
