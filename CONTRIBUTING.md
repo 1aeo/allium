@@ -108,17 +108,28 @@ For any change that affects HTML output (templates, data processing, page
 generation), run a before/after comparison to verify nothing unexpected broke:
 
 ```bash
-# 1. Generate baseline BEFORE your change
-python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# 1. Generate baseline BEFORE your change.
+#    --no-pressure-history skips the CollecTor archive backfill.
+python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 
 # 2. Make your code changes
 
 # 3. Generate output AFTER your change
-python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 
 # 4. Compare (~8 seconds for ~22k files)
 python3 compare_outputs.py
 ```
+
+A pressure-chart change keeps `--no-pressure-history` and uses the same cache
+that already contains days. An empty cache makes both runs omit the charts.
+An archive-parsing change omits the flag. Move any existing
+`allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json`
+aside, then delete them so both runs backfill. Delete them again before the
+after run. Put the saved copies back when the comparison is finished, and
+delete a file that had no copy. Each run's log must not contain `pressure
+history unavailable`. A sealed day already stored in the file changes only
+when the new census has more relays.
 
 The comparison tool classifies every file as:
 - **Identical** — no change at all

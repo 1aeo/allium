@@ -111,12 +111,15 @@ generation — use `compare_outputs.py` to diff the full ~22k-file site
 before and after your change:
 
 ```bash
-# Generate baseline, make changes, generate after, compare
-python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# Generate baseline, make changes, generate after, compare.
+# --no-pressure-history skips the CollecTor archive backfill.
+python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 # ... make code changes ...
-python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 python3 compare_outputs.py
 ```
+
+A pressure-chart change keeps `--no-pressure-history` and uses the same cache that already contains days. An empty cache makes both runs omit the charts. An archive-parsing change omits the flag, moves `allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json` aside, and deletes them before each run. Put the saved copies back afterward, and delete a file that had no copy. A log line `pressure history unavailable` means that run did not parse the archives. A sealed day already stored in the file changes only when the new census has more relays.
 
 Classifies every file as **identical**, **timestamp-only**, or **content diff**.
 Shows normalized unified diffs (timestamps stripped) for content diffs only.

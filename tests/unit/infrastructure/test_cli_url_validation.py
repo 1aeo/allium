@@ -202,6 +202,36 @@ def test_cli_help_documents_bare_slash_rejection():
     assert "site-root output" in result.stdout
 
 
+def test_pressure_backfill_is_a_flag_not_the_ci_cache_variable():
+    """ALLIUM_CI_CACHE_FALLBACK stays a setup.sh switch. It does not skip the archive."""
+    module = _load_allium_cli_module()
+    refresh = argparse.Namespace(pressure_history=True)
+    skip = argparse.Namespace(pressure_history=False)
+    assert module.pressure_refresh_skipped(refresh, environ={}) is False
+    assert module.pressure_refresh_skipped(skip, environ={}) is True
+    assert module.pressure_refresh_skipped(
+        refresh, environ={"ALLIUM_CI_CACHE_FALLBACK": "1"}) is False
+    assert module.pressure_refresh_skipped(
+        refresh, environ={"PYTEST_CURRENT_TEST": "tests/x.py::test_one"}) is True
+
+
+def test_cli_help_lists_the_operator_skip_flags():
+    result = _run_cli(["--help"])
+    assert result.returncode == 0, result.stderr
+    assert "--no-pressure-history" in result.stdout
+    assert "--no-consensus-evaluation" in result.stdout
+    assert "ALLIUM_CI_CACHE_FALLBACK" not in result.stdout
+    assert "ALLIUM_CONSENSUS_EVALUATION" not in result.stdout
+
+
+def test_python_entry_does_not_read_operator_choices_from_the_environment():
+    source = (ALLIUM_DIR / "allium.py").read_text(encoding="utf-8")
+    consensus = (PROJECT_ROOT / "allium" / "lib" / "consensus" / "__init__.py").read_text(encoding="utf-8")
+    assert "ALLIUM_CI_CACHE_FALLBACK" not in source
+    assert "ALLIUM_CONSENSUS_EVALUATION" not in source
+    assert "ALLIUM_CONSENSUS_EVALUATION" not in consensus
+
+
 def test_cli_rejects_bare_slash_before_generating(tmp_path):
     """The real parser exits before Onionoo or page generation."""
     marker = tmp_path / "generated"

@@ -18,13 +18,16 @@ comparison tool classifies every file and surfaces only real content changes.
 **Steps**:
 
 ```bash
-# 1. Generate baseline BEFORE your change
-python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# 1. Generate baseline BEFORE your change.
+#    --no-pressure-history skips the CollecTor archive backfill (~90 min on an
+#    empty cache). Both runs use the cache file already on disk. An empty
+#    cache omits the pressure charts on both sides.
+python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 
 # 2. Make your code changes
 
 # 3. Generate output AFTER your change
-python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 
 # 4. Compare (~8 seconds for ~22k files)
 python3 compare_outputs.py
@@ -33,6 +36,20 @@ python3 compare_outputs.py
 #    Use --quiet for summary only
 #    Use --max-diffs N to limit diff output
 ```
+
+A pressure-chart change keeps `--no-pressure-history`. Both runs need the same
+cache that already contains days. An empty cache makes both runs omit the charts.
+
+An archive-parsing change omits the flag. Move any existing
+`allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json`
+aside, then delete them so both runs backfill. Delete them again before the
+after run. A file the baseline writes lists its months in `processed_months`,
+and the after run skips those months. Put the saved copies back when the
+comparison is finished, and delete a file that had no copy. Each run's log
+must not contain `pressure history unavailable`: that line means the run
+loaded the cache and did not parse the archives. Deleting the files removes
+stored sealed days. A sealed day left in the file changes only when the new
+census has more relays, and an identical diff can hide a parsing change.
 
 **Interpreting results**:
 - "Identical" and "Timestamp only" files are expected — no action needed

@@ -100,6 +100,21 @@ def _browser_normalized_base_url(url):
     )
 
 
+def pressure_refresh_skipped(args, environ=None):
+    """True when this run must not download the CollecTor pressure archive.
+
+    ``--no-pressure-history`` is the operator switch. Pytest sets
+    ``PYTEST_CURRENT_TEST`` on this process, including the entrypoint tests,
+    and those runs must not start the archive backfill. The CI fixture job
+    passes the flag from ``scripts/ci_cache_fallback.sh``.
+    """
+    if not getattr(args, "pressure_history", True):
+        return True
+    if environ is None:
+        environ = os.environ
+    return bool(environ.get("PYTEST_CURRENT_TEST"))
+
+
 def validate_url_arguments(args):
     """
     Validate that all URL arguments use http:// or https:// scheme.
@@ -303,6 +318,24 @@ if __name__ == "__main__":
         help="skip the bandwidth and uptime history charts on relay and contact pages",
     )
     parser.add_argument(
+        "--no-pressure-history",
+        dest="pressure_history",
+        action="store_false",
+        help=(
+            "skip the CollecTor pressure-history backfill and use the history "
+            "already in the cache (allium/data/cache/pressure_history.json)"
+        ),
+    )
+    parser.add_argument(
+        "--no-consensus-evaluation",
+        dest="consensus_evaluation",
+        action="store_false",
+        help=(
+            "skip CollecTor consensus and server-descriptor fetches and the "
+            "per-relay consensus evaluation"
+        ),
+    )
+    parser.add_argument(
         "--chart-format",
         choices=("png", "svg"),
         help="history chart images: png (default; shows at Tor Browser's Safest level, which turns SVG "
@@ -341,8 +374,12 @@ if __name__ == "__main__":
     # steps, so adding an API worker or page type updates the total
     # automatically (hard-coded 4+22+35 previously drifted: comments said
     # 57/59 while runs logged 61, and --apis details overcounted).
+    from lib.consensus import set_consensus_evaluation_enabled
     from lib.coordinator import Coordinator
     from lib.site_generator import STANDALONE_PAGES, SORTED_PAGE_KEYS
+
+    # Applied before the progress total, which follows the workers this run enables.
+    set_consensus_evaluation_enabled(args.consensus_evaluation)
 
     # Setup: starting, creating output dir, dir ready, init relay data
     setup_steps = 4
@@ -449,11 +486,10 @@ if __name__ == "__main__":
 
     # Daily pressure history is independent of Onionoo's four windows. The first
     # run backfills it. Later runs only refresh days that are not sealed.
-    # Unit tests and the CI fixture job invoke this process and must not download
-    # the CollecTor archive. A normal build does both.
+    # --no-pressure-history loads the cache instead. Pytest sets
+    # PYTEST_CURRENT_TEST, and those runs must not start the backfill either.
     from lib.pressure_history import load_document, refresh as refresh_pressure_history
-    skip_pressure_network = bool(os.environ.get("PYTEST_CURRENT_TEST")) or os.environ.get("ALLIUM_CI_CACHE_FALLBACK") == "1"
-    if skip_pressure_network:
+    if pressure_refresh_skipped(args):
         RELAY_SET.pressure_history = load_document()
     else:
         try:
