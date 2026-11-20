@@ -151,6 +151,65 @@ def test_failed_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
     assert "2026-05" not in saved["processed_months"]
 
 
+def _thin_day(document, day_text):
+    current = datetime.strptime(day_text, "%Y-%m-%d").date()
+    for offset in range(-3, 4):
+        stamp = current + timedelta(days=offset)
+        document["days"][stamp.isoformat()] = {
+            "overload_publishers": 100 if offset == 0 else 9000,
+            "overload_share": 1.0, "overload_sealed": True,
+        }
+
+
+def _csv_opener(archive, calls):
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith(".tar.xz"):
+            return _response(archive)
+        raise AssertionError(url)
+    return opener
+
+
+def test_genuine_thin_day_is_downloaded_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, datetime(2026, 11, 1).date())
+    _thin_day(document, "2026-10-02")
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("A" * 40, "2026-10-02", False)])
+    now = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    calls = []
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    calls.clear()
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert not any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    assert "2026-10" in pressure.load_document(str(tmp_path))["thin_checked_months"]
+
+
+def test_open_month_thin_day_is_fetched_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    now = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, now.date())
+    document["current_month_through"] = "2026-11-18"
+    document["current_month_fetched_at"] = now.isoformat()
+    _thin_day(document, "2026-11-01")
+    pressure.save_document(document, str(tmp_path))
+    archive = _tar_xz([_descriptor("B" * 40, "2026-11-01", False)])
+    calls = []
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert any(url.endswith("server-descriptors-2026-11.tar.xz") for url in calls)
+    calls.clear()
+    pressure.refresh(cache_dir=str(tmp_path), now=now, opener=_csv_opener(archive, calls), log=lambda _m: None)
+    assert not any(url.endswith(".tar.xz") for url in calls)
+
+
 def test_percentile_is_linear():
     assert pressure.percentile([1, 2, 3, 4], 0.5) == 2.5
     assert pressure.percentile([10], 0.9) == 10

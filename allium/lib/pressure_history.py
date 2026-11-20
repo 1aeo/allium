@@ -731,21 +731,31 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
 
     if fetch_archives:
         _repair_processed_months(document, today)
-        thin = _thin_sealed_months(document)
+        checked = set(document.get("thin_checked_months") or [])
+        thin = _thin_sealed_months(document) - checked
         if thin:
             document["processed_months"] = [month for month in document.get("processed_months") or [] if month not in thin]
         for month in months_to_backfill(document, today):
             saved = _safe(log, "archive %s" % month, lambda month=month: _archive_month(
                 document, month, cache_dir, opener, log, now, True))
-            if saved is None and month not in set(document.get("processed_months") or []):
+            if saved:
+                # One repair is enough. A day that is still thin is the archive's own census.
+                if month in thin:
+                    _note_thin_checked(document, month)
+            elif month not in set(document.get("processed_months") or []):
                 # A repair replaces one month's slice. Its failure must not stop a later month.
                 # A month that was never saved still stops the first backfill, so the gap stays obvious.
                 if month in thin:
                     continue
                 break
-        if needs_current_month(document, now):
-            _safe(log, "archive %s" % _month(today), lambda: _archive_month(
-                document, _month(today), cache_dir, opener, log, now, False))
+        # The open month is not in the finished-month list. A leftover slice on its
+        # first days still needs that month's archive, once.
+        open_month = _month(today)
+        if needs_current_month(document, now) or open_month in thin:
+            saved = _safe(log, "archive %s" % open_month, lambda: _archive_month(
+                document, open_month, cache_dir, opener, log, now, False))
+            if saved and open_month in thin:
+                _note_thin_checked(document, open_month)
 
     listing_body = _safe(log, "recent descriptors", lambda: _http_text(RECENT, 120, opener))
     # A file still inside the 72-hour window can hold the relay that changes a share.
@@ -807,6 +817,12 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
     save_document(document, cache_dir)
     log("pressure history %d days, %d archive months" % (len(document["days"]), len(document.get("processed_months") or [])))
     return document
+
+
+def _note_thin_checked(document, month):
+    checked = set(document.get("thin_checked_months") or [])
+    checked.add(month)
+    document["thin_checked_months"] = sorted(checked)
 
 
 def _thin_sealed_months(document):
