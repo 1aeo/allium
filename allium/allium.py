@@ -447,6 +447,22 @@ if __name__ == "__main__":
         ENV.globals["chart_ext"] = args.chart_format
         ENV.globals["chart_root"] = CHARTS_DIR + "/" if apart else ""
 
+    # Daily pressure history is independent of Onionoo's four windows. The first
+    # run backfills it. Later runs only refresh days that are not sealed.
+    # Unit tests and the CI fixture job invoke this process and must not download
+    # the CollecTor archive. A normal build does both.
+    from lib.pressure_history import load_document, refresh as refresh_pressure_history
+    skip_pressure_network = bool(os.environ.get("PYTEST_CURRENT_TEST")) or os.environ.get("ALLIUM_CI_CACHE_FALLBACK") == "1"
+    if skip_pressure_network:
+        RELAY_SET.pressure_history = load_document()
+    else:
+        try:
+            RELAY_SET.pressure_history = refresh_pressure_history(log=progress_logger.log_without_increment)
+        except Exception as pressure_error:  # noqa: BLE001 -- the rest of the site still builds
+            progress_logger.log_without_increment("pressure history unavailable: %s" % pressure_error)
+            print("⚠️ pressure history unavailable: %s" % pressure_error)
+            RELAY_SET.pressure_history = load_document()
+
     # Freeze the finished data set so later collections, here and in the
     # forked page-rendering workers, skip it (workers then also avoid
     # copy-on-write copies of the heap that a full collection would cause).

@@ -54,7 +54,7 @@ def clear_chart_tree(output_dir):
     """
     root = os.path.join(output_dir, CHARTS_DIR)
     _refuse_symlink(root)
-    for kind in ("relay", "contact", "network"):
+    for kind in ("relay", "contact", "network", "pressure"):
         path = os.path.join(root, kind)
         if not os.path.lexists(path):
             continue
@@ -64,12 +64,13 @@ def clear_chart_tree(output_dir):
         os.rmdir(root)
     except OSError:  # missing, or holds something allium did not write
         pass
-    beside = os.path.join(output_dir, "network")
-    _refuse_symlink(beside)
-    if os.path.isdir(beside):
-        shutil.rmtree(beside)
-    elif os.path.isfile(beside):  # a stray file would make the chart directory unwritable
-        os.remove(beside)
+    for beside_name in ("network", "pressure"):
+        beside = os.path.join(output_dir, beside_name)
+        _refuse_symlink(beside)
+        if os.path.isdir(beside):
+            shutil.rmtree(beside)
+        elif os.path.isfile(beside):  # a stray file would make the chart directory unwritable
+            os.remove(beside)
 
 
 def _header(svg, identity, title, subtitle, y=10):
@@ -554,6 +555,15 @@ class ChartWriter(object):
         end = self._end(series, all(relay.get("running") is False for relay in members))  # as for a relay
         advertised = _advertised_mbit(summed)
         return bandwidth_chart(period, series, advertised, bands, identity, operator=True, end=end)
+
+    def pressure(self, directory, history):
+        """Write the four pressure charts for each period. Returns ``{name: {period: height}}``."""
+        from .pressure import CHARTS
+
+        def draw(chart, _history, _key, period):
+            return chart(_history, period)
+
+        return {name: self._charts(directory, name, draw, chart, history) for name, chart in CHARTS}
 
     def network(self, directory):
         """Write the whole-network ``bandwidth-<period>`` and ``uptime-<period>`` charts.
