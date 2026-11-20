@@ -86,7 +86,7 @@ def test_hsdir_subtitle_names_the_baseline_in_plain_language():
         }
     text = hsdir_chart(document, "1m").document()
     assert "quiet-year" not in text
-    assert "May 2025–May 2026" in text and "previous 28 days" in text
+    assert "May 2025–May 2026" in text and "previous 28 readings" in text
 
 
 def test_the_usual_range_edges_stay_inside_and_zero_is_outside():

@@ -224,8 +224,9 @@ def hsdir_chart(document, period):
     off, counted = hsdir_noise(document)
     subtitle = "Daily average count"
     if counted:
-        # The counted days are the May 2025–May 2026 baseline, the same window as the usual range.
-        subtitle = "May 2025–May 2026 · %d of %d days moved more than 10%% from the previous 28 days" % (off, counted)
+        # The counted days are the May 2025–May 2026 baseline. The median uses the previous 28 readings.
+        subtitle = "May 2025–May 2026 · %d of %d days moved more than 10%% from the previous 28 readings" % (
+            off, counted)
     return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, BLUE, "both", 1.8, 0.12)
 
 
