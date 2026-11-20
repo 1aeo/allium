@@ -1,0 +1,63 @@
+{% from "macros.html" import navigation, chart_history, chart_period_anchors %}
+{% extends "skeleton.html" -%}
+
+{% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/network-health.css">{% endblock %}
+
+{% block title -%}
+Network Pressure
+{% endblock -%}
+{% block meta_description %}Daily Tor network pressure: relays reporting overload, Guard and HSDir counts, and directory bytes served, against their usual range.{% endblock %}
+
+{% block body -%}
+
+<style>
+/* One column: layout A stacks the four charts under a single period switcher. */
+.pressure-stack.network-history { width: min(1094px, calc(100vw - 16px)); }
+.pressure-stack .pressure-charts { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+</style>
+
+<div class="aroi-center-text aroi-subsection">
+    <h1>Network Pressure</h1>
+    <p class="lead"><strong>Daily series against their usual range</strong></p>
+</div>
+
+{{ navigation('network_pressure', page_ctx, show_breadcrumbs=false) }}
+
+<div class="network-health-ribbon">
+    {% if relays.pressure_periods %}
+    {% set chart_src = page_ctx.path_prefix ~ chart_root ~ 'pressure/' %}
+    <section class="ribbon-card network-history pressure-stack" id="network-pressure">
+        {{ chart_period_anchors() }}
+        <div class="card-header">
+            <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
+        </div>
+        <p class="history-lead">Overload is the status: the share of relays whose server descriptor that day includes an overload-general line. It is a level, about a day late, because a relay writes the line into its next descriptor and keeps it for 72 hours. It is pressure, not a cause. Guard confirms a problem that lasts for weeks. HSDir is context. Directory bytes served are the bytes relays sent while answering directory requests. The same 1 month, 6 months, 1 year, and 5 years as a relay page. A thumbnail changes that chart. A period link changes all four.</p>
+        <p class="history-periods">
+            {% for period in chart_spans %}<a href="#{{ period }}">{{ period|upper }}</a>{% endfor %}
+        </p>
+        <div class="pressure-charts">
+            {% for name, alt, heading in (
+                ('overload', 'Relays reporting overload', 'Relays reporting overload'),
+                ('guard', 'Relays with the Guard flag', 'Guard'),
+                ('hsdir', 'Relays with the HSDir flag', 'HSDir'),
+                ('directory', 'Directory bytes served', 'Directory bytes served')) %}
+            {% if relays.pressure_periods.get(name) %}
+            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading) }}</div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        <p class="history-lead">Sources: CollecTor server descriptors for the overload line. Tor Metrics relay flags and dirwrite (directory bytes served) for the other series. The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. Days missing from Tor Metrics, and incomplete consensus days, are left as gaps.</p>
+    </section>
+    {% else %}
+    <section class="ribbon-card" id="network-pressure">
+        <div class="card-header"><h4>Network Pressure</h4></div>
+        <p class="history-lead">Pressure history is not available for this build.</p>
+    </section>
+    {% endif %}
+
+    <div class="ribbon-footer">
+        <p class="last-updated">Last updated: {{ page_ctx.timestamp_str }} UTC</p>
+    </div>
+</div>
+
+{% endblock -%}
