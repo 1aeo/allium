@@ -657,7 +657,7 @@
 {% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
 <h5 class="subsection-header" style="margin-top: 16px;">{% if jump %}<button type="button" id="{{ jump }}" class="pressure-jump-target" tabindex="-1">{{ heading }}</button>{% else %}{{ heading }}{% endif %}</h5>
 <div class="chart-history">
-    {% if independent %}
+    {% if independent and periods|length > 1 %}
     {% for period in order %}
     <input type="radio" name="chart-{{ name }}" id="{{ name }}-pick-{{ period }}" class="chart-pick chart-pick-{{ period }}">
     {% endfor %}

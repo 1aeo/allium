@@ -55,6 +55,13 @@ def test_earlier_series_names_its_last_day():
     assert "through Nov 9" in text
 
 
+def _flat(field, value):
+    document = _document()
+    for row in document["days"].values():
+        row[field] = value
+    return document
+
+
 def test_hsdir_chart_marks_both_sides_of_the_usual_range():
     document = _document()
     document["days"]["2026-11-10"]["hsdir"] = 1000  # below the frozen p10, so the line is redrawn in red
@@ -64,6 +71,14 @@ def test_hsdir_chart_marks_both_sides_of_the_usual_range():
     assert 'stroke="#ff6b6b" stroke-width="2.4"' in text
     overload = overload_chart(_document(), "1m").document()
     assert "Relays reporting overload" in overload and "Tor network" not in overload
+
+
+def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
+    """p10 and p90 are still inside. Zero is under the range, so the lower redraw includes it."""
+    red = 'stroke="#ff6b6b" stroke-width="2.4"'
+    assert red not in hsdir_chart(_flat("hsdir", 4372), "1m").document()
+    assert red not in hsdir_chart(_flat("hsdir", 5878), "1m").document()
+    assert red in hsdir_chart(_flat("hsdir", 0), "1m").document()
 
 
 def test_directory_chart_says_bytes_served():

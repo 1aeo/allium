@@ -53,13 +53,17 @@ Network Pressure
         <div class="card-header">
             <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
         </div>
+        {% set charts = [
+            ('overload', 'Relays reporting overload'),
+            ('guard', 'Relays with Guard Flag'),
+            ('hsdir', 'Relays with HSDir Flag'),
+            ('directory', 'Directory bytes served')] %}
         <p class="pressure-index">
             {#- Labels focus a button on the chart. A #pressure-* link would replace #1m/#5y and snap the other charts back to 1M. -#}
             <span class="pressure-index-label">Jump to</span>
-            <label for="jump-overload">Relays reporting overload</label>
-            <label for="jump-guard">Relays with Guard Flag</label>
-            <label for="jump-hsdir">Relays with HSDir Flag</label>
-            <label for="jump-directory">Directory bytes served</label>
+            {% for name, heading in charts if relays.pressure_periods.get(name) %}
+            <label for="jump-{{ name }}">{{ heading }}</label>
+            {% endfor %}
         </p>
         <div class="history-periods">
             {#- Submit reloads even when this period is already in the URL, which clears each chart's radio. -#}
@@ -77,14 +81,8 @@ Network Pressure
         <p class="history-lead">Directory bytes served is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
         <p class="history-lead">The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. The 1M, 6M, 1Y, and 5Y buttons set all four charts, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
-            {% for name, alt, heading in (
-                ('overload', 'Relays reporting overload', 'Relays reporting overload'),
-                ('guard', 'Relays with Guard Flag', 'Relays with Guard Flag'),
-                ('hsdir', 'Relays with HSDir Flag', 'Relays with HSDir Flag'),
-                ('directory', 'Directory bytes served', 'Directory bytes served')) %}
-            {% if relays.pressure_periods.get(name) %}
-            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading, independent=true, jump='jump-' ~ name) }}</div>
-            {% endif %}
+            {% for name, heading in charts if relays.pressure_periods.get(name) %}
+            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], heading, src=chart_src, ext=chart_ext, heading=heading, independent=true, jump='jump-' ~ name) }}</div>
             {% endfor %}
         </div>
     </section>

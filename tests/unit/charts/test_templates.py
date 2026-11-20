@@ -68,6 +68,11 @@ def test_an_independent_chart_keeps_its_period_off_the_url_hash():
     assert 'id="overload-pick-5y"' in html and 'for="guard-pick-5y"' in html
     assert 'href="#overload-5y"' not in html and 'href="#guard-1m"' not in html
     assert 'id="overload-5y"' in html and 'id="guard-1m"' in html
+    alone = ENV.from_string(
+        '{% from "macros.html" import chart_history %}'
+        '{{ chart_history("hsdir", {"1m": 10}, "HSDir", independent=true) }}'
+    ).render()
+    assert "chart-pick" not in alone and 'class="chart-hero ' in alone
 
 
 def test_pressure_page_introduces_each_chart_and_links_to_it():
@@ -89,6 +94,12 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
     assert 'id="jump-hsdir"' in html and ">Relays with HSDir Flag</button>" in html
+    missing = ENV.get_template("network-pressure.html").render(
+        page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
+        relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={"overload": periods}),
+    )
+    assert 'for="jump-overload"' in missing and 'id="jump-overload"' in missing
+    assert "jump-directory" not in missing and "jump-guard" not in missing
 
 
 def test_contact_charts_resolve_from_vanity_copies():

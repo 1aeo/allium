@@ -51,13 +51,18 @@ def _marked(values, pred):
     return [value if any(hit[max(index - 1, 0):index + 2]) else None for index, value in enumerate(values)]
 
 
-def _clip_band(svg, panel, values, lo, hi, color, clip_id, width=2.4):
-    """Redraw the line inside ``lo``–``hi``. The clip keeps the stroke in that band."""
+def _clip_band(svg, panel, values, lo, hi, color, clip_id, width=2.4, below=False):
+    """Redraw the line inside ``lo``–``hi``. The clip keeps the stroke in that band.
+
+    ``below`` includes ``lo`` and stops short of ``hi`` (counts under the usual range: ``hi`` is p10 and still
+    inside). Otherwise the band starts above ``lo`` (p90) and includes the top of the scale.
+    """
     top, bottom = panel.y(hi), panel.y(lo)
     if bottom - top <= 1:
         return
     svg.clip(clip_id, panel.left, top, panel.width, bottom - top)
-    panel.series(_marked(values, lambda value: lo < value <= hi), color, width, clip=clip_id)
+    pred = (lambda value: lo <= value < hi) if below else (lambda value: lo < value <= hi)
+    panel.series(_marked(values, pred), color, width, clip=clip_id)
 
 
 def _enough(values):
@@ -191,7 +196,7 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
     panel.series(values, color, width)
     if outside == "both" and p10 is not None and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period)
-        _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period)
+        _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period, below=True)
     elif outside == "above" and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period, width=2.2)
     _day, latest = latest_value(document, field, flags=field != "directory")
