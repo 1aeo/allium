@@ -614,9 +614,10 @@ def _archive_month(document, month, cache_dir, opener, log, now, complete):
         save_document(document, cache_dir)
         log("pressure archive %s done (%d days)" % (month, len(parsed)))
         return True
-    except (tarfile.ReadError, lzma.LZMAError) as failed:
-        # A truncated member is not an OSError on Python 3.8. Treat it as a failed
-        # download so a repair stays queued and a first backfill still stops.
+    except (tarfile.ReadError, lzma.LZMAError, EOFError) as failed:
+        # A short read raises EOFError once some members are out. ReadError and
+        # LZMAError are not OSErrors on Python 3.8. Treat each as a failed download
+        # so a repair stays queued and a first backfill still stops.
         log("pressure archive %s unreadable: %s" % (month, failed))
         return None
     finally:
