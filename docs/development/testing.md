@@ -119,7 +119,7 @@ python3 allium/allium.py --out allium/www_after --apis all --progress --no-press
 python3 compare_outputs.py
 ```
 
-When the change is the pressure-history refresh, omit `--no-pressure-history` on both commands. Before the baseline, copy each of `allium/data/cache/pressure_history.json` and `allium/data/cache/pressure_descriptor_files.json` that exists, and note each file that is absent. Before the after run, put each copy back and delete each file that was absent, so both runs refresh from the same cache.
+A pressure-chart change keeps `--no-pressure-history` and uses the same cache that already contains days. An empty cache makes both runs omit the charts. An archive-parsing change omits the flag and starts both runs from the same cache that does not already list the months under test in `processed_months`. Move `allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json` aside first, put that starting cache back before the after run, and put the saved files back when the comparison is finished.
 
 Classifies every file as **identical**, **timestamp-only**, or **content diff**.
 Shows normalized unified diffs (timestamps stripped) for content diffs only.
