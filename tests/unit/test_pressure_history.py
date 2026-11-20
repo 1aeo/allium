@@ -418,6 +418,31 @@ def test_open_month_archive_does_not_cover_an_earlier_pending_file(tmp_path, mon
     assert refreshed["days"]["2021-11-19"]["overload_sealed"] is False
 
 
+def test_finished_month_seals_days_that_were_still_open(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    now = datetime(2021, 12, 5, tzinfo=timezone.utc)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = ["2021-11"]
+    document["current_month_through"] = "2021-12-02"
+    document["current_month_fetched_at"] = now.isoformat()
+    document["days"]["2021-11-30"] = {
+        "overload_publishers": 1, "overload_overloaded": 1, "overload_share": 100.0, "overload_sealed": False,
+    }
+    document["overload_open"] = {"2021-11-30": {"A" * 40: True}}
+    pressure.save_document(document, str(tmp_path))
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        raise AssertionError(url)
+
+    refreshed = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
+    assert refreshed["days"]["2021-11-30"]["overload_sealed"] is True
+    assert "2021-11-30" not in refreshed["overload_open"]
+
+
 def _quiet_opener(request, timeout=None):
     url = request.full_url
     if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):

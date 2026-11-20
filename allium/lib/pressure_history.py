@@ -562,6 +562,19 @@ def _seal_limit(limit, month=None):
     return allow
 
 
+def _tail_seal(document):
+    """Seal a finished month's leftover days, and the open month through its snapshot."""
+    through = _as_day(document.get("current_month_through"))
+    done = set(document.get("processed_months") or [])
+
+    def allow(day):
+        if _month(day) in done:
+            return True
+        return through is not None and _month(day) == _month(through) and day <= through
+
+    return allow
+
+
 def _remember_month(document, month, parsed, now, complete):
     """A finished month seals now. The open month waits until recent files are merged."""
     if parsed:
@@ -770,8 +783,7 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
         if day_map:
             kept[name] = days
             recent_maps.append(day_map)
-    through = _as_day(document.get("current_month_through"))
-    seal = (lambda _day: False) if recent_incomplete else _seal_limit(through, None if through is None else _month(through))
+    seal = (lambda _day: False) if recent_incomplete else _tail_seal(document)
     apply_overload_maps(document, recent_maps, now, seal)
     save_descriptor_files(kept, cache_dir)
     if baseline_archives_ready(document):
