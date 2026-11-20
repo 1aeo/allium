@@ -553,15 +553,20 @@ def _recent_names(listing_html, now):
     return sorted(names)
 
 
-def _seal_limit(limit):
-    return lambda day: limit is not None and day <= limit
+def _seal_limit(limit, month=None):
+    """Seal days up to ``limit``. ``month`` restricts that to one archive month."""
+    def allow(day):
+        if limit is None or day > limit:
+            return False
+        return month is None or _month(day) == month
+    return allow
 
 
 def _remember_month(document, month, parsed, now, complete):
     """A finished month seals now. The open month waits until recent files are merged."""
     if parsed:
         # Recent files downloaded later in this run can still add relays to the open month.
-        seal = _seal_limit(max(parsed)) if complete else (lambda _day: False)
+        seal = _seal_limit(max(parsed), month) if complete else (lambda _day: False)
         apply_overload_maps(document, [parsed], now, seal)
     if complete and parsed:
         document["processed_months"] = sorted(set(document.get("processed_months") or []) | {month})
@@ -651,7 +656,8 @@ def _archive_has_file(document, name):
     if _month(day) in set(document.get("processed_months") or []):
         return True
     through = _as_day(document.get("current_month_through"))
-    return through is not None and through >= day
+    # The open-month snapshot does not contain days from any earlier month.
+    return through is not None and _month(through) == _month(day) and through >= day
 
 
 def _cache_lock(cache_dir):
@@ -764,7 +770,8 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
         if day_map:
             kept[name] = days
             recent_maps.append(day_map)
-    seal = (lambda _day: False) if recent_incomplete else _seal_limit(_as_day(document.get("current_month_through")))
+    through = _as_day(document.get("current_month_through"))
+    seal = (lambda _day: False) if recent_incomplete else _seal_limit(through, None if through is None else _month(through))
     apply_overload_maps(document, recent_maps, now, seal)
     save_descriptor_files(kept, cache_dir)
     if baseline_archives_ready(document):

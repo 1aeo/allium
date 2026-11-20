@@ -390,6 +390,34 @@ def test_expired_pending_file_clears_when_the_archive_covers_its_day(tmp_path, m
     assert row["overload_share"] == 50.0
 
 
+def test_open_month_archive_does_not_cover_an_earlier_pending_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    now = datetime(2021, 12, 10, tzinfo=timezone.utc)
+    name = "2021-11-19-00-00-00-server-descriptors"
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["current_month_through"] = "2021-12-04"
+    document["current_month_fetched_at"] = now.isoformat()
+    document["days"]["2021-11-19"] = {
+        "overload_publishers": 1, "overload_overloaded": 0, "overload_share": 0.0, "overload_sealed": False,
+    }
+    document["overload_open"] = {"2021-11-19": {"A" * 40: False}}
+    pressure.save_document(document, str(tmp_path))
+    pressure.save_descriptor_files({name: {"pending": True}}, str(tmp_path))
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith(".tar.xz"):
+            raise OSError("archive unavailable")
+        raise AssertionError(url)
+
+    refreshed = pressure.refresh(cache_dir=str(tmp_path), now=now, opener=opener, log=lambda _message: None)
+    assert name in pressure.load_descriptor_files(str(tmp_path))
+    assert refreshed["days"]["2021-11-19"]["overload_sealed"] is False
+
+
 def _quiet_opener(request, timeout=None):
     url = request.full_url
     if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
