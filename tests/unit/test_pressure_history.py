@@ -151,6 +151,58 @@ def test_failed_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
     assert "2026-05" not in saved["processed_months"]
 
 
+def test_unreadable_archive_repair_does_not_block_a_later_month(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    document = pressure.empty_document()
+    document["archive_revision"] = 2
+    document["processed_months"] = pressure.months_to_backfill(document, datetime(2026, 11, 1).date())
+    _thin_day(document, "2026-05-01")
+    _thin_day(document, "2026-10-02")
+    pressure.save_document(document, str(tmp_path))
+    calls = []
+    bad = lzma.compress(b"this is not a tar")
+    good = _tar_xz([_descriptor("A" * 40, "2026-10-02", False)])
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith("server-descriptors-2026-05.tar.xz"):
+            return _response(bad)
+        if url.endswith("server-descriptors-2026-10.tar.xz"):
+            return _response(good)
+        if url.endswith(".tar.xz"):
+            raise OSError("unexpected %s" % url)
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2026, 11, 20, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2026-10.tar.xz") for url in calls)
+    saved = pressure.load_document(str(tmp_path))
+    assert "2026-10" in saved["processed_months"]
+    assert "2026-05" not in saved["processed_months"]
+
+
+def test_unreadable_archive_stops_the_first_backfill(tmp_path, monkeypatch):
+    monkeypatch.setattr(pressure.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        calls.append(url)
+        if "relayflags.csv" in url or "dirbytes.csv" in url or url.endswith("server-descriptors/"):
+            return _response("date,flag,relays\n")
+        if url.endswith(".tar.xz"):
+            return _response(lzma.compress(b"this is not a tar"))
+        raise AssertionError(url)
+
+    pressure.refresh(cache_dir=str(tmp_path), now=datetime(2022, 1, 15, tzinfo=timezone.utc),
+                     opener=opener, log=lambda _message: None)
+    assert any(url.endswith("server-descriptors-2021-11.tar.xz") for url in calls)
+    assert not any(url.endswith("server-descriptors-2021-12.tar.xz") for url in calls)
+
+
 def _thin_day(document, day_text):
     current = datetime.strptime(day_text, "%Y-%m-%d").date()
     for offset in range(-3, 4):
