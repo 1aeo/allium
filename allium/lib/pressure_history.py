@@ -18,6 +18,7 @@ import shutil
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -192,6 +193,16 @@ def _http_bytes(url, timeout, opener=None):
 
 def _http_text(url, timeout, opener=None):
     return _http_bytes(url, timeout, opener).decode("utf-8", "replace")
+
+
+def _recent_body(url, opener):
+    """``(text, gone)``. ``gone`` is true when CollecTor no longer has the file."""
+    try:
+        return _http_text(url, 180, opener), False
+    except urllib.error.HTTPError as failed:
+        return None, failed.code == 404
+    except OSError:
+        return None, False
 
 
 def _download(url, dest, timeout, opener=None):
@@ -687,7 +698,11 @@ def _refresh(cache_dir, now, opener, log, fetch_archives):
         if name in file_cache and not _is_pending(file_cache[name]):
             continue
         log("pressure descriptor file %s" % name)
-        body = _safe(log, "descriptor file %s" % name, lambda name=name: _http_text(RECENT + name, 180, opener))
+        body, gone = _recent_body(RECENT + name, opener)
+        if gone:
+            # A 404 means the file has left CollecTor. Retrying it would block sealing forever.
+            file_cache.pop(name, None)
+            continue
         if not body:
             file_cache[name] = {"pending": True}
             recent_incomplete = True
