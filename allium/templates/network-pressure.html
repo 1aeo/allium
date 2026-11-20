@@ -17,11 +17,22 @@ Network Pressure
 .pressure-stack .pressure-charts { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; align-items: start; }
 .pressure-stack .history-chart { width: 100%; scroll-margin-top: 12px; }
 .pressure-stack .chart-history { max-width: none; }
-.pressure-stack .history-periods a { font-size: 1.5rem; font-weight: 700; padding: 8px 16px; }
+.pressure-stack .history-periods { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pressure-stack .history-periods form { margin: 0; }
+.pressure-stack .history-periods button {
+    margin: 0; padding: 8px 16px; border: 0; border-radius: 3px;
+    background: var(--nh-bg-metric); color: var(--color-link);
+    font-family: inherit; font-size: 1.5rem; font-weight: 700; line-height: inherit; cursor: pointer;
+}
 .pressure-stack .chart-spark { font-size: 16px; font-weight: 700; }
 .pressure-index { margin: 0 0 12px; }
 .pressure-index-label { margin-right: 8px; font-weight: 700; }
-.pressure-index a { display: inline-block; margin: 0 14px 6px 0; font-size: 1.15rem; font-weight: 700; }
+.pressure-index label { display: inline-block; margin: 0 14px 6px 0; font-size: 1.15rem; font-weight: 700; color: var(--color-link); cursor: pointer; }
+.pressure-jump-target {
+    display: block; width: 100%; margin: 0; padding: 0; border: 0; background: none;
+    color: inherit; font: inherit; font-weight: inherit; text-align: left; cursor: pointer;
+    scroll-margin-top: 16px;
+}
 @media (min-width: 1400px) {
     .pressure-stack .pressure-charts { grid-template-columns: 1fr 1fr; }
 }
@@ -43,16 +54,22 @@ Network Pressure
             <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
         </div>
         <p class="pressure-index">
+            {#- Labels focus a button on the chart. A #pressure-* link would replace #1m/#5y and snap the other charts back to 1M. -#}
             <span class="pressure-index-label">Jump to</span>
-            <a href="#pressure-overload">Relays reporting overload</a>
-            <a href="#pressure-guard">Relays with Guard Flag</a>
-            <a href="#pressure-hsdir">Relays with HSDir Flag</a>
-            <a href="#pressure-directory">Directory bytes served</a>
+            <label for="jump-overload">Relays reporting overload</label>
+            <label for="jump-guard">Relays with Guard Flag</label>
+            <label for="jump-hsdir">Relays with HSDir Flag</label>
+            <label for="jump-directory">Directory bytes served</label>
         </p>
-        <p class="history-periods">
-            {#- ?period= reloads, which clears a chart's own radio so these buttons set all four. -#}
-            {% for period in chart_spans %}<a href="?period={{ period }}#{{ period }}">{{ period|upper }}</a>{% endfor %}
-        </p>
+        <div class="history-periods">
+            {#- Submit reloads even when this period is already in the URL, which clears each chart's radio. -#}
+            {% for period in chart_spans %}
+            <form action="#{{ period }}" method="get">
+                <input type="hidden" name="period" value="{{ period }}">
+                <button type="submit">{{ period|upper }}</button>
+            </form>
+            {% endfor %}
+        </div>
         <p class="history-lead">Tor's goal is more diverse relays and more trusted relays. More relays, run by more operators, spread risk and give end users a more anonymous, safer, and more secure network. Minimizing overloaded relays, maximizing the number of high-quality Guard and HSDir relays, and minimizing excessive directory requests keep that network safer.</p>
         <p class="history-lead">Relays reporting overload is the share of relays whose server descriptor that day includes an overload-general line (CollecTor server descriptors): a level, about a day late, that measures pressure rather than a cause.</p>
         <p class="history-lead">Relays with Guard Flag is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
@@ -66,7 +83,7 @@ Network Pressure
                 ('hsdir', 'Relays with HSDir Flag', 'Relays with HSDir Flag'),
                 ('directory', 'Directory bytes served', 'Directory bytes served')) %}
             {% if relays.pressure_periods.get(name) %}
-            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>
+            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], alt, src=chart_src, ext=chart_ext, heading=heading, independent=true, jump='jump-' ~ name) }}</div>
             {% endif %}
             {% endfor %}
         </div>

@@ -649,12 +649,13 @@
     chart_spans is a fixed global; pass ext=chart_ext, which allium.py changes after the
     macros may already be imported and cached. independent=true uses a radio per chart
     instead of #<name>-<period>: the URL hash can target only one element, so a second
-    chart's period link would drop the first chart back to its default. -#}
-{% macro chart_history(name, periods, alt, src='', ext='svg', heading='History', independent=false) %}
+    chart's period link would drop the first chart back to its default. ``jump`` is the id of a
+    button in the heading: a label focuses it and the page scrolls there without changing the URL hash. -#}
+{% macro chart_history(name, periods, alt, src='', ext='svg', heading='History', independent=false, jump='') %}
 {% if periods %}
 {% set order = periods|list %}
 {% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
-<h5 class="subsection-header" style="margin-top: 16px;">{{ heading }}</h5>
+<h5 class="subsection-header" style="margin-top: 16px;">{% if jump %}<button type="button" id="{{ jump }}" class="pressure-jump-target" tabindex="-1">{{ heading }}</button>{% else %}{{ heading }}{% endif %}</h5>
 <div class="chart-history">
     {% if independent %}
     {% for period in order %}

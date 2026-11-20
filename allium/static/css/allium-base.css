@@ -772,14 +772,15 @@ th[title]::after {
 .chart-history .chart-pick-5y:checked ~ .chart-hero.chart-on-5y {
     display: block;
 }
-.chart-history .chart-pick:checked ~ .chart-sparks .chart-spark.chart-spark {
+.chart-history .chart-pick:checked ~ .chart-sparks .chart-spark {
     box-shadow: none;
     color: var(--aeo-text-dim);
 }
-.chart-history .chart-pick-1m:checked ~ .chart-sparks .chart-on-1m,
-.chart-history .chart-pick-6m:checked ~ .chart-sparks .chart-on-6m,
-.chart-history .chart-pick-1y:checked ~ .chart-sparks .chart-on-1y,
-.chart-history .chart-pick-5y:checked ~ .chart-sparks .chart-on-5y {
+/* One class past the reset above, so the chosen thumbnail stays green. */
+.chart-history .chart-pick-1m:checked ~ .chart-sparks .chart-spark.chart-on-1m,
+.chart-history .chart-pick-6m:checked ~ .chart-sparks .chart-spark.chart-on-6m,
+.chart-history .chart-pick-1y:checked ~ .chart-sparks .chart-spark.chart-on-1y,
+.chart-history .chart-pick-5y:checked ~ .chart-sparks .chart-spark.chart-on-5y {
     box-shadow: 0 0 0 1px var(--aeo-green);
     color: var(--aeo-green);
 }

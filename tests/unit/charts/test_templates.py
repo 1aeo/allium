@@ -82,11 +82,13 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert "CollecTor server descriptors" in html
     assert "Tor Metrics relay flags" in html
     assert "Tor Metrics dirwrite" in html
-    assert 'href="#pressure-overload"' in html and 'href="#pressure-directory"' in html
-    assert 'href="?period=5y#5y"' in html and 'href="?period=1m#1m"' in html
+    assert 'for="jump-overload"' in html and 'id="jump-directory"' in html
+    assert 'href="#pressure-overload"' not in html
+    assert 'action="#5y"' in html and 'name="period" value="5y"' in html
+    assert 'action="#1m"' in html and ">1M</button>" in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
-    assert ">Relays with HSDir Flag</h5>" in html
+    assert 'id="jump-hsdir"' in html and ">Relays with HSDir Flag</button>" in html
 
 
 def test_contact_charts_resolve_from_vanity_copies():
