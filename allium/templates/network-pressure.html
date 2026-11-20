@@ -92,12 +92,18 @@ Network Pressure
         <p class="history-lead">{{ pressure_name('guard', 'Relays with Guard Flag') }} is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
         <p class="history-lead">{{ pressure_name('hsdir', 'Relays with HSDir Flag') }} is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range. The note under the title counts days in May 2025–May 2026 that moved more than 10% from the previous 28 readings.</p>
         <p class="history-lead">{{ pressure_name('directory', 'Directory Bytes Served') }} is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
-        <p class="history-lead">The usual range is the 10th to 90th percentile for May 2025 through May 2026, frozen. The 1M, 6M, 1Y, and 5Y buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
+        <p class="history-lead">The 1M, 6M, 1Y, and 5Y buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
             {% for name, heading in charts if relays.pressure_periods.get(name) %}
             <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], heading, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>
             {% endfor %}
         </div>
+        <h5 class="subsection-header" style="margin-top: 20px;">How the usual range is set</h5>
+        <p class="history-lead">Each range is the 10th to 90th percentile of daily values from 1 May 2025 through 31 May 2026. It is saved once and does not move as new days arrive.</p>
+        <p class="history-lead"><strong>{{ pressure_name('overload', 'Relays Reporting Overload') }}.</strong> Each day is the share of relays that published a finished descriptor with an overload-general line. Green is that percentile range. Orange runs from its top up to 10%, and red is everything above 10%.</p>
+        <p class="history-lead"><strong>{{ pressure_name('guard', 'Relays with Guard Flag') }}.</strong> Each day is how many relays carried the Guard flag, skipping days that did not finish reporting flags. Green is the percentile range. Red is a day below the low end or above the high end.</p>
+        <p class="history-lead"><strong>{{ pressure_name('hsdir', 'Relays with HSDir Flag') }}.</strong> Each day is how many relays carried the HSDir flag, with the same skipped days and the same percentile range. Red is a day outside that range.</p>
+        <p class="history-lead"><strong>{{ pressure_name('directory', 'Directory Bytes Served') }}.</strong> Each day is the bytes relays sent while answering directory requests, in Gbit/s. Green is the percentile range. Red is only a day above the high end.</p>
     </section>
     {% else %}
     <section class="ribbon-card" id="network-pressure">

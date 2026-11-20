@@ -144,7 +144,7 @@ def overload_chart(document, period):
     svg = Svg(WIDTH)
     y = _header(svg, "", "Relays Reporting Overload · " + PERIOD_SPAN[period], subtitle)
     if p10 is not None and p90 is not None:
-        band = "Inside usual range  %.1f%%–%.1f%%" % (p10, p90)
+        band = "Inside usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90)
         y += legend(svg, LEFT, y, [[
             ("line", GREEN, None, band),
             ("line", ORANGE, None, "Up to %.0f%% outside usual range" % HIGH_SHARE),
@@ -183,11 +183,15 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
         usual = "%s–%s" % (point.format(p10), point.format(p90)) if p10 is not None and p90 is not None else ""
     svg = Svg(WIDTH)
     y = _header(svg, "", title + " · " + PERIOD_SPAN[period], subtitle)
-    entries = [("line", color, None, "Inside usual range" if outside else "Daily average")]
+    if usual and outside:
+        inside = "Inside usual range (p10–p90)  " + usual
+    elif outside:
+        inside = "Inside usual range"
+    else:
+        inside = "Daily average"
+    entries = [("line", color, None, inside)]
     if field == "directory" or (outside and p10 is not None):
         entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
-    if usual:
-        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  " + usual))
     y += legend(svg, LEFT, y, [entries], min_width=PLOT_WIDTH)
     panel = _panel(svg, field[:1] + period, y + 6, stamps, yhi, ticks, ylabel, yfmt, period, height)
     if p10 is not None and p90 is not None:

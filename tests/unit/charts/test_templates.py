@@ -87,13 +87,16 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert "CollecTor server descriptors" in html
     assert "Tor Metrics relay flags" in html
     assert "Tor Metrics dirwrite" in html
-    assert html.count('href="#pressure-overload"') == 2 and html.count('href="#pressure-directory"') == 2
+    assert html.count('href="#pressure-overload"') == 3 and html.count('href="#pressure-directory"') == 3
     assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
     assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
     assert 'name="pressure-period"' in html and ">1M</label>" in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
     assert ">Relays with HSDir Flag</h5>" in html
+    assert "How the usual range is set" in html
+    assert "Orange runs from its top up to 10%" in html
+    assert "skipping days that did not finish reporting flags" in html
     missing = ENV.get_template("network-pressure.html").render(
         page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
         relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={"overload": periods}),

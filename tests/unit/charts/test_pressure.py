@@ -33,7 +33,7 @@ def test_overload_chart_names_the_percentile_band_and_has_no_release_mark():
     svg = overload_chart(_document(), "1m")
     text = svg.document()
     assert "Relays Reporting Overload" in text
-    assert "Inside usual range" in text and "0.3%–1.9%" in text
+    assert "Inside usual range (p10–p90)" in text and "0.3%–1.9%" in text
     assert "Up to 10% outside usual range" in text
     assert "More than 10% outside usual range" in text
     assert "Pressure, not a cause" not in text
@@ -100,6 +100,7 @@ def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
 def test_directory_chart_says_bytes_served():
     text = directory_chart(_document(), "1m").document()
     assert "Directory Bytes Served" in text
-    assert "Usual range (p10–p90)" in text
+    assert "Inside usual range (p10–p90)" in text and "2.9–11.8" in text
+    assert "Above usual range" in text
     assert "2.9–11.8" in text
     assert "onset" not in text
