@@ -51,13 +51,18 @@ def _marked(values, pred):
     return [value if any(hit[max(index - 1, 0):index + 2]) else None for index, value in enumerate(values)]
 
 
-def _clip_band(svg, panel, values, lo, hi, color, clip_id, width=2.4):
-    """Redraw the line inside ``lo``–``hi``. The clip keeps the stroke in that band."""
+def _clip_band(svg, panel, values, lo, hi, color, clip_id, width=2.4, below=False):
+    """Redraw the line inside ``lo``–``hi``. The clip keeps the stroke in that band.
+
+    ``below`` includes ``lo`` and stops short of ``hi`` (counts under the usual range: ``hi`` is p10 and still
+    inside). Otherwise the band starts above ``lo`` (p90) and includes the top of the scale.
+    """
     top, bottom = panel.y(hi), panel.y(lo)
     if bottom - top <= 1:
         return
     svg.clip(clip_id, panel.left, top, panel.width, bottom - top)
-    panel.series(_marked(values, lambda value: lo < value <= hi), color, width, clip=clip_id)
+    pred = (lambda value: lo <= value < hi) if below else (lambda value: lo < value <= hi)
+    panel.series(_marked(values, pred), color, width, clip=clip_id)
 
 
 def _enough(values):
@@ -113,7 +118,7 @@ def _band(document, key):
 
 def _panel(svg, clip_id, y, stamps, yhi, ticks, ylabel, yfmt, period, height=200):
     panel = Panel(svg, clip_id, LEFT, y, PLOT_WIDTH, height, stamps, 0, yhi, _axis_end(stamps), 86400)
-    panel.yaxis(ticks, ylabel, fmt=yfmt)
+    panel.yaxis(ticks, ylabel, fmt=yfmt, close=True)
     panel.xaxis(period, labels=True)
     return panel
 
@@ -137,15 +142,14 @@ def overload_chart(document, period):
         subtitle = "%s since %s %d · %.1f%% on %s %d" % (
             status.capitalize(), began.strftime("%b"), began.day, latest, latest_day.strftime("%b"), latest_day.day)
     svg = Svg(WIDTH)
-    y = _header(svg, "Tor network", "Relays reporting overload · " + PERIOD_SPAN[period], subtitle)
-    svg.text(LEFT, y, "A level, about a day late. Pressure, not a cause.", 12, MUTED)
-    y += 18
+    y = _header(svg, "", "Relays Reporting Overload · " + PERIOD_SPAN[period], subtitle)
     if p10 is not None and p90 is not None:
-        y += legend(svg, LEFT, y, [
-            [("patch", GREEN, 0.28, "Usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90))],
-            [("patch", ORANGE, 0.28, "Elevated  to %.0f%%" % HIGH_SHARE),
-             ("patch", RED, 0.28, "High  above %.0f%%" % HIGH_SHARE)],
-        ])
+        band = "Inside usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90)
+        y += legend(svg, LEFT, y, [[
+            ("line", GREEN, None, band),
+            ("line", ORANGE, None, "Up to %.0f%% outside usual range" % HIGH_SHARE),
+            ("line", RED, None, "More than %.0f%% outside usual range" % HIGH_SHARE),
+        ]], min_width=PLOT_WIDTH)
     yhi, ticks = _scale(values, 30, 24, 1.15, [0, 6, 12, 18, 24])
     panel = _panel(svg, "o" + period, y + 6, stamps, yhi, ticks, "Share (%)", "{:.0f}", period)
     panel.series(values, GREEN, 2.2)
@@ -179,19 +183,23 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
         usual = "%s–%s" % (point.format(p10), point.format(p90)) if p10 is not None and p90 is not None else ""
     svg = Svg(WIDTH)
     y = _header(svg, "", title + " · " + PERIOD_SPAN[period], subtitle)
-    entries = [("line", color, None, "Daily average" if field == "hsdir" else "Inside usual range")]
+    if usual and outside:
+        inside = "Inside usual range (p10–p90)  " + usual
+    elif outside:
+        inside = "Inside usual range"
+    else:
+        inside = "Daily average"
+    entries = [("line", color, None, inside)]
     if field == "directory" or (outside and p10 is not None):
         entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
-    if usual:
-        entries.append(("patch", GREEN, 0.22, "Usual range (p10–p90)  " + usual))
-    y += legend(svg, LEFT, y, [entries])
+    y += legend(svg, LEFT, y, [entries], min_width=PLOT_WIDTH)
     panel = _panel(svg, field[:1] + period, y + 6, stamps, yhi, ticks, ylabel, yfmt, period, height)
     if p10 is not None and p90 is not None:
         panel.hband(p10, p90, GREEN, opacity)
     panel.series(values, color, width)
     if outside == "both" and p10 is not None and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period)
-        _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period)
+        _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period, below=True)
     elif outside == "above" and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period, width=2.2)
     _day, latest = latest_value(document, field, flags=field != "directory")
@@ -213,20 +221,22 @@ def guard_chart(document, period):
     if began:
         subtitle = "Confirms a sustained problem · under the usual range since %s %d · %d days" % (
             began.strftime("%b"), began.day, days)
-    return _count_chart(document, period, "guard", "Relays with the Guard flag", subtitle, GREEN, "both", 2.2, 0.14)
+    return _count_chart(document, period, "guard", "Relays with Guard Flag", subtitle, GREEN, "both", 2.2, 0.14)
 
 
 def hsdir_chart(document, period):
     off, counted = hsdir_noise(document)
-    subtitle = "Daily average count, for context"
+    subtitle = "Daily average count"
     if counted:
-        subtitle = "Context · %d of %d quiet-year days were more than 10%% off a 28-day median" % (off, counted)
-    return _count_chart(document, period, "hsdir", "Relays with the HSDir flag", subtitle, BLUE, None, 1.8, 0.12)
+        # Median of up to 28 earlier readings. A day with 14 to 27 still counts.
+        subtitle = ("May 2025–May 2026 · %d of %d days moved more than 10%% "
+                    "from the median of up to 28 earlier readings" % (off, counted))
+    return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, BLUE, "both", 1.8, 0.12)
 
 
 def directory_chart(document, period):
     return _count_chart(
-        document, period, "directory", "Directory bytes served",
+        document, period, "directory", "Directory Bytes Served",
         "Bytes relays sent while answering directory requests", GREEN, "above", 2.0, 0.16, height=176)
 
 

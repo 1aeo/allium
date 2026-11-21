@@ -1,5 +1,7 @@
 """History chart markup: one chart per period, switched in place without JavaScript."""
 
+from types import SimpleNamespace
+
 from allium.lib.charts.series import PERIODS
 from allium.lib.contact_sorting import adjust_vanity_paths
 from allium.lib.page_writer import ENV
@@ -53,6 +55,54 @@ def test_charts_use_the_chart_format():
 def test_one_period_needs_no_thumbnails_and_none_renders_nothing():
     assert "chart-sparks" not in MACRO.render(name="uptime", periods={"5y": 418}, src="")
     assert MACRO.render(name="uptime", periods={}, src="").strip() == ""
+
+
+def test_an_independent_chart_keeps_its_period_off_the_url_hash():
+    """Thumbnails are radios, so choosing 5Y on a second chart cannot clear the first."""
+    html = ENV.from_string(
+        '{% from "macros.html" import chart_history %}'
+        '{{ chart_history("overload", {"1m": 10, "5y": 12}, "Overload", independent=true) }}'
+        '{{ chart_history("guard", {"1m": 10, "5y": 12}, "Guard", independent=true) }}'
+    ).render()
+    assert html.count('name="chart-overload"') == 2 and html.count('name="chart-guard"') == 2
+    assert 'id="overload-pick-5y"' in html and 'for="guard-pick-5y"' in html
+    assert 'href="#overload-5y"' not in html and 'href="#guard-1m"' not in html
+    assert 'id="overload-5y"' in html and 'id="guard-1m"' in html
+    alone = ENV.from_string(
+        '{% from "macros.html" import chart_history %}'
+        '{{ chart_history("hsdir", {"1m": 10}, "HSDir", independent=true) }}'
+    ).render()
+    assert "chart-pick" not in alone and 'class="chart-hero ' in alone
+
+
+def test_pressure_page_introduces_each_chart_and_links_to_it():
+    periods = {"1m": 400, "6m": 400, "1y": 400, "5y": 400}
+    html = ENV.get_template("network-pressure.html").render(
+        page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
+        relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={
+            "overload": periods, "guard": periods, "hsdir": periods, "directory": periods,
+        }),
+    )
+    assert "more anonymous, safer, and more secure" in html
+    assert "CollecTor server descriptors" in html
+    assert "Tor Metrics relay flags" in html
+    assert "Tor Metrics dirwrite" in html
+    assert html.count('href="#pressure-overload"') == 3 and html.count('href="#pressure-directory"') == 3
+    assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
+    assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
+    assert 'name="pressure-period"' in html and ">1M</label>" in html
+    assert html.count('name="chart-guard"') == 4
+    assert "grid-template-columns: 1fr 1fr" in html
+    assert ">Relays with HSDir Flag</h5>" in html
+    assert "How the usual range is set" in html
+    assert "Orange runs from its top up to 10%" in html
+    assert "skipping days that did not finish reporting flags" in html
+    missing = ENV.get_template("network-pressure.html").render(
+        page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
+        relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={"overload": periods}),
+    )
+    assert 'href="#pressure-overload"' in missing and 'id="pressure-overload"' in missing
+    assert 'href="#pressure-directory"' not in missing and 'href="#pressure-guard"' not in missing
 
 
 def test_contact_charts_resolve_from_vanity_copies():

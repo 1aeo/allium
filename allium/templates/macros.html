@@ -647,20 +647,31 @@
     periods this chart lacks. Each chart links to its full-size image for zooming. periods
     maps each drawn period to its chart's height, so the page reserves the image's box.
     chart_spans is a fixed global; pass ext=chart_ext, which allium.py changes after the
-    macros may already be imported and cached. -#}
-{% macro chart_history(name, periods, alt, src='', ext='svg', heading='History') %}
+    macros may already be imported and cached. independent=true uses a radio per chart
+    instead of #<name>-<period>: the URL hash can target only one element, so a second
+    chart's period link would drop the first chart back to its default. -#}
+{% macro chart_history(name, periods, alt, src='', ext='svg', heading='History', independent=false) %}
 {% if periods %}
 {% set order = periods|list %}
 {% set missing %}{% for period in chart_spans if period not in periods %} chart-on-{{ period }}{% endfor %}{% endset %}
 <h5 class="subsection-header" style="margin-top: 16px;">{{ heading }}</h5>
 <div class="chart-history">
+    {% if independent and periods|length > 1 %}
+    {% for period in order %}
+    <input type="radio" name="chart-{{ name }}" id="{{ name }}-pick-{{ period }}" class="chart-pick chart-pick-{{ period }}">
+    {% endfor %}
+    {% endif %}
     {% for period in order[1:] + order[:1] %}
     <a id="{{ name }}-{{ period }}" class="chart-hero chart-on-{{ period }}{{ missing if loop.last }}" href="{{ src }}{{ name }}-{{ period }}.{{ ext }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="{{ alt }}, {{ chart_spans[period] }}" loading="lazy"></a>
     {% endfor %}
     {% if periods|length > 1 %}
     <div class="chart-sparks">
         {% for period in order %}
+        {% if independent %}
+        <label class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" for="{{ name }}-pick-{{ period }}" aria-label="{{ period|upper }}: show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</label>
+        {% else %}
         <a class="chart-spark chart-on-{{ period }}{{ ' chart-spark-default' ~ missing if loop.first }}" href="#{{ name }}-{{ period }}" aria-label="{{ period|upper }}: show the {{ chart_spans[period] }}"><img src="{{ src }}{{ name }}-{{ period }}.{{ ext }}" width="1080" height="{{ periods[period] }}" alt="" loading="lazy">{{ period|upper }}</a>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}

@@ -961,7 +961,13 @@ def guard_below_since(document, low):
 
 
 def hsdir_noise(document):
-    """``(off, counted)`` quiet-year days more than 10% off a trailing 28-day median."""
+    """``(off, counted)`` baseline days more than 10% off the median of earlier readings.
+
+    The baseline is May 2025 through May 2026, the same window as the frozen usual range.
+    The comparison is the median of up to 28 earlier readings, not 28 calendar days. A day with
+    only 14 to 27 earlier readings still counts, using those readings. It is off when that day's
+    count is more than 10% away from their median.
+    """
     points = list(_numeric_points(document, "hsdir", flags=True))
     off = counted = 0
     for position, (day, value) in enumerate(points):
