@@ -17,32 +17,101 @@ Network Pressure
 .pressure-stack .pressure-charts { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; align-items: start; }
 .pressure-stack .history-chart { width: 100%; scroll-margin-top: 12px; }
 .pressure-stack .chart-history { max-width: none; }
-.pressure-stack .pressure-index,
-.pressure-stack .history-periods { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pressure-stack .pressure-pill {
-    display: inline-block; margin: 0; padding: 8px 14px; border-radius: 3px;
-    background: var(--nh-bg-metric); color: var(--color-link);
-    font-size: 1.2rem; font-weight: 700; line-height: 1.2; cursor: pointer; text-decoration: none;
+/* One strip: a label column sized to "Time Period", then same-weight chips.
+   Radios stay earlier siblings so :checked ~ .pressure-nav and ~ .pressure-charts both match.
+   Chart show/hide stays in allium-base.css, ahead of the per-chart rules. */
+.pressure-nav {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 8px;
+    align-items: start;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: #f4f7fb;
+    border: 1px solid #e4ecf2;
+    border-radius: 8px;
+    text-align: left;
 }
-.pressure-stack .pressure-pill:hover,
-.pressure-stack .pressure-pill:focus { outline: 2px solid var(--color-link); outline-offset: 2px; }
+.pressure-nav-chips,
+.pressure-stack .history-periods {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+}
+.pressure-index-label {
+    margin: 0;
+    padding: 7px 0;
+    border: 1px solid transparent;
+    color: var(--color-text-heading);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.pressure-stack .pressure-pill {
+    display: inline-block;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 7px 12px;
+    border: 1px solid #d5e0ea;
+    border-radius: 4px;
+    background: #fff;
+    color: var(--color-link);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    max-width: 100%;
+}
+.pressure-stack a.pressure-pill:hover,
+.pressure-stack a.pressure-pill:focus,
+.pressure-stack label.pressure-pill:hover {
+    border-color: var(--color-link);
+    color: var(--color-link);
+    text-decoration: none;
+}
+.pressure-stack a.pressure-pill:focus-visible {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+}
 .pressure-all {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
     clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
-.pressure-stack .pressure-all-1m:checked ~ .history-periods label[for="pressure-all-1m"],
-.pressure-stack .pressure-all-6m:checked ~ .history-periods label[for="pressure-all-6m"],
-.pressure-stack .pressure-all-1y:checked ~ .history-periods label[for="pressure-all-1y"],
-.pressure-stack .pressure-all-5y:checked ~ .history-periods label[for="pressure-all-5y"],
-.pressure-stack .pressure-all-1m:focus-visible ~ .history-periods label[for="pressure-all-1m"],
-.pressure-stack .pressure-all-6m:focus-visible ~ .history-periods label[for="pressure-all-6m"],
-.pressure-stack .pressure-all-1y:focus-visible ~ .history-periods label[for="pressure-all-1y"],
-.pressure-stack .pressure-all-5y:focus-visible ~ .history-periods label[for="pressure-all-5y"] {
-    outline: 2px solid var(--color-link); outline-offset: 2px;
+.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label[for="pressure-all-1m"],
+.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label[for="pressure-all-6m"],
+.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label[for="pressure-all-1y"],
+.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"] {
+    background: var(--color-link);
+    border-color: var(--color-link);
+    color: #fff;
+}
+.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label[for="pressure-all-1m"]:hover,
+.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label[for="pressure-all-6m"]:hover,
+.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label[for="pressure-all-1y"]:hover,
+.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"]:hover {
+    background: var(--color-link-hover);
+    border-color: var(--color-link-hover);
+    color: #fff;
+}
+.pressure-stack .pressure-all-1m:focus-visible ~ .pressure-nav label[for="pressure-all-1m"],
+.pressure-stack .pressure-all-6m:focus-visible ~ .pressure-nav label[for="pressure-all-6m"],
+.pressure-stack .pressure-all-1y:focus-visible ~ .pressure-nav label[for="pressure-all-1y"],
+.pressure-stack .pressure-all-5y:focus-visible ~ .pressure-nav label[for="pressure-all-5y"] {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
 }
 .pressure-stack .chart-spark { font-size: 16px; font-weight: 700; }
-.pressure-index { margin: 0 0 8px; }
-.pressure-index-label { font-size: 1.2rem; font-weight: 700; }
+@media (max-width: 420px) {
+    /* A long chart name can be wider than the chip column; wrap inside the chip. */
+    .pressure-stack .pressure-pill { white-space: normal; }
+}
 .history-lead a { font-weight: 700; }
 @media (min-width: 1400px) {
     .pressure-stack .pressure-charts { grid-template-columns: 1fr 1fr; }
@@ -69,20 +138,25 @@ Network Pressure
             ('guard', 'Relays with Guard Flag'),
             ('hsdir', 'Relays with HSDir Flag'),
             ('directory', 'Directory Bytes Served')] %}
-        {#- Radios, not #1m/#5y: a jump link changes the hash, and the hash can target only one element. -#}
+        {% set period_names = {'1m': '1 month', '6m': '6 months', '1y': '1 year', '5y': '5 years'} %}
+        {#- Radios, not #1m/#5y: a jump link changes the hash, and the hash can target only one element.
+            1 month starts checked so the chip matches the chart that is already showing. -#}
         {% for period in chart_spans %}
-        <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period" id="pressure-all-{{ period }}">
+        <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period" id="pressure-all-{{ period }}"{% if period == '1m' %} checked{% endif %}>
         {% endfor %}
-        <p class="pressure-index">
-            <span class="pressure-index-label">Jump to</span>
-            {% for name, heading in charts if relays.pressure_periods.get(name) %}
-            <a class="pressure-pill" href="#pressure-{{ name }}">{{ heading }}</a>
-            {% endfor %}
-        </p>
-        <div class="history-periods">
-            {% for period in chart_spans %}
-            <label class="pressure-pill" for="pressure-all-{{ period }}">{{ period|upper }}</label>
-            {% endfor %}
+        <div class="pressure-nav">
+            <div class="pressure-index-label">Jump to</div>
+            <div class="pressure-nav-chips">
+                {% for name, heading in charts if relays.pressure_periods.get(name) %}
+                <a class="pressure-pill" href="#pressure-{{ name }}">{{ heading }}</a>
+                {% endfor %}
+            </div>
+            <div class="pressure-index-label">Time Period</div>
+            <div class="history-periods pressure-nav-chips">
+                {% for period in chart_spans %}
+                <label class="pressure-pill" for="pressure-all-{{ period }}">{{ period_names[period] }}</label>
+                {% endfor %}
+            </div>
         </div>
         <p class="history-lead">Tor's goal is more diverse relays and more trusted relays. More relays, run by more operators, spread risk and give end users a more anonymous, safer, and more secure network. Minimizing overloaded relays, maximizing the number of high-quality Guard and HSDir relays, and minimizing excessive directory requests keep that network safer.</p>
         {% macro pressure_name(name, heading) -%}
@@ -92,7 +166,7 @@ Network Pressure
         <p class="history-lead">{{ pressure_name('guard', 'Relays with Guard Flag') }} is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
         <p class="history-lead">{{ pressure_name('hsdir', 'Relays with HSDir Flag') }} is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range. The note under the title counts days in May 2025–May 2026 that moved more than 10% from the median of up to 28 earlier readings.</p>
         <p class="history-lead">{{ pressure_name('directory', 'Directory Bytes Served') }} is the bytes relays sent while answering directory requests (Tor Metrics dirwrite): a rise above the usual range is a directory flood.</p>
-        <p class="history-lead">The 1M, 6M, 1Y, and 5Y buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
+        <p class="history-lead">The 1 month, 6 months, 1 year, and 5 years buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
             {% for name, heading in charts if relays.pressure_periods.get(name) %}
             <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], heading, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>

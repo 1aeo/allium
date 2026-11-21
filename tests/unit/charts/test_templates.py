@@ -90,7 +90,15 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert html.count('href="#pressure-overload"') == 3 and html.count('href="#pressure-directory"') == 3
     assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
     assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
-    assert 'name="pressure-period"' in html and ">1M</label>" in html
+    assert 'name="pressure-period"' in html and 'id="pressure-all-1m" checked' in html
+    assert 'for="pressure-all-1m">1 month</label>' in html
+    assert 'for="pressure-all-6m">6 months</label>' in html
+    assert 'for="pressure-all-1y">1 year</label>' in html
+    assert 'for="pressure-all-5y">5 years</label>' in html
+    assert ">Time Period</div>" in html
+    assert "The 1 month, 6 months, 1 year, and 5 years buttons" in html
+    assert 'class="pressure-pill" href="#pressure-overload"' in html
+    assert 'pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"]' in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
     assert ">Relays with HSDir Flag</h5>" in html
