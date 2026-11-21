@@ -121,15 +121,22 @@ python3 allium/allium.py --out allium/www_after --apis all --progress --no-press
 python3 compare_outputs.py
 ```
 
-A pressure-chart change keeps `--no-pressure-history` and uses the same cache
-that already contains days. An empty cache makes both runs omit the charts.
+A pressure-chart change keeps `--no-pressure-history`. Both runs need the same
+cache that already contains days. An empty cache makes both runs omit the charts.
+
 An archive-parsing change omits the flag. Move any existing
 `allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json`
 aside, then delete them so both runs backfill. Delete them again before the
-after run. Put the saved copies back when the comparison is finished, and
-delete a file that had no copy. Each run's log must not contain `pressure
-history unavailable`. A sealed day already stored in the file changes only
-when the new census has more relays.
+after run. A file the baseline writes lists its months in `processed_months`,
+and the after run skips those months. Put the saved copies back when the
+comparison is finished, and delete a file that had no copy. Each run's log
+must not contain `pressure history unavailable`: that line means the run
+loaded the cache and did not parse the archives. Each month under test must
+log `pressure archive <month> done`. `pressure archive <month> unavailable`
+or `pressure archive <month> unreadable` means that month was not parsed, and
+the backfill stops there. Deleting the files removes
+stored sealed days. A sealed day left in the file changes only when the new
+census has more relays, and an identical diff can hide a parsing change.
 
 The comparison tool classifies every file as:
 - **Identical** — no change at all

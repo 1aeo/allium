@@ -37,13 +37,7 @@ python3 allium/allium.py --out allium/www_prodcheck_before --apis all --progress
 # AFTER
 python3 allium/allium.py --out allium/www_prodcheck_after --apis all --progress --no-pressure-history
 
-# A pressure-chart change keeps --no-pressure-history and the same cache that
-# already contains days. An archive-parsing change omits the flag, moves
-# allium/data/cache/pressure_history.json and pressure_descriptor_files.json
-# aside, and deletes them before each run. Put the saved copies back
-# afterward, and delete a file that had no copy. A log line "pressure history
-# unavailable" means that run did not parse the archives. A sealed day already
-# stored in the file changes only when the new census has more relays.
+# Pressure-chart and archive-parsing comparisons: see CONTRIBUTING.md.
 
 # Compare output
 python3 compare_outputs.py --baseline allium/www_prodcheck_before --after allium/www_prodcheck_after --quiet

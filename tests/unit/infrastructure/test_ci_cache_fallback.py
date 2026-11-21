@@ -379,6 +379,35 @@ ci_generate_once "$out" "%s"
         assert ("--no-pressure-history" in generation[-1].split()) is present
 
 
+def test_a_known_pressure_flag_is_not_probed_again(tmp_path):
+    """generate_from_ci_fixtures reuses a flag its caller already resolved."""
+    log = tmp_path / "argv.txt"
+    fake = tmp_path / "fake_allium.py"
+    fake.write_text(
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "Path(os.environ['ARGV_LOG']).open('a').write(' '.join(sys.argv) + '\\n')\n"
+        "if '--help' in sys.argv:\n"
+        "    raise SystemExit(0)\n"
+        "out = sys.argv[sys.argv.index('--out') + 1]\n"
+        "Path(out).mkdir(parents=True, exist_ok=True)\n"
+        "Path(out, 'index.html').write_text('<html></html>\\n')\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    script = """
+set -e
+source "%s"
+export ARGV_LOG="%s"
+generate_from_ci_fixtures "%s/site" "%s" "--apis details" ""
+""" % (HELPER, log, tmp_path, fake)
+    completed = _bash(script, tmp_path, _env())
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    recorded = log.read_text(encoding="utf-8")
+    assert "--help" not in recorded
+    assert "--out" in recorded
+
+
 def test_fixture_http_fallback_generates_index_html(tmp_path):
     """Exit 0 and no page: serve the fixtures once. This is the setup job's details run."""
     out = tmp_path / "www"
@@ -431,9 +460,9 @@ def test_setup_job_keeps_the_hang_backstop_and_opts_into_every_cache():
     assert "seed_ci_api_caches" in setup
     assert "ci_generate_once" in setup
     helper_text = HELPER.read_text(encoding="utf-8")
-    invocation = 'python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} $mode --out "$out"'
     assert "_no_pressure_history_arg" in helper_text
-    assert helper_text.count(invocation) == 2
+    assert helper_text.count('python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} "$@"') == 1
+    assert 'generate_from_ci_fixtures "$out" "$allium_py" "$mode" "$pressure_arg"' in helper_text
     assert "generate_from_ci_onionoo_fixture" not in setup
     assert 'echo "❌ Setup script exited with code $setup_exit_code"' in workflow
     assert "exit 1" in workflow[workflow.find("Setup script exited"):workflow.find("Setup script exited") + 200]
