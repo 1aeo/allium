@@ -266,7 +266,7 @@ Platform: unknown
                         <span class="al-status-warning" title="DNS query did not receive a response within the timeout period.">DNS Query Timeout</span>
                     {% elif relay.exit_dns_health_detail == 'relay_unreachable' %}
                         <span class="al-status-warning" title="Could not establish a circuit through this relay to test DNS resolution.">Relay Unreachable</span>
-                    {% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}
+                    {% elif relay.exit_dns_health_detail == 'dns_wrong_ip' or relay.exit_dns_health_detail == 'wrong_ip' %}
                         <span class="al-status-danger" title="DNS query returned an incorrect IP address. May indicate DNS manipulation or hijacking.">DNS Returned Wrong IP</span>
                     {% else %}
                         <span class="al-status-danger" title="DNS test failed: {{ relay.exit_dns_health_detail|escape }}">DNS {{ relay.exit_dns_health_detail|escape }}</span>
@@ -1299,7 +1299,7 @@ Platform: unknown
                     {% endif %}
                 {% elif relay.exit_dns_health_status == 'fail' %}
                     <span class="al-status-danger-bold">
-                        {% if relay.exit_dns_health_detail == 'dns_fail' %}DNS Lookup Failed{% elif relay.exit_dns_health_detail == 'timeout' %}DNS Query Timeout{% elif relay.exit_dns_health_detail == 'relay_unreachable' %}Relay Unreachable{% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}DNS Returned Wrong IP{% else %}{{ relay.exit_dns_health_detail|escape }}{% endif %}
+                        {% if relay.exit_dns_health_detail == 'dns_fail' %}DNS Lookup Failed{% elif relay.exit_dns_health_detail == 'timeout' %}DNS Query Timeout{% elif relay.exit_dns_health_detail == 'relay_unreachable' %}Relay Unreachable{% elif relay.exit_dns_health_detail == 'dns_wrong_ip' or relay.exit_dns_health_detail == 'wrong_ip' %}DNS Returned Wrong IP{% else %}{{ relay.exit_dns_health_detail|escape }}{% endif %}
                     </span>
                     {% if relay.exit_dns_health_consecutive_failures > 0 %}
                         <span class="al-text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
@@ -1357,14 +1357,18 @@ Platform: unknown
             {% endif %}
 
             {% if relay.exit_dns_health_cv_total is not none %}
-            <dt title="Each relay is tested through multiple independent Tor circuits built via different guard relays. A relay is only marked as failing if all instances agree. If any instance succeeds, the relay is marked healthy (cross-validation recovery).">Cross-Validation</dt>
+            <dt title="Each relay is tested through multiple independent Tor circuits built via different guard relays. A timeout, DNS failure, or other transient error is discarded when another instance succeeds. A wrong IP is kept even when another instance returns the right address.">Cross-Validation</dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
                     <span class="al-status-success">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% else %}
                     <span class="al-status-danger">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% endif %}
-                {% if relay.exit_dns_health_cv_improved %}<span class="al-status-success">(improved by cross-validation)</span>{% endif %}
+                {% if (relay.exit_dns_health_detail == 'wrong_ip' or relay.exit_dns_health_detail == 'dns_wrong_ip') and relay.exit_dns_health_cv_success %}
+                    <span class="al-status-danger">(a wrong IP was also returned; that answer is kept)</span>
+                {% elif relay.exit_dns_health_cv_improved %}
+                    <span class="al-status-success">(improved by cross-validation)</span>
+                {% endif %}
             </dd>
             {% endif %}
 
@@ -1396,7 +1400,7 @@ Platform: unknown
                     <tr>
                         <td style="padding-right: 8px;" title="Cross-validation instance {{ cv_counter[0] }}, {{ inst_name }} — independent Tor circuit used to verify DNS resolution">Cross Validation Attempt {{ cv_counter[0] }}:</td>
                         <td style="padding-right: 8px;">
-                            {% if inst_data.status == 'success' %}<span class="al-status-success">Success</span>{% elif inst_data.status == 'dns_fail' %}<span class="al-status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="al-status-warning">Timeout</span>{% else %}<span class="al-status-danger">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
+                            {% if inst_data.status == 'success' %}<span class="al-status-success">Success</span>{% elif inst_data.status == 'wrong_ip' %}<span class="al-status-danger">Wrong IP{% if inst_data.resolved_ip %} {{ inst_data.resolved_ip|escape }}{% endif %}</span>{% elif inst_data.status == 'dns_fail' %}<span class="al-status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="al-status-warning">Timeout</span>{% else %}<span class="al-status-danger">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
                         </td>
                         <td class="al-text-small-muted">({{ inst_name|escape }})</td>
                     </tr>
