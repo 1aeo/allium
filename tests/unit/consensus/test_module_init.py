@@ -2,9 +2,7 @@
 Tests for lib/consensus/__init__.py module initialization and feature flag.
 """
 
-import os
-import pytest
-from unittest.mock import patch
+from pathlib import Path
 
 
 class TestConsensusModule:
@@ -29,10 +27,10 @@ class TestConsensusModule:
         result = is_consensus_evaluation_enabled()
         assert isinstance(result, bool)
     
-    def test_consensus_evaluation_enabled_export(self):
-        """Test that CONSENSUS_EVALUATION_ENABLED is exported."""
-        from allium.lib.consensus import CONSENSUS_EVALUATION_ENABLED
-        assert isinstance(CONSENSUS_EVALUATION_ENABLED, bool)
+    def test_set_consensus_evaluation_enabled_export(self):
+        """The CLI records the choice through set_consensus_evaluation_enabled."""
+        from allium.lib.consensus import set_consensus_evaluation_enabled
+        assert callable(set_consensus_evaluation_enabled)
     
     def test_all_exports(self):
         """Test that __all__ contains expected exports."""
@@ -43,35 +41,44 @@ class TestConsensusModule:
             'format_relay_consensus_evaluation',
             'format_authority_consensus_evaluation',
             'is_consensus_evaluation_enabled',
-            'CONSENSUS_EVALUATION_ENABLED',
+            'set_consensus_evaluation_enabled',
         ]
         for export in expected_exports:
             assert export in consensus.__all__, f"{export} missing from __all__"
 
 
 class TestFeatureFlag:
-    """Tests for the ALLIUM_CONSENSUS_EVALUATION feature flag."""
-    
-    def test_feature_flag_default_enabled(self):
-        """Test that feature is enabled by default."""
-        # Clear any existing env var
-        with patch.dict(os.environ, {}, clear=True):
-            # Need to reload the module to pick up new env
-            import allium.lib.consensus as consensus
-            # Default should be 'true' when env var not set
-            # Note: This tests the module as currently loaded
-            # The actual default behavior depends on implementation
-            assert hasattr(consensus, 'CONSENSUS_EVALUATION_ENABLED')
-    
-    def test_feature_flag_env_var_name(self):
-        """Test that the correct environment variable name is used."""
-        # The env var should be ALLIUM_CONSENSUS_EVALUATION
-        from allium.lib.consensus import CONSENSUS_EVALUATION_ENABLED
-        env_var = os.environ.get('ALLIUM_CONSENSUS_EVALUATION')
-        # If env var is set, the flag should reflect it
-        if env_var is not None:
-            expected = env_var.lower() == 'true'
-            assert CONSENSUS_EVALUATION_ENABLED == expected
+    """Consensus evaluation is a CLI flag, recorded for the process by the setter."""
+
+    def test_setter_toggles_the_check_and_restores(self):
+        from allium.lib import consensus
+        previous = consensus.is_consensus_evaluation_enabled()
+        try:
+            consensus.set_consensus_evaluation_enabled(False)
+            assert consensus.is_consensus_evaluation_enabled() is False
+            consensus.set_consensus_evaluation_enabled(True)
+            assert consensus.is_consensus_evaluation_enabled() is True
+        finally:
+            consensus.set_consensus_evaluation_enabled(previous)
+
+    def test_disabling_it_drops_the_collector_workers(self):
+        from allium.lib import consensus
+        from allium.lib.coordinator import Coordinator
+        previous = consensus.is_consensus_evaluation_enabled()
+        try:
+            consensus.set_consensus_evaluation_enabled(False)
+            names = [config.api_name for config in Coordinator.iter_enabled_worker_entries("all")]
+            assert "collector_consensus" not in names
+            assert "collector_descriptors" not in names
+            assert "onionoo_details" in names
+        finally:
+            consensus.set_consensus_evaluation_enabled(previous)
+
+    def test_module_does_not_read_an_environment_variable(self):
+        from allium.lib import consensus
+        source = Path(consensus.__file__).read_text(encoding="utf-8")
+        assert "os.environ" not in source
+        assert "ALLIUM_CONSENSUS_EVALUATION" not in source
 
 
 class TestModuleDocstring:
