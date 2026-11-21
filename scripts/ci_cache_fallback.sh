@@ -145,13 +145,19 @@ ci_live_generation_outcome() {
 # Print --no-pressure-history when this allium.py accepts it.
 # setup.sh clones the default branch, so this helper from a pull request can be
 # newer than the allium.py it runs. An older entrypoint still skips the archive
-# while ALLIUM_CI_CACHE_FALLBACK=1.
+# while ALLIUM_CI_CACHE_FALLBACK=1. --help imports the whole program, so callers
+# that already know the answer pass it through instead of probing again.
 _no_pressure_history_arg() {
-    local allium_py="$1" help_text
-    help_text=$(python3 "$allium_py" --help 2>&1 || true)
-    if printf '%s\n' "$help_text" | grep -q -- '--no-pressure-history'; then
+    if python3 "$1" --help 2>&1 | grep -q -- '--no-pressure-history'; then
         printf '%s\n' --no-pressure-history
     fi
+}
+
+# $1 is allium.py, $2 is the pressure flag or empty, and the rest are its arguments.
+_invoke_allium() {
+    local allium_py="$1" pressure_arg="$2"
+    shift 2
+    python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} "$@"
 }
 
 # One live attempt, then fixtures if allium exits 0 without a page.
@@ -163,7 +169,7 @@ ci_generate_once() {
     pressure_arg=$(_no_pressure_history_arg "$allium_py")
     set +e
     # The fixture job must not backfill the CollecTor pressure archive.
-    python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} $mode --out "$out"
+    _invoke_allium "$allium_py" "$pressure_arg" $mode --out "$out"
     code=$?
     set -e
     outcome=$(ci_live_generation_outcome "$code" "${out}/index.html")
@@ -173,7 +179,7 @@ ci_generate_once() {
             ;;
         fallback)
             echo "⚠️  Generation exited 0 without ${out}/index.html; using CI fixtures"
-            generate_from_ci_fixtures "$out" "$allium_py" "$mode" || return $?
+            generate_from_ci_fixtures "$out" "$allium_py" "$mode" "$pressure_arg" || return $?
             echo "✅ Site generation completed from the CI API fixtures"
             ;;
         *)
@@ -184,8 +190,7 @@ ci_generate_once() {
 }
 
 generate_from_ci_fixtures() {
-    local out="$1" allium_py="$2" mode="$3"
-    local src dir port pid code ready
+    local out="$1" allium_py="$2" mode="$3" pressure_arg src dir port pid code ready base
     if ! src=$(ci_fixture_dir); then
         echo "❌ CI API fixtures are missing; cannot fall back"
         return 1
@@ -210,16 +215,21 @@ generate_from_ci_fixtures() {
         echo "❌ CI fixture HTTP server did not start"
         return 1
     fi
-    echo "🤖 CI: generating from committed API fixtures at http://127.0.0.1:${port}/"
-    local pressure_arg
-    pressure_arg=$(_no_pressure_history_arg "$allium_py")
+    base="http://127.0.0.1:${port}"
+    echo "🤖 CI: generating from committed API fixtures at ${base}/"
+    # A caller that already probed passes the flag, including an empty one.
+    if [ "$#" -lt 4 ]; then
+        pressure_arg=$(_no_pressure_history_arg "$allium_py")
+    else
+        pressure_arg="$4"
+    fi
     set +e
-    python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} $mode --out "$out" \
-        --onionoo-details-url "http://127.0.0.1:${port}/onionoo_details.json" \
-        --onionoo-uptime-url "http://127.0.0.1:${port}/onionoo_uptime.json" \
-        --onionoo-bandwidth-url "http://127.0.0.1:${port}/onionoo_bandwidth.json" \
-        --aroi-url "http://127.0.0.1:${port}/aroi_validation.json" \
-        --exit-dns-health-url "http://127.0.0.1:${port}/exit_dns_health.json"
+    _invoke_allium "$allium_py" "$pressure_arg" $mode --out "$out" \
+        --onionoo-details-url "${base}/onionoo_details.json" \
+        --onionoo-uptime-url "${base}/onionoo_uptime.json" \
+        --onionoo-bandwidth-url "${base}/onionoo_bandwidth.json" \
+        --aroi-url "${base}/aroi_validation.json" \
+        --exit-dns-health-url "${base}/exit_dns_health.json"
     code=$?
     set -e
     kill "$pid" 2>/dev/null || true

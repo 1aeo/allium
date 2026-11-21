@@ -108,11 +108,8 @@ def pressure_refresh_skipped(args, environ=None):
     and those runs must not start the archive backfill. The CI fixture job
     passes the flag from ``scripts/ci_cache_fallback.sh``.
     """
-    if not getattr(args, "pressure_history", True):
-        return True
-    if environ is None:
-        environ = os.environ
-    return bool(environ.get("PYTEST_CURRENT_TEST"))
+    environ = os.environ if environ is None else environ
+    return not getattr(args, "pressure_history", True) or bool(environ.get("PYTEST_CURRENT_TEST"))
 
 
 def validate_url_arguments(args):
