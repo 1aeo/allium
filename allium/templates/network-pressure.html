@@ -84,18 +84,57 @@ Network Pressure
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
     clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
-.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label[for="pressure-all-1m"],
-.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label[for="pressure-all-6m"],
-.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label[for="pressure-all-1y"],
-.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"] {
+/* 1 month is the resting chip: no radio starts checked, or a #5y URL could not show five-year charts.
+   The #1m/#6m/#1y/#5y anchors are earlier siblings, so a fragment can paint this strip. A checked
+   radio uses the same specificity and comes later, so a click after that URL moves the chip.
+   Chart show/hide for the same choice stays in allium-base.css, where a checked radio follows
+   the fragment and a chart's own radio still wins. */
+.pressure-stack .pressure-nav label[for="pressure-all-1m"] {
     background: var(--color-link);
     border-color: var(--color-link);
     color: #fff;
 }
-.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label[for="pressure-all-1m"]:hover,
-.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label[for="pressure-all-6m"]:hover,
-.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label[for="pressure-all-1y"]:hover,
-.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"]:hover {
+.pressure-stack .pressure-nav label[for="pressure-all-1m"]:hover {
+    background: var(--color-link-hover);
+    border-color: var(--color-link-hover);
+    color: #fff;
+}
+.pressure-stack .chart-period:target ~ .pressure-nav label[for="pressure-all-1m"] {
+    background: #fff;
+    border-color: #d5e0ea;
+    color: var(--color-link);
+}
+.pressure-stack .chart-period:target ~ .pressure-nav label[for="pressure-all-1m"]:hover {
+    border-color: var(--color-link);
+}
+.pressure-stack .chart-period[id="1m"]:target ~ .pressure-nav label[for="pressure-all-1m"],
+.pressure-stack .chart-period[id="6m"]:target ~ .pressure-nav label[for="pressure-all-6m"],
+.pressure-stack .chart-period[id="1y"]:target ~ .pressure-nav label[for="pressure-all-1y"],
+.pressure-stack .chart-period[id="5y"]:target ~ .pressure-nav label[for="pressure-all-5y"] {
+    background: var(--color-link);
+    border-color: var(--color-link);
+    color: #fff;
+}
+.pressure-stack .pressure-all:checked ~ .pressure-nav label.pressure-pill[for] {
+    background: #fff;
+    border-color: #d5e0ea;
+    color: var(--color-link);
+}
+.pressure-stack .pressure-all:checked ~ .pressure-nav label.pressure-pill[for]:hover {
+    border-color: var(--color-link);
+}
+.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-1m"],
+.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-6m"],
+.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-1y"],
+.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-5y"] {
+    background: var(--color-link);
+    border-color: var(--color-link);
+    color: #fff;
+}
+.pressure-stack .pressure-all-1m:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-1m"]:hover,
+.pressure-stack .pressure-all-6m:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-6m"]:hover,
+.pressure-stack .pressure-all-1y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-1y"]:hover,
+.pressure-stack .pressure-all-5y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-5y"]:hover {
     background: var(--color-link-hover);
     border-color: var(--color-link-hover);
     color: #fff;
@@ -139,10 +178,13 @@ Network Pressure
             ('hsdir', 'Relays with HSDir Flag'),
             ('directory', 'Directory Bytes Served')] %}
         {% set period_names = {'1m': '1 month', '6m': '6 months', '1y': '1 year', '5y': '5 years'} %}
-        {#- Radios, not #1m/#5y: a jump link changes the hash, and the hash can target only one element.
-            1 month starts checked so the chip matches the chart that is already showing. -#}
+        {#- Radios, not #1m/#5y links: a jump changes the hash, and the hash can name only one element.
+            None starts checked. A checked 1 month radio would beat #5y and open one-month charts.
+            With no fragment the 1 month chart is already showing and the chip CSS paints that chip.
+            A click checks a radio; that later rule wins, so #5y does not keep the old period. -#}
         {% for period in chart_spans %}
-        <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period" id="pressure-all-{{ period }}"{% if period == '1m' %} checked{% endif %}>
+        <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period"
+               id="pressure-all-{{ period }}">
         {% endfor %}
         <div class="pressure-nav">
             <div class="pressure-index-label">Jump to</div>

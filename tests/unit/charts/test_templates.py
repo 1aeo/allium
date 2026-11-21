@@ -1,10 +1,14 @@
 """History chart markup: one chart per period, switched in place without JavaScript."""
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 from allium.lib.charts.series import PERIODS
 from allium.lib.contact_sorting import adjust_vanity_paths
 from allium.lib.page_writer import ENV
+
+BASE_CSS = Path(__file__).resolve().parents[3] / "allium" / "static" / "css" / "allium-base.css"
 
 MACRO = ENV.from_string(
     '{% from "macros.html" import chart_history %}'
@@ -90,7 +94,9 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert html.count('href="#pressure-overload"') == 3 and html.count('href="#pressure-directory"') == 3
     assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
     assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
-    assert 'name="pressure-period"' in html and 'id="pressure-all-1m" checked' in html
+    assert 'name="pressure-period"' in html and 'id="pressure-all-1m">' in html
+    radios = [tag for tag in re.findall(r"<input\b[^>]*>", html) if "pressure-period" in tag]
+    assert len(radios) == 4 and all("checked" not in tag for tag in radios)
     assert 'for="pressure-all-1m">1 month</label>' in html
     assert 'for="pressure-all-6m">6 months</label>' in html
     assert 'for="pressure-all-1y">1 year</label>' in html
@@ -98,7 +104,7 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert ">Time Period</div>" in html
     assert "The 1 month, 6 months, 1 year, and 5 years buttons" in html
     assert 'class="pressure-pill" href="#pressure-overload"' in html
-    assert 'pressure-all-5y:checked ~ .pressure-nav label[for="pressure-all-5y"]' in html
+    assert 'pressure-all-5y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-5y"]' in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
     assert ">Relays with HSDir Flag</h5>" in html
@@ -111,6 +117,130 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     )
     assert 'href="#pressure-overload"' in missing and 'id="pressure-overload"' in missing
     assert 'href="#pressure-directory"' not in missing and 'href="#pressure-guard"' not in missing
+
+
+def _specificity(selector):
+    """CSS specificity as (ids, classes/attributes/pseudos, elements)."""
+    ids = classes = elements = 0
+    i = 0
+    while i < len(selector):
+        char = selector[i]
+        if char in " \t\n\r>+~":
+            i += 1
+            continue
+        if char == "*":
+            i += 1
+            continue
+        if char == "#":
+            ids += 1
+            i += 1
+            while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[":
+                i += 1
+            continue
+        if char == ".":
+            classes += 1
+            i += 1
+            while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[":
+                i += 1
+            continue
+        if char == "[":
+            classes += 1
+            i = selector.index("]", i) + 1
+            continue
+        if char == ":":
+            if selector.startswith("::", i):
+                elements += 1
+                i += 2
+            else:
+                classes += 1
+                i += 1
+            while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[(":
+                i += 1
+            if i < len(selector) and selector[i] == "(":
+                depth = 1
+                i += 1
+                while i < len(selector) and depth:
+                    if selector[i] == "(":
+                        depth += 1
+                    elif selector[i] == ")":
+                        depth -= 1
+                    i += 1
+            continue
+        elements += 1
+        while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[":
+            i += 1
+    return (ids, classes, elements)
+
+
+def _rule_at(css, selector):
+    """Where ``selector`` is a whole selector, not the prefix of a :hover sibling."""
+    match = re.search(re.escape(selector) + r"(?!:)\s*[,{]", css)
+    assert match, selector
+    return match.start()
+
+
+def test_a_period_fragment_paints_the_chip_until_a_radio_is_checked():
+    """#5y shows five-year charts until a chip click; the click then wins, including the chip."""
+    periods = {"1m": 400, "6m": 400, "1y": 400, "5y": 400}
+    html = ENV.get_template("network-pressure.html").render(
+        page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
+        relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={
+            "overload": periods, "guard": periods, "hsdir": periods, "directory": periods,
+        }),
+    )
+    # One set of period anchors, earlier than the chip strip, so a fragment can style the chips.
+    # Chart heroes use overload-1m and the rest, not these ids. The [id="1m"] rules are selectors.
+    for period in ("1m", "6m", "1y", "5y"):
+        assert html.count('<span id="%s" class="chart-period">' % period) == 1
+    assert html.index('id="5y" class="chart-period"') < html.index('class="pressure-nav"')
+    style = html.split("<style>", 1)[1].split("</style>", 1)[0]
+    # Chart show/hide stays in allium-base.css. A copy here would follow the per-chart rules.
+    assert ".chart-hero" not in style and "chart-on-" not in style
+
+    default = '.pressure-stack .pressure-nav label[for="pressure-all-1m"]'
+    undo = '.pressure-stack .chart-period:target ~ .pressure-nav label[for="pressure-all-1m"]'
+    fragment = '.pressure-stack .chart-period[id="%s"]:target ~ .pressure-nav label[for="pressure-all-%s"]'
+    reset = '.pressure-stack .pressure-all:checked ~ .pressure-nav label.pressure-pill[for]'
+    checked = '.pressure-stack .pressure-all-%s:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-%s"]'
+    # No fragment and no checked radio: the 1 month chip is the one that looks selected.
+    assert _specificity(default) == (0, 3, 1)
+    assert ":target" not in default and ":checked" not in default
+    # A period fragment beats that default, including when the fragment is #1m.
+    assert _specificity(undo) == (0, 5, 1)
+    assert _specificity(fragment % ("1m", "1m")) == (0, 6, 1)
+    assert _specificity(fragment % ("5y", "5y")) == (0, 6, 1)
+    # A checked chip ties the fragment and is later, so a click after #5y moves the strip.
+    assert _specificity(reset) == (0, 6, 1)
+    assert _specificity(checked % ("1m", "1m")) == (0, 6, 1)
+    assert _specificity(checked % ("5y", "5y")) == (0, 6, 1)
+    assert fragment % ("5y", "5y") + ":hover" not in style
+    order = [
+        _rule_at(style, default),
+        _rule_at(style, undo),
+        _rule_at(style, fragment % ("1m", "1m")),
+        _rule_at(style, fragment % ("6m", "6m")),
+        _rule_at(style, fragment % ("1y", "1y")),
+        _rule_at(style, fragment % ("5y", "5y")),
+        _rule_at(style, reset),
+        _rule_at(style, checked % ("1m", "1m")),
+        _rule_at(style, checked % ("6m", "6m")),
+        _rule_at(style, checked % ("1y", "1y")),
+        _rule_at(style, checked % ("5y", "5y")),
+    ]
+    assert order == sorted(order)
+
+    css = BASE_CSS.read_text()
+    target = '.chart-period[id="5y"]:target ~ * .chart-hero.chart-on-5y'
+    shared_hide = '.pressure-all:checked ~ .pressure-charts .chart-hero.chart-hero'
+    shared_show = '.pressure-all-1m:checked ~ .pressure-charts .chart-hero.chart-on-1m'
+    own = '.chart-history.chart-history .chart-pick-5y:checked ~ .chart-hero.chart-hero.chart-on-5y'
+    # Tied with #5y and later, so a checked radio replaces the fragment. The chart's own
+    # radio repeats .chart-history on the same element (not a descendant) and outranks both.
+    assert _specificity(target) == (0, 5, 0)
+    assert _specificity(shared_hide) == (0, 5, 0) == _specificity(shared_show)
+    assert _specificity(own) == (0, 7, 0)
+    assert ".chart-history .chart-history" not in css
+    assert _rule_at(css, target) < _rule_at(css, shared_hide) < _rule_at(css, shared_show) < _rule_at(css, own)
 
 
 def test_contact_charts_resolve_from_vanity_copies():
