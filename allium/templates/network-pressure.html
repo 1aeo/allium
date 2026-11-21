@@ -115,6 +115,24 @@ Network Pressure
     border-color: var(--color-link);
     color: #fff;
 }
+/* A jump names #pressure-5y-guard, not #5y. Same chip paint as a period fragment.
+   The checked rules below are heavier, so a chip click after the jump moves the strip. */
+.pressure-stack:has(.pressure-keep:target) .pressure-nav label[for="pressure-all-1m"] {
+    background: #fff;
+    border-color: #d5e0ea;
+    color: var(--color-link);
+}
+.pressure-stack:has(.pressure-keep:target) .pressure-nav label[for="pressure-all-1m"]:hover {
+    border-color: var(--color-link);
+}
+.pressure-stack:has(.pressure-keep-1m:target) .pressure-nav label[for="pressure-all-1m"],
+.pressure-stack:has(.pressure-keep-6m:target) .pressure-nav label[for="pressure-all-6m"],
+.pressure-stack:has(.pressure-keep-1y:target) .pressure-nav label[for="pressure-all-1y"],
+.pressure-stack:has(.pressure-keep-5y:target) .pressure-nav label[for="pressure-all-5y"] {
+    background: var(--color-link);
+    border-color: var(--color-link);
+    color: #fff;
+}
 .pressure-stack .pressure-all:checked ~ .pressure-nav label.pressure-pill[for] {
     background: #fff;
     border-color: #d5e0ea;
@@ -146,6 +164,27 @@ Network Pressure
     outline: 2px solid var(--color-link);
     outline-offset: 2px;
 }
+/* One jump set per period. 1 month shows at rest. A #5y fragment, then a
+   #pressure-5y-guard anchor, shows the five-year set. A checked radio repeats
+   .pressure-jump so it ties the fragment rule and, coming later, wins. */
+.pressure-keep { display: block; height: 0; scroll-margin-top: 12px; }
+.pressure-stack .pressure-jump { display: none; }
+.pressure-stack .pressure-jump-1m { display: inline-block; }
+.pressure-stack:has(.chart-period:target) .pressure-jump,
+.pressure-stack:has(.pressure-keep:target) .pressure-jump { display: none; }
+.pressure-stack:has(.chart-period[id="1m"]:target) .pressure-jump-1m,
+.pressure-stack:has(.chart-period[id="6m"]:target) .pressure-jump-6m,
+.pressure-stack:has(.chart-period[id="1y"]:target) .pressure-jump-1y,
+.pressure-stack:has(.chart-period[id="5y"]:target) .pressure-jump-5y,
+.pressure-stack:has(.pressure-keep-1m:target) .pressure-jump-1m,
+.pressure-stack:has(.pressure-keep-6m:target) .pressure-jump-6m,
+.pressure-stack:has(.pressure-keep-1y:target) .pressure-jump-1y,
+.pressure-stack:has(.pressure-keep-5y:target) .pressure-jump-5y { display: inline-block; }
+.pressure-stack:has(.pressure-all:checked) .pressure-jump.pressure-jump { display: none; }
+.pressure-stack:has(.pressure-all-1m:checked) .pressure-jump.pressure-jump-1m,
+.pressure-stack:has(.pressure-all-6m:checked) .pressure-jump.pressure-jump-6m,
+.pressure-stack:has(.pressure-all-1y:checked) .pressure-jump.pressure-jump-1y,
+.pressure-stack:has(.pressure-all-5y:checked) .pressure-jump.pressure-jump-5y { display: inline-block; }
 .pressure-stack .chart-spark { font-size: 16px; font-weight: 700; }
 @media (max-width: 420px) {
     /* A long chart name can be wider than the chip column; wrap inside the chip. */
@@ -181,16 +220,26 @@ Network Pressure
         {#- Radios, not #1m/#5y links: a jump changes the hash, and the hash can name only one element.
             None starts checked. A checked 1 month radio would beat #5y and open one-month charts.
             With no fragment the 1 month chart is already showing and the chip CSS paints that chip.
-            A click checks a radio; that later rule wins, so #5y does not keep the old period. -#}
+            A click checks a radio; that later rule wins, so #5y does not keep the old period.
+            Each jump link is #pressure-<period>-<chart> (pressure_name). After #5y the visible
+            links are the 5y set, so the next hash still carries five years. -#}
         {% for period in chart_spans %}
         <input class="pressure-all pressure-all-{{ period }}" type="radio" name="pressure-period"
                id="pressure-all-{{ period }}">
         {% endfor %}
+        {% macro pressure_name(name, heading, pill=false) -%}
+        {%- if relays.pressure_periods.get(name) -%}
+        {%- for period in chart_spans -%}
+        <a class="{% if pill %}pressure-pill {% endif %}pressure-jump pressure-jump-{{ period }}"
+           href="#pressure-{{ period }}-{{ name }}">{{ heading }}</a>
+        {%- endfor -%}
+        {%- else -%}{{ heading }}{%- endif -%}
+        {%- endmacro %}
         <div class="pressure-nav">
             <div class="pressure-index-label">Jump to</div>
             <div class="pressure-nav-chips">
                 {% for name, heading in charts if relays.pressure_periods.get(name) %}
-                <a class="pressure-pill" href="#pressure-{{ name }}">{{ heading }}</a>
+                {{ pressure_name(name, heading, pill=true) }}
                 {% endfor %}
             </div>
             <div class="pressure-index-label">Time Period</div>
@@ -201,9 +250,6 @@ Network Pressure
             </div>
         </div>
         <p class="history-lead">Tor's goal is more diverse relays and more trusted relays. More relays, run by more operators, spread risk and give end users a more anonymous, safer, and more secure network. Minimizing overloaded relays, maximizing the number of high-quality Guard and HSDir relays, and minimizing excessive directory requests keep that network safer.</p>
-        {% macro pressure_name(name, heading) -%}
-        {%- if relays.pressure_periods.get(name) -%}<a href="#pressure-{{ name }}">{{ heading }}</a>{%- else -%}{{ heading }}{%- endif -%}
-        {%- endmacro %}
         <p class="history-lead">{{ pressure_name('overload', 'Relays Reporting Overload') }} is the share of relays whose server descriptor that day includes an overload-general line (CollecTor server descriptors): a level, about a day late.</p>
         <p class="history-lead">{{ pressure_name('guard', 'Relays with Guard Flag') }} is how many relays carry the Guard flag (Tor Metrics relay flags): a drop below the usual range confirms a problem that lasts for weeks.</p>
         <p class="history-lead">{{ pressure_name('hsdir', 'Relays with HSDir Flag') }} is how many relays carry the HSDir flag (Tor Metrics relay flags), and the line turns red outside the usual range. The note under the title counts days in May 2025–May 2026 that moved more than 10% from the median of up to 28 earlier readings.</p>
@@ -211,7 +257,7 @@ Network Pressure
         <p class="history-lead">The 1 month, 6 months, 1 year, and 5 years buttons set every chart you have not changed yourself, and a chart's own thumbnails change only that chart. Days missing from Tor Metrics, and incomplete days, are left as gaps.</p>
         <div class="pressure-charts">
             {% for name, heading in charts if relays.pressure_periods.get(name) %}
-            <div id="pressure-{{ name }}" class="history-chart">{{ chart_history(name, relays.pressure_periods[name], heading, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>
+            <div id="pressure-{{ name }}" class="history-chart">{% for period in chart_spans %}<span id="pressure-{{ period }}-{{ name }}" class="pressure-keep pressure-keep-{{ period }}"></span>{% endfor %}{{ chart_history(name, relays.pressure_periods[name], heading, src=chart_src, ext=chart_ext, heading=heading, independent=true) }}</div>
             {% endfor %}
         </div>
         <h5 class="subsection-header" style="margin-top: 20px;">How the usual range is set</h5>

@@ -91,19 +91,28 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
     assert "CollecTor server descriptors" in html
     assert "Tor Metrics relay flags" in html
     assert "Tor Metrics dirwrite" in html
-    assert html.count('href="#pressure-overload"') == 3 and html.count('href="#pressure-directory"') == 3
+    # Nav, the intro, and the range note. Each names the period, so a jump keeps it.
+    for period in ("1m", "6m", "1y", "5y"):
+        assert html.count('href="#pressure-%s-overload"' % period) == 3
+        assert html.count('href="#pressure-%s-directory"' % period) == 3
+        assert html.count('id="pressure-%s-guard"' % period) == 1
+    assert 'href="#pressure-overload"' not in html and 'href="#pressure-guard"' not in html
+    assert re.search(
+        r'class="pressure-pill pressure-jump pressure-jump-5y"\s+href="#pressure-5y-guard"', html)
+    assert re.search(r'class="pressure-jump pressure-jump-5y"\s+href="#pressure-5y-guard"', html)
+    assert html.index('id="pressure-guard"') < html.index('id="pressure-5y-guard"') < html.index('id="guard-5y"')
     assert ">Relays Reporting Overload</a>" in html and ">Directory Bytes Served</a>" in html
     assert 'id="pressure-all-5y"' in html and 'for="pressure-all-5y"' in html
     assert 'name="pressure-period"' in html and 'id="pressure-all-1m">' in html
     radios = [tag for tag in re.findall(r"<input\b[^>]*>", html) if "pressure-period" in tag]
     assert len(radios) == 4 and all("checked" not in tag for tag in radios)
+    assert "<script" not in html
     assert 'for="pressure-all-1m">1 month</label>' in html
     assert 'for="pressure-all-6m">6 months</label>' in html
     assert 'for="pressure-all-1y">1 year</label>' in html
     assert 'for="pressure-all-5y">5 years</label>' in html
     assert ">Time Period</div>" in html
     assert "The 1 month, 6 months, 1 year, and 5 years buttons" in html
-    assert 'class="pressure-pill" href="#pressure-overload"' in html
     assert 'pressure-all-5y:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-5y"]' in html
     assert html.count('name="chart-guard"') == 4
     assert "grid-template-columns: 1fr 1fr" in html
@@ -115,12 +124,35 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
         page_ctx={"path_prefix": "", "timestamp_str": "2026-11-20 12:00"},
         relays=SimpleNamespace(timestamp="2026-11-20", pressure_periods={"overload": periods}),
     )
-    assert 'href="#pressure-overload"' in missing and 'id="pressure-overload"' in missing
+    assert 'href="#pressure-1m-overload"' in missing and 'href="#pressure-5y-overload"' in missing
+    assert 'id="pressure-overload"' in missing and 'id="pressure-5y-overload"' in missing
     assert 'href="#pressure-directory"' not in missing and 'href="#pressure-guard"' not in missing
+    assert "pressure-keep-guard" not in missing
+
+
+def _split_selector_list(argument):
+    """Split a selector list on commas that are not inside parentheses."""
+    parts = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(argument):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(argument[start:index])
+            start = index + 1
+    parts.append(argument[start:])
+    return parts
 
 
 def _specificity(selector):
-    """CSS specificity as (ids, classes/attributes/pseudos, elements)."""
+    """CSS specificity as (ids, classes/attributes/pseudos, elements).
+
+    ``:is()``, ``:not()``, and ``:has()`` contribute their argument's specificity,
+    not their own. ``:where()`` contributes nothing.
+    """
     ids = classes = elements = 0
     i = 0
     while i < len(selector):
@@ -151,20 +183,36 @@ def _specificity(selector):
             if selector.startswith("::", i):
                 elements += 1
                 i += 2
-            else:
-                classes += 1
-                i += 1
+                while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[(":
+                    i += 1
+                continue
+            i += 1
+            start = i
             while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[(":
                 i += 1
-            if i < len(selector) and selector[i] == "(":
+            name = selector[start:i]
+            if i < len(selector) and selector[i] == "(" and name in ("is", "not", "has", "where"):
                 depth = 1
                 i += 1
+                arg_start = i
                 while i < len(selector) and depth:
                     if selector[i] == "(":
                         depth += 1
                     elif selector[i] == ")":
                         depth -= 1
-                    i += 1
+                    if depth:
+                        i += 1
+                argument = selector[arg_start:i]
+                i += 1
+                if name != "where":
+                    best = (0, 0, 0)
+                    for part in _split_selector_list(argument):
+                        best = max(best, _specificity(part))
+                    ids += best[0]
+                    classes += best[1]
+                    elements += best[2]
+                continue
+            classes += 1
             continue
         elements += 1
         while i < len(selector) and selector[i] not in " \t\n\r>+~.#:[":
@@ -200,8 +248,14 @@ def test_a_period_fragment_paints_the_chip_until_a_radio_is_checked():
     default = '.pressure-stack .pressure-nav label[for="pressure-all-1m"]'
     undo = '.pressure-stack .chart-period:target ~ .pressure-nav label[for="pressure-all-1m"]'
     fragment = '.pressure-stack .chart-period[id="%s"]:target ~ .pressure-nav label[for="pressure-all-%s"]'
+    keep_reset = '.pressure-stack:has(.pressure-keep:target) .pressure-nav label[for="pressure-all-1m"]'
+    keep_chip = '.pressure-stack:has(.pressure-keep-%s:target) .pressure-nav label[for="pressure-all-%s"]'
     reset = '.pressure-stack .pressure-all:checked ~ .pressure-nav label.pressure-pill[for]'
     checked = '.pressure-stack .pressure-all-%s:checked ~ .pressure-nav label.pressure-pill[for="pressure-all-%s"]'
+    # :has() is the argument's specificity, not an extra pseudo on top of it.
+    assert _specificity(":has(.pressure-keep-5y:target)") == (0, 2, 0)
+    assert _specificity(":where(.a, #b)") == (0, 0, 0)
+    assert _specificity(":not(.a.b)") == (0, 2, 0)
     # No fragment and no checked radio: the 1 month chip is the one that looks selected.
     assert _specificity(default) == (0, 3, 1)
     assert ":target" not in default and ":checked" not in default
@@ -209,7 +263,12 @@ def test_a_period_fragment_paints_the_chip_until_a_radio_is_checked():
     assert _specificity(undo) == (0, 5, 1)
     assert _specificity(fragment % ("1m", "1m")) == (0, 6, 1)
     assert _specificity(fragment % ("5y", "5y")) == (0, 6, 1)
+    # A jump anchor paints the same chip, but lighter than a checked radio.
+    assert _specificity(keep_reset) == (0, 5, 1)
+    assert _specificity(keep_chip % ("1m", "1m")) == (0, 5, 1)
+    assert _specificity(keep_chip % ("5y", "5y")) == (0, 5, 1)
     # A checked chip ties the fragment and is later, so a click after #5y moves the strip.
+    # It also outweighs the jump-anchor chip.
     assert _specificity(reset) == (0, 6, 1)
     assert _specificity(checked % ("1m", "1m")) == (0, 6, 1)
     assert _specificity(checked % ("5y", "5y")) == (0, 6, 1)
@@ -221,6 +280,11 @@ def test_a_period_fragment_paints_the_chip_until_a_radio_is_checked():
         _rule_at(style, fragment % ("6m", "6m")),
         _rule_at(style, fragment % ("1y", "1y")),
         _rule_at(style, fragment % ("5y", "5y")),
+        _rule_at(style, keep_reset),
+        _rule_at(style, keep_chip % ("1m", "1m")),
+        _rule_at(style, keep_chip % ("6m", "6m")),
+        _rule_at(style, keep_chip % ("1y", "1y")),
+        _rule_at(style, keep_chip % ("5y", "5y")),
         _rule_at(style, reset),
         _rule_at(style, checked % ("1m", "1m")),
         _rule_at(style, checked % ("6m", "6m")),
@@ -229,18 +293,44 @@ def test_a_period_fragment_paints_the_chip_until_a_radio_is_checked():
     ]
     assert order == sorted(order)
 
+    # The visible jump set follows the fragment, then the jump anchor, then a checked radio.
+    jump_rest = ".pressure-stack .pressure-jump-1m"
+    jump_hide = ".pressure-stack:has(.pressure-keep:target) .pressure-jump"
+    jump_fragment = '.pressure-stack:has(.chart-period[id="5y"]:target) .pressure-jump-5y'
+    jump_keep = ".pressure-stack:has(.pressure-keep-5y:target) .pressure-jump-5y"
+    jump_checked_hide = ".pressure-stack:has(.pressure-all:checked) .pressure-jump.pressure-jump"
+    jump_checked = ".pressure-stack:has(.pressure-all-6m:checked) .pressure-jump.pressure-jump-6m"
+    assert _specificity(jump_rest) == (0, 2, 0)
+    assert _specificity(jump_hide) == (0, 4, 0) == _specificity(jump_keep)
+    assert _specificity(jump_fragment) == (0, 5, 0)
+    assert _specificity(jump_checked_hide) == (0, 5, 0) == _specificity(jump_checked)
+    jump_order = [
+        _rule_at(style, jump_rest),
+        _rule_at(style, jump_hide),
+        _rule_at(style, jump_fragment),
+        _rule_at(style, jump_keep),
+        _rule_at(style, jump_checked_hide),
+        _rule_at(style, jump_checked),
+    ]
+    assert jump_order == sorted(jump_order)
+
     css = BASE_CSS.read_text()
     target = '.chart-period[id="5y"]:target ~ * .chart-hero.chart-on-5y'
+    keep_hide = "body:has(.pressure-keep:target) .chart-hero"
+    keep_show = "body:has(.pressure-keep-5y:target) .chart-hero.chart-on-5y"
     shared_hide = '.pressure-all:checked ~ .pressure-charts .chart-hero.chart-hero'
     shared_show = '.pressure-all-1m:checked ~ .pressure-charts .chart-hero.chart-on-1m'
     own = '.chart-history.chart-history .chart-pick-5y:checked ~ .chart-hero.chart-hero.chart-on-5y'
-    # Tied with #5y and later, so a checked radio replaces the fragment. The chart's own
+    # A jump anchor is lighter than a checked radio, which is later. The chart's own
     # radio repeats .chart-history on the same element (not a descendant) and outranks both.
     assert _specificity(target) == (0, 5, 0)
+    assert _specificity(keep_hide) == (0, 3, 1)
+    assert _specificity(keep_show) == (0, 4, 1)
     assert _specificity(shared_hide) == (0, 5, 0) == _specificity(shared_show)
     assert _specificity(own) == (0, 7, 0)
     assert ".chart-history .chart-history" not in css
-    assert _rule_at(css, target) < _rule_at(css, shared_hide) < _rule_at(css, shared_show) < _rule_at(css, own)
+    assert _rule_at(css, target) < _rule_at(css, keep_hide) < _rule_at(css, keep_show)
+    assert _rule_at(css, keep_show) < _rule_at(css, shared_hide) < _rule_at(css, shared_show) < _rule_at(css, own)
 
 
 def test_contact_charts_resolve_from_vanity_copies():
