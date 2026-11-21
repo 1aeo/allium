@@ -131,7 +131,10 @@ after run. A file the baseline writes lists its months in `processed_months`,
 and the after run skips those months. Put the saved copies back when the
 comparison is finished, and delete a file that had no copy. Each run's log
 must not contain `pressure history unavailable`: that line means the run
-loaded the cache and did not parse the archives. Deleting the files removes
+loaded the cache and did not parse the archives. Each month under test must
+log `pressure archive <month> done`. `pressure archive <month> unavailable`
+or `pressure archive <month> unreadable` means that month was not parsed, and
+the backfill stops there. Deleting the files removes
 stored sealed days. A sealed day left in the file changes only when the new
 census has more relays, and an identical diff can hide a parsing change.
 
