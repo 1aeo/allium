@@ -10,7 +10,7 @@ from ..pressure_history import (
 )
 from .render import CREDIT, LEFT, PLOT_WIDTH, WIDTH, _header
 from .series import PERIOD_SPAN
-from .svg import BLUE, GREEN, MUTED, ORANGE, RED, Panel, Svg, legend, nice_ticks, text_width
+from .svg import GREEN, MUTED, ORANGE, RED, Panel, Svg, legend, nice_ticks, text_width
 
 _FOOT = "Usual range is the May 2025–May 2026 p10–p90, frozen."
 _COUNT_TICKS = [0, 1500, 3000, 4500, 6000, 7500]
@@ -231,7 +231,7 @@ def hsdir_chart(document, period):
         # Median of up to 28 earlier readings. A day with 14 to 27 still counts.
         subtitle = ("May 2025–May 2026 · %d of %d days moved more than 10%% "
                     "from the median of up to 28 earlier readings" % (off, counted))
-    return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, BLUE, "both", 1.8, 0.12)
+    return _count_chart(document, period, "hsdir", "Relays with HSDir Flag", subtitle, GREEN, "both", 1.8, 0.12)
 
 
 def directory_chart(document, period):
