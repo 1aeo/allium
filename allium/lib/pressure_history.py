@@ -878,6 +878,8 @@ def _publisher_points(rows):
 
 def _trailing_partial(points):
     """Days popped off the tail while each is under 3/4 of the preceding median."""
+    # Key order is not calendar order: unpadded 2026-11-9 follows 2026-11-10.
+    points = sorted(points, key=lambda point: point[0])
     partial = set()
     while len(points) >= 8:
         window = [pubs for _day, pubs in points[-15:-1]]
