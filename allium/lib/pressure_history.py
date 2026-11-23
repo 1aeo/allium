@@ -932,8 +932,10 @@ def series_latest(document):
             value = _plotted_value(day, row, field, flags, partial)
             if value is None:
                 continue
-            latest[field] = (day, value)
             # Keys sort as text, so an unpadded day such as 2026-11-9 follows 2026-11-10.
+            stored = latest[field][0]
+            if stored is None or day > stored:
+                latest[field] = (day, value)
             if newest is None or day > newest:
                 newest = day
     return newest, latest, partial

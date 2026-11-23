@@ -756,3 +756,15 @@ def test_series_latest_keeps_november_10_when_an_unpadded_day_sorts_later():
         "2026-11-09": {"guard": 1000, "flags_ok": True},
     }}
     assert pressure.series_latest(padded)[0] == datetime(2026, 11, 10).date()
+
+
+def test_series_latest_keeps_the_later_field_point_when_an_unpadded_day_sorts_last():
+    """A field visited on an older unpadded key keeps the later calendar point."""
+    document = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-9": {"directory": 5.0},
+    }}
+    newest, latest, _partial = pressure.series_latest(document)
+    assert latest["directory"] == (datetime(2026, 11, 10).date(), 6.0)
+    assert newest == datetime(2026, 11, 10).date()
