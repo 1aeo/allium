@@ -72,8 +72,15 @@ def test_hsdir_chart_marks_both_sides_of_the_usual_range():
     assert "Relays with HSDir Flag" in text
     assert "Outside usual range" in text
     assert 'stroke="#ff6b6b" stroke-width="2.4"' in text
+    # Inside the usual range, the series and its legend swatch use the same green as the other three charts.
+    assert 'stroke="#00ff7f" stroke-width="1.8"' in text
+    assert 'stroke="#00ff7f" stroke-width="2.2"' in text
+    assert 'stroke="#4da6ff"' not in text
     overload = overload_chart(_document(), "1m").document()
     assert "Relays Reporting Overload" in overload and "Tor network" not in overload
+    assert 'stroke="#00ff7f"' in overload
+    assert 'stroke="#00ff7f"' in guard_chart(_document(), "1m").document()
+    assert 'stroke="#00ff7f"' in directory_chart(_document(), "1m").document()
     assert "quiet-year" not in text
 
 
@@ -92,9 +99,15 @@ def test_hsdir_subtitle_names_the_baseline_in_plain_language():
 def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
     """p10 and p90 are still inside. Zero is under the range, so the lower redraw includes it."""
     red = 'stroke="#ff6b6b" stroke-width="2.4"'
-    assert red not in hsdir_chart(_flat("hsdir", 4372), "1m").document()
-    assert red not in hsdir_chart(_flat("hsdir", 5878), "1m").document()
-    assert red in hsdir_chart(_flat("hsdir", 0), "1m").document()
+    inside = 'stroke="#00ff7f" stroke-width="1.8"'
+    for value in (4372, 5878):
+        text = hsdir_chart(_flat("hsdir", value), "1m").document()
+        assert red not in text
+        assert inside in text
+        assert 'stroke="#4da6ff"' not in text
+    zero = hsdir_chart(_flat("hsdir", 0), "1m").document()
+    assert red in zero
+    assert inside in zero
 
 
 def test_directory_chart_says_bytes_served():
