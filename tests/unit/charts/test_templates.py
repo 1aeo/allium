@@ -97,6 +97,9 @@ def test_pressure_page_introduces_each_chart_and_links_to_it():
         assert html.count('href="#pressure-%s-directory"' % period) == 3
         assert html.count('id="pressure-%s-guard"' % period) == 1
     assert 'href="#pressure-overload"' not in html and 'href="#pressure-guard"' not in html
+    # The section id can still be linked from another page. The heading itself is not a
+    # fragment link: that hash would replace #5y and the charts would fall back to 1 month.
+    assert 'id="network-pressure"' in html and 'href="#network-pressure"' not in html
     assert re.search(
         r'class="pressure-pill pressure-jump pressure-jump-5y"\s+href="#pressure-5y-guard"', html)
     assert re.search(r'class="pressure-jump pressure-jump-5y"\s+href="#pressure-5y-guard"', html)
