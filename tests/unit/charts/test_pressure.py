@@ -176,7 +176,7 @@ def test_shared_latest_matches_each_series_and_skips_a_partial_tail():
 
 
 def test_latest_dot_stays_series_color_unless_both_band_edges_exist():
-    """A value outside one edge is not a hot marker until p10 and p90 both exist."""
+    """A two-sided flag marker needs both edges. Directory turns red from p90 alone."""
     low = _flat("guard", 3000)
     low["bands"]["guard"] = {"p10": 5384}
     one_edge = guard_chart(low, "1m")
@@ -191,10 +191,14 @@ def test_latest_dot_stays_series_color_unless_both_band_edges_exist():
 
     high = _flat("directory", 50)
     high["bands"]["directory"] = {"p10": 2.9}
-    assert "Daily average" in directory_chart(high, "1m").document()
-    assert _dot_color(directory_chart(high, "1m")) == GREEN
+    floor_only = directory_chart(high, "1m")
+    assert "Daily average" in floor_only.document()
+    assert "Above usual range" not in floor_only.document()
+    assert _dot_color(floor_only) == GREEN
     high["bands"]["directory"] = {"p90": 11.8}
-    assert _dot_color(directory_chart(high, "1m")) == GREEN
+    ceiling_only = directory_chart(high, "1m")
+    assert "Above usual range" in ceiling_only.document()
+    assert _dot_color(ceiling_only) == RED and RED in _series_colors(ceiling_only)
     high["bands"]["directory"] = {"p10": 2.9, "p90": 11.8}
     assert _dot_color(directory_chart(high, "1m")) == RED
 
