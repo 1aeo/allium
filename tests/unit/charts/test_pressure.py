@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta, timezone
 
 from allium.lib.charts.pressure import directory_chart, guard_chart, hsdir_chart, overload_chart
+from allium.lib.charts.svg import GREEN, ORANGE, RED
+from allium.lib.pressure_history import latest_value, series_latest
 
 
 def _document():
@@ -108,6 +110,69 @@ def test_the_usual_range_edges_stay_inside_and_zero_is_outside():
     zero = hsdir_chart(_flat("hsdir", 0), "1m").document()
     assert red in zero
     assert inside in zero
+
+
+def _dot_color(svg):
+    for op in reversed(svg.ops):
+        if op[0] == "path" and op[5] not in (None, "none"):
+            return op[2]
+    return None
+
+
+def _series_colors(svg):
+    return {op[2] for op in svg.ops if op[0] == "path" and op[5] in (None, "none")}
+
+
+def test_overload_marker_matches_the_stroke_it_sits_on():
+    """The trailing dot uses the same color as the band redraw, including exactly 10%."""
+    orange = overload_chart(_flat("overload_share", 5), "1m")
+    ceiling = overload_chart(_flat("overload_share", 10), "1m")
+    above = overload_chart(_flat("overload_share", 10.1), "1m")
+    assert _dot_color(orange) == ORANGE and ORANGE in _series_colors(orange)
+    assert _dot_color(ceiling) == ORANGE and RED not in _series_colors(ceiling)
+    assert _dot_color(above) == RED and RED in _series_colors(above)
+
+
+def test_a_usual_range_past_10_percent_stays_green_inside_it():
+    """p90 above 10% is still inside. The orange 'up to 10%' band is not drawn over it."""
+    document = _flat("overload_share", 11)
+    document["bands"]["overload"] = {"p10": 8.0, "p90": 12.0, "n": 300}
+    svg = overload_chart(document, "1m")
+    text = svg.document()
+    assert _dot_color(svg) == GREEN
+    assert RED not in _series_colors(svg) and ORANGE not in _series_colors(svg)
+    assert "Inside usual range (p10–p90)" in text and "8.0%–12.0%" in text
+    assert "Up to 10% outside usual range" not in text
+    assert "More than 10% outside usual range" in text
+
+
+def test_directory_without_a_band_does_not_invent_an_outside_color():
+    document = _document()
+    document["bands"].pop("directory")
+    svg = directory_chart(document, "1m")
+    text = svg.document()
+    assert "Above usual range" not in text and "Inside usual range" not in text
+    assert "Daily average" in text
+    assert RED not in _series_colors(svg) and _dot_color(svg) == GREEN
+
+
+def test_shared_latest_matches_each_series_and_skips_a_partial_tail():
+    document = _document()
+    for row in document["days"].values():
+        row["overload_publishers"] = 9000
+    document["days"]["2026-11-10"]["overload_publishers"] = 100
+    document["days"]["2026-11-10"]["overload_share"] = 50
+    document["days"]["2026-11-10"]["flags_ok"] = False
+    document["days"]["2026-11-10"]["guard"] = 100
+    newest, latest, partial = series_latest(document)
+    assert datetime(2026, 11, 10).date() in partial
+    assert latest["overload_share"] == latest_value(document, "overload_share")
+    assert latest["guard"] == latest_value(document, "guard", True)
+    assert latest["hsdir"] == latest_value(document, "hsdir", True)
+    assert latest["directory"] == latest_value(document, "directory")
+    assert newest == latest["directory"][0]
+    assert "through Nov 9" in guard_chart(document, "1m").document()
+    assert "50.0%" not in overload_chart(document, "1m").document()
 
 
 def test_directory_chart_says_bytes_served():

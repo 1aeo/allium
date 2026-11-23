@@ -6,7 +6,7 @@ The usual range is the frozen May 2025–May 2026 p10–p90 on every period.
 from datetime import datetime, timedelta, timezone
 
 from ..pressure_history import (
-    HIGH_SHARE, guard_below_since, hsdir_noise, latest_value, series_window, status_since,
+    HIGH_SHARE, guard_below_since, hsdir_noise, series_latest, series_window, status_since,
 )
 from .render import CREDIT, LEFT, PLOT_WIDTH, WIDTH, _header
 from .series import PERIOD_SPAN
@@ -70,18 +70,11 @@ def _enough(values):
 
 
 def _shared_end(document):
-    """Shared axis end, and each series' newest plotted point for the trailing label."""
-    newest = None
-    latest = {}
-    for field, flags in (("overload_share", False), ("guard", True), ("hsdir", True), ("directory", False)):
-        day, value = latest_value(document, field, flags)
-        latest[field] = (day, value)
-        if day is None:
-            continue
-        stamp = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-        if newest is None or stamp > newest:
-            newest = stamp
-    return newest, latest
+    """Shared axis end, each series' newest plotted point, and the overload tail."""
+    day, latest, partial = series_latest(document)
+    if day is None:
+        return None, latest, partial
+    return datetime(day.year, day.month, day.day, tzinfo=timezone.utc), latest, partial
 
 
 def _through(text, end, day):
@@ -91,24 +84,23 @@ def _through(text, end, day):
     return "%s · through %s %d" % (text, day.strftime("%b"), day.day)
 
 
-def _open(document, field, period, flags=False, end=None):
-    newest = end
-    if newest is None:
-        for key, row in (document.get("days") or {}).items():
-            if not isinstance(row, dict) or not isinstance(row.get(field), (int, float)):
-                continue
-            try:
-                day = datetime.strptime(key, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            except (TypeError, ValueError):
-                continue
-            if newest is None or day > newest:
-                newest = day
-    if newest is None:
+def _open(document, field, period, flags=False, end=None, partial=None):
+    if end is None:
         return None
-    stamps, values = series_window(document, field, newest, period, flags)
-    if not _enough(values):
-        return None
-    return stamps, values
+    stamps, values = series_window(document, field, end, period, flags, partial)
+    return (stamps, values) if _enough(values) else None
+
+
+def _overload_color(value, p90):
+    """Marker color for one overload share: green inside p90, orange through 10%, then red.
+
+    p90 at or above 10% has no orange band. A share inside that usual range stays green.
+    """
+    if p90 is None or value <= p90:
+        return GREEN
+    if value <= HIGH_SHARE:
+        return ORANGE
+    return RED
 
 
 def _band(document, key):
@@ -130,13 +122,14 @@ def _scale(values, floor, stay_under, headroom, floor_ticks):
 
 
 def overload_chart(document, period):
-    end, latest_points = _shared_end(document)
-    opened = _open(document, "overload_share", period, end=end)
+    end, latest_points, partial = _shared_end(document)
+    opened = _open(document, "overload_share", period, end=end, partial=partial)
     if not opened:
         return None
     stamps, values = opened
     p10, p90 = _band(document, "overload")
-    status, began, _share = status_since(document, p90 if p90 is not None else HIGH_SHARE)
+    status, began, _share = status_since(
+        document, p90 if p90 is not None else HIGH_SHARE, partial)
     latest_day, latest = latest_points["overload_share"]
     subtitle = "Share of relays publishing a descriptor that day"
     if status and began and latest_day is not None:
@@ -146,32 +139,34 @@ def overload_chart(document, period):
     y = _header(svg, "", "Relays Reporting Overload · " + PERIOD_SPAN[period], subtitle)
     if p10 is not None and p90 is not None:
         band = "Inside usual range (p10–p90)  %.1f%%–%.1f%%" % (p10, p90)
-        y += legend(svg, LEFT, y, [[
-            ("line", GREEN, None, band),
-            ("line", ORANGE, None, "Up to %.0f%% outside usual range" % HIGH_SHARE),
-            ("line", RED, None, "More than %.0f%% outside usual range" % HIGH_SHARE),
-        ]], min_width=PLOT_WIDTH)
+        entries = [("line", GREEN, None, band)]
+        # Orange is the gap between the usual range and 10%. It is not drawn when p90 is already past 10%.
+        if p90 < HIGH_SHARE:
+            entries.append(("line", ORANGE, None, "Up to %.0f%% outside usual range" % HIGH_SHARE))
+        entries.append(("line", RED, None, "More than %.0f%% outside usual range" % HIGH_SHARE))
+        y += legend(svg, LEFT, y, [entries], min_width=PLOT_WIDTH)
     yhi, ticks = _scale(values, 30, 24, 1.15, [0, 6, 12, 18, 24])
     panel = _panel(svg, "o" + period, y + 6, stamps, yhi, ticks, "Share (%)", "{:.0f}", period)
     panel.series(values, GREEN, 2.2)
     if p10 is not None and p90 is not None:
         panel.hband(p10, p90, GREEN, 0.18)
+        red_lo = HIGH_SHARE if p90 < HIGH_SHARE else p90
         if p90 < HIGH_SHARE:
             panel.hband(p90, HIGH_SHARE, ORANGE, 0.08)
             _clip_band(svg, panel, values, p90, HIGH_SHARE, ORANGE, "oe" + period)
-        panel.hband(HIGH_SHARE, yhi, RED, 0.07)
-        _clip_band(svg, panel, values, HIGH_SHARE, yhi, RED, "oh" + period)
+        panel.hband(red_lo, yhi, RED, 0.07)
+        _clip_band(svg, panel, values, red_lo, yhi, RED, "oh" + period)
     if latest is not None:
-        _latest(svg, panel, values, "%.1f%%" % latest, RED if p90 is not None and latest > p90 else GREEN)
+        _latest(svg, panel, values, "%.1f%%" % latest, _overload_color(latest, p90))
     return _finish(svg, panel)
 
 
 def _count_chart(document, period, field, title, subtitle, color, outside, width, opacity, height=200):
     flags = field != "directory"
-    end, latest_points = _shared_end(document)
+    end, latest_points, partial = _shared_end(document)
     day, latest = latest_points[field]
     subtitle = _through(subtitle, end, day)
-    opened = _open(document, field, period, flags=flags, end=end)
+    opened = _open(document, field, period, flags=flags, end=end, partial=partial)
     if not opened:
         return None
     stamps, values = opened
@@ -188,12 +183,14 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
     y = _header(svg, "", title + " · " + PERIOD_SPAN[period], subtitle)
     if usual and outside:
         inside = "Inside usual range (p10–p90)  " + usual
-    elif outside:
-        inside = "Inside usual range"
     else:
         inside = "Daily average"
     entries = [("line", color, None, inside)]
-    if field == "directory" or (outside and p10 is not None):
+    # The red stroke is drawn only for a threshold the chart actually has. A directory series with no
+    # p90, or a flag series missing one edge, must not grow a legend swatch the line never uses.
+    outside_drawn = ((outside == "both" and p10 is not None and p90 is not None) or
+                     (outside == "above" and p90 is not None))
+    if outside_drawn:
         entries.append(("line", RED, None, "Above usual range" if outside == "above" else "Outside usual range"))
     y += legend(svg, LEFT, y, [entries], min_width=PLOT_WIDTH)
     panel = _panel(svg, field[:1] + period, y + 6, stamps, yhi, ticks, ylabel, yfmt, period, height)
