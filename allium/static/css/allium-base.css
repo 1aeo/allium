@@ -748,9 +748,29 @@ th[title]::after {
     box-shadow: none;
     color: var(--aeo-text-dim);
 }
-/* Shared 1M/6M/1Y/5Y on the pressure page. Stronger than a #5y bookmark, weaker than
-   a chart's own radio below (that block repeats a class so it wins). A jump link
-   can change the hash without clearing this radio. */
+/* A pressure-page jump names one element that is both the chart and the period
+   (#pressure-5y-guard). The anchor sits inside that chart, so :has() reaches the
+   others. Lighter than the shared radios below (a chip click replaces the jump)
+   and lighter than a chart's own radio (that still changes only its chart). */
+body:has(.pressure-keep:target) .chart-hero { display: none; }
+body:has(.pressure-keep-1m:target) .chart-hero.chart-on-1m,
+body:has(.pressure-keep-6m:target) .chart-hero.chart-on-6m,
+body:has(.pressure-keep-1y:target) .chart-hero.chart-on-1y,
+body:has(.pressure-keep-5y:target) .chart-hero.chart-on-5y { display: block; }
+body:has(.pressure-keep:target) .chart-spark {
+    box-shadow: none;
+    color: var(--aeo-text-dim);
+}
+body:has(.pressure-keep-1m:target) .chart-spark.chart-on-1m,
+body:has(.pressure-keep-6m:target) .chart-spark.chart-on-6m,
+body:has(.pressure-keep-1y:target) .chart-spark.chart-on-1y,
+body:has(.pressure-keep-5y:target) .chart-spark.chart-on-5y {
+    box-shadow: 0 0 0 1px var(--aeo-green);
+    color: var(--aeo-green);
+}
+/* Shared 1M/6M/1Y/5Y on the pressure page. Stronger than a #5y bookmark and a
+   jump anchor, weaker than a chart's own radio below (that block repeats a class
+   so it wins). A jump link can change the hash without clearing this radio. */
 .pressure-all:checked ~ .pressure-charts .chart-hero.chart-hero { display: none; }
 .pressure-all-1m:checked ~ .pressure-charts .chart-hero.chart-on-1m,
 .pressure-all-6m:checked ~ .pressure-charts .chart-hero.chart-on-6m,
