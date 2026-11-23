@@ -209,7 +209,9 @@ Network Pressure
     <section class="ribbon-card network-history pressure-stack" id="network-pressure">
         {{ chart_period_anchors() }}
         <div class="card-header">
-            <h4><a href="#network-pressure" class="al-link-plain">Network Pressure</a></h4>
+            {#- Not a fragment link. The hash can name only one element, so #network-pressure
+                would replace #5y and the charts would fall back to 1 month. -#}
+            <h4>Network Pressure</h4>
         </div>
         {% set charts = [
             ('overload', 'Relays Reporting Overload'),
