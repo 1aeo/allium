@@ -203,10 +203,13 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
     elif outside == "above" and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period, width=2.2)
     if latest is not None:
-        if outside == "above":
-            hot = p90 is not None and latest > p90
+        # Either missing edge is the single-color fallback. Compare only when the range is whole.
+        if p10 is None or p90 is None:
+            hot = False
+        elif outside == "above":
+            hot = latest > p90
         elif outside == "both":
-            hot = p10 is not None and (latest < p10 or (p90 is not None and latest > p90))
+            hot = latest < p10 or latest > p90
         else:
             hot = False
         _latest(svg, panel, values, point % latest if field == "directory" else point.format(latest), RED if hot else color)

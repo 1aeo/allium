@@ -933,7 +933,9 @@ def series_latest(document):
             if value is None:
                 continue
             latest[field] = (day, value)
-            newest = day
+            # Keys sort as text, so an unpadded day such as 2026-11-9 follows 2026-11-10.
+            if newest is None or day > newest:
+                newest = day
     return newest, latest, partial
 
 

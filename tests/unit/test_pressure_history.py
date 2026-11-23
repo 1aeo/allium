@@ -738,3 +738,21 @@ def test_bands_freeze_once():
     pressure.freeze_bands(document)
     assert document["bands"]["guard"]["p10"] == guard
     assert document["bands"]["frozen"] is True
+
+
+def test_series_latest_keeps_november_10_when_an_unpadded_day_sorts_later():
+    """``2026-11-9`` sorts after ``2026-11-10``. The shared end stays November 10."""
+    document = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-9": {"guard": 1000, "flags_ok": True},
+    }}
+    newest, _latest, _partial = pressure.series_latest(document)
+    assert newest == datetime(2026, 11, 10).date()
+
+    padded = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-09": {"guard": 1000, "flags_ok": True},
+    }}
+    assert pressure.series_latest(padded)[0] == datetime(2026, 11, 10).date()

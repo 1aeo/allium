@@ -175,6 +175,30 @@ def test_shared_latest_matches_each_series_and_skips_a_partial_tail():
     assert "50.0%" not in overload_chart(document, "1m").document()
 
 
+def test_latest_dot_stays_series_color_unless_both_band_edges_exist():
+    """A value outside one edge is not a hot marker until p10 and p90 both exist."""
+    low = _flat("guard", 3000)
+    low["bands"]["guard"] = {"p10": 5384}
+    one_edge = guard_chart(low, "1m")
+    assert "Daily average" in one_edge.document()
+    assert "Outside usual range" not in one_edge.document()
+    assert RED not in _series_colors(one_edge)
+    assert _dot_color(one_edge) == GREEN
+
+    low["bands"]["guard"]["p90"] = 6336
+    assert _dot_color(guard_chart(low, "1m")) == RED
+    assert _dot_color(guard_chart(_flat("guard", 7000), "1m")) == RED
+
+    high = _flat("directory", 50)
+    high["bands"]["directory"] = {"p10": 2.9}
+    assert "Daily average" in directory_chart(high, "1m").document()
+    assert _dot_color(directory_chart(high, "1m")) == GREEN
+    high["bands"]["directory"] = {"p90": 11.8}
+    assert _dot_color(directory_chart(high, "1m")) == GREEN
+    high["bands"]["directory"] = {"p10": 2.9, "p90": 11.8}
+    assert _dot_color(directory_chart(high, "1m")) == RED
+
+
 def test_directory_chart_says_bytes_served():
     text = directory_chart(_document(), "1m").document()
     assert "Directory Bytes Served" in text
