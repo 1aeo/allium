@@ -70,22 +70,22 @@ def _enough(values):
 
 
 def _shared_end(document):
-    """One end date for all four panels, so their x-axes line up."""
+    """Shared axis end, and each series' newest plotted point for the trailing label."""
     newest = None
+    latest = {}
     for field, flags in (("overload_share", False), ("guard", True), ("hsdir", True), ("directory", False)):
-        day, _value = latest_value(document, field, flags)
+        day, value = latest_value(document, field, flags)
+        latest[field] = (day, value)
         if day is None:
             continue
         stamp = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
         if newest is None or stamp > newest:
             newest = stamp
-    return newest
+    return newest, latest
 
 
-def _through(document, field, flags, text):
+def _through(text, end, day):
     """Name the last day when this series stops before the shared axis."""
-    end = _shared_end(document)
-    day, _value = latest_value(document, field, flags)
     if end is None or day is None or day >= end.date():
         return text
     return "%s · through %s %d" % (text, day.strftime("%b"), day.day)
@@ -130,13 +130,14 @@ def _scale(values, floor, stay_under, headroom, floor_ticks):
 
 
 def overload_chart(document, period):
-    opened = _open(document, "overload_share", period, end=_shared_end(document))
+    end, latest_points = _shared_end(document)
+    opened = _open(document, "overload_share", period, end=end)
     if not opened:
         return None
     stamps, values = opened
     p10, p90 = _band(document, "overload")
     status, began, _share = status_since(document, p90 if p90 is not None else HIGH_SHARE)
-    latest_day, latest = latest_value(document, "overload_share")
+    latest_day, latest = latest_points["overload_share"]
     subtitle = "Share of relays publishing a descriptor that day"
     if status and began and latest_day is not None:
         subtitle = "%s since %s %d · %.1f%% on %s %d" % (
@@ -167,8 +168,10 @@ def overload_chart(document, period):
 
 def _count_chart(document, period, field, title, subtitle, color, outside, width, opacity, height=200):
     flags = field != "directory"
-    subtitle = _through(document, field, flags, subtitle)
-    opened = _open(document, field, period, flags=flags, end=_shared_end(document))
+    end, latest_points = _shared_end(document)
+    day, latest = latest_points[field]
+    subtitle = _through(subtitle, end, day)
+    opened = _open(document, field, period, flags=flags, end=end)
     if not opened:
         return None
     stamps, values = opened
@@ -202,7 +205,6 @@ def _count_chart(document, period, field, title, subtitle, color, outside, width
         _clip_band(svg, panel, values, 0, p10, RED, "b" + field + period, below=True)
     elif outside == "above" and p90 is not None:
         _clip_band(svg, panel, values, p90, yhi, RED, "a" + field + period, width=2.2)
-    _day, latest = latest_value(document, field, flags=field != "directory")
     if latest is not None:
         if outside == "above":
             hot = p90 is not None and latest > p90
