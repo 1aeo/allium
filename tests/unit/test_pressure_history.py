@@ -738,3 +738,60 @@ def test_bands_freeze_once():
     pressure.freeze_bands(document)
     assert document["bands"]["guard"]["p10"] == guard
     assert document["bands"]["frozen"] is True
+
+
+def test_series_latest_keeps_november_10_when_an_unpadded_day_sorts_later():
+    """``2026-11-9`` sorts after ``2026-11-10``. The shared end stays November 10."""
+    document = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-9": {"guard": 1000, "flags_ok": True},
+    }}
+    newest, _latest, _partial = pressure.series_latest(document)
+    assert newest == datetime(2026, 11, 10).date()
+
+    padded = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-09": {"guard": 1000, "flags_ok": True},
+    }}
+    assert pressure.series_latest(padded)[0] == datetime(2026, 11, 10).date()
+
+
+def test_series_latest_keeps_the_later_field_point_when_an_unpadded_day_sorts_last():
+    """A field visited on an older unpadded key keeps the later calendar point."""
+    document = {"days": {
+        "2026-11-08": {"directory": 4.0},
+        "2026-11-10": {"directory": 6.0},
+        "2026-11-9": {"directory": 5.0},
+    }}
+    newest, latest, _partial = pressure.series_latest(document)
+    assert latest["directory"] == (datetime(2026, 11, 10).date(), 6.0)
+    assert newest == datetime(2026, 11, 10).date()
+
+
+def test_series_latest_drops_incomplete_november_10_when_unpadded_november_9_sorts_last():
+    """Full ``2026-11-9`` sorts after incomplete ``2026-11-10``.
+
+    The tail is the calendar day, so November 10 stays partial and is not the
+    latest overload point. The same counts with a padded November 9 key still
+    drop only that incomplete day.
+    """
+    document = {"days": {}}
+    start = datetime(2026, 11, 2).date()
+    for offset in range(7):
+        day = start + timedelta(days=offset)
+        document["days"][day.isoformat()] = {"overload_publishers": 9000, "overload_share": 10.0}
+    document["days"]["2026-11-9"] = {"overload_publishers": 9000, "overload_share": 10.0}
+    document["days"]["2026-11-10"] = {"overload_publishers": 100, "overload_share": 50.0}
+    november_9 = datetime(2026, 11, 9).date()
+    november_10 = datetime(2026, 11, 10).date()
+    _newest, latest, partial = pressure.series_latest(document)
+    assert november_10 in partial
+    assert latest["overload_share"][0] == november_9
+    assert pressure.partial_overload_days(document) == {november_10}
+
+    padded = {"days": dict(document["days"])}
+    padded["days"]["2026-11-09"] = padded["days"].pop("2026-11-9")
+    assert pressure.partial_overload_days(padded) == {november_10}
+    assert pressure.series_latest(padded)[1]["overload_share"][0] == november_9

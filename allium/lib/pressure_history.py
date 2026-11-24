@@ -133,7 +133,20 @@ def percentile(values, fraction):
 
 
 def _day(text):
-    return datetime.strptime(str(text)[:10], "%Y-%m-%d").date()
+    """Calendar day from a ``YYYY-MM-DD`` prefix.
+
+    Saved keys and Tor Metrics rows use that zero-padded form. ``strptime``
+    consults the locale on every call, which dominated the pressure charts'
+    day scans, so the common shape is read as numbers. An unpadded day such
+    as ``2026-11-1`` still parses, matching the old ``%d`` flexibility.
+    """
+    text = str(text)[:10]
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        return date(int(text[0:4]), int(text[5:7]), int(text[8:10]))
+    year, month, day_number = text.split("-")
+    if len(year) != 4:
+        raise ValueError(text)
+    return date(int(year), int(month), int(day_number))
 
 
 def _as_day(value):
@@ -853,18 +866,20 @@ def _thin_sealed_months(document):
     return months
 
 
-def partial_overload_days(document):
-    """Trailing overload days that are still missing most of the day's relays.
-
-    A full day has nearly the same publisher count as the days around it. The
-    newest day, caught mid-publication, does not, and is not a status reading.
-    """
+def _publisher_points(rows):
     points = []
-    for day, row in _dated_rows(document):
+    for day, row in rows:
         pubs = row.get("overload_publishers")
         share = row.get("overload_share")
         if isinstance(pubs, int) and pubs > 0 and isinstance(share, (int, float)):
             points.append((day, pubs))
+    return points
+
+
+def _trailing_partial(points):
+    """Days popped off the tail while each is under 3/4 of the preceding median."""
+    # Key order is not calendar order: unpadded 2026-11-9 follows 2026-11-10.
+    points = sorted(points, key=lambda point: point[0])
     partial = set()
     while len(points) >= 8:
         window = [pubs for _day, pubs in points[-15:-1]]
@@ -878,35 +893,86 @@ def partial_overload_days(document):
     return partial
 
 
-def series_window(document, field, end, period, flags=False):
+def partial_overload_days(document):
+    """Trailing overload days that are still missing most of the day's relays.
+
+    A full day has nearly the same publisher count as the days around it. The
+    newest day, caught mid-publication, does not, and is not a status reading.
+    """
+    return _trailing_partial(_publisher_points(_dated_rows(document)))
+
+
+def _plotted_value(day, row, field, flags, partial):
+    """The plotted number, or None when this day is a gap for ``field``."""
+    if (field == "overload_share" and day in partial) or (flags and row.get("flags_ok") is False):
+        return None
+    value = row.get(field)
+    return value if isinstance(value, (int, float)) else None
+
+
+_PRESSURE_FIELDS = (
+    ("overload_share", False),
+    ("guard", True),
+    ("hsdir", True),
+    ("directory", False),
+)
+
+
+def series_latest(document):
+    """Newest plotted point of each pressure series, and the newest of those days.
+
+    ``(day or None, {field: (day, value)}, partial_days)``. A series with nothing
+    plotted is ``(None, None)``. ``partial_days`` is the overload tail from the
+    same pass, so a chart does not scan the history again to drop those days.
+    """
+    rows = list(_dated_rows(document))
+    partial = _trailing_partial(_publisher_points(rows))
+    latest = {field: (None, None) for field, _flags in _PRESSURE_FIELDS}
+    newest = None
+    for day, row in rows:
+        for field, flags in _PRESSURE_FIELDS:
+            value = _plotted_value(day, row, field, flags, partial)
+            if value is None:
+                continue
+            # Keys sort as text, so an unpadded day such as 2026-11-9 follows 2026-11-10.
+            stored = latest[field][0]
+            if stored is None or day > stored:
+                latest[field] = (day, value)
+            if newest is None or day > newest:
+                newest = day
+    return newest, latest, partial
+
+
+def series_window(document, field, end, period, flags=False, partial=None):
     """``(datetimes, values)`` for one chart period ending at ``end``.
 
     Missing days and, for flag series, incomplete consensus days are None.
+    ``partial`` is the overload tail when the caller already computed it.
     """
     last = end.date() if isinstance(end, datetime) else end
-    partial = partial_overload_days(document) if field == "overload_share" else set()
+    if field != "overload_share":
+        partial = set()
+    elif partial is None:
+        partial = partial_overload_days(document)
     cursor = last - WINDOW[period] + timedelta(days=1)
     stamps, values = [], []
     while cursor <= last:
         row = document["days"].get(cursor.isoformat()) or {}
-        value = row.get(field)
-        if cursor in partial:
-            value = None
-        elif (flags and row.get("flags_ok") is False) or not isinstance(value, (int, float)):
-            value = None
+        value = _plotted_value(cursor, row, field, flags, partial)
         stamps.append(_stamp(cursor))
         values.append(value)
         cursor += timedelta(days=1)
     return stamps, values
 
 
-def _numeric_points(document, field, flags=False):
-    partial = partial_overload_days(document) if field == "overload_share" else set()
+def _numeric_points(document, field, flags=False, partial=None):
+    if field != "overload_share":
+        partial = set()
+    elif partial is None:
+        partial = partial_overload_days(document)
     for day, row in _dated_rows(document):
-        if day in partial or (flags and row.get("flags_ok") is False):
-            continue
-        value = row.get(field)
-        if isinstance(value, (int, float)):
+        value = _plotted_value(day, row, field, flags, partial)
+        if value is not None:
             yield day, value
 
 
@@ -933,9 +999,9 @@ def _run_start(points, keep):
     return began, points[-1]
 
 
-def status_since(document, p90):
+def status_since(document, p90, partial=None):
     """``(status, day, share)`` of the newest overload run, and when it began."""
-    points = list(_numeric_points(document, "overload_share"))
+    points = list(_numeric_points(document, "overload_share", partial=partial))
     if not points or p90 is None:
         return None, None, None
 
