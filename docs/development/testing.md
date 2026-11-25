@@ -111,12 +111,15 @@ generation — use `compare_outputs.py` to diff the full ~22k-file site
 before and after your change:
 
 ```bash
-# Generate baseline, make changes, generate after, compare
-python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# Generate baseline, make changes, generate after, compare.
+# --no-pressure-history skips the CollecTor archive backfill.
+python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 # ... make code changes ...
-python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 python3 compare_outputs.py
 ```
+
+Pressure-chart and archive-parsing comparisons use a different cache. Those steps are in CONTRIBUTING.md under Output Comparison.
 
 Classifies every file as **identical**, **timestamp-only**, or **content diff**.
 Shows normalized unified diffs (timestamps stripped) for content diffs only.

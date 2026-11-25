@@ -215,12 +215,18 @@ class Panel(object):
     def vline(self, t, color, width, dash=None):
         self.svg.line(self.x(t), self.top, self.x(t), self.top + self.height, color, width, dash)
 
-    def yaxis(self, ticks, label, size=13, fmt="{:,g}"):
-        """Grid lines and their labels."""
+    def yaxis(self, ticks, label, size=13, fmt="{:,g}", close=False):
+        """Grid lines and their labels. ``close`` puts the rotated name just left of the tick numbers; the
+        default stays at the canvas edge, clear of a ``band_label`` that reaches past those numbers."""
         for tick in ticks:
             self.hline(tick, GRID, 1)
             self.svg.text(self.left - 8, self.y(tick) + size * 0.35, fmt.format(tick), size, MUTED, "end")
-        self.svg.text(12 + size, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
+        if close:
+            widest = max((text_width(fmt.format(tick), size) for tick in ticks), default=0)
+            x = self.left - 8 - widest - 12  # center of the rotated word, one em left of the numbers
+        else:
+            x = 12 + size
+        self.svg.text(x, self.top + self.height / 2, label, size, MUTED, "middle", rotate=True)
 
     def band_label(self, text, lo, hi, color, ticks, fmt="{:.1f}", size=12, room=13):
         """Name the y range ``lo``–``hi`` beside the axis, inside the range: at its middle, or the spot nearest the
@@ -251,20 +257,25 @@ class Panel(object):
         self.svg.line(self.left, bottom, self.left + self.width, bottom, AXIS, 1)
 
 
-def legend(svg, x, y, rows, size=11.5):
+def legend(svg, x, y, rows, size=11.5, min_width=0):
     """Framed rows of ``(kind, color, style, label)`` entries. Returns the height.
 
     ``kind`` is ``line`` (style = dash), ``patch`` (style = fill opacity), ``marker``
     (a diamond) or ``dot`` (a line with a dot, as the write/read strip's red marks).
-    A legend too wide for the canvas moves left.
+    A legend too wide for the canvas moves left. ``min_width`` stretches the frame and
+    spreads that row's gaps so a short key can span the plot.
     """
     pad, swatch, gap, row_h = 8, 22, 16, size * 1.55
     widths = [[swatch + 6 + text_width(entry[3], size) for entry in row] for row in rows]
-    total = max(sum(row) + gap * (len(row) - 1) for row in widths) + pad * 2
+    content = max(sum(row) + gap * (len(row) - 1) for row in widths)
+    total = max(content + pad * 2, min_width)
     height = pad * 2 + row_h * len(rows) - (row_h - size * 1.2)
     x = min(x, svg.width - 12 - total)
     svg.rect(x, y, total, height, LEGEND_BG, stroke=LEGEND_EDGE, rx=4)
     for r, (row, row_widths) in enumerate(zip(rows, widths)):
+        natural = sum(row_widths) + gap * max(len(row_widths) - 1, 0)
+        extra = (total - pad * 2 - natural) if min_width else 0
+        step = gap + (extra / (len(row_widths) - 1) if len(row_widths) > 1 and extra else 0)
         cy, cx = y + pad + size * 0.6 + r * row_h, x + pad
         for (kind, color, style, label), width in zip(row, row_widths):
             if kind == "line":
@@ -277,5 +288,5 @@ def legend(svg, x, y, rows, size=11.5):
                 svg.line(cx, cy, cx + swatch, cy, color, 2.4)
                 svg.dot(cx + swatch / 2, cy, 3.5, color)
             svg.text(cx + swatch + 6, cy + size * 0.35, label, size)
-            cx += width + gap
+            cx += width + step
     return height
