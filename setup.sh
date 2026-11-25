@@ -101,7 +101,9 @@ fi
 
 # ALLIUM_CI_CACHE_FALLBACK=1 is set only by the setup end-to-end job.
 # It seeds a cache file for every API that job can fetch and generates once.
-# A non-zero allium exit still fails. Production builds leave the flag unset.
+# ci_generate_once passes --no-pressure-history, so that job does not backfill
+# the CollecTor pressure archive. A non-zero allium exit still fails.
+# Production builds leave the variable unset and do not pass that flag.
 _load_ci_cache_helpers() {
     local helper="${ALLIUM_CI_CACHE_LIB:-}"
     if [ -z "$helper" ]; then
