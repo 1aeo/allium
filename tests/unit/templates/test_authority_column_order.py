@@ -78,6 +78,7 @@ def _header_labels(table):
 
 
 def _section(fragment, tag):
+    """Return the first <tag>...</tag> slice from an HTML fragment."""
     return fragment[fragment.index(f"<{tag}"):fragment.index(f"</{tag}>")]
 
 
@@ -103,6 +104,7 @@ def test_template_orders_headers_and_cells_together():
 
 
 def _relay(fingerprint, nickname):
+    """Build a minimal Onionoo relay fixture dictionary."""
     return {
         "nickname": nickname,
         "fingerprint": fingerprint,
@@ -125,6 +127,7 @@ def _relay(fingerprint, nickname):
 
 
 def _vote(name, **extra):
+    """Build a per-authority vote fixture with optional field overrides."""
     vote = {
         "authority": name,
         "fingerprint": AUTHORITIES_BY_NAME[name],
@@ -144,6 +147,7 @@ def _vote(name, **extra):
 
 
 def _evaluation(votes, ipv6=False):
+    """Build a consensus evaluation dictionary from authority vote fixtures."""
     evaluation = {
         "fingerprint": RELAY_V6 if ipv6 else RELAY_V4,
         "in_consensus": True,
@@ -175,6 +179,7 @@ def _evaluation(votes, ipv6=False):
 
 
 def _thresholds(names):
+    """Build default flag-threshold dictionaries keyed by authority name."""
     return {name: {
         "fast-speed": 102000,
         "guard-wfu": 0.98,
@@ -225,7 +230,13 @@ def _render(tmp_path):
         relay_uptime=10 * SECONDS_PER_DAY,
     )
     by_fp[RELAY_V4]["consensus_evaluation"] = format_relay_consensus_evaluation(
-        _evaluation([_vote("moria1"), _vote("bastet", voted=False, flags=[], ipv4_reachable=False)], ipv6=False),
+        _evaluation(
+            [
+                _vote("moria1", flags=["Running", "Valid", "Fast", "Stable", "BadExit"]),
+                _vote("bastet", voted=False, flags=[], ipv4_reachable=False),
+            ],
+            ipv6=False,
+        ),
         _thresholds(["moria1", "bastet"]),
         current_flags=["Running", "Valid", "Fast", "Stable"],
         observed_bandwidth=1_000_000,
@@ -236,12 +247,14 @@ def _render(tmp_path):
 
 
 def _page_table(relay_dir, fingerprint):
+    """Extract the rendered Per-Authority Details table for a fingerprint."""
     html = (relay_dir / fingerprint / "index.html").read_text()
     start = html.index('id="authority-votes"')
     return html[html.index("<table", start):html.index("</table>", start)]
 
 
 def _rows(table):
+    """Parse tbody rows into (cell_text, headers_attr) tuples."""
     tbody = _section(table, "tbody")
     rows = []
     for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", tbody, flags=re.S):
@@ -255,6 +268,7 @@ def _rows(table):
 
 
 def _ids(table):
+    """Collect the ordered id attributes from the table header cells."""
     thead = _section(table, "thead")
     found = []
     for attrs in re.findall(r"<th\b([^>]*)>", thead):
@@ -267,9 +281,11 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
     """Rendered rows have one cell per header, and deep-link ids land on that column."""
     relay_dir = _render(tmp_path)
 
+    with_v6_html = (relay_dir / RELAY_V6 / "index.html").read_text()
     with_v6 = _page_table(relay_dir, RELAY_V6)
     assert _header_labels(with_v6) == HEADER_ORDER
-    assert "most important on the left" in (relay_dir / RELAY_V6 / "index.html").read_text()
+    assert "most important on the left" in with_v6_html
+    assert "marked <strong>(partial)</strong> unless all voting authorities agree" in with_v6_html
     rows = _rows(with_v6)
     assert rows
     assert all(len(row) == len(HEADER_ORDER) for row in rows)
@@ -292,11 +308,12 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
     assert bastet[running][0] == "No"
     assert bastet[valid][0] == "—"
     flags = next(row for row in rows if "longclaw" in row[0][0])[labels.index("Flags")][0]
-    assert "Exit" in flags and "MiddleOnly" in flags
+    assert "Exit" in flags and "MiddleOnly (partial)" in flags
     assert "al-status-danger" in next(
-        cell for cell in re.findall(r"<td\b[^>]*>(.*?)</td>", 
-            _section(with_v6, "tbody"), flags=re.S)
-        if "MiddleOnly" in cell)
+        cell
+        for cell in re.findall(r"<td\b[^>]*>(.*?)</td>", _section(with_v6, "tbody"), flags=re.S)
+        if "MiddleOnly (partial)" in cell
+    )
 
     v4_only = _page_table(relay_dir, RELAY_V4)
     without_v6 = [label for label in HEADER_ORDER if label != "v6"]
@@ -305,3 +322,12 @@ def test_rendered_pages_keep_header_and_body_aligned(tmp_path):
     assert all(len(row) == len(without_v6) for row in v4_rows)
     assert [header for _text, header in v4_rows[0]] == _ids(v4_only)
     assert _header_labels(v4_only).index("Cons Wt (Authority)") == _header_labels(v4_only).index("v4") + 1
+    v4_moria = next(row for row in v4_rows if "moria1" in row[0][0])
+    v4_flags = v4_moria[without_v6.index("Flags")][0]
+    assert "BadExit" in v4_flags
+    assert "BadExit (partial)" not in v4_flags
+    assert "al-status-danger" in next(
+        cell
+        for cell in re.findall(r"<td\b[^>]*>(.*?)</td>", _section(v4_only, "tbody"), flags=re.S)
+        if "BadExit" in cell
+    )

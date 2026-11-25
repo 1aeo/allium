@@ -1468,7 +1468,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 <p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">
 Each cell shows: <strong>your measured value | authority threshold</strong>. 
 <span class="al-status-success">Green</span> = meets, <span class="al-status-danger">red</span> = below.
-Flags: <span class="al-status-success-bold">green</span> = all authorities agree, <span class="al-status-warning-bold">yellow</span> = partial.
+Flags: <span class="al-status-success-bold">green</span> = all authorities agree, <span class="al-status-warning-bold">yellow</span> = partial, <span class="al-status-danger">red</span> = MiddleOnly/BadExit warning (marked <strong>(partial)</strong> unless all voting authorities agree).
 Columns run from most important on the left to least important on the right. Authority and BW Scan name the voter.
 </p>
 <div style="overflow-x: auto; overflow-y: visible; padding-top: 60px; margin-top: -50px;">
@@ -1522,7 +1522,7 @@ Columns run from most important on the left to least important on the right. Aut
     <td headers="col-flags" style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
             {% for flag_info in vote.flags_with_consensus %}
-                {%- if flag_info.name in ['MiddleOnly', 'BadExit'] %}<span class="al-status-danger">{{ flag_info.name }}</span>
+                {%- if flag_info.name in ['MiddleOnly', 'BadExit'] %}<span class="al-status-danger" title="{% if flag_info.partial %}Warning flag (partial authority agreement){% elif flag_info.unanimous %}Warning flag (all voting authorities agree){% else %}Warning flag{% endif %}">{{ flag_info.name }}{% if flag_info.partial %} (partial){% endif %}</span>
                 {%- elif flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
                 {%- elif flag_info.partial %}<span class="al-status-warning-bold">{{ flag_info.name }}</span>
                 {%- else %}{{ flag_info.name }}{%- endif %}
