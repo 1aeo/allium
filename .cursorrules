@@ -67,7 +67,7 @@ flake8 . --select=E9,F63,F7,F82 --show-source
 
 - Python 3.8+ compatible
 - Jinja2 templates in `allium/templates/`
-- No external dependencies beyond Jinja2 for production code
+- Minimal production dependencies: Jinja2, plus cairocffi, numpy, and optional zlib-ng for PNG charts (config/requirements.txt)
 - Tests use pytest with fixtures in `tests/conftest.py`
 - Follow PEP 8, max line length 127 characters
 
@@ -75,6 +75,8 @@ flake8 . --select=E9,F63,F7,F82 --show-source
 
 - `allium/allium.py` — CLI entry point, argument parsing
 - `allium/lib/coordinator.py` — Orchestrates API fetching (threaded)
+- `allium/lib/workers.py` — Threaded API fetchers, caching, timeouts, and retry logic
 - `allium/lib/site_generator.py` — Page generation definitions and orchestration
+- `allium/lib/page_writer.py` — Jinja2 environment, multiprocessing page writers, and static output
 - `allium/lib/relays.py` — Relay data model and page rendering
 - `compare_outputs.py` — Output comparison tool (repo root)

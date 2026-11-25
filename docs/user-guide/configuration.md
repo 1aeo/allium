@@ -1,78 +1,79 @@
 # Configuration Guide
 
 **Audience**: Users  
-**Scope**: All CLI options and automation
+**Scope**: All CLI options, environment variables, and automation
 
 ## CLI Reference
 
+Run from the repository root (or `cd allium && python3 allium.py [options]`):
+
 ```bash
-cd allium
-python3 allium.py [options]
+python3 allium/allium.py [options]
 ```
 
 ### All Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--out` | `./www` | Output directory |
-| `--base-url` | `""` | Public SEO base URL (e.g., `https://metrics.example.com`). `""` is site-root output. A subdirectory prefix such as `/tor-metrics` is for previews. A bare `/` is rejected |
-| `--display-bandwidth-units` | `bits` | `bits` (Kbit/s) or `bytes` (KB/s) |
-| `-p, --progress` | false | Show progress with memory usage |
-| `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Details API endpoint |
-| `--onionoo-uptime-url` | `https://onionoo.torproject.org/uptime` | Uptime API endpoint |
-| `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Bandwidth API endpoint |
-| `--aroi-url` | `https://aroivalidator.1aeo.com/latest.json` | AROI validator endpoint |
-| `--exit-dns-health-url` | `https://exitdnshealth.1aeo.com/latest.json` | Exit DNS Health endpoint |
-| `--bandwidth-cache-hours` | `12` | Hours to cache bandwidth data |
-| `--apis` | `all` | `details` (~400MB) or `all` (~2.4GB) |
-| `--filter-downtime` | `7` | Filter relays not seen for >N days, even if Onionoo still marks them running (0=disable) |
-| `--workers` | CPU count, minimum 4 | Parallel workers for page generation (0 disables multiprocessing) |
-| `--no-charts` | charts on | Skip the relay and contact history charts (drawn only with `--apis all`) |
-| `--no-pressure-history` | backfill on | Skip the CollecTor pressure-history backfill and use `allium/data/cache/pressure_history.json` |
-| `--no-consensus-evaluation` | evaluation on | Skip CollecTor consensus and server-descriptor fetches and the per-relay consensus evaluation |
-| `--chart-format` | `png` | `png` (needs cairocffi, numpy and the cairo library, see the README's PNG charts section: without them the default writes SVG with a notice naming the install commands, and an explicit `png` stops; DejaVu Sans keeps the chart font) or `svg` |
-| `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
-| `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
-| `--chart-layout` | `beside` | `beside` (next to each relay and contact page) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, to serve them apart from the pages) |
+| `--out` | `./www` | Directory to store rendered files |
+| `--base-url` | `""` | Public base URL for vanity, canonical, Open Graph, and sitemap URLs (`""` = site-root, `/tor-metrics` = subdirectory preview, `https://...` = absolute canonicals plus `robots.txt` and `sitemap.xml`; bare `/` is rejected) |
+| `--display-bandwidth-units` | `bits` | Display bandwidth in `bits` (Kbit/s, Mbit/s, Gbit/s) or `bytes` (KB/s, MB/s, GB/s) |
+| `-p, --progress` | `false` | Show progress updates during execution (with memory usage) |
+| `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Onionoo details API HTTP URL |
+| `--onionoo-uptime-url` | `https://onionoo.torproject.org/uptime` | Onionoo uptime API HTTP URL |
+| `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Onionoo historical bandwidth API HTTP URL |
+| `--aroi-url` | `https://aroivalidator.1aeo.com/latest.json` | AROI validator API HTTP URL |
+| `--exit-dns-health-url` | `https://exitdnshealth.1aeo.com/latest.json` | Exit DNS Health API HTTP URL |
+| `--bandwidth-cache-hours` | `12` | Hours to cache historical bandwidth data before refreshing |
+| `--apis` | `all` | `details` (~400MB memory, details API only) or `all` (~2.4GB memory, all enabled APIs) |
+| `--filter-downtime` | `7` | Filter out relays not seen for >N days, even if Onionoo marks them running (`0` disables) |
+| `--workers` | `max(4, CPU count)` | Parallel workers for page generation (`0` disables multiprocessing) |
+| `--no-charts` | charts on | Skip relay, contact, network, and pressure history charts (charts are drawn only with `--apis all`) |
+| `--no-pressure-history` | backfill on | Skip CollecTor pressure-history backfill and use `allium/data/cache/pressure_history.json` |
+| `--no-consensus-evaluation` | evaluation on | Skip CollecTor consensus and server-descriptor fetches and per-relay consensus evaluation |
+| `--chart-format` | `png` | `png` (shows at Tor Browser's Safest level; falls back to SVG with a notice unless explicitly passed; needs cairocffi, numpy, cairo, and DejaVu Sans) or `svg` (smaller, faster, no extra packages) |
+| `--chart-scale` | `2.0` | PNG chart resolution (`1.0`, `1.5`, or `2.0`; default `2.0` is 2160 px wide) |
+| `--chart-colors` | `64` | PNG chart colors: `64` (fixed palette, ~1/3 file size) or `full` |
+| `--chart-layout` | `beside` | `beside` (writes under `relay/`, `contact/`, `network/`, `pressure/`) or `charts` (writes under `charts/{relay,contact,network,pressure}/`) |
 
-A run's behavior is a flag. `--help` lists them. The process that starts allium sets these variables:
+### Environment Variables
 
 | Variable | Who sets it | What it does |
 |----------|-------------|--------------|
-| `PYTEST_CURRENT_TEST` | pytest | The entrypoint skips the pressure-history download. Tests run `allium.py` and must not backfill the CollecTor archive. |
-| `CI`, `GITHUB_ACTIONS`, `GITLAB_CI` | the CI host | `setup.sh` passes `--apis details`. A worker failure prints a traceback. |
-| `ALLIUM_CI_CACHE_FALLBACK` | the setup end-to-end job | `setup.sh` seeds the fixture API caches and makes one generation attempt. That attempt passes `--no-pressure-history`. Production installs omit it. |
-| `ALLIUM_CI_FIXTURE_DIR` | that same job | Directory of the fixture JSON files. `setup.sh` is downloaded outside the checkout, so the job points it at the files. |
-| `ALLIUM_CI_CACHE_LIB` | that same job | Path to `scripts/ci_cache_fallback.sh`, for the same reason. |
+| `PYTEST_CURRENT_TEST` | `pytest` | Skips the CollecTor pressure-history download during test runs |
+| `CI`, `GITHUB_ACTIONS`, `GITLAB_CI` | CI host | `setup.sh` passes `--apis details`; worker failures print tracebacks |
+| `ALLIUM_CI_CACHE_FALLBACK` | CI setup job | `setup.sh` seeds fixture API caches and runs once with `--no-pressure-history` (production installs omit it) |
+| `ALLIUM_CI_FIXTURE_DIR` | CI setup job | Directory containing CI fixture JSON files when `setup.sh` runs outside the checkout |
+| `ALLIUM_CI_CACHE_LIB` | CI setup job | Path to `scripts/ci_cache_fallback.sh` |
 
 ## Common Profiles
 
 ### Low Memory (~400MB)
 
 ```bash
-python3 allium.py --apis details --workers 2 --progress
+python3 allium/allium.py --apis details --workers 2 --progress
 ```
 
-Disables uptime/bandwidth APIs. Reliability features unavailable.
+Disables uptime, bandwidth, AROI validation, Exit DNS Health, CollecTor fetches, and charts.
 
 ### Full Analytics (~2.4GB)
 
 ```bash
-python3 allium.py --apis all --progress
+python3 allium/allium.py --apis all --progress
 ```
 
-All features enabled including reliability analysis.
+Enables all 7 coordinator API workers, daily pressure history, and history charts. Add `--no-pressure-history` on local runs to skip the initial ~90-minute CollecTor archive backfill.
 
 ### Subdirectory Hosting
 
 ```bash
-python3 allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
+python3 allium/allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
 ```
 
 ### Debug Mode
 
 ```bash
-python3 allium.py --workers 0 --progress
+python3 allium/allium.py --workers 0 --progress
 ```
 
 Disables multiprocessing for easier debugging.
@@ -80,59 +81,36 @@ Disables multiprocessing for easier debugging.
 ### Production (Silent)
 
 ```bash
-python3 allium.py --out /var/www/tor-metrics \
+python3 allium/allium.py --out /var/www/tor-metrics \
   --base-url https://metrics.example.com
 ```
 
-No progress output, suitable for cron. An absolute HTTP(S) base URL enables an
-absolute canonical on every page plus canonical-only `sitemap.xml` output.
-
-## Automated Updates (Cron)
-
-### Every 6 Hours
-
-```bash
-crontab -e
-# Add:
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
-```
-
-### Daily at 3 AM
-
-```bash
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
-```
-
-### Low Memory Cron
-
-```bash
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
-```
-
-### Cron Tips
-
-- Use absolute paths
-- Log output for debugging
-- Don't use `--progress` (creates large logs)
-- Run as non-root user
-- After updating allium, check the next run's log for `⚠️` and `💡` lines: when an optional feature such as PNG charts lacks a package, they name it and the command that installs it for the Python cron runs (they print without `--progress` too)
+No progress output, suitable for cron. An absolute `https://` base URL enables absolute canonical URLs plus `robots.txt` and canonical-only `sitemap.xml` output.
 
 ## Virtual Environment
 
+From the repository root:
+
 ```bash
-cd allium
-sudo apt install python3-venv libcairo2 fonts-dejavu-core  # Debian/Ubuntu: venv support, then PNG charts
+cd /path/to/allium
+sudo apt install python3-venv libcairo2 fonts-dejavu-core  # Debian/Ubuntu: venv, cairo, chart font
 python3 -m venv venv
-source venv/bin/activate
-pip install -r config/requirements.txt
-python3 allium.py --progress
+venv/bin/python3 -m pip install -r config/requirements.txt
+venv/bin/python3 allium/allium.py --progress
 ```
 
-For cron with venv:
+Or run from `allium/` using the repo-root virtualenv (`../venv/bin/python3 allium.py --progress`); avoid mixing `config/requirements.txt` and `allium.py` paths from the wrong directory.
+
+## Automated Updates (Cron)
+
+For production cron jobs, use staged generation and `rsync` so failed runs never overwrite the published site. See [Deployment Guide](deployment.md#automated-updates-cron) for the full staged script.
 
 ```bash
-0 */6 * * * cd /path/to/allium && source venv/bin/activate && python3 allium.py --out /var/www/tor-metrics
+# Every 6 hours using repo-root venv (omit --progress to keep logs compact)
+0 */6 * * * cd /path/to/allium && venv/bin/python3 allium/allium.py --out /var/www/tor-metrics --base-url https://metrics.example.com >> /var/log/allium.log 2>&1
 ```
+
+Check logs after updates for `⚠️` and `💡` lines: when an optional package for PNG charts is missing, Allium prints the exact install command for the Python interpreter running cron.
 
 ## Performance Tuning
 
@@ -140,20 +118,21 @@ For cron with venv:
 |---------|--------|
 | `--apis details` | Reduces memory from ~2.4GB to ~400MB |
 | `--workers 2` | Reduces parallel processing overhead |
-| `--bandwidth-cache-hours 24` | Reduces API fetches |
+| `--bandwidth-cache-hours 24` | Reduces Onionoo bandwidth API fetches |
 | `--filter-downtime 0` | Includes all relays (more pages) |
-| `--no-pressure-history` | Skips the CollecTor archive backfill (about 90 minutes on an empty cache) |
-| `--no-consensus-evaluation` | Skips the CollecTor consensus and descriptor fetches |
+| `--no-charts` | Skips relay, contact, network, and pressure chart generation |
+| `--no-pressure-history` | Skips CollecTor archive backfill (~90 min on an empty cache) |
+| `--no-consensus-evaluation` | Skips CollecTor consensus and descriptor fetches |
 
 ## How to Verify
 
 ```bash
-# Check current CLI options match this doc
+# Verify CLI options match this guide
 python3 allium/allium.py --help
 ```
 
 ## See Also
 
 - [Quick Start](quick-start.md) - First run
-- [Deployment](deployment.md) - Web server setup
+- [Deployment](deployment.md) - Web server setup and staged cron publishing
 - [Troubleshooting](troubleshooting.md) - Common issues

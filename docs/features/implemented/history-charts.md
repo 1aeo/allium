@@ -1,8 +1,14 @@
-# Relay and operator history charts
+# Build-time history charts
 
-Build-time charts on relay and contact pages: throughput over a write/read
-strip for 1M / 6M / 1Y / 5Y, Running-flag uptime for the same periods, and the
-summed throughput of an operator's relays. No JavaScript. `allium/lib/charts/svg.py`
+**Audience**: Contributors
+**Scope**: Build-time PNG/SVG charts across relay, contact, network health, and network pressure pages.
+
+Build-time charts across four page sets for 1M / 6M / 1Y / 5Y with no JavaScript:
+relay throughput (over a write/read strip) and Running-flag uptime, summed
+throughput and operator mean Running-flag uptime on contact pages, whole-network
+throughput and uptime on the Network Health Dashboard, and daily network
+pressure series (overload share, Guard count, HSDir count, and directory bytes
+served) on the Network Pressure page. `allium/lib/charts/svg.py`
 draws each chart as SVG text and records the same drawing calls. Colors and
 type follow the 1aeo.com/blog charts (dark `#1e1e1e` canvas, DejaVu Sans).
 
@@ -26,7 +32,7 @@ Per chart at 2x with 4 workers busy: about 10.5 ms and 53 KB (full color: 10 ms
 and 150 KB), against about 70 ms to rasterize the SVG text with CairoSVG at the
 same size, and about 1 ms and 10 KB for SVG (`--chart-format svg`).
 
-PNGs are cached in `data/cache/charts` under a hash of their drawing calls
+PNGs are cached in `allium/data/cache/charts` under a hash of their drawing calls
 (`Svg.ops`, exactly what cairo replays; the SVG text rounds them to 0.1 px), the
 scale and the colors, and hard-linked next to their page. A chart that did not
 change since the last build is linked, not drawn: most 6M/1Y/5Y charts, and 1M
@@ -62,31 +68,37 @@ fontconfig's `fc-match` is installed to check.
 
 ## Where they are written
 
-- `allium.py` builds one `ChartWriter` (`charts/render.py`) before forking when
-  `/bandwidth` or `/uptime` data is loaded (`--apis all`). It holds the cached
+- `allium/allium.py` builds one `ChartWriter` (`allium/lib/charts/render.py`) before forking when
+  `/bandwidth` or `/uptime` data is loaded (`--apis all`, unless `--no-charts` is set). It holds the cached
   fingerprint maps (`operator_analysis.history_maps`) and the 1M family and
   peer write/read medians, which need every relay.
-- The relay page workers (`_RelayPageRenderer.write`) call
-  `ChartWriter.relay()` and the contact page workers (`_render_contact_variants`)
-  call `ChartWriter.contact()`. The charts land next to the page they belong to,
-  so a page only references charts that were written. They return
-  `{period: height}` (one per chart type) so the page reserves every image's
+- `ChartWriter` produces four chart sets (`allium/lib/charts/render.py` and `allium/lib/site_generator.py`):
+  1. **Relay pages** (`relay/<fp>/` or `charts/relay/<fp>/`): `_RelayPageRenderer.write` (`allium/lib/page_writer.py`) calls `ChartWriter.relay()` to write `bandwidth-<period>` and Running-flag `uptime-<period>`.
+  2. **Contact pages** (`contact/<hash>/` or `charts/contact/<hash>/`): `_render_contact_variants` (`allium/lib/page_writer.py`) calls `ChartWriter.contact()` to write summed `bandwidth-<period>` (`_contact_bandwidth`) and operator mean Running-flag `uptime-<period>` (`_contact_uptime`).
+  3. **Network Health** (`network/` beside `network-health.html`, or `charts/network/`): `generate_site()` (`allium/lib/site_generator.py`) calls `_write_network_history()` -> `ChartWriter.network()`, writing whole-network `bandwidth-<period>` and `uptime-<period>`.
+  4. **Network Pressure** (`pressure/` beside `network-pressure.html`, or `charts/pressure/`): `generate_site()` (`allium/lib/site_generator.py`) calls `_write_pressure_charts()` -> `ChartWriter.pressure()`, fed by `allium/lib/pressure_history.py` and drawn by `allium/lib/charts/pressure.py`, writing daily `overload-<period>`, `guard-<period>`, `hsdir-<period>`, and `directory-<period>` (bytes served).
+- By default (`--chart-layout beside`), charts land next to the page they belong to,
+  so a page only references charts that were written. Each writer returns
+  `{period: height}` maps (per chart type/name) so the page reserves every image's
   box before it loads.
-- `--chart-layout charts` writes the same files to `charts/relay/<fingerprint>/`
-  and `charts/contact/<hash>/` instead (a folder only for a relay or operator
-  with a chart), so a host can serve them apart from the pages. The pages link
+- `--chart-layout charts` writes the same files to `charts/relay/<fingerprint>/`,
+  `charts/contact/<hash>/`, `charts/network/`, and `charts/pressure/` instead (a folder only for a target
+  with charts), so a host can serve them apart from the pages. Pages link
   them relative to their own folder (`../../charts/relay/<fingerprint>/bandwidth-1m.png`,
-  and `../charts/contact/<hash>/...` from a vanity-domain copy), so the site still
+  `../charts/contact/<hash>/...` from a vanity-domain copy, `charts/network/...` from `network-health.html`,
+  and `charts/pressure/...` from `network-pressure.html`), so the site still
   works from a subdirectory or `file://`.
 - The page writer rebuilds `relay/` and `contact/` every run, which drops the
-  charts beside the pages, and `allium.py` removes `charts/relay/` and
-  `charts/contact/` before every build (`clear_chart_tree`; `charts/` goes too
-  unless it holds other files; one it cannot remove stops the build). A build
+  charts beside those pages, and `allium/allium.py` calls `clear_chart_tree()` (`allium/lib/charts/render.py`)
+  before every build to delete `charts/relay/`, `charts/contact/`, `charts/network/`, and `charts/pressure/`
+  (`charts/` goes too unless it holds other files) plus the beside-page `network/` and `pressure/`
+  directories (or stray files at those paths). `clear_chart_tree()` refuses symlinks so deleting cannot
+  reach outside the output tree, and stops the build if a chart directory cannot be removed. A build
   so leaves only its own charts, in its own layout, whichever layout the last
   build used. A host that passes `--chart-layout charts` needs an allium with
   this option and this clear: an older one rejects the option, and leaves
   `charts/` behind after a switch back to `beside`.
-- About 68k charts for the whole network, drawn in those existing workers.
+- About 68k charts for the whole network: relay and contact charts are drawn in the existing forked page workers, while network and pressure charts are drawn in `generate_site()`.
 - A section shows its first period; the thumbnails above it (four across the
   card's width) link to
   `#bandwidth-6m` and so on, and CSS `:target` swaps the chart in place, so no
@@ -96,13 +108,13 @@ fontconfig's `fc-match` is installed to check.
   readers meet the chart first, then its thumbnails). `#1m`/`#6m`/`#1y`/`#5y` switch
   every chart on the page (empty `.chart-period` anchors placed before the
   chart sections, `chart_period_anchors`); a chart without that period keeps
-  its default. These fragments are the deep links. On a relay page they land on
+  its default. On `network-pressure.html`, `chart_history(..., independent=true)` uses CSS radio controls per chart alongside `#1m`/`#6m`/`#1y`/`#5y` so changing one pressure chart keeps the other three's selections, still with zero JavaScript. These fragments are the deep links. On a relay page they land on
   the bandwidth chart card, past the bandwidth details above it: fixed offsets
   for the shortest details measured on every relay page (408 px from 992 px
   wide, 519 px below) put the card near the top, or up to about 280 px lower on
   a narrow phone, never past it. A relay page with only uptime charts does the
   same for the uptime card (366 / 580 px).
-- `--no-charts` skips them.
+- `--no-charts` skips all charts; `--no-pressure-history` skips the CollecTor pressure-history backfill and reads cached `allium/data/cache/pressure_history.json`.
 
 ## Content rules
 
@@ -113,7 +125,8 @@ fontconfig's `fc-match` is installed to check.
   longer than 50 characters, and its relay count: `tor@kllx.eu · 64 relays`;
   relays without a contact, or with `none`, as the contact page treats them, are
   not an operator and get no chart),
-  frozen role bands in `charts/data/role_ratio_bands.json` (`bands.py`; do not
+  frozen role bands in `allium/lib/charts/data/role_ratio_bands.json` and whole-network
+  bands in `allium/lib/charts/data/network_ratio_bands.json` (`bands.py`; do not
   recompute from the live dump).
 - Subtitles state facts about what the panel draws, so they hold by
   construction. Throughput: `Write avg 48 Mbit/s (44% of advertised), peak 170
@@ -180,3 +193,22 @@ fontconfig's `fc-match` is installed to check.
   histories reach the newest day at different times, so the sum stops at the
   newest slot every member still reporting (within two slots) has reached; a
   member no longer running does not hold it back, as its end is a real drop.
+- Contact uptime (`_contact_uptime`) averages members' Running-flag series
+  (`Mean running flag`) and marks the newest `last_restarted` among the
+  contact's relays.
+- Network Health (`ChartWriter.network`) sums whole-network write and read in
+  `Gbit/s` (excluding an incomplete trailing slot via `_without_partial_tail`)
+  against `network_ratio_bands.json`, and plots whole-network mean Running-flag
+  uptime with a lower `Relays counted` panel.
+- Network Pressure (`ChartWriter.pressure`, `allium/lib/charts/pressure.py`,
+  `allium/lib/pressure_history.py`) plots daily `overload_share`, `guard` flag
+  count, `hsdir` flag count, and `directory` bytes served (`Gbit/s` from Tor
+  Metrics `dirwrite`) against frozen May 2025–May 2026 `p10–p90` bands,
+  leaving missing or incomplete days as gaps.
+
+## How to Verify
+
+```bash
+python3 allium/allium.py --help
+pytest tests/unit/charts/
+```

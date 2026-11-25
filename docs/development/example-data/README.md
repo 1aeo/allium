@@ -1,13 +1,16 @@
 # Example Relay Data
 
+**Audience**: Contributors  
+**Scope**: Snapshot fixture data for offline development and testing
+
 This directory contains example and mock data for development and testing.
 
-## 📁 Files
+## Files
 
 ### `1aeo_relays_data.json`
-**Size**: 7.9MB  
-**Type**: Real Onionoo API response (anonymized)  
-**Source**: Snapshot of actual Tor network data
+- **Size**: 7.9MB
+- **Type**: Real Onionoo API response (anonymized)
+- **Source**: Snapshot of actual Tor network data
 
 **Use Cases**:
 - **Unit Testing**: Mock data for tests without network access
@@ -15,32 +18,38 @@ This directory contains example and mock data for development and testing.
 - **Documentation**: Examples of data structure
 - **Performance Testing**: Realistic data set for benchmarking
 
-## 🔧 Usage in Tests
+## Usage in Tests
 
 ```python
 import json
 from pathlib import Path
+from allium.lib.relays import Relays
 
-# Load example data
-example_data_path = Path(__file__).parent.parent / 'docs/development/example-data/1aeo_relays_data.json'
-with open(example_data_path) as f:
+# Load example data from repository root
+example_data_path = Path(__file__).resolve().parents[2] / "docs/development/example-data/1aeo_relays_data.json"
+with open(example_data_path, encoding="utf-8") as f:
     mock_data = json.load(f)
 
-# Use in tests
-def test_relay_processing():
-    relay_set = Relays(output_dir='/tmp/test', relay_data=mock_data)
-    assert len(relay_set.json['relays']) > 0
+
+def test_relay_processing(tmp_path):
+    relay_set = Relays(
+        output_dir=str(tmp_path),
+        onionoo_url="https://onionoo.torproject.org/details",
+        relay_data=mock_data,
+    )
+    assert len(relay_set.json["relays"]) > 0
 ```
 
-## 📊 Data Structure
+## Data Structure
 
 The JSON file contains a complete Onionoo details API response with:
-- **Relays**: Array of relay objects
-- **Bridges**: Array of bridge objects (if any)
-- **Version**: Onionoo API version
-- **RelaysPublished**: Timestamp of data collection
+- **relays**: Array of relay objects
+- **bridges**: Array of bridge objects (if any)
+- **version**: Onionoo API version
+- **relays_published**: Timestamp of data collection
 
 ### Example Relay Object
+
 ```json
 {
   "fingerprint": "...",
@@ -55,14 +64,15 @@ The JSON file contains a complete Onionoo details API response with:
 }
 ```
 
-## ⚠️ Notes
+## Notes
 
 - This data is **anonymized** and safe for public repositories
-- Data may be **outdated** - use for structure/testing only, not production
+- Data is a static snapshot — use for structure and offline tests only, not live network state
 - For **live testing**, use the actual Onionoo API
 - Update this file periodically to reflect current API format
 
----
+## How to Verify
 
-**Last Updated**: 2025-11-23  
-**Data Snapshot Date**: Check file modification date
+```bash
+python3 -c "import json; d = json.load(open('docs/development/example-data/1aeo_relays_data.json')); print(len(d['relays']), d.get('relays_published'))"
+```

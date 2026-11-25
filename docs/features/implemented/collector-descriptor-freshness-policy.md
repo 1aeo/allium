@@ -27,6 +27,7 @@ Thresholds were chosen from observed feed behavior:
 - **fresh**: `source_age <= 2h`
 - **degraded**: `2h < source_age <= 5h`
 - **stale**: `source_age > 5h`
+- **unknown**: `source_age` cannot be parsed
 - **critical stale flag**: `source_age > 12h`
 
 Where `source_age` is computed from the newest descriptor filename timestamp in
@@ -45,6 +46,7 @@ the CollecTor recent listing.
    - keep prior cert/key mappings
    - add newly observed cert/key mappings
    - do not remove prior cert status
+   - `unknown` freshness (when source age cannot be parsed) takes this same upgrade-only / freeze-downgrades path (`allium/lib/workers.py`).
 
 4. **Fresh source** (`<=2h`):
    apply downgrade confirmation before removing cert status.

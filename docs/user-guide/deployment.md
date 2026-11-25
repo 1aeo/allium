@@ -26,11 +26,12 @@ The generator exits non-zero when generation fails, including when the final
 crawl-size guard finds an oversized page. Keep generation and publication as
 separate steps: only synchronize the staging directory after the generator
 returns zero. This leaves the currently published site untouched on failure.
+Omit `--no-pressure-history` in production (use it only for fast local dev runs).
 
 ## Subdirectory Hosting
 
-Use an absolute `--base-url` in production. It is the origin for canonical and
-Open Graph URLs and enables `sitemap.xml` generation:
+Use an absolute `https://` `--base-url` in production. It is the origin for canonical and
+Open Graph URLs and enables `robots.txt` and `sitemap.xml` generation:
 
 ```bash
 python3 allium.py --out /var/www/tor-metrics \
@@ -104,8 +105,8 @@ server {
 3. Set source to the appropriate branch/folder
 
 ```bash
-# Generate for GitHub Pages
-python3 allium.py --out ./docs --base-url "/repository-name" && \
+# Generate for GitHub Pages (from repository root)
+python3 allium/allium.py --out ./docs --base-url "/repository-name" && \
   git add docs/ && \
   git commit -m "Update metrics" && \
   git push
@@ -119,9 +120,11 @@ python3 allium.py --out ./docs --base-url "/repository-name" && \
 2. Set build command: `cd allium && python3 allium.py --out ../public`
 3. Set output directory: `public`
 
+Production search and Cloudflare Workers/Pages deployment tooling lives in the separate `1aeo/allium-deploy` repository.
+
 ### Search Function
 
-Allium generates `search-index.json` for use with Cloudflare Pages Functions:
+Allium generates `search-index.json` (compact schema v1.7) for use with Cloudflare Pages Functions:
 
 1. Create `functions/search.js`:
 
@@ -140,15 +143,16 @@ export async function onRequest(context) {
         });
     }
     
-    // Fetch search index
+    // Fetch search index (compact schema v1.7: r.n = nickname, r.f = fingerprint)
     const indexUrl = new URL('/search-index.json', url.origin);
     const response = await fetch(indexUrl);
     const index = await response.json();
     
     // Search logic
+    const q = query.toLowerCase();
     const results = index.relays.filter(r => 
-        r.nickname.toLowerCase().includes(query.toLowerCase()) ||
-        r.fingerprint.toLowerCase().includes(query.toLowerCase())
+        (r.n && r.n.toLowerCase().includes(q)) ||
+        r.f.toLowerCase().includes(q)
     ).slice(0, 20);
     
     return new Response(JSON.stringify(results), {
@@ -200,6 +204,9 @@ python3 -m http.server 8000 --directory /var/www/tor-metrics
 curl -I http://localhost:8000/
 curl -I http://localhost:8000/top500.html
 curl -I http://localhost:8000/network-health.html
+curl -I http://localhost:8000/network-pressure.html
+curl -I http://localhost:8000/misc/diagnostics.html
+curl -I http://localhost:8000/metrics
 
 # After production deployment, purge stale crawler-discovery cache keys and verify
 curl -fsS https://metrics.example.com/robots.txt
