@@ -82,8 +82,8 @@ python3 allium/allium.py --progress
 # Custom output directory
 python3 allium/allium.py --out /var/www/tor-metrics
 
-# Low memory mode (~400MB instead of ~2.4GB)
-python3 allium/allium.py --apis details
+# Low memory mode (~400MB instead of ~2.4GB, skipping archive backfill)
+python3 allium/allium.py --apis details --no-pressure-history
 
 # All options
 python3 allium/allium.py --help
@@ -96,7 +96,7 @@ python3 allium/allium.py --help
 | "Jinja2 not found" | `sudo apt install python3-jinja2` for Debian/Ubuntu's own python3; in a virtualenv, `pip install -r config/requirements.txt` from the repository root |
 | "Permission denied" | `python3 allium/allium.py --out ~/allium-output` |
 | "No module named 'lib'" | Run `python3 allium/allium.py` from the repository root or `cd allium && python3 allium.py` |
-| Out of memory | `python3 allium/allium.py --apis details` |
+| Out of memory | `python3 allium/allium.py --apis details --no-pressure-history` |
 | "PNG charts need cairocffi, numpy and the cairo library" | Run the `💡` commands printed after it, or add `--chart-format svg` |
 
 ## How to Verify

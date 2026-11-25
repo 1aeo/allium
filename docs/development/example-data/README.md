@@ -22,16 +22,20 @@ This directory contains example and mock data for development and testing.
 
 ```python
 import json
-from pathlib import Path
+import pytest
 from allium.lib.relays import Relays
 
-# Load example data from repository root
-example_data_path = Path(__file__).resolve().parents[2] / "docs/development/example-data/1aeo_relays_data.json"
-with open(example_data_path, encoding="utf-8") as f:
-    mock_data = json.load(f)
+
+@pytest.fixture
+def mock_data(pytestconfig):
+    example_data_path = (
+        pytestconfig.rootpath / "docs/development/example-data/1aeo_relays_data.json"
+    )
+    with open(example_data_path, encoding="utf-8") as f:
+        return json.load(f)
 
 
-def test_relay_processing(tmp_path):
+def test_relay_processing(tmp_path, mock_data):
     relay_set = Relays(
         output_dir=str(tmp_path),
         onionoo_url="https://onionoo.torproject.org/details",

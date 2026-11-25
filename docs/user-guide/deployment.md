@@ -15,6 +15,7 @@ cd allium
   chmod 755 "$staging_dir"  # mktemp makes it 0700, and rsync -a gives the web root its mode
   python3 allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
+  test -s "$staging_dir/index.html" || { echo "No site generated; skipping publish" >&2; exit 1; }
   rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
 )
 
@@ -22,10 +23,7 @@ cd allium
 cd /var/www/tor-metrics && python3 -m http.server 8000
 ```
 
-The generator exits non-zero when generation fails, including when the final
-crawl-size guard finds an oversized page. Keep generation and publication as
-separate steps: only synchronize the staging directory after the generator
-returns zero. This leaves the currently published site untouched on failure.
+The generator exits non-zero on generation errors (including oversized pages above the crawl-size guard), and exits `0` without generating pages when Onionoo details are unavailable (`allium/allium.py`). Keep generation and publication as separate steps and verify both a zero exit status and non-empty `"$staging_dir/index.html"` before running `rsync --delete`, so an empty or failed build leaves the published site untouched.
 Omit `--no-pressure-history` in production (use it only for fast local dev runs).
 
 ## Subdirectory Hosting
@@ -165,9 +163,7 @@ export async function onRequest(context) {
 
 ## Automated Updates (Cron)
 
-Put the staged generation and `rsync` sequence from Quick Deploy in an
-executable `/path/to/deploy-allium.sh`. The script must use `set -e` (or an
-explicit exit-status check) so a generator failure prevents `rsync`.
+Put the staged generation, non-empty `index.html` check, and `rsync` sequence from [Quick Deploy](#quick-deploy) in an executable `/path/to/deploy-allium.sh`. Because `allium.py` exits `0` without writing pages when Onionoo details are unavailable, the script must use `set -e` and verify `test -s "$staging_dir/index.html"` before `rsync --delete`.
 
 ```bash
 # Update every 6 hours
@@ -182,8 +178,8 @@ explicit exit-status check) so a generator failure prevents `rsync`.
 For cron jobs on memory-constrained systems:
 
 ```bash
-# Low memory mode (~400MB): add --apis details to the generator command in
-# deploy-allium.sh, then keep the same failure-gated cron entry.
+# Low memory mode (~400MB): add --apis details --no-pressure-history to the generator command in
+# deploy-allium.sh, then keep the same failure- and index-gated cron entry.
 0 */6 * * * /path/to/deploy-allium.sh
 ```
 

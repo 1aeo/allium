@@ -51,10 +51,10 @@ python3 allium/allium.py [options]
 ### Low Memory (~400MB)
 
 ```bash
-python3 allium/allium.py --apis details --workers 2 --progress
+python3 allium/allium.py --apis details --workers 2 --progress --no-pressure-history
 ```
 
-Disables uptime, bandwidth, AROI validation, Exit DNS Health, CollecTor fetches, and charts.
+Disables uptime, bandwidth, AROI validation, Exit DNS Health, CollecTor consensus/descriptor fetches, charts, and the CollecTor pressure-history download (loads cached pressure history only if present).
 
 ### Full Analytics (~2.4GB)
 
@@ -103,11 +103,11 @@ Or run from `allium/` using the repo-root virtualenv (`../venv/bin/python3 alliu
 
 ## Automated Updates (Cron)
 
-For production cron jobs, use staged generation and `rsync` so failed runs never overwrite the published site. See [Deployment Guide](deployment.md#automated-updates-cron) for the full staged script.
+Production cron jobs must generate into a staging directory, verify `index.html` is non-empty, and `rsync --delete` to the web root only after success — direct-to-docroot runs overwrite or delete live page directories before rebuilding. See [Deployment Guide](deployment.md#automated-updates-cron) for the staged wrapper script.
 
 ```bash
-# Every 6 hours using repo-root venv (omit --progress to keep logs compact)
-0 */6 * * * cd /path/to/allium && venv/bin/python3 allium/allium.py --out /var/www/tor-metrics --base-url https://metrics.example.com >> /var/log/allium.log 2>&1
+# Every 6 hours via staged wrapper script (omit --progress to keep logs compact)
+0 */6 * * * /path/to/deploy-allium.sh >> /var/log/allium.log 2>&1
 ```
 
 Check logs after updates for `⚠️` and `💡` lines: when an optional package for PNG charts is missing, Allium prints the exact install command for the Python interpreter running cron.
