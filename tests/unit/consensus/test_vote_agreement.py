@@ -203,6 +203,40 @@ class TestAgreement:
         assert summary['compared'] == 1
         assert relays[0]['vote_agreement']['agreed'] is True
 
+    def test_missing_count_includes_zero_measured_relays(self):
+        """Relays with zero Measured= values count toward bandwidth missing_count."""
+        relays = [
+            {'fingerprint': FP, 'nickname': 'all-measured'},
+            {'fingerprint': FP_B, 'nickname': 'partial-measured'},
+            {'fingerprint': 'C' * 40, 'nickname': 'zero-measured'},
+        ]
+        index = {
+            FP: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': 100},
+                'moria1': {'flags': FLAGS, 'measured': 120},
+            }},
+            FP_B: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': 80},
+                'moria1': {'flags': FLAGS, 'measured': None},
+            }},
+            'C' * 40: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': None},
+                'moria1': {'flags': FLAGS, 'measured': None},
+            }},
+        }
+        summary = attach_vote_agreement(
+            relays, index, bw_authorities={'bastet', 'moria1'},
+            scanner_authorities={'bastet', 'moria1'},
+        )
+        assert summary['compared'] == 3
+        assert summary['measurement_split'] == 1
+        assert summary['bandwidth']['full_count'] == 1
+        assert summary['bandwidth']['missing_count'] == 2
+        assert summary['bandwidth']['misses'] == [
+            {'name': 'moria1', 'count': 2},
+            {'name': 'bastet', 'count': 1},
+        ]
+
 
 class TestVoteAgreementMacroRendering:
     """Rendered bandwidth-measurement sentences distinguish publishing and silent authorities."""
@@ -258,3 +292,53 @@ class TestVoteAgreementMacroRendering:
         assert "2 of 4 relays have Measured= published in the votes from all 2 of 4 publishing authorities" in text
         assert "No Measured= published in the votes from 2 of 4 authorities" in text
         assert "bastet did not publish Measured= on 2 relays." in text
+
+    def test_dashboard_bandwidth_card_uses_missing_count_including_zeros(self):
+        """Network health Bandwidth measurements card shows missing_count rather than measurement_split."""
+        import re
+        from types import SimpleNamespace
+        from allium.lib import page_writer
+
+        source = page_writer.ENV.loader.get_source(
+            page_writer.ENV, 'network-health-dashboard.html'
+        )[0]
+        start = source.index('    {% if relays.vote_agreement_summary and relays.vote_agreement_summary.compared %}')
+        end = source.index('\n    <!-- FIRST ROW -->', start)
+        snippet = "{% from 'macros.html' import authority_list %}\n" + source[start:end]
+        relays = SimpleNamespace(vote_agreement_summary={
+            'compared': 3, 'agreed': 3, 'split': 0,
+            'measurement_split': 1, 'unmeasured': 2, 'flag_rows': [],
+            'bandwidth': {
+                'full_count': 1, 'missing_count': 2, 'compared': 3,
+                'publishing': ['bastet', 'moria1'],
+                'silent': [], 'scanners': ['bastet', 'moria1'],
+                'misses': [{'name': 'moria1', 'count': 2}, {'name': 'bastet', 'count': 1}],
+            },
+        })
+        html = page_writer.ENV.from_string(snippet).render(
+            relays=relays, page_ctx=SimpleNamespace(path_prefix='')
+        )
+        card = html[html.index('id="bandwidth-agreement"'):]
+        match = re.search(
+            r'<span class="metric-value">([^<]+)<sup[^>]*>.*?Relays missing Measured=',
+            card, re.DOTALL,
+        )
+        assert match and match.group(1) == '2'
+
+        relays_no_field = SimpleNamespace(vote_agreement_summary={
+            'compared': 1, 'agreed': 1, 'split': 0,
+            'measurement_split': 1, 'unmeasured': 1, 'flag_rows': [],
+            'bandwidth': {
+                'full_count': 0, 'compared': 1,
+                'publishing': ['bastet'], 'silent': [], 'scanners': ['bastet'], 'misses': [],
+            },
+        })
+        html_fallback = page_writer.ENV.from_string(snippet).render(
+            relays=relays_no_field, page_ctx=SimpleNamespace(path_prefix='')
+        )
+        card_fallback = html_fallback[html_fallback.index('id="bandwidth-agreement"'):]
+        match_fallback = re.search(
+            r'<span class="metric-value">([^<]+)<sup[^>]*>.*?Relays missing Measured=',
+            card_fallback, re.DOTALL,
+        )
+        assert match_fallback and match_fallback.group(1) == '0'

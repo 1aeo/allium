@@ -60,7 +60,7 @@ Network Health Dashboard
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="A relay is counted here when an authority that publishes Measured= left it off this relay.">
-                    <span class="metric-value">{{ "{:,}".format(vote_sum.measurement_split) }}<sup class="vote-dagger" title="Missing Measured= from an authority that publishes it.">†</sup></span>
+                    <span class="metric-value">{% if bw %}{{ "{:,}".format(bw.missing_count|default(0)) }}{% else %}0{% endif %}<sup class="vote-dagger" title="Missing Measured= from an authority that publishes it.">†</sup></span>
                     <span class="metric-label">Relays missing Measured=</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: 1fr 1fr;">

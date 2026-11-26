@@ -219,10 +219,76 @@ class TestBandwidthFileRows:
         assert 'id="bandwidth-authority-details"' in html
         assert 'Bandwidth Voted Value' in html
         assert 'moria1' in html
+        assert 'href="#vote-moria1"' not in html
         assert 'do not include a per-relay round-trip time' in html
         assert '2026-10-24 05:36:11' in html
         assert 'al-status-success">8 ok' in html
         assert 'al-status-danger">2 stream errors' in html
+
+    def test_scanner_links_require_matching_vote_row_target(self):
+        """Scanner #vote- links appear only when the authority row exists on relay-info."""
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        details = format_scanner_measurements({
+            'scanners': [
+                {'scanner': 'moria1', 'scanner_country': 'US', 'bw': 20},
+                {'scanner': 'longclaw_bw', 'scanner_country': 'CA', 'bw': 30},
+            ],
+        }, use_bits=False)
+        env = Environment(
+            loader=FileSystemLoader('allium/templates'),
+            autoescape=select_autoescape(['html']),
+        )
+        with_target = env.get_template('bandwidth-file.html').render(
+            relay={'bandwidth_file_details': details},
+            vote_row_authorities=['moria1'],
+        )
+        assert '<a href="#vote-moria1">moria1</a>' in with_target
+        assert 'longclaw_bw' in with_target
+        assert 'href="#vote-longclaw_bw"' not in with_target
+
+        relay_template = Path('allium/templates/relay-info.html').read_text(encoding='utf-8')
+        start = relay_template.index('{% if diag and diag.available and diag.authority_table %}')
+        end = relay_template.index('{% endblock -%}', start)
+        section_tmpl = env.from_string(relay_template[start:end])
+
+        row_base = {
+            'voted': True, 'flags': ['Running', 'Valid'], 'is_bw_authority': True,
+            'ipv4_reachable': True, 'ipv6_cell': 'none', 'flags_with_consensus': [],
+            'flags_display': 'Running, Valid', 'fast_threshold_display': '',
+            'guard_bw_guarantee_display': '', 'wfu': None, 'tk': None,
+            'stable_threshold': None, 'stable_mtbf': None, 'stable_uptime_threshold': None,
+            'stable_uptime': None, 'has_staledesc': False, 'descriptor_published': 'N/A',
+            'measured': None,
+        }
+        diag = {
+            'available': True,
+            'reachability_summary': None,
+            'authority_table': [dict(row_base, authority='moria1')],
+        }
+        rendered_with_diag = section_tmpl.render(
+            diag=diag,
+            relays=SimpleNamespace(collector_fetched_at=None),
+            relay={'bandwidth_file_details': details},
+            authority_page_fps={},
+            page_ctx=SimpleNamespace(path_prefix='../../'),
+        )
+        assert 'id="vote-moria1"' in rendered_with_diag
+        assert 'href="#vote-moria1"' in rendered_with_diag
+        assert 'longclaw_bw' in rendered_with_diag
+        assert 'href="#vote-longclaw_bw"' not in rendered_with_diag
+
+        rendered_without_diag = section_tmpl.render(
+            diag=None,
+            relays=SimpleNamespace(collector_fetched_at=None),
+            relay={'bandwidth_file_details': details},
+            authority_page_fps={},
+            page_ctx=SimpleNamespace(path_prefix='../../'),
+        )
+        assert 'id="bandwidth-authority-details"' in rendered_without_diag
+        assert 'href="#vote-moria1"' not in rendered_without_diag
+        assert 'href="#vote-longclaw_bw"' not in rendered_without_diag
 
     def test_values_within_twice_the_median_agree(self):
         assert _column_tones([100, 200, None]) == ['agree', 'agree', 'unknown']

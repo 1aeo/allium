@@ -1448,6 +1448,7 @@ Platform: unknown
 {% if diag and diag.available and diag.authority_table %}
 
 {% set has_ipv6 = diag.reachability_summary.ipv6.show_ipv6 if diag.reachability_summary else false %}
+{% set vote_row_authorities = diag.authority_table | selectattr('authority') | map(attribute='authority') | map('lower') | list %}
 
 <section class="section-box relay-section">
 <h3 id="consensus-evaluation">

@@ -32,8 +32,9 @@ Successful stream counts are green and stream errors are red.
 </thead>
 <tbody>
 {% for row in relay.bandwidth_file_details.rows %}
+{% set scanner_key = (row.scanner or '')|lower %}
 <tr>
-    <td title="Bandwidth file created {{ row.file_created }}. Scanner country {{ row.country }}."><a href="#vote-{{ row.scanner|lower }}">{{ row.scanner }}</a>{% if row.country %} <span class="al-text-small-muted">({{ row.country }})</span>{% endif %}</td>
+    <td title="Bandwidth file created {{ row.file_created }}. Scanner country {{ row.country }}.">{% if vote_row_authorities is defined and scanner_key and scanner_key in vote_row_authorities %}<a href="#vote-{{ scanner_key }}">{{ row.scanner }}</a>{% else %}{{ row.scanner }}{% endif %}{% if row.country %} <span class="al-text-small-muted">({{ row.country }})</span>{% endif %}</td>
     <td><span class="{% if row.bw_tone == 'agree' %}al-status-success{% elif row.bw_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.bw_display }}</span></td>
     <td><span class="{% if row.mean_tone == 'agree' %}al-status-success{% elif row.mean_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.mean_display }}</span></td>
     <td><span class="{% if row.median_tone == 'agree' %}al-status-success{% elif row.median_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.median_display }}</span></td>

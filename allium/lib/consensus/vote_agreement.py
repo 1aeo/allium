@@ -191,16 +191,19 @@ def _bandwidth_summary(pairs, compared, measurement_authorities):
         scanners = list(publishing)
     misses = Counter()
     full = 0
+    missing_relays = 0
     if publishing:
         for _relay, info in pairs:
             measured = set(info.get('measured_by') or ())
             missing = [name for name in publishing if name not in measured]
             if missing:
+                missing_relays += 1
                 misses.update(missing)
             else:
                 full += 1
     return {
         'full_count': full,
+        'missing_count': missing_relays,
         'compared': compared,
         'publishing': publishing,
         'silent': silent,
