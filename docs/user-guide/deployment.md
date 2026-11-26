@@ -7,13 +7,13 @@
 
 ```bash
 # Generate into staging, then publish only after a successful exit.
-cd allium
+cd /path/to/allium
 (
   set -eu
-  staging_dir="$(mkdir -p data && mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
+  staging_dir="$(mkdir -p allium/data && mktemp -d -p "$PWD/allium/data")"  # beside allium/data/cache: PNG charts are linked, not copied
   trap 'rm -rf -- "$staging_dir"' EXIT
   chmod 755 "$staging_dir"  # mktemp makes it 0700, and rsync -a gives the web root its mode
-  python3 allium.py --out "$staging_dir" \
+  python3 allium/allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
   test -s "$staging_dir/index.html" || { echo "No site generated; skipping publish" >&2; exit 1; }
   rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
@@ -163,7 +163,7 @@ export async function onRequest(context) {
 
 ## Automated Updates (Cron)
 
-Put the staged generation, non-empty `index.html` check, and `rsync` sequence from [Quick Deploy](#quick-deploy) in an executable `/path/to/deploy-allium.sh`. Because `allium.py` exits `0` without writing pages when Onionoo details are unavailable, the script must use `set -e` and verify `test -s "$staging_dir/index.html"` before `rsync --delete`.
+Put `cd /path/to/allium` (your absolute checkout path) followed by the staged generation, non-empty `index.html` check, and `rsync` sequence from [Quick Deploy](#quick-deploy) in an executable `/path/to/deploy-allium.sh` so `allium/allium.py` and `allium/data` resolve regardless of cron's working directory. Because `allium/allium.py` exits `0` without writing pages when Onionoo details are unavailable, the script must keep `set -eu` and verify `test -s "$staging_dir/index.html"` before `rsync --delete`.
 
 ```bash
 # Update every 6 hours

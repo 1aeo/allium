@@ -60,7 +60,7 @@ cd www && python3 -m http.server 8000
 | Generate full site (with backfill) | `python3 allium/allium.py --progress` |
 | Serve output | `cd www && python3 -m http.server 8000` |
 | Custom output dir | `python3 allium/allium.py --out /path/to/site` |
-| Minimal memory mode | `python3 allium/allium.py --apis details --progress --no-pressure-history` |
+| Minimal memory mode | `python3 allium/allium.py --apis details --out ./www-minimal --progress --no-pressure-history` |
 
 ### Resource Notes
 
@@ -140,8 +140,8 @@ python3 allium/allium.py --out www_baseline --apis all --progress --no-pressure-
 # Custom output directory with production base URL and bytes units
 python3 allium/allium.py --out /var/www/tor-metrics --base-url https://metrics.example.com --display-bandwidth-units bytes
 
-# Minimal memory mode (~400MB instead of ~2.4GB, skipping archive backfill)
-python3 allium/allium.py --apis details --progress --no-pressure-history
+# Minimal memory mode (~400MB instead of ~2.4GB; omits uptime, bandwidth, AROI validation, Exit DNS Health, CollecTor consensus/descriptors, and history charts — uses a separate --out directory so it doesn't overwrite ./www)
+python3 allium/allium.py --apis details --out ./www-minimal --progress --no-pressure-history
 ```
 
 See the **[Configuration Guide](docs/user-guide/configuration.md)** for all 20 CLI flags and environment variables (or run `python3 allium/allium.py --help`).
