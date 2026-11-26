@@ -333,6 +333,81 @@ echo "kept-failure"
     assert not (tmp_path / "site" / "index.html").exists()
 
 
+def test_pressure_flag_is_passed_only_when_allium_accepts_it(tmp_path):
+    """setup.sh runs the default branch, which rejects a flag it does not have."""
+    fake = tmp_path / "fake_allium.py"
+    fake.write_text(
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "log = Path(os.environ['ARGV_LOG'])\n"
+        "with log.open('a', encoding='utf-8') as handle:\n"
+        "    handle.write(' '.join(sys.argv) + '\\n')\n"
+        "if '--help' in sys.argv:\n"
+        "    sys.stdout.write('usage\\n')\n"
+        "    if os.environ.get('ACCEPT_PRESSURE_FLAG') == '1':\n"
+        "        sys.stdout.write('--no-pressure-history\\n')\n"
+        "    raise SystemExit(0)\n"
+        "if '--no-pressure-history' in sys.argv and os.environ.get('ACCEPT_PRESSURE_FLAG') != '1':\n"
+        "    sys.stderr.write('unrecognized arguments: --no-pressure-history\\n')\n"
+        "    raise SystemExit(2)\n"
+        "out = sys.argv[sys.argv.index('--out') + 1]\n"
+        "Path(out).mkdir(parents=True, exist_ok=True)\n"
+        "Path(out, 'index.html').write_text('<html></html>\\n')\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    script = """
+set -e
+source "%s"
+export API_MODE="--apis details"
+export ARGV_LOG="%s"
+export ACCEPT_PRESSURE_FLAG="%s"
+out="%s/site"
+: > "$ARGV_LOG"
+ci_generate_once "$out" "%s"
+"""
+    for accept, present in (("0", False), ("1", True)):
+        log = tmp_path / ("argv-%s.txt" % accept)
+        completed = _bash(
+            script % (HELPER, log, accept, tmp_path, fake),
+            tmp_path,
+            _env(),
+        )
+        assert completed.returncode == 0, completed.stderr + completed.stdout
+        generation = [line for line in log.read_text(encoding="utf-8").splitlines() if "--out" in line]
+        assert generation, log.read_text(encoding="utf-8")
+        assert ("--no-pressure-history" in generation[-1].split()) is present
+
+
+def test_a_known_pressure_flag_is_not_probed_again(tmp_path):
+    """generate_from_ci_fixtures reuses a flag its caller already resolved."""
+    log = tmp_path / "argv.txt"
+    fake = tmp_path / "fake_allium.py"
+    fake.write_text(
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "Path(os.environ['ARGV_LOG']).open('a').write(' '.join(sys.argv) + '\\n')\n"
+        "if '--help' in sys.argv:\n"
+        "    raise SystemExit(0)\n"
+        "out = sys.argv[sys.argv.index('--out') + 1]\n"
+        "Path(out).mkdir(parents=True, exist_ok=True)\n"
+        "Path(out, 'index.html').write_text('<html></html>\\n')\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    script = """
+set -e
+source "%s"
+export ARGV_LOG="%s"
+generate_from_ci_fixtures "%s/site" "%s" "--apis details" ""
+""" % (HELPER, log, tmp_path, fake)
+    completed = _bash(script, tmp_path, _env())
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    recorded = log.read_text(encoding="utf-8")
+    assert "--help" not in recorded
+    assert "--out" in recorded
+
+
 def test_fixture_http_fallback_generates_index_html(tmp_path):
     """Exit 0 and no page: serve the fixtures once. This is the setup job's details run."""
     out = tmp_path / "www"
@@ -384,6 +459,10 @@ def test_setup_job_keeps_the_hang_backstop_and_opts_into_every_cache():
     assert "ALLIUM_CI_DETAILS_FALLBACK" not in workflow
     assert "seed_ci_api_caches" in setup
     assert "ci_generate_once" in setup
+    helper_text = HELPER.read_text(encoding="utf-8")
+    assert "_no_pressure_history_arg" in helper_text
+    assert helper_text.count('python3 "$allium_py" --progress ${pressure_arg:+$pressure_arg} "$@"') == 1
+    assert 'generate_from_ci_fixtures "$out" "$allium_py" "$mode" "$pressure_arg"' in helper_text
     assert "generate_from_ci_onionoo_fixture" not in setup
     assert 'echo "❌ Setup script exited with code $setup_exit_code"' in workflow
     assert "exit 1" in workflow[workflow.find("Setup script exited"):workflow.find("Setup script exited") + 200]

@@ -22,15 +22,28 @@ python3 allium.py [options]
 | `--onionoo-uptime-url` | `https://onionoo.torproject.org/uptime` | Uptime API endpoint |
 | `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Bandwidth API endpoint |
 | `--aroi-url` | `https://aroivalidator.1aeo.com/latest.json` | AROI validator endpoint |
+| `--exit-dns-health-url` | `https://exitdnshealth.1aeo.com/latest.json` | Exit DNS Health endpoint |
 | `--bandwidth-cache-hours` | `12` | Hours to cache bandwidth data |
 | `--apis` | `all` | `details` (~400MB) or `all` (~2.4GB) |
 | `--filter-downtime` | `7` | Filter relays not seen for >N days, even if Onionoo still marks them running (0=disable) |
-| `--workers` | `4` | Parallel workers (0=disable multiprocessing) |
+| `--workers` | CPU count, minimum 4 | Parallel workers for page generation (0 disables multiprocessing) |
 | `--no-charts` | charts on | Skip the relay and contact history charts (drawn only with `--apis all`) |
+| `--no-pressure-history` | backfill on | Skip the CollecTor pressure-history backfill and use `allium/data/cache/pressure_history.json` |
+| `--no-consensus-evaluation` | evaluation on | Skip CollecTor consensus and server-descriptor fetches and the per-relay consensus evaluation |
 | `--chart-format` | `png` | `png` (needs cairocffi, numpy and the cairo library, see the README's PNG charts section: without them the default writes SVG with a notice naming the install commands, and an explicit `png` stops; DejaVu Sans keeps the chart font) or `svg` |
 | `--chart-scale` | `2` | PNG resolution: `2`, `1.5` or `1` |
 | `--chart-colors` | `64` | PNG colors: `64` (fixed palette, about a third the size) or `full` |
 | `--chart-layout` | `beside` | `beside` (next to each relay and contact page) or `charts` (`charts/relay/<fingerprint>/` and `charts/contact/<hash>/`, to serve them apart from the pages) |
+
+A run's behavior is a flag. `--help` lists them. The process that starts allium sets these variables:
+
+| Variable | Who sets it | What it does |
+|----------|-------------|--------------|
+| `PYTEST_CURRENT_TEST` | pytest | The entrypoint skips the pressure-history download. Tests run `allium.py` and must not backfill the CollecTor archive. |
+| `CI`, `GITHUB_ACTIONS`, `GITLAB_CI` | the CI host | `setup.sh` passes `--apis details`. A worker failure prints a traceback. |
+| `ALLIUM_CI_CACHE_FALLBACK` | the setup end-to-end job | `setup.sh` seeds the fixture API caches and makes one generation attempt. That attempt passes `--no-pressure-history`. Production installs omit it. |
+| `ALLIUM_CI_FIXTURE_DIR` | that same job | Directory of the fixture JSON files. `setup.sh` is downloaded outside the checkout, so the job points it at the files. |
+| `ALLIUM_CI_CACHE_LIB` | that same job | Path to `scripts/ci_cache_fallback.sh`, for the same reason. |
 
 ## Common Profiles
 
@@ -129,6 +142,8 @@ For cron with venv:
 | `--workers 2` | Reduces parallel processing overhead |
 | `--bandwidth-cache-hours 24` | Reduces API fetches |
 | `--filter-downtime 0` | Includes all relays (more pages) |
+| `--no-pressure-history` | Skips the CollecTor archive backfill (about 90 minutes on an empty cache) |
+| `--no-consensus-evaluation` | Skips the CollecTor consensus and descriptor fetches |
 
 ## How to Verify
 
