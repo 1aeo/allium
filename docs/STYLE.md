@@ -29,7 +29,7 @@ Every doc should include:
 
 ### Do
 
-- Present tense: "Allium generates 18 AROI leaderboards"
+- Present tense: "Allium generates 21 AROI leaderboards"
 - Action-first: "Run `pytest` to execute tests"
 - Specific numbers: "Uses ~2.4GB memory with `--apis all`"
 - Code references: "See `lib/aroileaders.py`"
@@ -50,8 +50,8 @@ instructions into commands.
 For AROI v3 error categories, the pasteable string lives in
 `V3_CATEGORY_LABELS[<category>]['example']` in
 `allium/lib/aroi_validation.py`. When upstream `aroivalidator` adds a
-new `error_category`, A.8 logs a one-time warning so we know to add a
-new entry.
+new `error_category`, `allium/lib/aroi_validation.py` logs a one-time
+warning so we know to add a new entry.
 
 ### Don't
 
@@ -69,7 +69,9 @@ new entry.
 | `reference/` | Technical specifications |
 | `architecture/` | System design |
 | `development/` | Contributor workflows |
+| `features/implemented/` | Behavior specs for shipped features |
 | `features/planned/` | Future work proposals |
+| `prometheus/` | Prometheus metrics schema, alerts, and dashboards |
 
 ## Review Checklist
 

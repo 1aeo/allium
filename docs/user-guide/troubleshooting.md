@@ -37,10 +37,12 @@ python3 --version  # Check current version
 ModuleNotFoundError: No module named 'lib'
 ```
 
-**Solution**: Run from the correct directory:
+**Solution**: Invoke `allium.py` directly so `allium/` is on Python's module path (either from the repository root or from `allium/`):
 ```bash
-cd allium  # Must be in the allium/ subdirectory
-python3 allium.py --progress
+# From the repository root:
+python3 allium/allium.py --progress
+# Or from allium/:
+cd allium && python3 allium.py --progress
 ```
 
 ### "PNG charts need cairocffi, numpy and the cairo library"
@@ -63,7 +65,7 @@ venv/bin/python3 -m pip install -r config/requirements.txt
 sudo apt install libcairo2 fonts-dejavu-core   # Fedora: sudo dnf install cairo dejavu-sans-fonts
 ```
 
-To keep SVG charts without the notice, run `python3 allium.py --chart-format svg`; `python3 allium.py --no-charts`
+To keep SVG charts without the notice, run `python3 allium/allium.py --chart-format svg`; `python3 allium/allium.py --no-charts`
 builds without charts.
 
 ## Permission Issues
@@ -76,7 +78,7 @@ builds without charts.
 
 **Solution**: Use a different output directory:
 ```bash
-python3 allium.py --out ~/allium-output --progress
+python3 allium/allium.py --out ~/allium-output --progress
 # or fix permissions
 chmod 755 /path/to/parent/directory
 ```
@@ -97,12 +99,12 @@ Process killed during generation, typically with `--apis all`.
 
 **Solution 1**: Use details-only mode:
 ```bash
-python3 allium.py --apis details --progress  # ~400MB instead of ~2.4GB
+python3 allium/allium.py --apis details --progress  # ~400MB instead of ~2.4GB
 ```
 
 **Solution 2**: Reduce parallel workers:
 ```bash
-python3 allium.py --workers 2 --progress  # Default is 4
+python3 allium/allium.py --workers 2 --progress  # Default is max(4, CPU count)
 ```
 
 **Solution 3**: Add swap space:
@@ -117,7 +119,7 @@ sudo swapon /swapfile
 
 ```bash
 # Watch memory during generation
-python3 allium.py --progress  # Shows memory usage
+python3 allium/allium.py --progress  # Shows memory usage
 # or
 watch -n 1 free -h
 ```
@@ -141,7 +143,7 @@ watch -n 1 free -h
 curl -I https://onionoo.torproject.org/details
 
 # Retry - API may be temporarily slow
-python3 allium.py --progress
+python3 allium/allium.py --progress
 
 # Check for proxy requirements
 export HTTP_PROXY=http://proxy:port
@@ -151,35 +153,37 @@ export HTTPS_PROXY=http://proxy:port
 ### "No onionoo data available"
 
 ```
-⚠️ No onionoo data available
+⚠️  No onionoo data available - this might be due to network issues or the service being temporarily unavailable
 ```
 
-This is often temporary. The generator exits gracefully (exit code 0) in CI environments.
+This is often temporary. The generator exits gracefully (exit code 0) when Onionoo details data is unavailable.
 
 **Solution**: Wait and retry:
 ```bash
-sleep 60 && python3 allium.py --progress
+sleep 60 && python3 allium/allium.py --progress
 ```
 
 ## Generation Issues
 
 ### "Generation takes too long"
 
-Normal generation time: 2-5 minutes with `--apis all`, 1-2 minutes with `--apis details`.
+Steady-state generation takes 2–5 minutes with `--apis all` (1–2 minutes with `--apis details`). On the very first run with an empty cache, the CollecTor server-descriptor backfill for Network Pressure (`allium/lib/pressure_history.py`) downloads monthly archives and takes ~90 minutes; subsequent runs refresh incrementally.
 
 **If longer**:
-1. Check internet connection speed
-2. Reduce workers: `--workers 2`
-3. Use details-only: `--apis details`
+1. For fast local runs on an empty cache, skip the backfill: `--no-pressure-history`
+2. Check internet connection speed
+3. Reduce workers: `--workers 2`
+4. Use details-only: `--apis details`
+5. Use SVG or disable charts if PNG rasterization is slow on low-CPU hosts: `--chart-format svg` or `--no-charts`
 
-### "Static files already exist, skipping copy"
+### Static files not updating
 
-This is normal behavior, not an error. Static files are only copied once.
+`_sync_static_files` syncs new or modified static files incrementally on every run (`Static files: <copied> updated, <skipped> unchanged`). Unchanged files are skipped by size, mtime, and byte comparison (`filecmp.cmp`).
 
-**To force refresh**:
+**To force a clean static copy**:
 ```bash
 rm -rf www/static
-python3 allium.py --progress
+python3 allium/allium.py --progress --no-pressure-history
 ```
 
 ### "Some pages missing"
@@ -188,7 +192,7 @@ If relay or contact pages are missing:
 
 1. Check if relays are filtered by downtime:
    ```bash
-   python3 allium.py --filter-downtime 0  # Disable filtering
+   python3 allium/allium.py --filter-downtime 0  # Disable filtering
    ```
 
 2. Verify the relay exists in current Onionoo data
@@ -204,12 +208,12 @@ If relay or contact pages are missing:
 
 **Fix for subdirectory hosting**:
 ```bash
-python3 allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
+python3 allium/allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
 ```
 
 ### "Search doesn't work"
 
-Search requires `search-index.json` and server-side function (Cloudflare Pages).
+Search requires `search-index.json` and the server-side function (Cloudflare Pages, deployed via `1aeo/allium-deploy`).
 
 **Verify search index exists**:
 ```bash
@@ -218,14 +222,21 @@ ls -la www/search-index.json
 
 ## Debug Mode
 
-For detailed debugging:
+For detailed debugging (use `--workers 0` to disable multiprocessing):
 
 ```bash
-# Verbose output
-python3 allium.py --progress 2>&1 | tee allium.log
+# Verbose single-process output
+python3 allium/allium.py --workers 0 --progress --no-pressure-history 2>&1 | tee allium.log
 
 # Check specific API
 curl -v https://onionoo.torproject.org/details | head -100
+```
+
+## How to Verify
+
+```bash
+# Run unit tests for optional PNG dependencies and CLI smoke checks
+pytest tests/unit/test_optional_deps.py
 ```
 
 ## Getting Help
