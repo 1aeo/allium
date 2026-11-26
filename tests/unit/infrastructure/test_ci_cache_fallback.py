@@ -147,6 +147,8 @@ def test_fresh_cache_short_circuit_does_not_hit_the_network(api_name, fetch, tmp
         cache.save_cache(api_name, document)
         if api_name == "onionoo_bandwidth":
             result = fetch("https://example.invalid/bandwidth", 12, progress_logger=None)
+        elif api_name == "tls_pqc":
+            result = fetch(document["index_url"], progress_logger=None)
         else:
             result = fetch("https://example.invalid/%s" % api_name, progress_logger=None)
     assert result == document

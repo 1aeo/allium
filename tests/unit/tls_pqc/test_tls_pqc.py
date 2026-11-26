@@ -1,6 +1,10 @@
 """Margot TLS scan parsing and PQC display. Fixtures only; no live Tor probe."""
 
+import io
 import os
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +24,7 @@ from allium.lib.tls_pqc import (
     STATUS_OTHER,
     STATUS_SAW,
     attach_tls_pqc_to_relays,
+    is_safe_scan_url,
     latest_scan_url,
     load_tls_pqc_scan,
     parse_csv_scan,
@@ -43,10 +48,12 @@ SCAN_URL = "https://ahf.me/tor-tls-pqc/2026-06-18/"
 
 
 def _read(name):
+    """Read a TLS PQC fixture file as UTF-8 text."""
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
 def _health(relays, document):
+    """Build network health metrics with an attached TLS PQC document."""
     relay_set = Relays(
         output_dir="/tmp/tls-pqc-test",
         onionoo_url="https://onionoo.example.invalid/details",
@@ -59,6 +66,7 @@ def _health(relays, document):
 
 
 def _relay(fingerprint, nickname, flags, weight, version="0.4.8.17"):
+    """Construct a minimal Onionoo relay fixture dictionary."""
     return {
         "nickname": nickname,
         "fingerprint": fingerprint,
@@ -83,6 +91,7 @@ def _relay(fingerprint, nickname, flags, weight, version="0.4.8.17"):
 
 
 def test_html_fixture_matches_the_published_table():
+    """HTML fixture parsing extracts groups, ciphers, and duplicate precedence."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
     assert validate_tls_pqc_document(document)
     assert document["artifact"] == "html"
@@ -105,6 +114,7 @@ def test_html_fixture_matches_the_published_table():
 
 
 def test_csv_fixture_is_the_margot_scanner_file():
+    """CSV fixture parsing preserves connected flags and semicolon columns."""
     document = parse_csv_scan(_read("cipher_suites.csv"), SCAN_URL + "cipher_suites.csv")
     assert document["artifact"] == "csv"
     assert document["scan_time"] == "2026-06-18"
@@ -121,11 +131,13 @@ def test_csv_fixture_is_the_margot_scanner_file():
 
 
 def test_index_selects_the_newest_dated_scan_and_skips_other_pages():
+    """Index parser selects the newest dated scan link."""
     latest = latest_scan_url(_read("index.html"), INDEX)
     assert latest == SCAN_URL
 
 
 def test_index_ignores_impossible_dates_off_host_links_and_http_downgrades():
+    """Index parser rejects impossible dates, cross-host links, and downgrades."""
     html = """
     <a href="/tor-tls-pqc/2026-02-26/">real</a>
     <a href="/tor-tls-pqc/2026-99-99/">impossible</a>
@@ -138,6 +150,7 @@ def test_index_ignores_impossible_dates_off_host_links_and_http_downgrades():
 
 
 def test_script_rows_and_a_preamble_do_not_invent_relays():
+    """Script tags inside tables do not inject relay rows."""
     fake = "C" * 40
     html = """
     <table id="tor_pqc_tls_table"><tr><td colspan="4">note</td></tr>
@@ -152,6 +165,7 @@ def test_script_rows_and_a_preamble_do_not_invent_relays():
 
 
 def test_index_then_html_and_a_direct_csv_both_parse():
+    """load_tls_pqc_scan handles both index traversal and direct CSV payloads."""
     pages = {
         INDEX: _read("index.html").encode("utf-8"),
         SCAN_URL: _read("scan.html").encode("utf-8"),
@@ -178,6 +192,7 @@ def test_index_then_html_and_a_direct_csv_both_parse():
 
 
 def test_unrecognized_payload_is_rejected_and_an_index_without_dates_is_too():
+    """Unrecognized payloads and dateless index HTML raise ValueError."""
     with pytest.raises(ValueError):
         parse_scan_payload(b'{"relays": []}', INDEX)
     with pytest.raises(ValueError):
@@ -185,6 +200,7 @@ def test_unrecognized_payload_is_rejected_and_an_index_without_dates_is_too():
 
 
 def test_missing_fingerprint_is_not_in_this_scan_and_version_is_ignored():
+    """Relay status attachment, health counts, and authority denominators work."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
     relays = [
         _relay(SAW, "lisdex", ["Guard", "Running"], 100, version="0.4.7.7"),
@@ -233,6 +249,7 @@ def test_missing_fingerprint_is_not_in_this_scan_and_version_is_ignored():
 
 
 def test_operator_summary_separates_other_groups_from_absence():
+    """Contact intelligence groups PQC-ready, other-group, and absent relays."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
     members = [
         _relay(SAW, "lisdex", ["Guard"], 80),
@@ -267,6 +284,7 @@ def test_operator_summary_separates_other_groups_from_absence():
 
 
 def test_dashboard_template_does_not_hardcode_directory_authority_counts():
+    """Dashboard template reads dynamic authority counts rather than constants."""
     text = (REPO / "allium" / "templates" / "network-health-dashboard.html").read_text(encoding="utf-8")
     start = text.index('id="tls-pqc"')
     card = text[start:text.index("FOURTH ROW", start)]
@@ -283,6 +301,7 @@ def test_dashboard_template_does_not_hardcode_directory_authority_counts():
 
 
 def test_fresh_cache_skips_the_network_and_a_timeout_uses_the_cache():
+    """Fresh cache avoids network fetches, and timeout falls back to stale cache."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
     workers._save_cache("tls_pqc", document)
     with patch.object(workers, "_fetch_url_with_total_timeout",
@@ -303,6 +322,7 @@ def test_fresh_cache_skips_the_network_and_a_timeout_uses_the_cache():
 
 
 def test_pages_show_the_scan_result_and_absence(tmp_path):
+    """Rendered dashboard, relay, and contact pages include PQC scan summaries."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
     details = {
         "version": "8.0",
@@ -369,3 +389,168 @@ def test_pages_show_the_scan_result_and_absence(tmp_path):
     assert "not in this scan" in operator
     assert "oldtls" in operator
     assert "X25519" in operator
+
+
+def test_html_table_collector_handles_omitted_cell_row_and_table_end_tags():
+    """Implied </td>, </tr>, and </table> omissions still parse all rows."""
+    html = (
+        '<table id="tor_pqc_tls_table">'
+        "<tr><th>Nickname<th>Fingerprint<th>Cipher Suite<th>Group"
+        "<tr><td>alpha<td>%s<td>TLS13_AES_256_GCM_SHA384<td>X25519MLKEM768"
+        "<tr><td>beta<td>%s<td>TLS13_AES_128_GCM_SHA256<td>X25519"
+    ) % (SAW, OTHER)
+    document = parse_html_scan(html, SCAN_URL)
+    assert document is not None
+    assert document["relays"][SAW]["key_exchange_group"] == PQC_GROUP
+    assert document["relays"][OTHER]["key_exchange_group"] == "X25519"
+
+
+def test_csv_parser_skips_leading_blank_rows_before_header():
+    """Leading blank rows before the CSV header do not break parsing."""
+    csv_text = (
+        "\n   \n\n"
+        "nickname;rsa_id;connected;cipher_suite;key_exchange_group\n"
+        f"lisdex;{SAW};true;TLS13_AES_256_GCM_SHA384;{PQC_GROUP}\n"
+    )
+    document = parse_scan_payload(csv_text, SCAN_URL + "cipher_suites.csv")
+    assert document["artifact"] == "csv"
+    assert document["relays"][SAW]["key_exchange_group"] == PQC_GROUP
+
+
+def test_is_safe_scan_url_and_latest_scan_url_pin_origin_and_reject_userinfo():
+    """URL guard blocks userinfo, non-HTTP schemes, cross-host, port changes, and downgrades."""
+    assert is_safe_scan_url("https://ahf.me/tor-tls-pqc/2026-06-18/", INDEX)
+    assert is_safe_scan_url("https://ahf.me/tor-tls-pqc/2026-06-18/", "http://ahf.me/tor-tls-pqc/")
+    assert not is_safe_scan_url("http://ahf.me/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("https://user@ahf.me/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("https://@ahf.me/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("https://ahf.me:8443/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("https://ahf.me.evil.example/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("file:///tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("ftp://ahf.me/tor-tls-pqc/2026-06-18/", INDEX)
+    assert not is_safe_scan_url("https://ahf.me/tor-tls-pqc/\n", INDEX)
+
+    evil_html = """
+    <a href="https://user:pass@ahf.me/tor-tls-pqc/2099-01-01/">userinfo</a>
+    <a href="file:///tor-tls-pqc/2099-01-02/">file</a>
+    <a href="//169.254.169.254/tor-tls-pqc/2099-01-03/">metadata</a>
+    <a href="https://ahf.me:8443/tor-tls-pqc/2099-01-04/">port</a>
+    <a href="/tor-tls-pqc/2026-06-18/">valid</a>
+    """
+    assert latest_scan_url(evil_html, INDEX) == SCAN_URL
+    assert latest_scan_url('<a href="/tor-tls-pqc/2026-06-18/">ok</a>', "https://user@ahf.me/tor-tls-pqc/") == ""
+
+
+def test_validate_tls_pqc_document_and_cache_reject_unsafe_or_mismatched_urls():
+    """Cached and parsed documents reject unsafe or off-origin source_url values."""
+    document = parse_html_scan(_read("scan.html"), SCAN_URL)
+    assert validate_tls_pqc_document(document, expected_url=INDEX)
+
+    for bad_url in (
+        "javascript:alert(1)",
+        "file:///etc/passwd",
+        "https://evil.example/tor-tls-pqc/2026-06-18/",
+        "http://ahf.me/tor-tls-pqc/2026-06-18/",
+    ):
+        bad_doc = dict(document, source_url=bad_url)
+        assert not validate_tls_pqc_document(bad_doc, expected_url=INDEX)
+
+    assert not validate_tls_pqc_document(dict(document, source_url="javascript:alert(1)"))
+    assert not validate_tls_pqc_document(
+        dict(document, index_url="https://evil.example/tor-tls-pqc/"),
+        expected_url=INDEX,
+    )
+
+    workers._save_cache("tls_pqc", dict(document, source_url="https://evil.example/tor-tls-pqc/2026-06-18/"))
+    with patch.object(workers, "_fetch_url_with_total_timeout", return_value=_read("scan.html").encode("utf-8")):
+        loaded = workers.fetch_tls_pqc(INDEX, progress_logger=None)
+    assert loaded["source_url"] == INDEX
+
+    assert workers.fetch_tls_pqc("file:///tmp/scan.html", progress_logger=None) is None
+
+
+def test_http_only_opener_and_same_origin_redirect_handler():
+    """Opener drops file/ftp handlers and blocks off-origin redirects without target leak."""
+    opener = workers._build_http_only_opener(INDEX)
+    handler_names = {type(h).__name__ for h in opener.handlers}
+    assert "FileHandler" not in handler_names
+    assert "FTPHandler" not in handler_names
+    assert "DataHandler" not in handler_names
+
+    with pytest.raises(urllib.error.URLError):
+        opener.open(urllib.request.Request("file:///etc/passwd"), timeout=2)
+    with pytest.raises(urllib.error.URLError):
+        opener.open(urllib.request.Request("ftp://ahf.me/tor-tls-pqc/"), timeout=2)
+
+    redirect_handler = next(h for h in opener.handlers if isinstance(h, workers._SameOriginRedirectHandler))
+    base_req = urllib.request.Request(INDEX)
+    allowed = redirect_handler.redirect_request(base_req, None, 302, "Found", {}, "/tor-tls-pqc/2026-06-18/")
+    assert allowed.full_url == SCAN_URL
+
+    http_opener = workers._build_http_only_opener("http://ahf.me/tor-tls-pqc/")
+    http_redirect = next(h for h in http_opener.handlers if isinstance(h, workers._SameOriginRedirectHandler))
+    http_req = urllib.request.Request("http://ahf.me/tor-tls-pqc/")
+    upgraded = http_redirect.redirect_request(http_req, None, 301, "Moved", {}, "https://ahf.me/tor-tls-pqc/")
+    assert upgraded.full_url == INDEX
+    # Multi-hop downgrade back from https -> http must be blocked.
+    with pytest.raises(urllib.error.URLError):
+        http_redirect.redirect_request(upgraded, None, 302, "Found", {}, "http://ahf.me/tor-tls-pqc/2026-06-18/")
+
+    for bad_target in (
+        "https://169.254.169.254/latest/meta-data/iam/",
+        "file:///etc/passwd",
+        "ftp://ahf.me/secret",
+        "https://user@ahf.me/tor-tls-pqc/",
+    ):
+        headers = Message()
+        headers["Location"] = bad_target
+        with pytest.raises(urllib.error.URLError) as exc_info:
+            redirect_handler.http_error_302(base_req, io.BytesIO(b""), 302, "Found", headers)
+        assert bad_target not in str(exc_info.value)
+
+
+def test_fetch_url_with_total_timeout_enforces_max_bytes():
+    """Response size cap rejects oversized Content-Length and oversized bodies while closing."""
+    class _FakeResponse:
+        """Minimal HTTP response double supporting read1, headers, and close."""
+
+        def __init__(self, body, declared_length=None):
+            """Store body stream and optional Content-Length header."""
+            self._stream = io.BytesIO(body)
+            self.headers = Message()
+            if declared_length is not None:
+                self.headers["Content-Length"] = str(declared_length)
+            self.closed = False
+
+        def read1(self, n):
+            """Read up to ``n`` bytes from the backing stream."""
+            return self._stream.read(n)
+
+        def close(self):
+            """Record that the response was closed."""
+            self.closed = True
+
+    class _FakeOpener:
+        """Minimal opener double returning a pre-built fake response."""
+
+        def __init__(self, response):
+            """Hold the response instance to return on open()."""
+            self._response = response
+
+        def open(self, _req, timeout=None):
+            """Return the pre-built response without network I/O."""
+            return self._response
+
+    exact = _FakeResponse(b"abcde", declared_length=5)
+    assert workers._fetch_url_with_total_timeout(INDEX, 5, opener=_FakeOpener(exact), max_bytes=5) == b"abcde"
+    assert exact.closed is True
+
+    over_header = _FakeResponse(b"ok", declared_length=100)
+    with pytest.raises(ValueError, match="exceeded size limit"):
+        workers._fetch_url_with_total_timeout(INDEX, 5, opener=_FakeOpener(over_header), max_bytes=10)
+    assert over_header.closed is True
+
+    over_stream = _FakeResponse(b"x" * 11)
+    with pytest.raises(ValueError, match="exceeded size limit"):
+        workers._fetch_url_with_total_timeout(INDEX, 5, opener=_FakeOpener(over_stream), max_bytes=10)
+    assert over_stream.closed is True

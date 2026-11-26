@@ -14,6 +14,7 @@ from allium.lib.workers import fetch_onionoo_details, fetch_onionoo_uptime
 TEST_BANDWIDTH_URL = "http://invalid.nonexistent.url/bandwidth"
 TEST_AROI_URL = "http://invalid.nonexistent.url/aroi"
 TEST_EXIT_DNS_HEALTH_URL = "http://invalid.nonexistent.url/exit-dns"
+TEST_TLS_PQC_URL = "http://invalid.nonexistent.url/tls-pqc"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
 # Mark all tests in this module as slow (real network calls)
@@ -43,6 +44,7 @@ class TestErrorHandlingWithRealAPIs:
                 onionoo_bandwidth_url=TEST_BANDWIDTH_URL,
                 aroi_url=TEST_AROI_URL,
                 exit_dns_health_url=TEST_EXIT_DNS_HEALTH_URL,
+                tls_pqc_url=TEST_TLS_PQC_URL,
                 bandwidth_cache_hours=TEST_BANDWIDTH_CACHE_HOURS,
                 progress=False
             )

@@ -67,6 +67,7 @@ def normalize_fingerprint(value):
 
 
 def _clean_token(value):
+    """Strip whitespace and normalize empty or N/A tokens to an empty string."""
     text = (value or "").strip()
     if text.upper() in _EMPTY_TOKENS:
         return ""
@@ -74,10 +75,12 @@ def _clean_token(value):
 
 
 def _header_key(cell):
+    """Normalize a column header cell to lowercase ASCII letters."""
     return re.sub(r"[^a-z]", "", (cell or "").lower())
 
 
 def _real_date(candidate):
+    """Return ``candidate`` if it is a valid YYYY-MM-DD calendar date, else empty."""
     if not candidate or _DATE_RE.fullmatch(candidate) is None:
         return ""
     try:
@@ -88,6 +91,7 @@ def _real_date(candidate):
 
 
 def _scan_time_from_url(url):
+    """Extract a YYYY-MM-DD scan date from URL path segments."""
     for part in reversed(urlsplit(url or "").path.split("/")):
         found = _real_date(part)
         if found:
@@ -96,20 +100,84 @@ def _scan_time_from_url(url):
 
 
 def _scan_time_from_html(text):
+    """Extract a YYYY-MM-DD scan date from the HTML title or h1 heading."""
     match = _HEAD_DATE_RE.search(text[:4000])
     return _real_date(match.group(1) if match else "")
+
+
+def _effective_port(parsed) -> int:
+    """Return the explicit port or default port (80/443) for an http(s) SplitResult."""
+    if parsed.port is not None:
+        return parsed.port
+    return 443 if parsed.scheme == "https" else 80
+
+
+def is_safe_scan_url(candidate_url, reference_url=None) -> bool:
+    """True when ``candidate_url`` is a clean http(s) URL without userinfo.
+
+    When ``reference_url`` is given, ``candidate_url`` must keep the same
+    hostname and either the same scheme and port or a default-port HTTP-to-HTTPS
+    upgrade on that host.
+    """
+    if not isinstance(candidate_url, str) or not candidate_url:
+        return False
+    if candidate_url != candidate_url.strip():
+        return False
+    if any(ch.isspace() or ord(ch) < 32 for ch in candidate_url):
+        return False
+    parsed = urlsplit(candidate_url)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return False
+    try:
+        cand_port = _effective_port(parsed)
+    except ValueError:
+        return False
+    if reference_url is None:
+        return True
+    if not is_safe_scan_url(reference_url):
+        return False
+    ref = urlsplit(reference_url)
+    if hostname != (ref.hostname or "").lower():
+        return False
+    ref_port = _effective_port(ref)
+    if (parsed.scheme, cand_port) == (ref.scheme, ref_port):
+        return True
+    return ref.scheme == "http" and parsed.scheme == "https" and ref_port == 80 and cand_port == 443
 
 
 class _TableCollector(HTMLParser):
     """Collect every HTML table as a list of stripped cell rows."""
 
     def __init__(self):
+        """Initialize parser state for collecting HTML tables."""
         HTMLParser.__init__(self, convert_charrefs=True)
         self.tables = []
         self._stack = []
         self._raw = 0
 
-    def handle_starttag(self, tag, attrs):
+    @staticmethod
+    def _close_cell(frame) -> None:
+        """Finalize any open cell in ``frame``."""
+        if frame["cell"] is not None:
+            if frame["row"] is not None:
+                frame["row"].append("".join(frame["cell"]).strip())
+            frame["cell"] = None
+
+    def _close_row(self, frame) -> None:
+        """Finalize any open cell and non-empty row in ``frame``."""
+        self._close_cell(frame)
+        if frame["row"] is not None:
+            if any(frame["row"]):
+                frame["rows"].append(frame["row"])
+            frame["row"] = None
+
+    def handle_starttag(self, tag, attrs) -> None:
+        """Open a table, row, or cell after closing any implied predecessor."""
         if tag in ("script", "style"):
             self._raw += 1
             return
@@ -126,41 +194,46 @@ class _TableCollector(HTMLParser):
                 "cell": None,
             })
         elif self._stack and tag == "tr":
+            self._close_row(self._stack[-1])
             self._stack[-1]["row"] = []
         elif self._stack and tag in ("td", "th"):
+            self._close_cell(self._stack[-1])
             self._stack[-1]["cell"] = []
 
-    def handle_endtag(self, tag):
+    def handle_endtag(self, tag) -> None:
+        """Close the active cell, row, or table on explicit end tags."""
         if tag in ("script", "style") and self._raw:
             self._raw -= 1
             return
         if self._raw or not self._stack:
             return
         frame = self._stack[-1]
-        if tag in ("td", "th") and frame["cell"] is not None:
-            if frame["row"] is not None:
-                frame["row"].append("".join(frame["cell"]).strip())
-            frame["cell"] = None
-        elif tag == "tr" and frame["row"] is not None:
-            if any(frame["row"]):
-                frame["rows"].append(frame["row"])
-            frame["row"] = None
+        if tag in ("td", "th"):
+            self._close_cell(frame)
+        elif tag == "tr":
+            self._close_row(frame)
         elif tag == "table":
+            self._close_row(frame)
             self.tables.append(self._stack.pop())
 
-    def handle_data(self, data):
+    def handle_data(self, data) -> None:
+        """Accumulate text inside an open table cell."""
         if self._raw:
             return
         if self._stack and self._stack[-1]["cell"] is not None:
             self._stack[-1]["cell"].append(data)
 
-    def close(self):
+    def close(self) -> None:
+        """Flush buffered parser input and close any unclosed tables."""
         HTMLParser.close(self)
         while self._stack:
-            self.tables.append(self._stack.pop())
+            frame = self._stack.pop()
+            self._close_row(frame)
+            self.tables.append(frame)
 
 
 def _header_map(row):
+    """Map normalized table header names to column indices."""
     mapping = {}
     for index, cell in enumerate(row):
         name = _HEADER_ALIASES.get(_header_key(cell))
@@ -170,6 +243,7 @@ def _header_map(row):
 
 
 def _select_scan_table(tables):
+    """Select the scan table and header column mapping from parsed HTML tables."""
     ordered = sorted(tables, key=lambda table: table.get("id") != "tor_pqc_tls_table")
     for table in ordered:
         rows = table.get("rows") or []
@@ -181,6 +255,7 @@ def _select_scan_table(tables):
 
 
 def _cell(row, index):
+    """Return stripped text for column ``index`` of ``row``, or empty string."""
     if index is None or index >= len(row):
         return ""
     return row[index].strip()
@@ -218,6 +293,7 @@ def _remember_row(relays, fingerprint, nickname, cipher, group, connected):
 
 
 def _document(relays, url, artifact, scan_time):
+    """Build the normalized cached/returned TLS PQC document dictionary."""
     return {
         "schema": SCHEMA_VERSION,
         "artifact": artifact,
@@ -228,7 +304,7 @@ def _document(relays, url, artifact, scan_time):
     }
 
 
-def validate_tls_pqc_document(data):
+def validate_tls_pqc_document(data, expected_url=None):
     """True for a parsed scan this module is willing to cache and display."""
     if not isinstance(data, dict):
         return False
@@ -238,8 +314,15 @@ def validate_tls_pqc_document(data):
         return False
     if not isinstance(data.get("scan_time"), str) or not data.get("scan_time"):
         return False
-    if not isinstance(data.get("source_url"), str) or not data.get("source_url"):
+    source_url = data.get("source_url")
+    if not is_safe_scan_url(source_url, expected_url):
         return False
+    index_url = data.get("index_url", "")
+    if index_url:
+        if not isinstance(index_url, str) or not is_safe_scan_url(index_url, expected_url):
+            return False
+        if expected_url is None and not is_safe_scan_url(source_url, index_url):
+            return False
     relays = data.get("relays")
     if not isinstance(relays, dict):
         return False
@@ -258,6 +341,7 @@ def validate_tls_pqc_document(data):
 
 
 def _looks_like_csv(text):
+    """True when the first non-blank line looks like Margot's cipher_suites CSV header."""
     for line in text.lstrip("\ufeff").splitlines():
         if line.strip():
             folded = line.lower().replace(" ", "")
@@ -266,6 +350,7 @@ def _looks_like_csv(text):
 
 
 def _looks_like_html(text):
+    """True when the payload prefix looks like an HTML document or table."""
     folded = text[:20000].lower()
     return "<html" in folded or "<!doctype" in folded or "<table" in folded
 
@@ -280,9 +365,8 @@ def parse_csv_scan(text, url):
             break
     delimiter = ";" if ";" in first else ","
     reader = csv.reader(io.StringIO(sample), delimiter=delimiter)
-    try:
-        header = next(reader)
-    except StopIteration:
+    header = next((row for row in reader if any(cell.strip() for cell in row)), None)
+    if header is None:
         raise ValueError("TLS PQC CSV is empty")
     mapping = _header_map(header)
     if "fingerprint" not in mapping or "group" not in mapping:
@@ -358,18 +442,16 @@ def latest_scan_url(html, index_url):
     A date that is not a real calendar day is ignored, so 2026-99-99 cannot
     sort ahead of a real scan.
     """
+    if not is_safe_scan_url(index_url):
+        return ""
     found = []
-    index = urlsplit(index_url or "")
+    index = urlsplit(index_url)
     index_path = index.path.rstrip("/")
     for match in _HREF_RE.finditer(html or ""):
-        absolute = urljoin(index_url or "", match.group("href"))
+        absolute = urljoin(index_url, match.group("href"))
+        if not is_safe_scan_url(absolute, index_url):
+            continue
         link = urlsplit(absolute)
-        if link.scheme not in ("http", "https"):
-            continue
-        if index.scheme == "https" and link.scheme != "https":
-            continue
-        if index.netloc and link.netloc.lower() != index.netloc.lower():
-            continue
         path = link.path.rstrip("/")
         date = _real_date(path.rsplit("/", 1)[-1])
         if not date:
@@ -393,6 +475,8 @@ def load_tls_pqc_scan(fetch_body, start_url):
     parsed directly. The ahf.me index has no table; the newest ``/tor-tls-pqc/YYYY-MM-DD/``
     link is fetched next.
     """
+    if not is_safe_scan_url(start_url):
+        raise ValueError("invalid TLS PQC scan URL")
     first = fetch_body(start_url)
     parsed = parse_scan_payload(first, start_url)
     if parsed is not None:
@@ -401,13 +485,13 @@ def load_tls_pqc_scan(fetch_body, start_url):
     latest = latest_scan_url(text, start_url)
     if not latest:
         raise ValueError("TLS PQC index has no dated scan link")
-    if latest.rstrip("/") == (start_url or "").rstrip("/"):
+    if latest.rstrip("/") == start_url.rstrip("/"):
         raise ValueError("TLS PQC index linked to itself")
     second = fetch_body(latest)
     parsed = parse_scan_payload(second, latest)
     if parsed is None:
         raise ValueError("latest TLS PQC link was not a scan table or CSV")
-    parsed["index_url"] = start_url or ""
+    parsed["index_url"] = start_url
     return parsed
 
 
@@ -425,6 +509,7 @@ def classify_scan_row(row):
 
 
 def _lookup_row(document, fingerprint):
+    """Look up a single relay row in ``document`` by normalized fingerprint."""
     relays = document.get("relays") or {}
     normalized = normalize_fingerprint(fingerprint or "")
     if not normalized:
