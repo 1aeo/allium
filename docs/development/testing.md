@@ -1,22 +1,27 @@
 # Testing Guide
 
 **Audience**: Contributors  
-**Scope**: Running tests and conventions
+**Scope**: Test suite layout, `pytest.ini` defaults, and testing conventions
 
 ## Running Tests
 
+`pytest.ini` sets `testpaths = tests`, `pythonpath = .`, `-m "not slow"`, and `--timeout=30` (`--timeout-method=thread`) by default.
+
 ```bash
-# All tests
+# Default suite (excludes tests marked 'slow')
 pytest
+
+# Include slow tests (override default -m "not slow")
+pytest -m ""
 
 # With coverage
 pytest --cov=allium --cov-report=html
 
 # Specific file
-pytest tests/test_utils.py
+pytest tests/unit/test_seo.py
 
 # Specific test
-pytest tests/test_utils.py::TestClassName::test_method
+pytest tests/unit/coordinator/test_coordinator.py::TestRelayCount::test_relay_count
 
 # Verbose
 pytest -v
@@ -24,29 +29,40 @@ pytest -v
 
 ## Test Organization
 
-All tests are in `tests/` (flat structure):
+Tests are organized by scope and subsystem under `tests/`:
 
 ```
 tests/
-├── test_unit_*.py          # Unit tests
-├── test_integration_*.py   # Integration tests
-├── test_system_*.py        # System tests (may use real APIs)
-├── test_regression_*.py    # Regression tests
-└── test_*.py               # Other tests
+├── conftest.py                 # Shared pytest fixtures (e.g., jinja_env)
+├── unit/                       # Fast unit tests (no external network)
+│   ├── aroi/                   # AROI validation and leaderboard tests
+│   ├── charts/                 # History and pressure chart tests
+│   ├── consensus/              # Consensus evaluation and authority tests
+│   ├── coordinator/            # Coordinator orchestration tests
+│   ├── exit_dns_health/        # Exit DNS health and resolver tests
+│   ├── infrastructure/         # CLI validation, cache fallback, infra tests
+│   ├── relays/                 # Relay processing, sorting, overload tests
+│   ├── templates/              # Template rendering, escaping, search index tests
+│   ├── uptime/                 # Uptime utilities and percentile tests
+│   ├── workers/                # API workers, timeouts, retries, caching tests
+│   └── test_*.py               # Cross-cutting unit tests (SEO, metrics, etc.)
+├── integration/                # Multi-component integration tests
+├── regression/                 # Bug-fix regression tests
+├── system/                     # System/E2E tests (may require real network)
+├── fixtures/                   # Canned JSON fixtures (e.g., fixtures/ci/)
+└── helpers/                    # Shared test helpers and fixture builders
 ```
 
 ## Naming Conventions
 
 ### Files
 
-```
-test_[type]_[component].py
-```
+Place test modules under the matching directory using `test_<component>.py`:
 
-Examples:
-- `test_unit_coordinator.py`
-- `test_integration_full_workflow.py`
-- `test_system_real_api.py`
+- `tests/unit/coordinator/test_coordinator.py`
+- `tests/integration/test_full_workflow.py`
+- `tests/regression/test_allium_entrypoint.py`
+- `tests/system/test_real_api.py`
 
 ### Functions
 
@@ -55,94 +71,73 @@ def test_component_action_expected_outcome(self):
 ```
 
 Examples:
-- `test_coordinator_initialization_succeeds`
-- `test_cache_save_preserves_data`
-- `test_empty_input_returns_default`
+- `test_coordinator_initialization_sets_all_parameters_correctly`
+- `test_route_for_html_uses_clean_public_routes`
+- `test_contact_precomputation_stores_required_metadata`
 
 ## Writing Tests
 
 ### Basic Structure
 
 ```python
-import pytest
-from allium.lib.module import function_to_test
+from allium.lib.ip_utils import safe_parse_ip_address
 
-class TestComponentName:
-    """Tests for ComponentName"""
-    
-    def test_basic_functionality(self):
-        result = function_to_test(input)
-        assert result == expected
-    
-    def test_edge_case_handling(self):
-        result = function_to_test(None)
-        assert result == default_value
+
+class TestIpUtils:
+    """Tests for IP address parsing."""
+
+    def test_valid_ipv4_with_port(self):
+        ip, version = safe_parse_ip_address("192.0.2.1:9001")
+        assert (ip, version) == ("192.0.2.1", 4)
+
+    def test_invalid_input_returns_none(self):
+        assert safe_parse_ip_address(None) == (None, None)
 ```
 
 ### Using Fixtures
 
 ```python
+import pytest
+
+
 @pytest.fixture
 def sample_relay_data():
     return {
-        'fingerprint': 'ABC123',
-        'nickname': 'TestRelay',
-        'bandwidth': 1000000
+        "fingerprint": "ABC123",
+        "nickname": "TestRelay",
+        "observed_bandwidth": 1000000,
     }
 
+
 def test_with_fixture(sample_relay_data):
-    result = process_relay(sample_relay_data)
-    assert result['nickname'] == 'TestRelay'
+    assert sample_relay_data["nickname"] == "TestRelay"
 ```
 
 ## Test Categories
 
-| Prefix | Purpose | Speed | External Dependencies |
-|--------|---------|-------|----------------------|
-| `test_unit_` | Single component | Fast | None |
-| `test_integration_` | Multiple components | Medium | None |
-| `test_system_` | Full system | Slow | May use real APIs |
-| `test_regression_` | Bug fixes | Varies | None |
+Markers defined in `pytest.ini`: `unit`, `integration`, `regression`, `system`, `slow`.
+
+| Directory / Marker | Purpose | Speed | External Dependencies |
+|--------------------|---------|-------|----------------------|
+| `tests/unit/` (`unit`) | Single module or helper | Fast | None |
+| `tests/integration/` (`integration`) | Multiple components | Medium | None (unless marked `slow`) |
+| `tests/regression/` (`regression`) | Bug-fix guards | Fast | None |
+| `tests/system/` (`system`, `slow`) | End-to-end checks | Slow | May use real APIs |
 
 ## Output Comparison (Full-Site Regression Testing)
 
-For changes that affect HTML output — templates, data processing, page
-generation — use `compare_outputs.py` to diff the full ~22k-file site
-before and after your change:
-
-```bash
-# Generate baseline, make changes, generate after, compare.
-# --no-pressure-history skips the CollecTor archive backfill.
-python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
-# ... make code changes ...
-python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
-python3 compare_outputs.py
-```
-
-Pressure-chart and archive-parsing comparisons use a different cache. Those steps are in CONTRIBUTING.md under Output Comparison.
-
-Classifies every file as **identical**, **timestamp-only**, or **content diff**.
-Shows normalized unified diffs (timestamps stripped) for content diffs only.
-Takes ~8 seconds for 22k files using parallel processing across all CPUs.
-
-See `python3 compare_outputs.py --help` for options and `CONTRIBUTING.md`
-for the full workflow.
+For changes that affect generated HTML, charts, or archive parsing, use `compare_outputs.py` to classify every file in the ~22k-file site (`identical`, `timestamp-only`, or `content diff`). See the **Output Comparison (Major Changes)** section in [CONTRIBUTING.md](../../CONTRIBUTING.md#output-comparison-major-changes) for the full baseline/candidate workflow and pressure-history cache instructions.
 
 ## CI Integration
 
-Tests run automatically on PR via GitHub Actions. See `.github/workflows/ci.yml`.
-
-Required for merge:
-- All tests pass
-- No linting errors (`flake8`)
-- No security issues (`bandit`)
+Tests run automatically on PR via GitHub Actions (`.github/workflows/ci.yml`), executing `python -m pytest tests/ -v --cov=. --cov-report=xml -m "not slow"` alongside `flake8` and template checks.
 
 ## How to Verify
 
 ```bash
-# Run full test suite
+# Run default test suite
 pytest
 
-# Check test count
+# Check collected test count
 pytest --collect-only | tail -1
 ```

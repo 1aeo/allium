@@ -7,14 +7,15 @@
 
 ```bash
 # Generate into staging, then publish only after a successful exit.
-cd allium
+cd /path/to/allium
 (
   set -eu
-  staging_dir="$(mkdir -p data && mktemp -d -p "$PWD/data")"  # beside data/cache: PNG charts are linked, not copied
+  staging_dir="$(mkdir -p allium/data && mktemp -d -p "$PWD/allium/data")"  # beside allium/data/cache: PNG charts are linked, not copied
   trap 'rm -rf -- "$staging_dir"' EXIT
   chmod 755 "$staging_dir"  # mktemp makes it 0700, and rsync -a gives the web root its mode
-  python3 allium.py --out "$staging_dir" \
+  python3 allium/allium.py --out "$staging_dir" \
     --base-url https://metrics.example.com --progress
+  test -s "$staging_dir/index.html" || { echo "No site generated; skipping publish" >&2; exit 1; }
   rsync -a --delete "$staging_dir"/ /var/www/tor-metrics/
 )
 
@@ -22,15 +23,13 @@ cd allium
 cd /var/www/tor-metrics && python3 -m http.server 8000
 ```
 
-The generator exits non-zero when generation fails, including when the final
-crawl-size guard finds an oversized page. Keep generation and publication as
-separate steps: only synchronize the staging directory after the generator
-returns zero. This leaves the currently published site untouched on failure.
+The generator exits non-zero on generation errors (including oversized pages above the crawl-size guard), and exits `0` without generating pages when Onionoo details are unavailable (`allium/allium.py`). Keep generation and publication as separate steps and verify both a zero exit status and non-empty `"$staging_dir/index.html"` before running `rsync --delete`, so an empty or failed build leaves the published site untouched.
+Omit `--no-pressure-history` in production (use it only for fast local dev runs).
 
 ## Subdirectory Hosting
 
-Use an absolute `--base-url` in production. It is the origin for canonical and
-Open Graph URLs and enables `sitemap.xml` generation:
+Use an absolute `https://` `--base-url` in production. It is the origin for canonical and
+Open Graph URLs and enables `robots.txt` and `sitemap.xml` generation:
 
 ```bash
 python3 allium.py --out /var/www/tor-metrics \
@@ -104,8 +103,8 @@ server {
 3. Set source to the appropriate branch/folder
 
 ```bash
-# Generate for GitHub Pages
-python3 allium.py --out ./docs --base-url "/repository-name" && \
+# Generate for GitHub Pages (from repository root)
+python3 allium/allium.py --out ./docs --base-url "/repository-name" && \
   git add docs/ && \
   git commit -m "Update metrics" && \
   git push
@@ -119,9 +118,11 @@ python3 allium.py --out ./docs --base-url "/repository-name" && \
 2. Set build command: `cd allium && python3 allium.py --out ../public`
 3. Set output directory: `public`
 
+Production search and Cloudflare Workers/Pages deployment tooling lives in the separate `1aeo/allium-deploy` repository.
+
 ### Search Function
 
-Allium generates `search-index.json` for use with Cloudflare Pages Functions:
+Allium generates `search-index.json` (compact schema v1.7) for use with Cloudflare Pages Functions:
 
 1. Create `functions/search.js`:
 
@@ -140,15 +141,16 @@ export async function onRequest(context) {
         });
     }
     
-    // Fetch search index
+    // Fetch search index (compact schema v1.7: r.n = nickname, r.f = fingerprint)
     const indexUrl = new URL('/search-index.json', url.origin);
     const response = await fetch(indexUrl);
     const index = await response.json();
     
     // Search logic
+    const q = query.toLowerCase();
     const results = index.relays.filter(r => 
-        r.nickname.toLowerCase().includes(query.toLowerCase()) ||
-        r.fingerprint.toLowerCase().includes(query.toLowerCase())
+        (r.n && r.n.toLowerCase().includes(q)) ||
+        r.f.toLowerCase().includes(q)
     ).slice(0, 20);
     
     return new Response(JSON.stringify(results), {
@@ -161,9 +163,7 @@ export async function onRequest(context) {
 
 ## Automated Updates (Cron)
 
-Put the staged generation and `rsync` sequence from Quick Deploy in an
-executable `/path/to/deploy-allium.sh`. The script must use `set -e` (or an
-explicit exit-status check) so a generator failure prevents `rsync`.
+Put `cd /path/to/allium` (your absolute checkout path) followed by the staged generation, non-empty `index.html` check, and `rsync` sequence from [Quick Deploy](#quick-deploy) in an executable `/path/to/deploy-allium.sh` so `allium/allium.py` and `allium/data` resolve regardless of cron's working directory. Because `allium/allium.py` exits `0` without writing pages when Onionoo details are unavailable, the script must keep `set -eu` and verify `test -s "$staging_dir/index.html"` before `rsync --delete`.
 
 ```bash
 # Update every 6 hours
@@ -178,8 +178,8 @@ explicit exit-status check) so a generator failure prevents `rsync`.
 For cron jobs on memory-constrained systems:
 
 ```bash
-# Low memory mode (~400MB): add --apis details to the generator command in
-# deploy-allium.sh, then keep the same failure-gated cron entry.
+# Low memory mode (~400MB): add --apis details --no-pressure-history to the generator command in
+# deploy-allium.sh, then keep the same failure- and index-gated cron entry.
 0 */6 * * * /path/to/deploy-allium.sh
 ```
 
@@ -200,6 +200,9 @@ python3 -m http.server 8000 --directory /var/www/tor-metrics
 curl -I http://localhost:8000/
 curl -I http://localhost:8000/top500.html
 curl -I http://localhost:8000/network-health.html
+curl -I http://localhost:8000/network-pressure.html
+curl -I http://localhost:8000/misc/diagnostics.html
+curl -I http://localhost:8000/metrics
 
 # After production deployment, purge stale crawler-discovery cache keys and verify
 curl -fsS https://metrics.example.com/robots.txt
