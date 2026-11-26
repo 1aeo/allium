@@ -292,7 +292,18 @@ class TestBandwidthFileRows:
 
     def test_values_within_twice_the_median_agree(self):
         assert _column_tones([100, 200, None]) == ['agree', 'agree', 'unknown']
-        assert _column_tones([8, 2100])[0] == 'disagree'
+        assert _column_tones([100, 290]) == ['disagree', 'disagree']
+        assert _column_tones([8, 2100]) == ['disagree', 'disagree']
+        assert _column_tones([0, 0]) == ['agree', 'agree']
+        assert _column_tones([0, 10]) == ['disagree', 'disagree']
+        assert _column_tones([100, 110, 500]) == ['agree', 'agree', 'disagree']
+        assert _column_tones([100, 100, 1000, 1000]) == [
+            'disagree', 'disagree', 'disagree', 'disagree',
+        ]
+        assert _column_tones([0, 0, 100, 100]) == [
+            'disagree', 'disagree', 'disagree', 'disagree',
+        ]
+        assert _column_tones([0, 0, 0, 100]) == ['agree', 'agree', 'agree', 'disagree']
         assert _column_tones([8]) == ['unknown']
         details = format_scanner_measurements({'scanners': [
             {'scanner': 'bastet', 'bw': 1, 'success': 0, 'error_stream': 4},

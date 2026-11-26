@@ -237,6 +237,54 @@ class TestAgreement:
             {'name': 'bastet', 'count': 1},
         ]
 
+    def test_stale_vote_hour_excluded_to_match_consensus_weight(self):
+        """Stale-hour Measured= votes are ignored so unmeasured agrees with CollectorFetcher."""
+        index = {
+            FP: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': 100, 'bandwidth': 100},
+                'longclaw': {'flags': FLAGS, 'measured': 120, 'bandwidth': 80},
+                'moria1': {'flags': FLAGS, 'measured': 90, 'bandwidth': 60},
+            }},
+            FP_B: {'votes': {
+                name: {'flags': FLAGS, 'measured': 5, 'bandwidth': 5}
+                for name in ('bastet', 'longclaw', 'moria1')
+            }},
+        }
+        votes_docs = {
+            'bastet': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'longclaw': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'moria1': {'valid_after': HOUR_1, 'vote_time': HOUR_1},
+        }
+        fetcher = CollectorFetcher()
+        fetcher.votes = votes_docs
+        fetcher.relay_index = index
+        fetcher.bw_authorities = {'bastet', 'longclaw', 'moria1'}
+        bw_info = fetcher._format_bandwidth(index[FP])
+        assert bw_info['measurement_count'] == 2
+        assert bw_info['unmeasured'] is True
+
+        relays_with_votes = [{'fingerprint': FP, 'nickname': 'lagged'}]
+        summary = attach_vote_agreement(
+            relays_with_votes, index,
+            bw_authorities={'bastet', 'longclaw', 'moria1'},
+            scanner_authorities={'bastet', 'longclaw', 'moria1'},
+            votes=votes_docs,
+        )
+        assert relays_with_votes[0]['vote_agreement']['measured_count'] == 2
+        assert relays_with_votes[0]['vote_agreement']['unmeasured'] is True
+        assert summary['unmeasured'] == 1
+        assert summary['bandwidth']['publishing'] == ['bastet', 'longclaw']
+        assert summary['bandwidth']['missing_count'] == 0
+
+        relays_no_votes = [{'fingerprint': FP, 'nickname': 'no-doc-hours'}]
+        summary_all = attach_vote_agreement(
+            relays_no_votes, index,
+            bw_authorities={'bastet', 'longclaw', 'moria1'},
+        )
+        assert relays_no_votes[0]['vote_agreement']['measured_count'] == 3
+        assert relays_no_votes[0]['vote_agreement']['unmeasured'] is False
+        assert summary_all['unmeasured'] == 0
+
 
 class TestVoteAgreementMacroRendering:
     """Rendered bandwidth-measurement sentences distinguish publishing and silent authorities."""

@@ -18,13 +18,15 @@ _DID_NOT_GROUPS = 2
 _ASSIGNED_GROUPS = 1
 
 
-def classify_authority_votes(votes_by_authority, measuring_authorities=None):
+def classify_authority_votes(votes_by_authority, measuring_authorities=None, stale_authorities=None):
     """Agreement of one relay's latest votes, or None when nobody voted.
 
     A relay agrees when every voting authority assigned the same Running,
     Valid, Fast, Stable, Guard, Exit, and HSDir state. ``measuring_authorities``
     limits the measurement-split count to authorities whose votes carry
     Measured=. None means every vote can measure. An empty set means none can.
+    ``stale_authorities`` drops votes belonging to earlier consensus hours so
+    unmeasured checks match the live consensus-weight calculation.
     """
     if not isinstance(votes_by_authority, dict) or not votes_by_authority:
         return None
@@ -32,11 +34,12 @@ def classify_authority_votes(votes_by_authority, measuring_authorities=None):
     if measuring_authorities is None:
         measuring = None
     else:
-        measuring = {_authority_key(name) for name in measuring_authorities if _authority_key(name)}
+        measuring = _authority_set(measuring_authorities, _authority_key)
+    stale = _authority_set(stale_authorities, _authority_key)
     folded = {}
     for name, vote in votes_by_authority.items():
         key = _authority_key(name)
-        if key and isinstance(vote, dict) and vote.get('voted') is not False:
+        if key and key not in stale and isinstance(vote, dict) and vote.get('voted') is not False:
             folded[key] = vote
     ballots = []
     measured = measurable_votes = measurable_measured = 0
@@ -91,22 +94,27 @@ def summarize_operator_votes(members, limit=5, measurement_authorities=None):
     return _summarize(pairs, limit, measurement_authorities)
 
 
-def attach_vote_agreement(relays, relay_index, bw_authorities=None, scanner_authorities=None):
+def attach_vote_agreement(
+    relays, relay_index, bw_authorities=None, scanner_authorities=None, votes=None,
+):
     """Attach ``vote_agreement`` from the current collector index.
 
     ``bw_authorities`` is the set whose votes publish Measured= (the caller's
     measuring authorities). ``scanner_authorities`` is every authority that
-    included a bandwidth file. Returns the network summary. A lowercase
-    fingerprint key in an older cache still matches.
+    included a bandwidth file. ``votes`` restricts comparisons and measuring
+    authorities to the newest consensus hour when supplied. Returns the network
+    summary. A lowercase fingerprint key in an older cache still matches.
     """
-    from .collector_fetcher import _authority_key
+    from .collector_fetcher import _authority_key, _votes_by_name
     index = relay_index if isinstance(relay_index, dict) else {}
-    publishing = _name_list(bw_authorities, _authority_key)
-    scanners = _name_list(scanner_authorities, _authority_key)
+    stale = _stale_authorities(votes)
+    current_bw = _without_stale(bw_authorities, stale, _authority_key)
+    current_scanners = _without_stale(scanner_authorities, stale, _authority_key)
+    publishing = _name_list(current_bw, _authority_key)
+    scanners = _name_list(current_scanners, _authority_key)
     silent = [name for name in scanners if name not in set(publishing)]
     authorities = {'publishing': publishing, 'silent': silent, 'scanners': scanners}
     pairs = []
-    from .collector_fetcher import _votes_by_name
     for relay in relays or ():
         if not isinstance(relay, dict):
             continue
@@ -116,7 +124,9 @@ def attach_vote_agreement(relays, relay_index, bw_authorities=None, scanner_auth
             if not isinstance(indexed, dict) and fp:
                 indexed = index.get(fp.lower())
             raw_votes = _votes_by_name(indexed) if isinstance(indexed, dict) else {}
-            agreement = classify_authority_votes(raw_votes, bw_authorities)
+            agreement = classify_authority_votes(
+                raw_votes, current_bw, stale_authorities=stale,
+            )
             if agreement:
                 relay['vote_agreement'] = agreement
                 pairs.append((relay, agreement))
@@ -296,6 +306,29 @@ def _split_flag_rows(by_flag):
     rows = [{'flag': flag, 'count': count} for flag, count in by_flag.items() if count]
     rows.sort(key=lambda item: (-item['count'], item['flag']))
     return rows
+
+
+def _authority_set(names, key):
+    """Return normalized non-empty authority names from an iterable, else an empty set."""
+    if isinstance(names, (str, bytes)) or not isinstance(names, (list, tuple, set, frozenset)):
+        return set()
+    return {folded for name in names for folded in (key(name),) if folded}
+
+
+def _stale_authorities(votes):
+    """Return normalized authority names whose vote document trails the newest hour."""
+    from .collector_fetcher import vote_document_hours
+    newest, times = vote_document_hours(votes)
+    if not newest:
+        return set()
+    return {key for key, when in times.items() if when and when != newest}
+
+
+def _without_stale(names, stale, key):
+    """Drop stale authorities from a collection while preserving ``None``."""
+    if not stale or isinstance(names, (str, bytes)) or not isinstance(names, (list, tuple, set, frozenset)):
+        return names
+    return [name for name in names if key(name) not in stale]
 
 
 def _name_list(names, key):

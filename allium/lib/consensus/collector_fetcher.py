@@ -11,6 +11,7 @@ Data sources:
 """
 
 import re
+import math
 import base64
 import urllib.request
 import urllib.error
@@ -459,6 +460,20 @@ def document_time(vote):
     return None
 
 
+def vote_document_hours(votes):
+    """Newest valid-after in ``votes``, and each authority's normalized hour map."""
+    newest, times = None, {}
+    source = votes if isinstance(votes, dict) else {}
+    for name, vote in source.items():
+        when = document_time(vote) if isinstance(vote, dict) else None
+        key = _authority_key(name)
+        if key and when:
+            times[key] = when
+            if newest is None or when > newest:
+                newest = when
+    return newest, times
+
+
 def _vote_kb(value):
     """A vote Bandwidth= or Measured= keyword, in KB/s.
 
@@ -491,18 +506,29 @@ def _stream_count(value):
 
 
 def _column_tones(values):
-    """Green when a value is within 2× of the column median, red outside.
+    """Green when a value is within 2× of the column midpoint, red outside.
 
     One published value, or a missing value, stays unknown: black on the page.
+    Two values compare directly so neither sits artificially close to a shared
+    arithmetic mean. Four or more even-count values use the geometric midpoint
+    of the middle pair for symmetric ratio comparison.
     """
     present = sorted(value for value in values if value is not None)
     if len(present) < 2:
         return ['unknown'] * len(values)
+    if len(present) == 2:
+        low, high = present[0], present[1]
+        agree = (low == 0 and high == 0) or (low > 0 and high / float(low) <= 2)
+        tone = 'agree' if agree else 'disagree'
+        return ['unknown' if value is None else tone for value in values]
     middle = len(present) // 2
     if len(present) % 2:
         median = float(present[middle])
     else:
-        median = (present[middle - 1] + present[middle]) / 2.0
+        lo, hi = present[middle - 1], present[middle]
+        if lo == 0 and hi > 0:
+            return ['unknown' if value is None else 'disagree' for value in values]
+        median = math.sqrt(lo) * math.sqrt(hi)
     tones = []
     for value in values:
         if value is None:
@@ -1853,16 +1879,7 @@ class CollectorFetcher:
         cached = self.__dict__.get('_document_hour_cache')
         if cached is not None:
             return cached
-        newest, times = None, {}
-        source = self.votes if isinstance(self.votes, dict) else {}
-        for name, vote in source.items():
-            when = document_time(vote) if isinstance(vote, dict) else None
-            key = _authority_key(name)
-            if key and when:
-                times[key] = when
-                if newest is None or when > newest:
-                    newest = when
-        cached = (newest, times)
+        cached = vote_document_hours(self.votes)
         self.__dict__['_document_hour_cache'] = cached
         return cached
     

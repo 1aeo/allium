@@ -941,12 +941,13 @@ class Relays:
             flag_thresholds = collector_data.get('flag_thresholds', {})
             bw_authorities = collector_data.get('bw_authorities', [])
             
-            def _attach_agreement(index, measuring, scanners=None):
+            def _attach_agreement(index, measuring, scanners=None, votes=None):
                 try:
                     from .consensus.vote_agreement import attach_vote_agreement
                     self.vote_agreement_summary = attach_vote_agreement(
                         self.json['relays'], index if isinstance(index, dict) else {},
-                        bw_authorities=measuring, scanner_authorities=scanners)
+                        bw_authorities=measuring, scanner_authorities=scanners,
+                        votes=votes)
                     tracked = self.vote_agreement_summary.get('compared', 0) if self.vote_agreement_summary else 0
                     authorities = (self.vote_agreement_summary or {}).get('measurement_authorities')
                     self.vote_measurement_authorities = authorities if isinstance(authorities, dict) else None
@@ -1104,7 +1105,10 @@ class Relays:
                     if isinstance(issues, list):
                         issues.append(failure)
             
-            _attach_agreement(relay_index, fetcher.measuring_authorities, bw_authorities)
+            _attach_agreement(
+                relay_index, fetcher.measuring_authorities, bw_authorities,
+                votes=fetcher.votes,
+            )
             
             self.progress_logger.log_without_increment(f"Processed consensus evaluation for {evaluation_count} relays")
             
