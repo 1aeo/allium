@@ -173,6 +173,15 @@ def test_dns_unreachable_no_latency(tmp_path, make_relay, make_relay_set, sample
     assert 'aeo1_exit_dns_latency_ms{fingerprint="CCCC"' not in content
 
 
+@pytest.mark.parametrize("detail", ["hard_timeout", "ttl_expired"])
+def test_dns_metrics_timeout_variants_map_to_timeout(
+    tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata, detail
+):
+    relays = [make_relay("EEEE", dns_status=detail, dns_timing=180000)]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
+    assert 'aeo1_exit_dns_failed{fingerprint="EEEE",familyid="",status="timeout"} 1' in content
+
+
 def test_dns_untested_not_failed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     relays = [make_relay("DDDD", dns_status="untested", dns_timing=None)]
     content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
