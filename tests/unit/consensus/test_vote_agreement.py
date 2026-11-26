@@ -202,3 +202,59 @@ class TestAgreement:
         summary = attach_vote_agreement(relays, index)
         assert summary['compared'] == 1
         assert relays[0]['vote_agreement']['agreed'] is True
+
+
+class TestVoteAgreementMacroRendering:
+    """Rendered bandwidth-measurement sentences distinguish publishing and silent authorities."""
+
+    @staticmethod
+    def _render_block(vote_sum):
+        """Render vote_agreement_block with a minimal page_ctx."""
+        import re
+        from types import SimpleNamespace
+        from allium.lib import page_writer
+
+        tmpl = page_writer.ENV.from_string(
+            "{% from 'macros.html' import vote_agreement_block %}{{ vote_agreement_block(vote_sum, page_ctx) }}"
+        )
+        html = tmpl.render(vote_sum=vote_sum, page_ctx=SimpleNamespace(path_prefix='../'))
+        return ' '.join(re.sub(r'<[^>]+>', ' ', html).split())
+
+    def test_full_coverage_names_publishing_and_silent_authorities_separately(self):
+        """When all relays have Measured=, silent authorities still say no Measured= published."""
+        vote_sum = {
+            'agreed': 4, 'compared': 4, 'all_agreed': True, 'voters': ['bastet', 'gabelmoo'],
+            'assigned_flags': FLAGS, 'absent_flags': [], 'split': 0, 'split_flags': [],
+            'flag_patterns': [], 'unmeasured': 0, 'examples': [], 'example_total': 0,
+            'bandwidth': {
+                'full_count': 4, 'compared': 4,
+                'publishing': ['bastet', 'gabelmoo'],
+                'silent': ['faravahar', 'longclaw'],
+                'scanners': ['bastet', 'faravahar', 'gabelmoo', 'longclaw'],
+                'misses': [],
+            },
+        }
+        text = self._render_block(vote_sum)
+        assert "4 of 4 relays have Measured= published in the votes from all 2 of 4 publishing authorities" in text
+        assert "no relays are missing Measured= from them." in text
+        assert "No Measured= published in the votes from 2 of 4 authorities" in text
+        assert "No relays are missing Measured= published in the votes from" not in text
+
+    def test_partial_coverage_names_misses_and_silent_authorities(self):
+        """When some relays lack Measured=, misses and silent authorities stay distinct."""
+        vote_sum = {
+            'agreed': 4, 'compared': 4, 'all_agreed': True, 'voters': ['bastet', 'gabelmoo'],
+            'assigned_flags': FLAGS, 'absent_flags': [], 'split': 0, 'split_flags': [],
+            'flag_patterns': [], 'unmeasured': 0, 'examples': [], 'example_total': 0,
+            'bandwidth': {
+                'full_count': 2, 'compared': 4,
+                'publishing': ['bastet', 'gabelmoo'],
+                'silent': ['faravahar', 'longclaw'],
+                'scanners': ['bastet', 'faravahar', 'gabelmoo', 'longclaw'],
+                'misses': [{'name': 'bastet', 'count': 2}],
+            },
+        }
+        text = self._render_block(vote_sum)
+        assert "2 of 4 relays have Measured= published in the votes from all 2 of 4 publishing authorities" in text
+        assert "No Measured= published in the votes from 2 of 4 authorities" in text
+        assert "bastet did not publish Measured= on 2 relays." in text

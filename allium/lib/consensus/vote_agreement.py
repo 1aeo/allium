@@ -134,6 +134,7 @@ def attach_vote_agreement(relays, relay_index, bw_authorities=None, scanner_auth
 
 
 def _summarize(pairs, limit, measurement_authorities):
+    """Aggregate flag agreement, pattern lines, examples, and bandwidth summary."""
     summary, by_flag = _empty_agreement(), {flag: 0 for flag in AGREEMENT_FLAGS}
     examples = []
     sides = {flag: [] for flag in AGREEMENT_FLAGS}
@@ -178,6 +179,7 @@ def _summarize(pairs, limit, measurement_authorities):
 
 
 def _bandwidth_summary(pairs, compared, measurement_authorities):
+    """Summarize publishing, silent, and missing Measured= counts across relays."""
     authorities = measurement_authorities if isinstance(measurement_authorities, dict) else {}
     publishing = list(authorities.get('publishing') or [])
     scanners = list(authorities.get('scanners') or [])
@@ -250,12 +252,14 @@ def _pattern_lines(pairs):
 
 
 def _line(kind, count, scope, names, also, only):
+    """Build one flag-pattern sentence descriptor for template rendering."""
     return {
         'kind': kind, 'count': count, 'scope': scope, 'names': names, 'also': also, 'only': only,
     }
 
 
 def _empty_agreement():
+    """Return an empty vote-agreement summary dictionary."""
     return {
         'compared': 0, 'agreed': 0, 'split': 0,
         'measurement_split': 0, 'unmeasured': 0,
@@ -285,12 +289,14 @@ def _note_agreement(summary, by_flag, info):
 
 
 def _split_flag_rows(by_flag):
+    """Return non-zero split flag counts sorted by descending relay count."""
     rows = [{'flag': flag, 'count': count} for flag, count in by_flag.items() if count]
     rows.sort(key=lambda item: (-item['count'], item['flag']))
     return rows
 
 
 def _name_list(names, key):
+    """Return sorted unique normalized authority names from an iterable."""
     if isinstance(names, (str, bytes)) or not isinstance(names, (list, tuple, set, frozenset)):
         return []
     found = []
@@ -316,6 +322,7 @@ def _flag_list(flags):
 
 
 def _fingerprint(value):
+    """Normalize a 40-hex relay fingerprint, or return None if invalid."""
     if not isinstance(value, str) or len(value) != 40:
         return None
     fp = value.strip().upper()
