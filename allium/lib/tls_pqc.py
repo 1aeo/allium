@@ -304,7 +304,7 @@ def _document(relays, url, artifact, scan_time):
     }
 
 
-def validate_tls_pqc_document(data, expected_url=None):
+def validate_tls_pqc_document(data, expected_url=None, require_start_url=False):
     """True for a parsed scan this module is willing to cache and display."""
     if not isinstance(data, dict):
         return False
@@ -322,6 +322,17 @@ def validate_tls_pqc_document(data, expected_url=None):
         if not isinstance(index_url, str) or not is_safe_scan_url(index_url, expected_url):
             return False
         if expected_url is None and not is_safe_scan_url(source_url, index_url):
+            return False
+    start_url = data.get("start_url")
+    if require_start_url:
+        if not isinstance(expected_url, str) or not expected_url:
+            return False
+        if not isinstance(start_url, str) or start_url != expected_url:
+            return False
+    elif start_url is not None:
+        if not isinstance(start_url, str) or (start_url and not is_safe_scan_url(start_url, expected_url)):
+            return False
+        if start_url and expected_url is None and not is_safe_scan_url(source_url, start_url):
             return False
     relays = data.get("relays")
     if not isinstance(relays, dict):
@@ -480,6 +491,7 @@ def load_tls_pqc_scan(fetch_body, start_url):
     first = fetch_body(start_url)
     parsed = parse_scan_payload(first, start_url)
     if parsed is not None:
+        parsed["start_url"] = start_url
         return parsed
     text = first.decode("utf-8", errors="replace") if isinstance(first, bytes) else first
     latest = latest_scan_url(text, start_url)
@@ -492,6 +504,7 @@ def load_tls_pqc_scan(fetch_body, start_url):
     if parsed is None:
         raise ValueError("latest TLS PQC link was not a scan table or CSV")
     parsed["index_url"] = start_url
+    parsed["start_url"] = start_url
     return parsed
 
 

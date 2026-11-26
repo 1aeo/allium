@@ -1999,10 +1999,12 @@ def _build_http_only_opener(origin_url: str) -> urllib.request.OpenerDirector:
     return opener
 
 
-def _validate_tls_pqc_document(data, expected_url=None) -> bool:
+def _validate_tls_pqc_document(data, expected_url=None, require_start_url=False) -> bool:
     """Validator for a parsed Margot TLS scan cached as JSON."""
     from .tls_pqc import validate_tls_pqc_document
-    return validate_tls_pqc_document(data, expected_url=expected_url)
+    return validate_tls_pqc_document(
+        data, expected_url=expected_url, require_start_url=require_start_url
+    )
 
 
 def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=None):
@@ -2033,7 +2035,7 @@ def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=Non
     cache_max_age_seconds = TLS_PQC_CACHE_MAX_AGE_HOURS * 3600
     if cache_age is not None and cache_age < cache_max_age_seconds:
         cached = _load_cache(api_name)
-        if cached and _validate_tls_pqc_document(cached, expected_url=url):
+        if cached and _validate_tls_pqc_document(cached, expected_url=url, require_start_url=True):
             log_progress(
                 "using cached %s (less than %s hour(s) old)"
                 % (display_name, TLS_PQC_CACHE_MAX_AGE_HOURS))
@@ -2047,7 +2049,7 @@ def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=Non
     retry_count = TLS_PQC_CONFIG.retry_count
     try:
         loaded = _load_cache(api_name)
-        if loaded and _validate_tls_pqc_document(loaded, expected_url=url):
+        if loaded and _validate_tls_pqc_document(loaded, expected_url=url, require_start_url=True):
             cached_data = loaded
             timeout_seconds = TLS_PQC_TIMEOUT_FRESH_CACHE
             retry_count = 0
@@ -2078,7 +2080,9 @@ def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=Non
             )
 
         data = load_tls_pqc_scan(fetch_body, url)
-        if not _validate_tls_pqc_document(data, expected_url=url):
+        if isinstance(data, dict):
+            data["start_url"] = url
+        if not _validate_tls_pqc_document(data, expected_url=url, require_start_url=True):
             log_progress("warning: invalid %s document" % display_name)
             if cached_data:
                 log_progress("using cached %s due to invalid response" % display_name)

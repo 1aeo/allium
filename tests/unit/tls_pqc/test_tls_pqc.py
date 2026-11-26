@@ -303,6 +303,7 @@ def test_dashboard_template_does_not_hardcode_directory_authority_counts():
 def test_fresh_cache_skips_the_network_and_a_timeout_uses_the_cache():
     """Fresh cache avoids network fetches, and timeout falls back to stale cache."""
     document = parse_html_scan(_read("scan.html"), SCAN_URL)
+    document["start_url"] = INDEX
     workers._save_cache("tls_pqc", document)
     with patch.object(workers, "_fetch_url_with_total_timeout",
                       side_effect=AssertionError("network")) as called:
@@ -461,12 +462,69 @@ def test_validate_tls_pqc_document_and_cache_reject_unsafe_or_mismatched_urls():
         expected_url=INDEX,
     )
 
-    workers._save_cache("tls_pqc", dict(document, source_url="https://evil.example/tor-tls-pqc/2026-06-18/"))
+    workers._save_cache("tls_pqc", dict(
+        document,
+        start_url=INDEX,
+        source_url="https://evil.example/tor-tls-pqc/2026-06-18/",
+    ))
     with patch.object(workers, "_fetch_url_with_total_timeout", return_value=_read("scan.html").encode("utf-8")):
         loaded = workers.fetch_tls_pqc(INDEX, progress_logger=None)
     assert loaded["source_url"] == INDEX
 
     assert workers.fetch_tls_pqc("file:///tmp/scan.html", progress_logger=None) is None
+
+
+def test_cache_is_bound_to_configured_start_url():
+    """Cached scans are keyed to start_url across fresh hits, URL switches, and fallbacks."""
+    pages = {
+        INDEX: _read("index.html").encode("utf-8"),
+        SCAN_URL: _read("scan.html").encode("utf-8"),
+    }
+
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=lambda u, *a, **kw: pages[u]) as fetch:
+        first = workers.fetch_tls_pqc(INDEX, progress_logger=None)
+    assert fetch.call_count == 2
+    assert first["start_url"] == INDEX
+    assert first["source_url"] == SCAN_URL
+
+    # Same start URL within 24h reuses cache even though source_url != start_url.
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=AssertionError("network")):
+        reused = workers.fetch_tls_pqc(INDEX, progress_logger=None)
+    assert reused["start_url"] == INDEX
+    assert reused["source_url"] == SCAN_URL
+
+    # Switching --tls-pqc-url on the same host bypasses the INDEX cache and updates start_url.
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=lambda u, *a, **kw: pages[u]) as switch_fetch:
+        switched = workers.fetch_tls_pqc(SCAN_URL, progress_logger=None)
+    assert switch_fetch.call_count == 1
+    assert switch_fetch.call_args.args[0] == SCAN_URL
+    assert switched["start_url"] == SCAN_URL
+
+    # Timeout or invalid refresh for another URL on the same host does not fall back to SCAN_URL cache.
+    other_url = "https://ahf.me/tor-tls-pqc/2026-03-01/"
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=workers.TotalTimeoutError("timeout")):
+        assert workers.fetch_tls_pqc(other_url, progress_logger=None) is None
+    with patch.object(workers, "_fetch_url_with_total_timeout", return_value=b"<html>no table</html>"):
+        assert workers.fetch_tls_pqc(other_url, progress_logger=None) is None
+
+    # Pre-change cached documents lacking start_url are treated as unusable in fresh and stale fallback.
+    legacy = parse_html_scan(_read("scan.html"), SCAN_URL)
+    assert "start_url" not in legacy
+    assert validate_tls_pqc_document(legacy, expected_url=SCAN_URL, require_start_url=False)
+    assert not validate_tls_pqc_document(legacy, expected_url=SCAN_URL, require_start_url=True)
+    workers._save_cache("tls_pqc", legacy)
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=workers.TotalTimeoutError("timeout")):
+        assert workers.fetch_tls_pqc(SCAN_URL, progress_logger=None) is None
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=lambda u, *a, **kw: pages[u]) as legacy_fetch:
+        reloaded = workers.fetch_tls_pqc(SCAN_URL, progress_logger=None)
+    assert legacy_fetch.call_count == 1
+    assert reloaded["start_url"] == SCAN_URL
 
 
 def test_http_only_opener_and_same_origin_redirect_handler():
