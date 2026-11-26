@@ -178,7 +178,7 @@ Pre-computed analysis attached to contact pages:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--out` | `./www` | Output directory for generated files |
-| `--onionoo-url` | `https://onionoo.torproject.org/details` | Onionoo API endpoint |
+| `--onionoo-details-url` | `https://onionoo.torproject.org/details` | Onionoo details API endpoint |
 | `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Historical bandwidth API endpoint |
 | `--bandwidth-cache-hours` | `12` | Cache time for historical bandwidth data (hours) |
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
@@ -187,6 +187,8 @@ Pre-computed analysis attached to contact pages:
 | `--filter-downtime` | `7` | Exclude relays not seen for >N days (0 to disable) |
 | `--workers` | CPU count (min 4) | Parallel workers for page generation |
 | `--no-charts` | charts on | Skip the bandwidth/uptime history charts (they need `--apis all`) |
+| `--no-pressure-history` | backfill on | Skip the CollecTor pressure-history backfill and use the cache file already on disk |
+| `--no-consensus-evaluation` | evaluation on | Skip CollecTor consensus and server-descriptor fetches and the per-relay consensus evaluation |
 | `--chart-format` | `png` | Chart images. `png`: shows at Tor Browser's Safest level; needs cairocffi and numpy (`config/requirements.txt`, with zlib-ng for faster deflate) plus the cairo library ([PNG charts](#png-charts)), without which the default writes SVG with a notice naming the install commands and an explicit `--chart-format png` stops; DejaVu Sans (`fonts-dejavu-core`) keeps the chart font; ~10.5 ms per new chart, cached across builds. `svg`: ~1 ms and ~10 KB per chart, no extra packages, blank at Safest |
 | `--chart-scale` | `2` | PNG resolution: `2` (2160 px wide, sharp on HiDPI screens), `1.5` or `1`; the page lays charts out at 1080 px either way |
 | `--chart-colors` | `64` | PNG colors: `64` (a fixed palette, ~53 KB a chart at 2x, looks the same) or `full` (~150 KB) |
@@ -203,6 +205,9 @@ Pre-computed analysis attached to contact pages:
 
 # Minimal memory mode (~400MB instead of ~2.4GB)
 ./allium.py --apis details --progress
+
+# Before/after comparison without the CollecTor pressure-history backfill
+./allium.py --out www_baseline --apis all --progress --no-pressure-history
 ```
 
 ## API Data Sources

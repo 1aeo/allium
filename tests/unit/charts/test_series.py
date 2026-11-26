@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from allium.lib.charts.series import (
-    MBIT, active_ratio, family_key, operator_throughput, peer_medians, points, throughput, uptime_points,
+    MBIT, active_ratio, family_key, network_ratio_bands, network_uptime, operator_throughput, operator_uptime,
+    peer_medians, points, throughput, uptime_points,
 )
 from allium.lib.uptime_utils import _block_uptime_percentage_and_datapoints, uptime_windows
 
@@ -81,7 +82,12 @@ def test_operator_throughput_sums_members_on_the_common_interval():
         "B": history([10, 20], [10, None]),
         "C": history([5, 5], interval=2 * DAY),  # outvoted interval
     }
-    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D")]
+    bandwidth_map["Z"] = {"write_history": {"1_month": {"values": [1, 2], "interval": "nope", "factor": 1000,
+                                                       "first": "2026-09-01 12:00:00"}},
+                          "read_history": {"1_month": {"values": [1, 2], "interval": "nope", "factor": 1000,
+                                                      "first": "2026-09-01 12:00:00"}}}
+    bandwidth_map["shape"] = {"write_history": "not-a-history", "read_history": {"1_month": [1, 2]}}
+    members = [{"fingerprint": fp} for fp in ("A", "B", "C", "D", "Z", "shape")]
     (ts, write, read, interval), summed = operator_throughput(members, bandwidth_map, "1_month")
     # Each with the traffic it carried on the days summed (write plus read): B only on day 1.
     assert [(r["fingerprint"], round(traffic / MBIT)) for r, traffic in summed] == [("A", 6000), ("B", 20000)]
@@ -106,10 +112,54 @@ def test_operator_throughput_fills_in_members_without_the_period_and_stops_where
     assert [r["fingerprint"] for r, _traffic in summed] == list("ABLO") and interval == 2 * DAY
     # Sep 7 would sum A and B without L: the sum stops at Sep 5 instead of ending on a false drop.
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(26, 5), (28, 5), (3, 170), (5, 160)]
+    # The network chart also leaves Sep 7 off: 2 of the 3 relays that reported Sep 5 is under 9/10.
+    (open_ts, open_write, _read, _interval), _summed = operator_throughput(
+        members, bandwidth_map, "1_year", until_slowest=False)
+    assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(open_ts, open_write)][-1] == (5, 160)
     # If L is no longer running, it will not catch up: the drop on Sep 7 is real.
     members[2]["running"] = False
     (ts, write, _read, interval), summed = operator_throughput(members, bandwidth_map, "1_year")
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)][-2:] == [(5, 160), (7, 110)]
+
+
+def test_network_sum_drops_only_an_incomplete_trailing_slot():
+    """One relay behind must not hide the newest slot, and a slot missing more than a tenth must not be summed.
+
+    A lower count that continues is relays that left: those slots stay, so the drop stays on the chart.
+    """
+    members = [{"fingerprint": str(i)} for i in range(12)]
+
+    def summed_days(behind, trail):
+        bandwidth = {str(i): history([10] * (2 + trail)) for i in range(12 - behind)}
+        for i in range(12 - behind, 12):
+            bandwidth[str(i)] = history([10, 10])
+        (ts, write, _read, _interval), _summed = operator_throughput(
+            members, bandwidth, "1_month", until_slowest=False)
+        return [t.day for t in ts], [round(v / MBIT) for v in write]
+
+    # 11/12 on the last day: kept. The operator cut would have stopped at the one relay still behind.
+    assert summed_days(1, 1) == ([1, 2, 3], [120000, 120000, 110000])
+    # 8/12 on the last day: the unfinished Onionoo slot, left off. The two full days stay.
+    assert summed_days(4, 1) == ([1, 2], [120000, 120000])
+    # The same 8 relays are still there the day after: both thinner days stay.
+    assert summed_days(4, 2) == ([1, 2, 3, 4], [120000, 120000, 80000, 80000])
+
+
+def test_operator_throughput_falls_through_a_non_positive_interval():
+    # A zero or negative block is not a slot size. It must not hide this relay's shorter history.
+    short = {"1_month": block([10, 10])}
+    bandwidth_map = {
+        "A": history([100, 100], key="6_months"),
+        "Z": {"write_history": {"6_months": block([1, 2], interval=0), **short},
+              "read_history": {"6_months": block([1, 2], interval=0), **short}},
+        "N": {"write_history": {"6_months": block([1, 2], interval=-DAY), "1_month": block([5, 5])},
+              "read_history": {"6_months": block([1, 2], interval=-DAY), "1_month": block([5, 5])}},
+    }
+    (ts, write, _read, interval), summed = operator_throughput(
+        [{"fingerprint": fp} for fp in "AZN"], bandwidth_map, "6_months")
+    assert [relay["fingerprint"] for relay, _traffic in summed] == list("AZN")
+    assert ts == [T0, T0 + timedelta(days=1)] and interval == DAY
+    assert [round(v / MBIT) for v in write] == [115000, 115000]
 
 
 def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():
@@ -119,6 +169,215 @@ def test_operator_throughput_sums_only_whole_slots_of_a_shorter_history():
     (ts, write, _read, _interval), _summed = operator_throughput([{"fingerprint": "A"}, {"fingerprint": "B"}],
                                                                  bandwidth_map, "1_year")
     assert [(t.day, round(v / MBIT / 1000)) for t, v in zip(ts, write)] == [(3, 100), (5, 110), (7, 110)]
+
+
+def _uptime(values, first="2026-08-30 14:00:00", interval=14400, key="1_month"):
+    return {"uptime": {key: block(values, first=first, interval=interval, factor=1 / 999.0)}}
+
+
+def test_operator_uptime_is_the_mean_of_each_relays_drawn_series():
+    """A slot is the mean of the members whose own chart has a point there, including a stopped relay's 0%."""
+    windows = uptime_windows({"relays_published": "2026-09-30 12:00:00", "relays": []})
+    uptime_map = {"A": _uptime([999] * 200), "B": _uptime([999] * 150)}
+    members = [relay("A"), relay("B", running=False, last_seen="2026-09-24 11:00:00")]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", windows)
+    drawn = [uptime_points(uptime_map[fp]["uptime"]["1_month"], "1_month", windows, member,
+                           uptime_map[fp]["uptime"]) for fp, member in zip("AB", members)]
+    assert interval == 14400 and len(ts) == 186
+    assert percent[149] == pytest.approx(100.0) and percent[150] == pytest.approx(50.0)
+    for t, value in zip(ts, percent):
+        present = [series[t] for series in drawn if t in series]
+        assert value == pytest.approx(sum(present) / len(present))
+
+
+def test_operator_uptime_fills_a_shorter_history_and_stops_where_everyone_running_has_reported():
+    # No document window, so nothing is padded and a relay's series ends where its block ends.
+    day, first = 86400, "2026-09-01 12:00:00"
+    uptime_map = {
+        "A": _uptime([999] * 10, first=first, interval=day),
+        "L": _uptime([999] * 8, first=first, interval=day),  # two slots behind: still catching up
+        "O": _uptime([0] * 3, first=first, interval=day),  # stopped well before
+        "S": _uptime([0] * 12, first=first, interval=4 * 3600, key="6_months"),  # not this period's grid
+    }
+    members = [relay("A"), relay("L"), relay("O", running=False), relay("S")]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert interval == day and len(ts) == 8  # held at L, not extended over the two slots L lacks
+    assert percent[:3] == pytest.approx([200.0 / 3] * 3)  # A and L up, O down
+    assert percent[3:] == pytest.approx([100.0] * 5)
+    # Three slots behind is not a delay: the mean runs on to A's end without L.
+    uptime_map["L"] = _uptime([999] * 7, first=first, interval=day)
+    ts, percent, _interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert len(ts) == 10 and percent[-1] == pytest.approx(100.0)
+    # B has only a 6-month history. Its days average into the 1-year slots: Sep 3 is down, Sep 5 is up.
+    # B has stopped, so the series runs on and A's later slots stand alone. No native block, no chart.
+    year = dict(first="2026-09-03 00:00:00", interval=2 * day, key="1_year")
+    uptime_map = {"A": _uptime([999] * 4, **year),
+                  "B": _uptime([0, 0, 999, 999], first="2026-09-02 12:00:00", interval=day, key="6_months")}
+    ts, percent, interval = operator_uptime([relay("A"), relay("B", running=False)], uptime_map, "1_year", {})
+    assert interval == 2 * day
+    assert [(t.day, round(v)) for t, v in zip(ts, percent)] == [(3, 50), (5, 100), (7, 100), (9, 100)]
+    assert operator_uptime([relay("B", running=False)], uptime_map, "1_year", {}) is None
+    assert operator_uptime([relay("Z")], {}, "1_month", {}) is None
+
+
+def test_operator_uptime_slots_every_history_and_skips_non_finite_values():
+    """A native block on a finer interval joins the majority slots. NaN does not make the mean NaN."""
+    day, first = 86400, "2026-09-01 12:00:00"
+    uptime_map = {
+        "A": _uptime([999, 999], first=first, interval=day),
+        "B": _uptime([999, 999], first=first, interval=day),
+        # Same period, outvoted interval: four 12-hour zeros are two whole days at 0%.
+        "C": _uptime([0, 0, 0, 0], first="2026-09-01 06:00:00", interval=day // 2),
+        "N": _uptime([float("nan"), 0], first=first, interval=day),
+    }
+    members = [relay(fp) for fp in "ABCN"]
+    ts, percent, interval = operator_uptime(members, uptime_map, "1_month", {})
+    assert interval == day and [t.day for t in ts] == [1, 2]
+    # Sep 1: A and B up, C down, N missing. Sep 2: N is down too.
+    assert percent == pytest.approx([200.0 / 3, 50.0])
+    # A member whose history cannot be read is left out; the others still draw.
+    bad = {"uptime": {"1_month": dict(uptime_map["A"]["uptime"]["1_month"], factor="x")}}
+    drawn = operator_uptime([relay("A"), relay("X")], {"A": uptime_map["A"], "X": bad}, "1_month", {})
+    assert drawn[2] == day and drawn[1] == pytest.approx([100.0, 100.0])
+    # A non-mapping uptime object is skipped; it must not raise before the other relays are read.
+    weird = {"uptime": "not-an-object"}
+    drawn = operator_uptime([relay("A"), relay("W")], {"A": uptime_map["A"], "W": weird}, "1_month", {})
+    assert drawn[1] == pytest.approx([100.0, 100.0])
+    # Null-only native blocks must not vote the interval over a relay that has real daily samples.
+    empty = {"uptime": {"1_month": block([None, None], interval=14400)}}
+    daily = _uptime([999, 999], first=first, interval=day)
+    drawn = operator_uptime([relay("E1"), relay("E2"), relay("G")],
+                            {"E1": empty, "E2": empty, "G": daily}, "1_month", {})
+    assert drawn[2] == day and drawn[1] == pytest.approx([100.0, 100.0])
+    # A trailing NaN is not a reported point, so the series stops at the last finite slot both relays have.
+    nan_tail = _uptime([999, 999, float("nan")], first=first, interval=day)
+    full = _uptime([999, 999, 999], first=first, interval=day)
+    ts, percent, _interval = operator_uptime([relay("A"), relay("B")], {"A": full, "B": nan_tail}, "1_month", {})
+    assert [t.day for t in ts] == [1, 2] and percent == pytest.approx([100.0, 100.0])
+
+
+def test_network_uptime_averages_the_relays_that_have_the_period():
+    relays = [relay("A"), relay("B"), relay("C")]
+    uptime_map = {
+        "A": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+        "B": {"uptime": {"1_month": block([0, 999], interval=14400, factor=1 / 999.0)}},
+        # No 1-month block: a relay that does not count, rather than a hole treated as 0%.
+    }
+    ts, percent, interval, average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)]
+    assert percent == [pytest.approx(50.0), pytest.approx(100.0)]
+    # Two slots: a relay chart states no average under 30, so the network chart does not either.
+    assert interval == 14400 and average == 0.0 and counts == [2, 2]
+    assert network_uptime(relays, uptime_map, "5_years", {}) is None
+    # A different sampling interval, and one relay's extra trailing slot, do not move the mean.
+    relays = [relay(str(i)) for i in range(20)]
+    uptime_map = {relay["fingerprint"]: {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}}
+                  for relay in relays}
+    uptime_map["0"]["uptime"]["1_month"] = block([999, 999, 0], interval=14400, factor=1 / 999.0)
+    relays.append(relay("odd"))
+    uptime_map["odd"] = {"uptime": {"1_month": block([0, 0], interval=DAY, factor=1 / 999.0)}}
+    ts, percent, interval, average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and average == 0.0 and counts == [20, 20]
+    # Early slots of a long period have fewer relays. They stay; only a sparse trailing slot is dropped.
+    old = [relay("old1"), relay("old2")]
+    young = [relay("y%d" % i) for i in range(20)]
+    early = {}
+    for item in old:
+        early[item["fingerprint"]] = {"uptime": {"1_month": block([999] * 4, interval=14400, factor=1 / 999.0)}}
+    for item in young:
+        early[item["fingerprint"]] = {"uptime": {"1_month": block(
+            [999, 999], interval=14400, factor=1 / 999.0, first="2026-09-01 20:00:00")}}
+    ts, _percent, _interval, _average, counts = network_uptime(old + young, early, "1_month", {})
+    assert [t.hour for t in ts] == [12, 16, 20, 0] and counts == [2, 2, 22, 22]
+    # Thirty slots at 100% and 0%: the mean is shown. One percent or less is not, as on a relay chart.
+    long_map = {"A": {"uptime": {"1_month": block([999] * 30, interval=14400, factor=1 / 999.0)}},
+                "B": {"uptime": {"1_month": block([0] * 30, interval=14400, factor=1 / 999.0)}}}
+    _ts, percent, _interval, average, counts = network_uptime([relay("A"), relay("B")], long_map, "1_month", {})
+    assert len(percent) == 30 and percent[0] == pytest.approx(50.0) and average == pytest.approx(50.0)
+    assert counts == [2] * 30
+    quiet = {"A": {"uptime": {"1_month": block([0] * 30, interval=14400, factor=1 / 999.0)}}}
+    _ts, percent, _interval, average, counts = network_uptime([relay("A")], quiet, "1_month", {})
+    assert percent == [pytest.approx(0.0)] * 30 and average == 0.0 and counts == [1] * 30
+    # A zero interval, or one that is not a number, must not become the period's sampling interval,
+    # and must not drop the relays that do have one.
+    bad = {"uptime": {"1_month": {"first": "2026-09-01 12:00:00", "interval": "nope", "factor": 1 / 999.0,
+                                  "values": [1, 2, 3]}}}
+    zero = {"uptime": {"1_month": block([0, 0], interval=0, factor=1 / 999.0)}}
+    relays = [relay("good"), relay("bad"), relay("zero")]
+    uptime_map = {"good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+                  "bad": bad, "zero": zero,
+                  "shape": {"uptime": {"1_month": {"values": 5, "interval": 14400}}},
+                  "text": {"uptime": "not-an-object"}}
+    relays.extend((relay("shape"), relay("text")))
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
+
+
+def test_network_uptime_rejects_a_fractional_interval():
+    relays = [relay("good"), relay("a"), relay("b")]
+    uptime_map = {
+        "good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+        # int(1.5) is 1. Two of these would outvote the 4-hour history and plot one-second samples.
+        "a": {"uptime": {"1_month": block([999, 999], interval=1.5, factor=1 / 999.0)}},
+        "b": {"uptime": {"1_month": block([0, 0], interval=1.5, factor=1 / 999.0)}},
+    }
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 1]
+    assert network_uptime([relay("a")], {"a": uptime_map["a"]}, "1_month", {}) is None
+    # 14400.0 is the same number of seconds as 14400.
+    whole = {"uptime": {"1_month": block([999, 999], interval=14400.0, factor=1 / 999.0)}}
+    _ts, _percent, interval, _average, counts = network_uptime(
+        [relay("good"), relay("whole")], {"good": uptime_map["good"], "whole": whole}, "1_month", {})
+    assert interval == 14400 and counts == [2, 2]
+
+
+def test_network_uptime_ignores_a_block_with_no_numeric_values():
+    relays = [relay("good"), relay("words"), relay("holes"), relay("mixed")]
+    uptime_map = {
+        "good": {"uptime": {"1_month": block([999, 999], interval=14400, factor=1 / 999.0)}},
+        # Two lists with no numbers would outvote the real 4-hour history.
+        "words": {"uptime": {"1_month": block(["down", "down"], interval=DAY)}},
+        "holes": {"uptime": {"1_month": block([None, None], interval=DAY)}},
+        # A null beside a sample is still a history: the sample counts.
+        "mixed": {"uptime": {"1_month": block([None, 999], interval=14400, factor=1 / 999.0)}},
+    }
+    ts, percent, interval, _average, counts = network_uptime(relays, uptime_map, "1_month", {})
+    assert ts == [T0, T0 + timedelta(hours=4)] and interval == 14400
+    assert percent == [pytest.approx(100.0), pytest.approx(100.0)] and counts == [1, 2]
+
+
+def test_network_ratio_bands_uses_the_relay_census_cut():
+    """p10/p90 of per-relay sum(write)/sum(read), dropping quiet relays and histories under three points."""
+    relays = [relay(str(i)) for i in range(40)]
+    bandwidth = {}
+    for i, item in enumerate(relays):
+        # write/read = 1 + i/100 exactly (1.00 .. 1.39), so the linear percentiles are known.
+        bandwidth[item["fingerprint"]] = history([1000 + 10 * i] * 5, [1000] * 5)
+    relays.append(relay("short"))
+    bandwidth["short"] = history([5000] * 2, [1000] * 2)  # two points: not a census member
+    relays.append(relay("quiet"))
+    bandwidth["quiet"] = history([1] * 5, [1] * 5)  # under 50 KB/s
+    few = []
+    operator_throughput(relays[:10], bandwidth, "1_month", ratios=few)
+    assert network_ratio_bands(few) is None
+    ratios = []
+    operator_throughput(relays, bandwidth, "1_month", ratios=ratios)
+    bands = network_ratio_bands(ratios)
+    assert bands["n"] == 40 and bands["role"] == "network"
+    # rank = 39 * quantile / 100, between value 1 + i*0.01 and the next.
+    assert bands["typical_lo"] == pytest.approx(1.039) and bands["typical_hi"] == pytest.approx(1.351)
+    assert bands["invest_lo"] == pytest.approx(1.0078) and bands["invest_hi"] == pytest.approx(1.3822)
+    # A native history on another interval stays in the census and out of the sum.
+    odd = [relay("day"), relay("day2"), relay("wide")]
+    odd_bw = {name: history([1000] * 5) for name in ("day", "day2")}
+    odd_bw["wide"] = history([2000] * 4, [1000] * 4, interval=2 * DAY)
+    odd_ratios = []
+    _series, summed = operator_throughput(odd, odd_bw, "1_month", ratios=odd_ratios)
+    assert sorted(round(ratio, 3) for ratio in odd_ratios) == [1.0, 1.0, 2.0]
+    assert [relay["fingerprint"] for relay, _traffic in summed] == ["day", "day2"]
 
 
 def test_family_key_is_the_effective_family_when_it_has_other_members():

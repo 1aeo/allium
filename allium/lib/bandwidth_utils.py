@@ -453,13 +453,17 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         total_data = {p: write_total.get(p, 0) + read_total.get(p, 0)
                       for p in ONIONOO_HISTORY_PERIODS}
         
+        fields = overload_fields(bandwidth_relay)
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,
             'total_data': total_data,
             'flag_data': flag_data,
-            # Overload fields from bandwidth endpoint (for stability computation)
-            'overload_ratelimits': bandwidth_relay.get('overload_ratelimits'),
-            'overload_fd_exhausted': bandwidth_relay.get('overload_fd_exhausted'),
+            # Presence is recorded separately from the value so an explicit
+            # null or empty object is not treated as a missing field.
+            'overload_ratelimits': fields['ratelimits'],
+            'overload_ratelimits_present': fields['ratelimits_present'],
+            'overload_fd_exhausted': fields['fd'],
+            'overload_fd_exhausted_present': fields['fd_present'],
         }
     
     # Calculate network flag statistics
@@ -492,3 +496,70 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
             'flags_found': list(network_flag_data.keys()) if include_flag_analysis else []
         }
     }
+
+
+def overload_fields(row):
+    """Presence and value of the two /bandwidth overload objects on one row."""
+    def field(key):
+        present = isinstance(row, dict) and key in row
+        return present, (row[key] if present else None)
+    rate_present, rate = field('overload_ratelimits')
+    fd_present, fd = field('overload_fd_exhausted')
+    return {
+        'ratelimits_present': rate_present,
+        'ratelimits': rate,
+        'fd_present': fd_present,
+        'fd': fd,
+    }
+
+
+def bandwidth_overload_index(bandwidth_data):
+    """Map fingerprint to overload-field presence for a loaded bandwidth document.
+
+    Returns None when the payload is not a loaded Onionoo bandwidth document
+    (endpoint disabled, fetch failed, or the body has no relays list). An empty
+    relays list is a loaded document in which every fingerprint is absent.
+    """
+    if not isinstance(bandwidth_data, dict) or not isinstance(bandwidth_data.get('relays'), list):
+        return None
+    index = {}
+    for row in bandwidth_data['relays']:
+        if not isinstance(row, dict):
+            continue
+        fingerprint = row.get('fingerprint')
+        if fingerprint and isinstance(fingerprint, str):
+            index[fingerprint] = overload_fields(row)
+    return index
+
+
+def _assign_bandwidth_overload(relay, availability, fields=None):
+    from .stability_utils import BANDWIDTH_AVAILABILITY_KEY
+    relay[BANDWIDTH_AVAILABILITY_KEY] = availability
+    for present_key, value_key, relay_key in (
+        ('ratelimits_present', 'ratelimits', 'overload_ratelimits'),
+        ('fd_present', 'fd', 'overload_fd_exhausted'),
+    ):
+        if fields and fields[present_key]:
+            relay[relay_key] = fields[value_key]
+        else:
+            relay.pop(relay_key, None)
+
+
+def apply_bandwidth_overload_fields(relays, bandwidth_data):
+    """Copy this generation's bandwidth overload fields onto details relays.
+
+    Absent keys are removed, including values left by an earlier response.
+    Each relay's ``_bandwidth_overload_availability`` is ``loaded``,
+    ``no_record``, or ``unavailable``. Malformed values are copied through so
+    evaluation can tell them from a field that was not in the document.
+    """
+    index = bandwidth_overload_index(bandwidth_data)
+    for relay in relays or []:
+        if not isinstance(relay, dict):
+            continue
+        if index is None:
+            _assign_bandwidth_overload(relay, 'unavailable')
+        else:
+            fields = index.get(relay.get('fingerprint'))
+            _assign_bandwidth_overload(
+                relay, 'loaded' if fields else 'no_record', fields)

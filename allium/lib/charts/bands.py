@@ -18,6 +18,11 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "role
 # The census day, for the footnote ("15 Aug 2026").
 BASELINE = "{0.day} {0:%b %Y}".format(parse_onionoo_timestamp(CATALOG["frozen_from"]))
 
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "network_ratio_bands.json"),
+          encoding="utf-8") as _handle:
+    NETWORK = json.load(_handle)
+NETWORK_BASELINE = "{0.day} {0:%b %Y}".format(parse_onionoo_timestamp(NETWORK["frozen_from"]))
+
 
 def role_from_flags(flags):
     """The catalog role for a relay's Onionoo flags: Exit+Guard, Exit, Guard or Middle."""
@@ -30,6 +35,24 @@ def role_from_flags(flags):
 def bands_for_role(role):
     """The catalog's typical / investigate limits and census size for one role, with ``role`` and ``peers``."""
     return dict(CATALOG["roles"][role], role=role, peers=PEERS[role])
+
+
+def bands_for_network(period):
+    """The frozen whole-network write/read census for one chart period, or None.
+
+    Not recomputed from the live dump: a network-wide shift would move the percentiles with the line and
+    hide the event. Rebuild ``network_ratio_bands.json`` from a quiet snapshot when the mix changes.
+    """
+    row = NETWORK["periods"].get(period)
+    if not row:
+        return None
+    return {"role": "network", "peers": "relays", "n": row["n"], "typical_lo": row["p10"], "typical_hi": row["p90"],
+            "invest_lo": row["p2"], "invest_hi": row["p98"]}
+
+
+def network_census_footnote(bands):
+    """``9,151 relays · baseline 19 Oct 2026``."""
+    return "{:,} relays · baseline {}".format(bands["n"], NETWORK_BASELINE)
 
 
 def ratio_strip_data_hi(bands):

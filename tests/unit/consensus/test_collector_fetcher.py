@@ -1004,7 +1004,7 @@ w Bandwidth=50000
         assert '2001:db8::1' in relay['ipv6_address']
     
     def test_parse_multiple_a_lines(self):
-        """Test that 'a' lines are parsed (last one wins per current impl)."""
+        """The first routable 'a' line is the address dir-spec says to keep."""
         fetcher = CollectorFetcher()
         
         vote_content = """@type network-status-vote-3 1.0
@@ -1018,8 +1018,7 @@ w Bandwidth=50000
         
         relay = list(result['relays'].values())[0]
         assert relay['ipv6_reachable'] == True
-        # Implementation uses last 'a' line (overwrites)
-        assert '2001:db8' in relay['ipv6_address']  # Either address is valid
+        assert relay['ipv6_address'] == '[2001:db8::1]:9001'
 
 
 class TestBandwidthFileHeadersDetection:

@@ -1,22 +1,28 @@
 """
 Consensus evaluation module.
-Feature flag: ALLIUM_CONSENSUS_EVALUATION (default: true)
+
+Operators turn this off with ``--no-consensus-evaluation``. ``allium.py`` calls
+``set_consensus_evaluation_enabled`` from that flag before any worker starts.
+The default is on.
 
 This module provides per-relay consensus evaluation from CollecTor data,
 including authority voting information and flag threshold analysis.
 """
 
-import os
+# The CLI sets this before workers are counted. Library callers that never
+# parse arguments keep the default, which is on.
+_consensus_evaluation_enabled = True
 
-# Feature flag for gradual rollout
-CONSENSUS_EVALUATION_ENABLED = os.environ.get(
-    'ALLIUM_CONSENSUS_EVALUATION', 'true'
-).lower() == 'true'
+
+def set_consensus_evaluation_enabled(enabled: bool) -> None:
+    """Record whether this process should fetch and render consensus evaluation."""
+    global _consensus_evaluation_enabled
+    _consensus_evaluation_enabled = bool(enabled)
 
 
 def is_consensus_evaluation_enabled() -> bool:
     """Check if consensus evaluation feature is enabled."""
-    return CONSENSUS_EVALUATION_ENABLED
+    return _consensus_evaluation_enabled
 
 
 # Export main classes
@@ -51,7 +57,7 @@ __all__ = [
     'format_relay_consensus_evaluation',
     'format_authority_consensus_evaluation',
     'is_consensus_evaluation_enabled',
-    'CONSENSUS_EVALUATION_ENABLED',
+    'set_consensus_evaluation_enabled',
     # Flag threshold constants
     'SECONDS_PER_DAY',
     'GUARD_BW_GUARANTEE',

@@ -53,6 +53,9 @@ STANDALONE_PAGES = [
     # Network Health Dashboard
     {"template": "network-health-dashboard.html", "output": "network-health.html",
      "context": "health", "context_name": "Network Health Dashboard", "label": "network health dashboard"},
+    # Network pressure: daily overload, Guard, HSDir, and directory bytes served.
+    {"template": "network-pressure.html", "output": "network-pressure.html",
+     "context": "health", "context_name": "Network Pressure", "label": "network pressure page"},
     # Directory Authorities
     {"template": "misc-authorities.html", "output": "misc/authorities.html",
      "context": "misc", "context_name": "Directory Authorities", "label": "directory authorities monitoring page"},
@@ -195,6 +198,8 @@ def generate_site(relay_set, args, progress_logger):
     allium_pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     progress_logger.log(f"Details API data loaded successfully - found {len(relay_set.json.get('relays', []))} relays")
+    _write_network_history(relay_set, args.output_dir)
+    _write_pressure_charts(relay_set, args.output_dir)
 
     # Compute API diagnostics data before page generation
     from .api_diagnostics import collect_api_diagnostics
@@ -418,6 +423,29 @@ def _sync_static_files(src_dir, dst_dir):
             copied += 1
 
     return copied, skipped
+
+
+def _write_network_history(relay_set, output_dir):
+    """Draw the whole-network charts and remember their heights for the health page.
+
+    No writer (``--no-charts`` or a details-only build) leaves both maps empty, and the page omits the section.
+    """
+    writer = getattr(relay_set, "chart_writer", None)
+    bandwidth, uptime = (writer.network(os.path.join(writer.root or output_dir, "network")) if writer else
+                         ({}, {}))
+    relay_set.network_bandwidth_periods, relay_set.network_uptime_periods = bandwidth, uptime
+
+
+def _write_pressure_charts(relay_set, output_dir):
+    """Draw the pressure charts beside network-pressure.html, or under charts/pressure/."""
+    writer = getattr(relay_set, "chart_writer", None)
+    history = getattr(relay_set, "pressure_history", None)
+    if not writer or not history or not history.get("days"):
+        relay_set.pressure_periods = {}
+        return
+    directory = os.path.join(writer.root or output_dir, "pressure")
+    drawn = writer.pressure(directory, history)
+    relay_set.pressure_periods = {name: periods for name, periods in drawn.items() if periods}
 
 
 def _build_page_context(page_def, relay_set):

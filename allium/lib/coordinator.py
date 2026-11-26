@@ -145,7 +145,7 @@ class Coordinator:
             self.progress_logger.log(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
             
-            # CI debugging with centralized approach
+            # CI and GITHUB_ACTIONS identify the host. They are not operator options.
             import os
             if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
                 print(f"🔧 CI Debug: {api_name} worker failed with: {e}")

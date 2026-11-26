@@ -48,6 +48,8 @@ def test_throughput_subtitle_states_the_mean_its_share_and_the_peak():
 
 def test_ratio_subtitle_gives_the_overall_band_and_the_days_beyond_p2_p98_on_each_side():
     assert ratio_subtitle(rows([1.05] * 10), {}, GUARD) == "Write/read 1.05 overall (typical) · inside p2–p98 throughout"
+    # No role bands (the network sum): the same overall ratio, with no band verdict.
+    assert ratio_subtitle(rows([1.05] * 10), {}, None) == "Write/read 1.05 overall"
     assert ratio_subtitle([], {}, GUARD) == "Under 50 KB/s throughout: too little traffic to compare"
     assert ratio_subtitle(rows([1.05] * 5 + [3.0, 3.1, 0.5]), {}, GUARD) == \
         "Write/read 1.48 overall (uncommon) · above p98 Sep 6–7 · below p2 Sep 8"

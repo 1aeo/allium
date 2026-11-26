@@ -2,6 +2,7 @@
 
 import filecmp
 import os
+import time
 
 import pytest
 
@@ -27,6 +28,8 @@ def _onionoo_details():
             "first_seen": "2023-01-01 00:00:00",
             "last_seen": "2024-01-01 00:00:00",
             "last_restarted": "2023-12-01 00:00:00",
+            # Same instant as _one_overload_clock, so general overload is eligible.
+            "overload_general_timestamp": 1_700_000_000_000,
             "platform": "Tor 0.4.8.10 on Linux",
             "country": ["us", "de", "nl"][i % 3],
             "country_name": ["United States", "Germany", "Netherlands"][i % 3],
@@ -54,6 +57,40 @@ def _build(output_dir, mp_workers):
     return relay_set
 
 
+@pytest.fixture(autouse=True)
+def _one_overload_clock(monkeypatch):
+    """Two generations compared as one run share the overload clock.
+
+    enrich_with_api_data stores time.time() on every relay, and contact
+    precompute keeps those relay dicts. A moving clock makes the comparison
+    unequal and the assertion diff times out.
+    """
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_000)
+
+
+def _first_difference(left, right, path=""):
+    """One differing path, so a mismatch does not spend the timeout diffing every relay."""
+    if left == right:
+        return None
+    if isinstance(left, dict) and isinstance(right, dict):
+        for key in list(left) + [key for key in right if key not in left]:
+            if key not in left or key not in right:
+                return f"{path}.{key} missing"
+            found = _first_difference(left[key], right[key], f"{path}.{key}")
+            if found:
+                return found
+        return path or "<root>"
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return f"{path} length {len(left)} != {len(right)}"
+        for index, (item, other) in enumerate(zip(left, right)):
+            found = _first_difference(item, other, f"{path}[{index}]")
+            if found:
+                return found
+        return path or "<root>"
+    return f"{path} {left!r} != {right!r}"[:240]
+
+
 def _tree(root):
     return sorted(
         os.path.relpath(os.path.join(dirpath, name), root)
@@ -72,6 +109,9 @@ def test_parallel_and_sequential_generation_write_identical_pages(tmp_path, monk
         parallel = _build(tmp_path / "parallel", mp_workers=2)
     sequential = _build(tmp_path / "sequential", mp_workers=0)
     sequential.timestamp = parallel.timestamp  # rendered into every page
+    overload = sequential.json["relays"][0]["overload"]
+    assert overload["headline"] == "overloaded"
+    assert overload["general"]["state"] == "eligible"
 
     # Workers send relay dicts back as indexes: statuses reference the
     # parent's own relay dicts, exactly as the sequential path stores them.
@@ -176,4 +216,6 @@ def test_precompute_pools_fall_back_when_a_worker_dies(tmp_path, monkeypatch, gr
     # ending up exactly as the sequential path leaves it.
     assert died.exists()
     assert sorted(recomputed) == sorted(sequential.json["sorted"][group])
-    assert relay_set.json["sorted"][group] == sequential.json["sorted"][group]
+    difference = _first_difference(
+        relay_set.json["sorted"][group], sequential.json["sorted"][group])
+    assert difference is None, difference

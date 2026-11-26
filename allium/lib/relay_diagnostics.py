@@ -16,26 +16,38 @@ Issue Severities:
 - warning: Issues that should be addressed
 - info: Informational notes (shown in Notes section)
 
-Per Tor spec proposal 328, overload status remains for 72 hours after
-the last detected overload event.
+Overload diagnostics use the same signal states as the stability cell.
+General overload and file-descriptor exhaustion stay eligible for 72 hours,
+and a rate-limit hit stays eligible for 24 hours. A report at the cutoff is
+historical. See stability_utils for the window rules.
 """
 
 import html as _html
-from datetime import datetime, timezone
+import math
 from typing import List, Optional
 
 # Import flag thresholds from centralized module
 from .consensus.flag_thresholds import (
+    SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
+    GUARD_TK_DEFAULT,
+    GUARD_TK_NEAR_MARGIN,
+    GUARD_WFU_DEFAULT,
+    GUARD_WFU_NEAR_MARGIN,
     GUARD_BW_GUARANTEE,
+    GUARD_BW_NEAR_FRACTION,
     FAST_BW_GUARANTEE,
     BW_SOURCE_MEASURED,
     BW_SOURCE_REPORTED,
     BW_SOURCE_UNMEASURED,
+    guard_bandwidth_requirement,
     resolve_voting_total,
 )
 from .string_utils import (
+    format_days,
+    format_keeping_below,
     format_known_duration,
+    format_percentage_from_fraction,
     format_wfu_display,
     _format_tk_requirement,
     _format_wfu_requirement,
@@ -58,7 +70,15 @@ except ImportError:
 
 # Shared overload fact evaluation from stability_utils (DRY).
 # OVERLOAD_THRESHOLD_HOURS is re-exported: tests import it from this module.
-from .stability_utils import OVERLOAD_THRESHOLD_HOURS, evaluate_overload  # noqa: F401
+from .stability_utils import (  # noqa: F401
+    HOUR_PRECISION_NOTE,
+    OVERLOAD_GUIDE_URL,
+    OVERLOAD_THRESHOLD_HOURS,
+    RATE_COUNTER_NOTE,
+    compute_relay_stability,
+    ensure_overload_display,
+    guidance_text,
+)
 
 
 def generate_relay_issues(relay: dict, consensus_data: dict = None, 
@@ -99,6 +119,26 @@ def generate_relay_issues(relay: dict, consensus_data: dict = None,
     issues.extend(_check_overload_issues(relay, use_bits, now_timestamp))
     
     return issues
+
+
+_IPV6_SECTION = 'flag-running-ipv6-reachability'
+_IPV6_CHECK = (
+    "Check the published IPv6 ORPort: the firewall allows IPv6, Tor is bound on that "
+    "address, and the route is public."
+)
+
+
+def _ipv6_issue(severity, title, description, suggestion, doc_ref):
+    """One reachability issue. The IPv6 notes all point at the same flag row."""
+    return {
+        'severity': severity,
+        'category': 'reachability',
+        'title': title,
+        'description': description,
+        'suggestion': suggestion,
+        'section': _IPV6_SECTION,
+        'doc_ref': doc_ref,
+    }
 
 
 def generate_issues_from_consensus(
@@ -145,12 +185,31 @@ def generate_issues_from_consensus(
     if consensus_data.get('error'):
         return issues
     
-    # Extract data for analysis
-    authority_votes = consensus_data.get('authority_votes', [])
-    reachability = consensus_data.get('reachability', {})
-    flag_eligibility = consensus_data.get('flag_eligibility', {})
+    # Extract data for analysis. One corrupt value must not abort every relay:
+    # relays.py wraps this whole pass in a single try.
+    authority_votes = consensus_data.get('authority_votes') or []
+    if not isinstance(authority_votes, list):
+        authority_votes = []
+    reachability = consensus_data.get('reachability') or {}
+    if not isinstance(reachability, dict):
+        reachability = {}
+    flag_eligibility = consensus_data.get('flag_eligibility') or {}
+    if not isinstance(flag_eligibility, dict):
+        flag_eligibility = {}
     # Same total and majority as the flag rows. A missing total uses the registry.
     auth_count, majority_threshold = resolve_voting_total(consensus_data.get('total_authorities'))
+
+    # Get relay metrics from first available vote
+    relay_wfu = relay_tk = None
+    for vote in authority_votes:
+        if not isinstance(vote, dict):
+            continue
+        if relay_wfu is None and vote.get('wfu') is not None:
+            relay_wfu = vote['wfu']
+        if relay_tk is None and vote.get('tk') is not None:
+            relay_tk = vote['tk']
+        if relay_wfu is not None and relay_tk is not None:
+            break
     
     # =========================================================================
     # CONSENSUS STATUS ISSUES (1 issue type)
@@ -170,8 +229,11 @@ def generate_issues_from_consensus(
     # =========================================================================
     # REACHABILITY ISSUES (3 issue types)
     # =========================================================================
-    ipv4_count = reachability.get('ipv4_reachable_count', 0)
-    ipv4_reachable = reachability.get('ipv4_reachable_authorities', [])
+    from .consensus.consensus_evaluation import _as_count, _classify_ipv6_reachability
+    ipv4_count = _as_count(reachability.get('ipv4_reachable_count'))
+    ipv4_reachable = reachability.get('ipv4_reachable_authorities') or []
+    if not isinstance(ipv4_reachable, (list, tuple, set, frozenset)):
+        ipv4_reachable = []
     
     # DRY: Compute unreachable list once, reuse for both error and info cases
     unreachable_ipv4 = [name for name in get_voting_authority_names() if name not in ipv4_reachable]
@@ -197,33 +259,38 @@ def generate_issues_from_consensus(
             'section': 'flag-running-ipv4-reachability',
         })
     
-    # IPv6 reachability issues
-    # Note: ipv6_not_tested_authorities may not be reliably populated.
-    # Use ipv6_tested_count if explicitly provided, otherwise use the count of
-    # authorities that successfully tested IPv6 as minimum bound.
-    ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    ipv6_tested = reachability.get('ipv6_tested_count')  # Explicit count if available
-    if ipv6_tested is None:
-        # Fallback: calculate from not-tested list, but cap at reasonable value
-        # Most authorities (7-8 out of 9) test IPv6 in practice
-        not_tested = reachability.get('ipv6_not_tested_authorities', [])
-        # Only trust this calculation if not_tested list is small (<=2 authorities)
-        # Otherwise the data is likely incomplete and we shouldn't generate this issue
-        if len(not_tested) <= 2:
-            ipv6_tested = auth_count - len(not_tested)
-        else:
-            ipv6_tested = 0  # Don't generate issue if data is unreliable
-    
-    if ipv6_tested > 0 and ipv6_count == 0:
-        issues.append({
-            'severity': 'warning',
-            'category': 'reachability',
-            'title': 'IPv6 not reachable',
-            'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
-            'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
-            'section': 'flag-running-ipv6-reachability',
-            'doc_ref': 'https://community.torproject.org/relay/setup/',
-        })
+    # Same classification as the relay page, so a note cannot call a tested
+    # relay "not tested" or a reached relay "not confirmed".
+    ipv6 = _classify_ipv6_reachability(reachability, auth_count)
+    if ipv6['state'] == 'not_tested':
+        issues.append(_ipv6_issue(
+            'info', 'IPv6 not tested',
+            "This relay publishes an IPv6 ORPort, but no directory authority vote contains an "
+            "IPv6 reachability test. Authorities with AuthDirHasIPv6Connectivity include an 'a' line "
+            "only after they reach that address. Tor on the relay logs that an auto-discovered IPv6 "
+            "address has not been found reachable while it waits for that vote; Allium does not run "
+            "the check.",
+            _IPV6_CHECK + " An address in the descriptor is not evidence that an authority tested it.",
+            'https://spec.torproject.org/dir-spec/consensus-formats.html',
+        ))
+    elif ipv6['state'] == 'failed' and ipv6['reachable_count'] <= 0 and ipv6['tested_total'] > 0:
+        issues.append(_ipv6_issue(
+            'warning', 'IPv6 not reachable',
+            "0/{0} authorities that test IPv6 can reach your IPv6 address".format(ipv6['tested_total']),
+            'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, '
+            '2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. '
+            'Test with: curl -6 http://ipv6.icanhazip.com/',
+            'https://community.torproject.org/relay/setup/',
+        ))
+    elif ipv6['state'] == 'failed' and ipv6['reachable_count'] <= 0:
+        issues.append(_ipv6_issue(
+            'warning', 'IPv6 not reachable',
+            "Onionoo lists this IPv6 ORPort as declared but not confirmed by directory "
+            "authorities. This fetch has no vote 'a' line for it either, so this is a "
+            "failed confirmation, not an untested address.",
+            _IPV6_CHECK,
+            'https://metrics.torproject.org/onionoo.html#details_relay_unreachable_or_addresses',
+        ))
     
     # =========================================================================
     # FAST FLAG (1 issue type)
@@ -255,11 +322,18 @@ def generate_issues_from_consensus(
         })
     
     # =========================================================================
-    # GUARD FLAG ELIGIBILITY (5 issue types) - 3 changed from info to warning
+    # GUARD FLAG ELIGIBILITY
+    # Without Guard: the requirement that failed (warning). Those texts stay.
+    # With Guard: an info note when WFU, time-known, or bandwidth is near that
+    # authority's own published threshold. This does not assign the flag.
     # =========================================================================
     has_guard = 'Guard' in current_flags
     has_stable = 'Stable' in current_flags
-    guard_details = flag_eligibility.get('guard', {}).get('details', [])
+    # A missing or non-list details value used to raise in the majority count.
+    # Rows that are not dicts are not authority measurements.
+    guard_block = flag_eligibility.get('guard') if isinstance(flag_eligibility, dict) else None
+    raw_details = guard_block.get('details') if isinstance(guard_block, dict) else None
+    guard_details = [row for row in raw_details or [] if isinstance(row, dict)]
     guard_bw_votes = sum(1 for d in guard_details if d.get('bw_met'))
     if guard_details:
         guard_bw_eligible = guard_bw_votes >= majority_threshold
@@ -352,6 +426,8 @@ def generate_issues_from_consensus(
                 'section': 'flag-guard-time-known',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
+    else:
+        issues.extend(_guard_near_threshold_notes(guard_details, use_bits))
     
     # =========================================================================
     # STABLE FLAG ISSUES (1 issue type) - changed from info to warning
@@ -553,178 +629,139 @@ def generate_issues_from_consensus(
     return issues
 
 
-def _check_overload_issues(relay: dict, use_bits: bool = False, 
-                           now_timestamp: float = None) -> List[dict]:
+def _displayed_facts(relay, use_bits, now_timestamp, facts):
+    """Attach rate displays without reclassifying a record that already has a clock.
+
+    Recomputing from ``time.time()`` would let a later call expire a signal
+    the caller already judged eligible.
     """
-    Check for overload-related issues from Onionoo overload fields.
-    
-    Implements 6 issue types from 7 scenarios (guidance doc section 3.2):
-    1. General Overload Active (overload_general_timestamp < 72h) - error
-    2. Recent Overload Reported (72h-7d ago) - info
-    3. File Descriptor Exhaustion (overload_fd_exhausted) - error
-    4. Write Bandwidth Limit Hit (overload_ratelimits.write-count > 0) - warning
-    5. Read Bandwidth Limit Hit (overload_ratelimits.read-count > 0) - warning
-    6. Rate Limit Configuration (context info) - info
-    
-    Args:
-        relay: Relay dict with overload_* fields
-        use_bits: Whether to format bandwidth in bits
-        now_timestamp: Current Unix timestamp (avoids repeated time.time() calls)
-    
-    Returns:
-        List of overload issue dicts
-    """
-    issues = []
-    # Shared fact evaluation (stability_utils.evaluate_overload); presentation
-    # policy below is specific to the diagnostics page — see evaluate_overload
-    # docstring for how it differs from compute_relay_stability.
-    facts = evaluate_overload(relay, now_timestamp)
-
-    # =========================================================================
-    # SCENARIO 1 & 2: General Overload (overload_general_timestamp)
-    # Per Tor spec proposal 328: 72-hour threshold
-    # =========================================================================
-    if facts['general_ts']:
-        if facts['general_active']:
-            # Scenario 1: Active overload (within 72 hours)
-            issues.append({
-                'severity': 'error',
-                'category': 'overload',
-                'title': 'General Overload Active',
-                'description': f"Relay reported general overload at {facts['general_date']} UTC. "
-                              'This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion.',
-                'suggestion': 'Check CPU/memory with htop. Review logs for "out of memory" or "onionskins" warnings. '
-                             'Consider increasing MaxMemInQueues in torrc. Verify TCP ports available.',
-                'section': 'overload-general',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
-            })
-        elif facts['general_age_hours'] < 168:  # Within 7 days
-            # Scenario 2: Recent overload (stale but notable)
-            # This caller only reports stale overloads within 7 days
-            # (the stability cell reports them no matter how old)
-            issues.append({
-                'severity': 'info',
-                'category': 'overload',
-                'title': 'Recent Overload Reported',
-                'description': f"Relay reported overload {facts['general_days_ago']} days ago (no longer active per 72h threshold).",
-                'suggestion': 'Monitor for recurring issues. Check system resources periodically.',
-                'section': 'overload-general',
-            })
-
-    # =========================================================================
-    # SCENARIO 3: File Descriptor Exhaustion (overload_fd_exhausted)
-    # This caller requires a dict (the stability cell accepts any truthy value)
-    # =========================================================================
-    if isinstance(facts['fd_exhausted'], dict):
-        issues.append(_create_fd_exhaustion_issue(facts['fd_timestamp']))
-
-    # =========================================================================
-    # SCENARIOS 4, 5, 6: Rate Limit Issues (overload_ratelimits)
-    # =========================================================================
-    if facts['ratelimits']:
-        rate_limit = facts['rate_limit']
-        burst_limit = facts['burst_limit']
-        write_count = facts['write_count']
-        read_count = facts['read_count']
-
-        # Format rate using BandwidthFormatter
-        rate_str = _format_rate(rate_limit, use_bits)
-        
-        # Scenario 4: Write Bandwidth Limit Hit
-        if write_count > 0:
-            issues.append({
-                'severity': 'warning',
-                'category': 'overload',
-                'title': 'Write Bandwidth Limit Hit',
-                'description': f'Write rate limit ({rate_str}) was hit {write_count:,} times. '
-                              'Relay is throttling outbound traffic.',
-                'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
-                             'if your connection has more upload capacity.',
-                'section': 'overload-write',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
-        
-        # Scenario 5: Read Bandwidth Limit Hit
-        if read_count > 0:
-            issues.append({
-                'severity': 'warning',
-                'category': 'overload',
-                'title': 'Read Bandwidth Limit Hit',
-                'description': f'Read rate limit ({rate_str}) was hit {read_count:,} times. '
-                              'Relay is throttling inbound traffic.',
-                'suggestion': 'Increase RelayBandwidthRate and RelayBandwidthBurst in torrc '
-                             'if your connection has more download capacity.',
-                'section': 'overload-read',
-                'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
-            })
-        
-        # Scenario 6: Rate Limit Configuration (info context)
-        if rate_limit > 0 and (write_count > 0 or read_count > 0):
-            burst_str = _format_volume(burst_limit)
-            issues.append({
-                'severity': 'info',
-                'category': 'overload',
-                'title': 'Rate Limit Configuration',
-                'description': f'Configured limits: Rate={rate_str}, Burst={burst_str}. '
-                              f'Limits hit: Write={write_count:,}, Read={read_count:,}.',
-                'suggestion': 'These are your configured torrc limits. Adjust RelayBandwidthRate '
-                             'and RelayBandwidthBurst to match your actual network capacity.',
-                'section': 'overload-rate-config',
-            })
-    
-    return issues
+    if facts:
+        return ensure_overload_display(facts, use_bits)
+    from .bandwidth_formatter import BandwidthFormatter
+    return compute_relay_stability(
+        relay, now_timestamp, BandwidthFormatter(use_bits=use_bits))['overload']
 
 
-def _create_fd_exhaustion_issue(timestamp_ms: Optional[int] = None) -> dict:
-    """
-    Create a File Descriptor Exhaustion issue dict.
-    
-    DRY helper to avoid duplicate issue creation code.
-    
-    Args:
-        timestamp_ms: Optional timestamp in milliseconds when FD exhaustion occurred
-    
-    Returns:
-        Issue dict with severity, category, title, description, suggestion, doc_ref
-    """
-    if timestamp_ms:
-        ts_str = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
-        description = (f'Relay ran out of file descriptors at {ts_str} UTC. '
-                      'This severely impacts connections and performance.')
-    else:
-        description = ('Relay reported running out of file descriptors. '
-                      'This severely impacts connections and performance.')
-    
+def _issue(severity, title, description, suggestion, section, doc_ref=OVERLOAD_GUIDE_URL):
     return {
-        'severity': 'error',
+        'severity': severity,
         'category': 'overload',
-        'title': 'File Descriptor Exhaustion',
+        'title': title,
         'description': description,
-        'suggestion': ('Increase file descriptor limits: '
-                      'For systemd: add "LimitNOFILE=65535" to [Service] section. '
-                      'For shell: ulimit -n 65535. '
-                      'Persistent: edit /etc/security/limits.conf.'),
-        'section': 'overload-fd',
-        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
+        'suggestion': suggestion,
+        'section': section,
+        'doc_ref': doc_ref,
     }
 
 
-def _format_volume(volume_bytes: int) -> str:
-    """Format a data volume (e.g. BandwidthBurst token-bucket size).
-
-    Per proposal 328 / dir-spec, overload_ratelimits burst-limit is a
-    quantity of bytes, not a rate - no '/s' suffix.
+def _check_overload_issues(relay: dict, use_bits: bool = False,
+                           now_timestamp: float = None, facts: dict = None) -> List[dict]:
     """
-    if not volume_bytes:
-        return "unknown"
-    from .bandwidth_formatter import format_data_volume_with_unit
-    return format_data_volume_with_unit(volume_bytes)
+    Overload issues from the shared signal evaluation.
+
+    Issue types and severities:
+    1. General Overload Active (eligible general timestamp) - error
+    2. Recent Overload Reported (historical general report within 7 days) - info
+    3. File Descriptor Exhaustion (eligible FD timestamp) - error
+    4. Write Bandwidth Limit Hit (eligible rate record, positive write count) - warning
+    5. Read Bandwidth Limit Hit (eligible rate record, positive read count) - warning
+    6. Rate Limit Configuration (context for an eligible hit) - info
+
+    Pass ``facts`` from the generation's ``compute_relay_stability`` call so
+    this does not evaluate the signals again. Expired, invalid, empty, and
+    zero-hit records do not produce an overload issue.
+    """
+    facts = _displayed_facts(relay, use_bits, now_timestamp, facts)
+    issues = _general_overload_issues(facts)
+    fd_issue = _fd_overload_issue(facts)
+    if fd_issue:
+        issues.append(fd_issue)
+    issues.extend(_rate_overload_issues(facts))
+    return issues
+
+
+def _general_overload_issues(facts: dict) -> List[dict]:
+    """General-overload diagnostics. The title and severities stay as reviewed."""
+    general = facts.get('general') or {}
+    when = general.get('when')
+    guide = (
+        _html.escape(guidance_text(('memory', 'ntor', 'tcp')))
+        + f' See <a href="{OVERLOAD_GUIDE_URL}">the Tor overload troubleshooting guide</a>.'
+    )
+    if general.get('state') == 'eligible' and when:
+        return [_issue(
+            'error', 'General Overload Active',
+            f"Relay reported general overload at {when} UTC. {HOUR_PRECISION_NOTE} "
+            'The flag does not identify which trigger fired. Investigation paths are '
+            "Tor's internal OOM handling, dropped ntor onionskins, and TCP port exhaustion.",
+            guide, 'overload-general')]
+    if general.get('note_recent'):
+        return [_issue(
+            'info', 'Recent Overload Reported',
+            f"Relay reported general overload {general.get('days_ago')} days ago, outside the "
+            '72-hour eligibility window. The report can remain available after that window; '
+            'the cutoff is not proof the relay recovered then.',
+            'Monitor for a new report. Check system resources if it recurs.',
+            'overload-general')]
+    return []
+
+
+def _fd_overload_issue(facts: dict) -> Optional[dict]:
+    """FD exhaustion issue only for a timestamp inside the 72-hour window."""
+    fd_signal = facts.get('fd') or {}
+    if fd_signal.get('state') != 'eligible' or not fd_signal.get('when'):
+        return None
+    return _issue(
+        'error', 'File Descriptor Exhaustion',
+        f"Relay reported file-descriptor exhaustion at {fd_signal['when']} UTC. {HOUR_PRECISION_NOTE}",
+        _html.escape(guidance_text(('fd',))), 'overload-fd')
+
+
+_RATE_DIRECTIONS = (
+    ('write', 'Write Bandwidth Limit Hit', 'overload-write'),
+    ('read', 'Read Bandwidth Limit Hit', 'overload-read'),
+)
+
+
+def _rate_overload_issues(facts: dict) -> List[dict]:
+    """Write, read, and configuration issues for one eligible rate-limit hit."""
+    rate = facts.get('rate') or {}
+    if rate.get('state') != 'eligible':
+        return []
+    suggestion = _html.escape(guidance_text(('bandwidth',)))
+    rate_str = rate.get('rate_display', 'unavailable')
+    issues = []
+    for key, title, section in _RATE_DIRECTIONS:
+        if rate.get(f'{key}_state') == 'ok' and (rate.get(f'{key}_value') or 0) > 0:
+            issues.append(_issue(
+                'warning', title,
+                f"{title.split()[0]} rate-limit counter is {rate[f'{key}_display']} "
+                f'(configured rate {rate_str}). {RATE_COUNTER_NOTE}',
+                suggestion, section,
+                'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits'))
+    issues.append(_issue(
+        'info', 'Rate Limit Configuration',
+        f"Configured limits: Rate={rate_str}, Burst={rate.get('burst_display', 'unavailable')}. "
+        f"Counters: Write={rate.get('write_display', 'unknown')}, "
+        f"Read={rate.get('read_display', 'unknown')}. "
+        'These values are BandwidthRate and BandwidthBurst from the extra-info descriptor. '
+        'RelayBandwidthRate and RelayBandwidthBurst are additional torrc caps, not the names '
+        'of these values. Burst is a quantity of bytes.',
+        suggestion, 'overload-rate-config'))
+    return issues
+
+
+def _join_names(names) -> str:
+    """'a', 'a and b', or 'a, b and c'."""
+    names = list(names)
+    if len(names) <= 1:
+        return names[0] if names else ''
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def _authority_names(details: list) -> str:
     """The details' authority names as 'a', 'a and b' or 'a, b and c'."""
-    names = [d.get('authority', '?') for d in details]
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    return _join_names(detail.get('authority', '?') for detail in details)
 
 
 def _rate_range(values: list, use_bits: bool) -> str:
@@ -808,8 +845,9 @@ _TK_HISTORY_SUGGESTION = (
 
 
 def _guard_wfu_suggestion(short: list) -> str:
-    """History advice when every shortfall is 0 or unpublished. Otherwise the uptime advice."""
-    if short and all('wfu_value' in d and (d.get('wfu_value') is None or d.get('wfu_value') == 0) for d in short):
+    """History advice when every shortfall is unpublished or untracked. Recorded downtime gets uptime advice."""
+    if short and all(
+            'wfu_value' in d and _wfu_shortfall_bucket(d) in ('missing', 'history') for d in short):
         return _WFU_HISTORY_SUGGESTION
     return _WFU_MEASURED_SUGGESTION
 
@@ -930,6 +968,198 @@ def _describe_guard_bw_shortfall(details: list, met_count: int, auth_count: int,
                      f"({majority} needed): at least {guarantee} (AuthDirGuardBWGuarantee){top25}."]
                     + _bandwidth_source_sentences([d for d in details if not d.get('bw_met')],
                                                   'bw_value', 'bw_source', use_bits))
+
+
+def _is_number(value) -> bool:
+    """True for a finite int or float. bool is an int subclass and is not a measurement."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _published_positive(detail: dict, key: str, default: float) -> Optional[float]:
+    """That authority's threshold, or the dirauth default when the vote omitted it."""
+    value = detail.get(key) if key in detail else default
+    if value is None:
+        value = default
+    return float(value) if _is_number(value) and value > 0 else None
+
+
+def _append_near(bucket: list, authority: str, value, threshold, margin) -> None:
+    """Record a measurement within the open margin on either side of its bar.
+
+    A zero on the failing side is an empty measurement (no WFU credit, no
+    time-known history), not a value sitting against the bar.
+    """
+    if threshold is None or not _is_number(value) or value < 0 or not _is_number(margin) or margin <= 0:
+        return
+    slack = value - threshold
+    if slack < 0 and value == 0:
+        return
+    if -margin < slack < margin:
+        bucket.append((authority, value, threshold))
+
+
+def _tk_near_margin(threshold: float) -> float:
+    """One day, but never more than an eighth of a shorter published bar.
+
+    A fixed one-day window is wider than a bar of a few hours, and would call
+    every smaller measurement, including zero, "just under" that bar. An eighth
+    of the 8-day cap is still one day.
+    """
+    return min(GUARD_TK_NEAR_MARGIN, threshold / 8.0)
+
+
+def _format_near_wfu(value, threshold) -> str:
+    """WFU text that does not round a close call up to the far edge of the margin."""
+    shown = format_wfu_display(value, threshold)
+    if not (threshold <= value < threshold + GUARD_WFU_NEAR_MARGIN):
+        return shown
+    edge = threshold + GUARD_WFU_NEAR_MARGIN
+    if shown != format_percentage_from_fraction(edge, 1):
+        return shown
+    # Two decimals can still print 98.50%, the excluded edge of a 98.5% window.
+    return format_keeping_below(value * 100, edge * 100, start=2) + '%'
+
+
+def _format_near_tk(value, threshold) -> str:
+    """Time-known text that does not round a close call up to the far edge of the margin."""
+    shown = format_known_duration(value, threshold=threshold)
+    margin = _tk_near_margin(threshold)
+    if not (threshold <= value < threshold + margin) or value < SECONDS_PER_DAY:
+        return shown
+    edge = threshold + margin
+    if shown != format_days(edge, decimals=1, suffix=' days'):
+        return shown
+    # Two decimals can still print 9.00 days, the excluded edge of a 9-day window.
+    return format_keeping_below(value / SECONDS_PER_DAY, edge / SECONDS_PER_DAY, start=2) + ' days'
+
+
+def _near_phrase(entries: list, format_value, format_bar) -> str:
+    """Authorities that share a rendered measurement and bar, then any that differ."""
+    groups = {}
+    order = []
+    for name, value, threshold in sorted(entries, key=lambda item: item[0]):
+        rendered = (format_value(value, threshold), format_bar(value, threshold))
+        names = groups.get(rendered)
+        if names is None:
+            groups[rendered] = names = []
+            order.append(rendered)
+        names.append(name)
+    parts = [f"{_join_names(groups[rendered])} ({rendered[0]}, need {rendered[1]})" for rendered in order]
+    return parts[0] if len(parts) == 1 else _join_names(parts)
+
+
+def _near_clause(entries: list, requirement: str, format_value, format_bar) -> str:
+    """'just above guard-wfu at A and just under guard-wfu at B'."""
+    sides = (
+        ('just above', [entry for entry in entries if entry[1] >= entry[2]]),
+        ('just under', [entry for entry in entries if entry[1] < entry[2]]),
+    )
+    return ' and '.join(
+        f"{word} {requirement} at {_near_phrase(group, format_value, format_bar)}"
+        for word, group in sides if group)
+
+
+def _bandwidth_pair(value, threshold, use_bits: bool):
+    """(measurement, bar) in one unit. A miss stays strictly below the displayed bar.
+
+    Rounding the bar alone can turn 2.04 MB/s into 2.0 MB/s while 2.03 MB/s still
+    shows two decimals, so a lower measurement looks higher than the bar.
+    """
+    if not _get_bw_formatter or not _is_number(value) or not _is_number(threshold):
+        shown = _format_rate(value, use_bits, decimal_places=1)
+        bar = _format_rate(threshold, use_bits, decimal_places=1) if _is_number(threshold) else shown
+        return shown, '≥' + bar
+    fmt = _get_bw_formatter(use_bits=use_bits)
+    unit = fmt.determine_unit(max(value, threshold))
+    divisor = fmt.get_divisor_for_unit(unit)
+    value_units, bar_units = value / divisor, threshold / divisor
+    decimals = 1
+    if value < threshold:
+        for decimals in range(1, 9):
+            if float(f"{value_units:.{decimals}f}") < float(f"{bar_units:.{decimals}f}"):
+                break
+    return f"{value_units:.{decimals}f} {unit}", f"≥{bar_units:.{decimals}f} {unit}"
+
+
+def _guard_bw_bar(detail: dict) -> Optional[float]:
+    """Easier of this authority's guarantee and its top-25% cutoff."""
+    guarantee = detail.get('bw_guarantee')
+    if not _is_number(guarantee) or guarantee <= 0:
+        guarantee = GUARD_BW_GUARANTEE
+    return guard_bandwidth_requirement(guarantee, detail.get('bw_top25_threshold'))
+
+
+def _guard_near_threshold_notes(details: list, use_bits: bool = False) -> List[dict]:
+    """Info notes when a relay that has Guard is within the margin of one authority's bar.
+
+    One pass over the guard details. A missing measurement is skipped. An omitted
+    guard-wfu or guard-tk uses the dirauth default. Bandwidth uses the easier of
+    AuthDirGuardBWGuarantee and the top-25% cutoff. This does not assign Guard.
+    """
+    if not details:
+        return []
+    wfu_near, tk_near, bw_near = [], [], []
+    for detail in details:
+        authority = detail.get('authority') or '?'
+        _append_near(wfu_near, authority, detail.get('wfu_value'),
+                     _published_positive(detail, 'wfu_threshold', GUARD_WFU_DEFAULT), GUARD_WFU_NEAR_MARGIN)
+        tk_bar = _published_positive(detail, 'tk_threshold', GUARD_TK_DEFAULT)
+        if tk_bar:
+            _append_near(tk_near, authority, detail.get('tk_value'), tk_bar, _tk_near_margin(tk_bar))
+        bar = _guard_bw_bar(detail)
+        if bar:
+            _append_near(bw_near, authority, detail.get('bw_value'), bar, bar * GUARD_BW_NEAR_FRACTION)
+
+    def rate(value, threshold) -> str:
+        return _bandwidth_pair(value, threshold, use_bits)[0]
+
+    # The Notes box shows title and description only. Say which input, which
+    # authorities, the published bar, and the one thing that can cross it.
+    wfu_text = ('Recent downtime weighs more than older downtime. Avoid restarts '
+                'while it is this close; a short outage can drop the Guard flag.')
+    tk_text = ('This is weighted time, so the day count is shorter than calendar uptime, '
+               'and it falls while the relay is unreachable. Stay reachable so it can move clear of the bar.')
+    bw_text = ("The bar is the lower of AuthDirGuardBWGuarantee and that authority's "
+               'top 25%. A dip in the bandwidth it counts can drop the Guard flag.')
+    # (rows, title, section, subject, value formatter, bar formatter, description tail, suggestion)
+    wfu_suggestion = (
+        'Recent downtime weighs more than older downtime. Minimize restarts, use systemd '
+        'Restart=always, and watch for OOM kills until each authority has more room above '
+        'its own guard-wfu.'
+    )
+    tk_suggestion = (
+        'Weighted time-known falls while the relay is unreachable and resets if the identity '
+        'key changes. Authorities cap it at 8 days (AuthDirVoteGuardGuaranteeTimeKnown), about '
+        'a few weeks of continuous uptime. Stay up with the same key.'
+    )
+    bw_suggestion = (
+        "The bandwidth that counts is that authority's measurement when it has one, otherwise "
+        'the relay-reported rate. Keep it above the lower of AuthDirGuardBWGuarantee (2 MB by '
+        "default) and that authority's top 25%."
+    )
+    def bar_text(value, threshold) -> str:
+        return _bandwidth_pair(value, threshold, use_bits)[1]
+    specs = (
+        (wfu_near, 'Guard: WFU near threshold', 'flag-guard-wfu', 'Weighted Fractional Uptime',
+         _format_near_wfu, lambda _value, threshold: _format_wfu_requirement(threshold),
+         wfu_text, wfu_suggestion),
+        (tk_near, 'Guard: Time Known near threshold', 'flag-guard-time-known', 'Time Known',
+         _format_near_tk, lambda _value, threshold: _format_tk_requirement(threshold),
+         tk_text, tk_suggestion),
+        (bw_near, 'Guard: bandwidth near threshold', 'flag-guard-bandwidth',
+         'Bandwidth counted for Guard', rate, bar_text, bw_text, bw_suggestion),
+    )
+    notes = []
+    for entries, title, section, subject, format_value, format_bar, consequence, suggestion in specs:
+        if not entries:
+            continue
+        clause = _near_clause(entries, 'the Guard bar', format_value, format_bar)
+        notes.append({
+            'severity': 'info', 'category': 'guard', 'title': title, 'section': section,
+            'description': f"{subject} is {clause}. {consequence}", 'suggestion': suggestion,
+            'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+        })
+    return notes
 
 
 def _format_rate(rate_bytes: int, use_bits: bool = False, decimal_places: int = 0) -> str:

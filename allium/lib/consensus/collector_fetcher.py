@@ -22,6 +22,7 @@ import logging
 import time
 
 # Import centralized retry and total-timeout infrastructure from workers
+from ..ip_utils import is_ipv6_orport
 from ..workers import (
     _fetch_url_with_total_timeout,
     _retry_with_backoff,
@@ -361,6 +362,14 @@ class CollectorFetcher:
         self.flag_thresholds = {}
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
+        # Testers seen in an earlier fetch. An authority that voted this hour
+        # but reached zero IPv6 relays has no 'a' line; it still tests IPv6.
+        self.prior_ipv6_testing_authorities = set()
+        # name -> when that authority last published an IPv6 'a' line. Carried
+        # names keep this stamp; it is not refreshed merely because they voted.
+        self.prior_ipv6_tester_last_seen = {}
+        self.prior_ipv6_tester_origin = None
+        self.ipv6_tester_last_seen = {}
         self._timings = {}
     
     def fetch_all(self) -> dict:
@@ -436,6 +445,7 @@ class CollectorFetcher:
         
         result['bw_authorities'] = sorted(self.bw_authorities)
         result['ipv6_testing_authorities'] = sorted(self.ipv6_testing_authorities)
+        result['ipv6_tester_last_seen'] = dict(sorted(self.ipv6_tester_last_seen.items()))
         result['timings'] = self._timings
         
         # Log performance metrics
@@ -445,8 +455,22 @@ class CollectorFetcher:
             logger.warning(f"CollecTor fetch took {total:.1f}s (>60s threshold)")
         
         return result
+
+    def _index_relay(self, fingerprint):
+        """Relay index entry. Hex case differs across caches; non-dicts miss."""
+        if not isinstance(fingerprint, str):
+            return None
+        fingerprint = fingerprint.strip().upper()
+        if not self._validate_fingerprint(fingerprint):
+            return None
+        index = self.relay_index if isinstance(self.relay_index, dict) else {}
+        relay = index.get(fingerprint)
+        if not isinstance(relay, dict):
+            relay = index.get(fingerprint.lower())
+        return relay if isinstance(relay, dict) else None
     
-    def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT) -> dict:
+    def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT,
+                                       published_ipv6: bool = False, declared_unreachable: bool = False) -> dict:
         """
         Get consensus evaluation for a single relay.
         O(1) lookup after index is built.
@@ -454,19 +478,25 @@ class CollectorFetcher:
         Args:
             fingerprint: Relay fingerprint (40 hex chars)
             authority_count: Total number of authorities (for consensus calculation)
+            published_ipv6: True when the relay descriptor publishes an IPv6 ORPort.
+                Publishing an address is not a successful test.
+            declared_unreachable: True when Onionoo lists that IPv6 ORPort in
+                unreachable_or_addresses (authorities failed to confirm it).
         
         Returns:
             dict: Consensus evaluation information for the relay
         """
-        fingerprint = fingerprint.upper()
-        if not self._validate_fingerprint(fingerprint):
-            return {'error': 'Invalid fingerprint', 'in_consensus': False}
-            
-        if fingerprint not in self.relay_index:
+        relay = self._index_relay(fingerprint)
+        if relay is None:
+            if not isinstance(fingerprint, str) or not self._validate_fingerprint(fingerprint.strip().upper()):
+                return {'error': 'Invalid fingerprint', 'in_consensus': False}
             return {'error': 'Relay not found in votes', 'in_consensus': False, 'vote_count': 0}
-        
-        relay = self.relay_index[fingerprint]
-        vote_count = len(relay.get('votes', {}))
+        stored = relay.get('fingerprint')
+        if isinstance(stored, str) and self._validate_fingerprint(stored.strip().upper()):
+            fingerprint = stored.strip().upper()
+        else:
+            fingerprint = fingerprint.strip().upper()
+        vote_count = len(_votes_by_name(relay))
         
         # Tor consensus requires MAJORITY of authorities
         # Per dir-spec: relay appears in consensus if > half of authorities vote for it
@@ -479,10 +509,12 @@ class CollectorFetcher:
             'vote_count': vote_count,
             'total_authorities': authority_count,
             'majority_required': majority_required,
-            'authority_votes': self._format_authority_votes(relay),
+            'authority_votes': self._format_authority_votes(
+                relay, published_ipv6=published_ipv6 or declared_unreachable),
             'flag_eligibility': self._analyze_flag_eligibility(relay),
             'bandwidth': self._format_bandwidth(relay),
-            'reachability': self._format_reachability(relay),
+            'reachability': self._format_reachability(
+                relay, published_ipv6=published_ipv6, declared_unreachable=declared_unreachable),
         }
     
     def _fetch_url(self, url: str) -> str:
@@ -647,6 +679,11 @@ class CollectorFetcher:
             'params': {},  # Voted consensus params (from header)
             'published': None,  # Vote header published time (UTC)
             'valid_after': None,  # Consensus period this vote is for (UTC)
+            # True once any relay in this vote has an 'a' line. That line is how
+            # an authority with AuthDirHasIPv6Connectivity reports an IPv6 ORPort
+            # it reached (dir-spec consensus-formats). No 'a' line anywhere means
+            # this authority did not test IPv6.
+            'tests_ipv6': False,
         }
         
         lines = content.split('\n')
@@ -702,10 +739,15 @@ class CollectorFetcher:
                 elif line.startswith('w '):
                     # Bandwidth line
                     current_relay.update(self._parse_w_line(line))
-                elif line.startswith('a '):
-                    # IPv6 address line
-                    current_relay['ipv6_address'] = line[2:]
-                    current_relay['ipv6_reachable'] = True
+                elif line.startswith('a ') and is_ipv6_orport(line[2:]):
+                    # IPv6 ORPort the authority found reachable. dir-spec: authorities
+                    # include only the first advertised IPv6 address, and only if it
+                    # is reachable. A later line must not replace that address, and an
+                    # IPv4, empty, or non-routable line is not a test.
+                    if current_relay.get('ipv6_reachable') is not True:
+                        current_relay['ipv6_address'] = line[2:].strip().split()[0]
+                        current_relay['ipv6_reachable'] = True
+                    vote['tests_ipv6'] = True
                 elif line.startswith('stats '):
                     # Stats line: stats wfu=X.XX tk=XXXX mtbf=XXXX
                     current_relay.update(self._parse_stats_line(line))
@@ -879,6 +921,7 @@ class CollectorFetcher:
         """
         self.relay_index = {}
         self.flag_thresholds = {}  # Extract thresholds in same loop
+        self.ipv6_testing_authorities = set()
         
         for auth_name, vote_data in sorted(self.votes.items()):
             if not vote_data:
@@ -894,6 +937,8 @@ class CollectorFetcher:
                 continue
             
             for fingerprint, relay_data in sorted(relays.items()):
+                if not isinstance(relay_data, dict):
+                    continue
                 if fingerprint not in self.relay_index:
                     self.relay_index[fingerprint] = {
                         'fingerprint': fingerprint,
@@ -919,6 +964,16 @@ class CollectorFetcher:
         for fingerprint, bw_data in sorted(self.bandwidth_files.items()):
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
+
+        self.ipv6_testing_authorities, self.ipv6_tester_last_seen = _ipv6_testers_this_fetch(
+            _collect_ipv6_testers(self.relay_index, self.votes),
+            self.votes,
+            self.prior_ipv6_testing_authorities,
+            self.prior_ipv6_tester_last_seen,
+            self.prior_ipv6_tester_origin,
+        )
+        # Derived from the index. A rebuild must not keep the previous hour's set.
+        self.__dict__.pop('measuring_authorities', None)
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
@@ -1082,8 +1137,26 @@ class CollectorFetcher:
     @cached_property
     def measuring_authorities(self) -> set:
         """Authorities whose votes carry Measured= values (dirvote.c has_measured_bws)."""
-        return {auth_name for relay in self.relay_index.values()
-                for auth_name, vote in relay.get('votes', {}).items() if vote.get('measured') is not None}
+        found = set()
+        index = self.relay_index if isinstance(self.relay_index, dict) else {}
+        for relay in index.values():
+            for auth_name, vote in _votes_by_name(relay).items():
+                measured = vote.get('measured')
+                if isinstance(measured, (int, float)) and not isinstance(measured, bool):
+                    found.add(auth_name)
+        return found
+
+    def _authority_thresholds(self, auth_name) -> dict:
+        """Flag thresholds for one authority. A non-dict container or entry is empty."""
+        all_thresholds = self.flag_thresholds if isinstance(self.flag_thresholds, dict) else {}
+        direct = all_thresholds.get(auth_name)
+        if isinstance(direct, dict):
+            return direct
+        key = _authority_key(auth_name)
+        for name, entry in all_thresholds.items():
+            if name != auth_name and _authority_key(name) == key and isinstance(entry, dict):
+                return entry
+        return {}
 
     def _credible_bandwidth(self, auth_name: str, vote_info: dict) -> tuple:
         """Bandwidth (bytes/s, source) this authority judges Fast and Guard by.
@@ -1092,30 +1165,50 @@ class CollectorFetcher:
         uses a measurement from an earlier bandwidth file if it kept one: surely when it still
         votes Fast, and likely when its vote has no Measured= values at all.
         """
+        flags = vote_info.get('flags')
+        if not isinstance(flags, (list, tuple)):
+            flags = []
+        unpublished = (
+            'Fast' in flags
+            or _authority_key(auth_name) not in self.measuring_authorities)
         return credible_bandwidth(
             vote_info.get('measured'), vote_info.get('bandwidth'),
-            self.flag_thresholds.get(auth_name, {}).get('ignoring-advertised-bws') == 1,
-            unpublished='Fast' in vote_info.get('flags', []) or auth_name not in self.measuring_authorities)
+            self._authority_thresholds(auth_name).get('ignoring-advertised-bws') == 1,
+            unpublished=unpublished)
 
-    def _format_authority_votes(self, relay: dict) -> List[dict]:
+    def _format_authority_votes(self, relay: dict, published_ipv6: bool = False) -> List[dict]:
         """
         Format per-authority vote information for display.
         Only includes voting authorities (9) - excludes non-voting authorities like Serge.
         """
         authority_votes = []
-        relay_votes = relay.get('votes', {})
+        relay_votes = _votes_by_name(relay)
+        # An 'a' line proves the relay published an IPv6 ORPort even when Onionoo
+        # has not been passed in. Omitting the line is a failed test only then.
+        relay_has_ipv6 = published_ipv6 or any(
+            vote.get('ipv6_reachable') is True for vote in relay_votes.values())
         
         for auth_name in get_voting_authority_names():  # Only voting authorities (9)
-            vote_info = relay_votes.get(auth_name, {})
+            vote_info = relay_votes.get(_authority_key(auth_name)) or {}
             
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
+            tests_ipv6 = auth_name.lower() in self.ipv6_testing_authorities
+            if not voted:
+                ipv6_reachable = None
+            elif vote_info.get('ipv6_reachable') is True:
+                ipv6_reachable = True
+            elif relay_has_ipv6 and tests_ipv6:
+                # Tester voted and left out the 'a' line: the IPv6 ORPort was not reachable.
+                ipv6_reachable = False
+            else:
+                ipv6_reachable = None
             
             wfu = vote_info.get('wfu') if voted else None
             tk = vote_info.get('tk') if voted else None
             # Same text the relay page builds, against this authority's own bars,
             # so a miss cannot show as 98.0% or 8.0 days here and 97.999% there.
-            thresholds = self.flag_thresholds.get(auth_name, {})
+            thresholds = self._authority_thresholds(auth_name)
             wfu_bar = parse_wfu_threshold(thresholds.get('guard-wfu')) or GUARD_WFU_DEFAULT
             tk_bar = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
             authority_votes.append({
@@ -1132,7 +1225,8 @@ class CollectorFetcher:
                 'tk_display': self._format_time_known(tk, tk_bar),
                 'mtbf': vote_info.get('mtbf'),
                 'ipv4_reachable': voted,  # If voted, authority could reach relay
-                'ipv6_reachable': vote_info.get('ipv6_reachable'),
+                'ipv6_reachable': ipv6_reachable,
+                'tests_ipv6': tests_ipv6,
                 'ipv6_address': vote_info.get('ipv6_address'),
                 'is_bw_authority': auth_name in self.bw_authorities,
                 'descriptor_published': vote_info.get('descriptor_published'),  # Timestamp of relay's descriptor
@@ -1174,13 +1268,18 @@ class CollectorFetcher:
             'badexit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
         }
         
-        for auth_name, thresholds in self.flag_thresholds.items():
-            vote_info = relay.get('votes', {}).get(auth_name, {})
+        thresholds_by_auth = self.flag_thresholds if isinstance(self.flag_thresholds, dict) else {}
+        votes = _votes_by_name(relay)
+        for auth_name in thresholds_by_auth:
+            thresholds = self._authority_thresholds(auth_name)
+            vote_info = votes.get(_authority_key(auth_name)) or {}
             if not vote_info:
                 continue
             
             # Get flags assigned by this authority
-            auth_flags = vote_info.get('flags', [])
+            auth_flags = vote_info.get('flags') or []
+            if not isinstance(auth_flags, (list, tuple)):
+                auth_flags = []
             
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
@@ -1340,16 +1439,32 @@ class CollectorFetcher:
         - bw_auth_total: Total number of BW authorities (denominator)
         - measurement_count: Number of Measured= values in the votes
         """
-        votes = relay.get('votes', {})
-        measured = {auth_name: vote['measured'] * VOTE_BW_KB_BYTES
-                    for auth_name, vote in votes.items() if vote.get('measured') is not None}
+        votes = _votes_by_name(relay)
+
+        def _kb(value):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            if isinstance(value, float) and (value != value or abs(value) == float('inf')):
+                return None
+            return value * VOTE_BW_KB_BYTES
+
+        measured = {}
+        for auth_name, vote in votes.items():
+            kb = _kb(vote.get('measured'))
+            if kb is not None:
+                measured[auth_name] = kb
         values = sorted(measured.values())
         unmeasured = len(values) < 3
-        median = low_median(values if not unmeasured else
-                            [vote['bandwidth'] * VOTE_BW_KB_BYTES for vote in votes.values()
-                             if vote.get('bandwidth') is not None])
+        if unmeasured:
+            reported = [kb for kb in (_kb(vote.get('bandwidth')) for vote in votes.values()) if kb is not None]
+            median = low_median(reported)
+        else:
+            median = low_median(values)
         if unmeasured and median is not None and len(self.measuring_authorities) >= 3:
             median = min(median, MAX_UNMEASURED_BW_KB * VOTE_BW_KB_BYTES)
+        bw_authorities = self.bw_authorities if isinstance(self.bw_authorities, (list, tuple, set, frozenset)) else ()
+        bw_keys = _authority_keys(bw_authorities)
+        measured_names = set(measured)
         return {
             'median': median,  # Consensus weight
             'unmeasured': unmeasured,
@@ -1358,40 +1473,253 @@ class CollectorFetcher:
             'max': values[-1] if values else None,
             'deviation': values[-1] - values[0] if not unmeasured else 0,
             'measurement_count': len(values),
-            'bw_auth_measured_count': len(self.bw_authorities & measured.keys()),
-            'bw_auth_total': len(self.bw_authorities),
-            'bw_auth_not_measured_names': sorted(self.bw_authorities - measured.keys()),
+            'bw_auth_measured_count': len(bw_keys & measured_names),
+            'bw_auth_total': len(bw_keys),
+            'bw_auth_not_measured_names': sorted(
+                name for name in bw_authorities if _authority_key(name) not in measured_names),
         }
     
-    def _format_reachability(self, relay: dict) -> dict:
+    def _format_reachability(self, relay: dict, published_ipv6: bool = False,
+                             declared_unreachable: bool = False) -> dict:
         """
-        Format reachability information across authorities.
-        Only includes voting authorities (9) - reachability is only tested by voters.
+        Reachability across voting authorities.
+
+        IPv4: the relay is in an authority's vote only when that authority reached
+        the IPv4 ORPort. IPv6: dir-spec includes an ``a`` line only when an
+        authority with AuthDirHasIPv6Connectivity reached the IPv6 ORPort.
+        A published descriptor address is not that test. Onionoo
+        ``unreachable_or_addresses`` means authorities failed to confirm it.
+
+        The tested count is authorities that test IPv6 and voted for this relay.
+        Authorities that did not vote are not in the denominator.
+
+        ipv6_state:
+        - ok: at least one ``a`` line
+        - failed: a testing authority voted without an ``a`` line, or Onionoo
+          lists the IPv6 ORPort as unconfirmed
+        - not_tested: an IPv6 ORPort was published and no vote contains a test
+        - none: the relay has no IPv6 ORPort
         """
-        votes = relay.get('votes', {})
+        votes = _votes_by_name(relay)
         
         ipv4_reachable = []
         ipv6_reachable = []
+        ipv6_failed = []
         ipv6_not_tested = []
         
         for auth_name in get_voting_authority_names():  # Only voting authorities (9)
-            vote = votes.get(auth_name, {})
+            vote = votes.get(_authority_key(auth_name)) or {}
             
             if vote:
                 ipv4_reachable.append(auth_name)
-                if vote.get('ipv6_reachable'):
+                if vote.get('ipv6_reachable') is True:
                     ipv6_reachable.append(auth_name)
-                elif auth_name not in self.ipv6_testing_authorities:
+                elif auth_name.lower() in self.ipv6_testing_authorities:
+                    ipv6_failed.append(auth_name)
+                else:
                     ipv6_not_tested.append(auth_name)
+
+        # Only testers who voted for this relay. A tester that did not vote
+        # published no result, so it is not part of N.
+        ipv6_tested_count = len(ipv6_reachable) + len(ipv6_failed)
+        if ipv6_reachable:
+            ipv6_state = 'ok'
+            failure_source = None
+        elif ipv6_failed and published_ipv6:
+            ipv6_state = 'failed'
+            failure_source = 'vote'
+        elif declared_unreachable:
+            # Onionoo already recorded a failed confirmation. Do not call that
+            # "not tested" just because this fetch has no 'a' line.
+            ipv6_state = 'failed'
+            failure_source = 'onionoo'
+        elif published_ipv6:
+            ipv6_state = 'not_tested'
+            failure_source = None
+        else:
+            ipv6_state = 'none'
+            failure_source = None
         
         return {
             'ipv4_reachable_count': len(ipv4_reachable),
             'ipv4_reachable_authorities': ipv4_reachable,
             'ipv6_reachable_count': len(ipv6_reachable),
             'ipv6_reachable_authorities': ipv6_reachable,
+            'ipv6_failed_authorities': ipv6_failed,
             'ipv6_not_tested_authorities': ipv6_not_tested,
+            'ipv6_tested_count': ipv6_tested_count,
+            'ipv6_state': ipv6_state,
+            'ipv6_failure_source': failure_source,
+            'published_ipv6': bool(published_ipv6),
             'total_authorities': get_voting_authority_count(),  # Use voting authorities (9) for consensus
         }
+
+
+def _authority_key(name):
+    """Lowercase authority name. Bool and blank values are not names."""
+    if name is None or isinstance(name, bool):
+        return ''
+    return str(name).strip().lower()
+
+
+def _authority_keys(names):
+    """Name set. A string is one value, not a sequence of characters."""
+    if isinstance(names, (str, bytes)) or not isinstance(names, (list, tuple, set, frozenset)):
+        return set()
+    return {key for key in (_authority_key(name) for name in names) if key}
+
+
+def _votes_by_name(relay):
+    """Per-relay votes keyed by lowercase authority name.
+
+    Cache files have used ``Moria1`` and ``moria1`` for the same authority.
+    A non-dict entry is skipped so one corrupt vote cannot abort the page build.
+    """
+    raw = relay.get('votes') if isinstance(relay, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    folded = {}
+    for name, vote in raw.items():
+        key = _authority_key(name)
+        if key and isinstance(vote, dict):
+            folded[key] = vote
+    return folded
+
+
+def _collect_ipv6_testers(relay_index, votes=None):
+    """Authorities whose vote contains an IPv6 'a' line. Names are lowercase."""
+    found = set()
+
+    def _note(auth_name, vote):
+        if not isinstance(vote, dict):
+            return
+        key = _authority_key(auth_name)
+        if not key:
+            return
+        if vote.get('tests_ipv6') is True or vote.get('ipv6_reachable') is True:
+            found.add(key)
+            return
+        relays = vote.get('relays')
+        if not isinstance(relays, dict):
+            return
+        for relay in relays.values():
+            if isinstance(relay, dict) and relay.get('ipv6_reachable') is True:
+                found.add(key)
+                return
+
+    if isinstance(votes, dict):
+        for auth_name, vote in votes.items():
+            _note(auth_name, vote)
+    if isinstance(relay_index, dict):
+        for relay in relay_index.values():
+            if not isinstance(relay, dict):
+                continue
+            relay_votes = relay.get('votes')
+            if not isinstance(relay_votes, dict):
+                continue
+            for auth_name, vote in relay_votes.items():
+                _note(auth_name, vote)
+    return found
+
+
+# Same window as workers._validate_collector_cache. A carried tester whose last
+# 'a' line is older than this is no longer treated as testing IPv6.
+_IPV6_TESTER_MAX_AGE_SECONDS = 3 * 3600
+
+
+def _parse_utc(value):
+    """Parse a vote or cache timestamp. Naive values are UTC."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip().replace('Z', '+00:00')
+    if len(text) >= 19 and text[10] == ' ':
+        text = text[:10] + 'T' + text[11:]
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _tester_seen_current(value, now=None):
+    """True when ``value`` is a timestamp within the carry-forward window."""
+    parsed = _parse_utc(value)
+    if parsed is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    age = (now - parsed).total_seconds()
+    return -3600 <= age <= _IPV6_TESTER_MAX_AGE_SECONDS
+
+
+def _stamp_from_vote(vote):
+    """ISO time of a vote, from the consensus period it belongs to."""
+    if not isinstance(vote, dict):
+        return None
+    for key in ('vote_time', 'valid_after', 'published'):
+        parsed = _parse_utc(vote.get(key))
+        if parsed is not None:
+            return parsed.replace(microsecond=0).isoformat()
+    return None
+
+
+def _votes_folded(votes):
+    folded = {}
+    if not isinstance(votes, dict):
+        return folded
+    for name, vote in votes.items():
+        key = _authority_key(name)
+        if key and isinstance(vote, dict):
+            folded[key] = vote
+    return folded
+
+
+def _ipv6_testers_this_fetch(found, votes, prior_names, prior_last_seen, prior_origin):
+    """Testers for this run, and the last time each one published an 'a' line.
+
+    A prior tester who voted but published no 'a' line is kept only while that
+    earlier stamp is still inside the carry-forward window. Voting again does
+    not refresh the stamp.
+    """
+    folded = _votes_folded(votes)
+    now_stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    seen = {name: _stamp_from_vote(folded.get(name)) or now_stamp for name in found}
+    last_seen = prior_last_seen if isinstance(prior_last_seen, dict) else {}
+    carried = {}
+    for name in _authority_keys(prior_names):
+        if name in seen or name not in folded:
+            continue
+        stamp = last_seen.get(name) or prior_origin
+        if stamp is None or _tester_seen_current(stamp):
+            carried[name] = stamp or now_stamp
+    last = dict(carried)
+    last.update(seen)
+    return set(last), last
+
+
+def apply_prior_ipv6_testers(fetcher, collector_data):
+    """Copy testers from a cache that has already been validated."""
+    if not isinstance(collector_data, dict):
+        return
+    fetcher.prior_ipv6_testing_authorities = ipv6_testers_from_collector(collector_data)
+    last_seen = collector_data.get('ipv6_tester_last_seen')
+    fetcher.prior_ipv6_tester_last_seen = last_seen if isinstance(last_seen, dict) else {}
+    fetcher.prior_ipv6_tester_origin = collector_data.get('fetched_at')
+
+
+def ipv6_testers_from_collector(collector_data):
+    """Testers recorded on one fetch result, including its relay index.
+
+    The saved set is the answer for that document. A later page build must not
+    drop a carried tester because the wall clock moved; the age check runs only
+    when a new fetch decides whether to carry the name forward.
+    """
+    if not isinstance(collector_data, dict):
+        return set()
+    saved = _authority_keys(collector_data.get('ipv6_testing_authorities'))
+    return saved | _collect_ipv6_testers(
+        collector_data.get('relay_index'), collector_data.get('votes'))
 
 
 def discover_authorities(relays: list, update_registry: bool = True) -> list:

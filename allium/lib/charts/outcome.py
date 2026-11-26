@@ -58,15 +58,19 @@ def ratio_text(value, *edges):
     return text
 
 
-def throughput_subtitle(ts, write, advertised, period="1m"):
+def throughput_subtitle(ts, write, advertised, period="1m", unit="Mbit/s"):
     """``Write avg 48 Mbit/s (44% of advertised), peak 170 Mbit/s Sep 16``: the share of today's advertised
-    bandwidth only up to 100% (a long period's mean can exceed what a relay advertises now), no peak at 0."""
+    bandwidth only up to 100% (a long period's mean can exceed what a relay advertises now), no peak at 0.
+
+    ``unit`` is the label only. Callers scale ``write`` and ``advertised`` themselves (the network chart
+    passes Gbit/s). The default keeps every relay and operator subtitle unchanged.
+    """
     mean = sum(write) / len(write)
     peak_t, peak = max(zip(ts, write), key=lambda point: point[1])
     share = 100.0 * mean / advertised if 0 < mean <= advertised else None
-    return "Write avg {} Mbit/s{}{}".format(
-        mbit(mean), "" if share is None else " ({} of advertised)".format("<1%" if share < 0.5 else "%.0f%%" % share),
-        ", peak {} Mbit/s {}".format(mbit(peak), format_day(peak_t, year=period in YEAR_PERIODS)) if peak else "")
+    return "Write avg {} {}{}{}".format(
+        mbit(mean), unit, "" if share is None else " ({} of advertised)".format("<1%" if share < 0.5 else "%.0f%%" % share),
+        ", peak {} {} {}".format(mbit(peak), unit, format_day(peak_t, year=period in YEAR_PERIODS)) if peak else "")
 
 
 def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY, most=3):
@@ -76,11 +80,14 @@ def ratio_subtitle(rows, overlays, bands, period="1m", interval=SECONDS_PER_DAY,
     whether the family and peer medians in ``overlays`` (1M relay charts) left it on the same side on at least
     half of those days, or stayed inside it on at least half. ``most`` runs of days are listed per side before
     they collapse (``format_day_span``); a typical overall ratio with most days out of band gives their counts.
+    Without ``bands`` (the network sum is not one role) only the overall ratio is stated.
     """
     if not rows:
         return "Under {} KB/s throughout: too little traffic to compare".format(MIN_ACTIVE_KBYTES)
-    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     overall = sum(row[1] for row in rows) / sum(row[2] for row in rows)
+    if not bands:
+        return "Write/read {} overall".format(ratio_text(overall))
+    tlo, thi, ilo, ihi = bands["typical_lo"], bands["typical_hi"], bands["invest_lo"], bands["invest_hi"]
     band = "typical" if tlo <= overall <= thi else "uncommon" if ilo <= overall <= ihi else "investigate"
     parts = ["Write/read {} overall ({})".format(ratio_text(overall, tlo, thi, ilo, ihi), band)]
     beyond = {row[0]: row[3] > ihi for row in rows if not ilo <= row[3] <= ihi}  # day -> above p98 (or below p2)
