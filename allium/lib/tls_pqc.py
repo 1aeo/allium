@@ -13,7 +13,7 @@ import io
 import re
 from datetime import datetime
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 PQC_GROUP = "X25519MLKEM768"
 SCHEMA_VERSION = 1
@@ -457,9 +457,14 @@ def latest_scan_url(html, index_url):
         return ""
     found = []
     index = urlsplit(index_url)
-    index_path = index.path.rstrip("/")
+    raw_path = index.path
+    if raw_path.lower().endswith((".html", ".htm")):
+        index_path = raw_path.rsplit("/", 1)[0].rstrip("/")
+    else:
+        index_path = raw_path.rstrip("/")
+    base_url = urlunsplit((index.scheme, index.netloc, index_path + "/", "", ""))
     for match in _HREF_RE.finditer(html or ""):
-        absolute = urljoin(index_url, match.group("href"))
+        absolute = urljoin(base_url, match.group("href"))
         if not is_safe_scan_url(absolute, index_url):
             continue
         link = urlsplit(absolute)

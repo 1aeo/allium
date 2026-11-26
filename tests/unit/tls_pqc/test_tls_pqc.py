@@ -527,6 +527,33 @@ def test_cache_is_bound_to_configured_start_url():
     assert reloaded["start_url"] == SCAN_URL
 
 
+def test_relative_links_resolve_from_index_directory_while_preserving_start_url():
+    """Slashless, query, and .html index URLs resolve relative scan links cleanly."""
+    index_body = '<html><body><a href="2026-06-18/">latest</a></body></html>'
+    assert latest_scan_url(index_body, "https://ahf.me/tor-tls-pqc") == SCAN_URL
+    assert latest_scan_url(index_body, "https://ahf.me/tor-tls-pqc?v=1") == SCAN_URL
+    assert latest_scan_url(index_body, "https://ahf.me/tor-tls-pqc/index.html") == SCAN_URL
+    assert latest_scan_url(index_body, "https://ahf.me/custom-scans") == "https://ahf.me/custom-scans/2026-06-18/"
+
+    slashless = "https://ahf.me/tor-tls-pqc"
+    pages = {
+        slashless: index_body.encode("utf-8"),
+        SCAN_URL: _read("scan.html").encode("utf-8"),
+    }
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=lambda u, *a, **kw: pages[u]) as fetch:
+        doc = workers.fetch_tls_pqc(slashless, progress_logger=None)
+    assert fetch.call_count == 2
+    assert doc["start_url"] == slashless
+    assert doc["source_url"] == SCAN_URL
+
+    with patch.object(workers, "_fetch_url_with_total_timeout",
+                      side_effect=AssertionError("network")):
+        cached = workers.fetch_tls_pqc(slashless, progress_logger=None)
+    assert cached["start_url"] == slashless
+    assert cached["source_url"] == SCAN_URL
+
+
 def test_http_only_opener_and_same_origin_redirect_handler():
     """Opener drops file/ftp handlers and blocks off-origin redirects without target leak."""
     opener = workers._build_http_only_opener(INDEX)
