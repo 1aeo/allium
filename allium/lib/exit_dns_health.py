@@ -256,7 +256,7 @@ def attach_exit_dns_health_to_relays(relays: List[Dict], health_map: Dict[str, D
         relay.update({
             'exit_dns_health_status': 'success' if is_success else 'fail',
             'exit_dns_health_detail': status,
-            'exit_dns_health_error': entry['error'],
+            'exit_dns_health_error': None if is_success else entry['error'],
             'exit_dns_health_timing_ms': entry['timing_ms'],
             'exit_dns_health_timing_percentile': (
                 _percentile_rank(sorted_timings, entry['timing_ms'])
