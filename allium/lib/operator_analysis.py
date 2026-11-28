@@ -983,6 +983,15 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     # 10. Flag bandwidth analysis
     operator_flag_bandwidth_analysis = compute_contact_flag_bandwidth_analysis(v, members, relay_set)
     display_data['flag_bandwidth_analysis'] = operator_flag_bandwidth_analysis
+
+    # Latest authority-vote agreement. Members carry vote_agreement from collector processing.
+    from .consensus.vote_agreement import summarize_operator_votes
+    authorities = getattr(relay_set, 'vote_measurement_authorities', None)
+    if not isinstance(authorities, dict):
+        network = getattr(relay_set, 'vote_agreement_summary', None)
+        authorities = network.get('measurement_authorities') if isinstance(network, dict) else None
+    display_data['vote_agreement'] = summarize_operator_votes(
+        members, measurement_authorities=authorities)
     
     return display_data
 
