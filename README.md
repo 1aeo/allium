@@ -112,7 +112,7 @@ Authenticated Relay Operator Identification system ranking verified operators:
 <details>
 <summary><strong>Network Health, Pressure, Diagnostics & Metrics</strong></summary>
 
-- **Network Health (`network-health.html`)**: 12 metric cards (Relay Counts, Bandwidth Capacity Availability, Relay Uptime, Operator Participation, Geographic Participation, Provider Participation, Bandwidth Utilization, Version Compliance, Unique Operating Systems, Happy Families Key Migration, Exit Policies, Exit DNS Health) plus Network History charts
+- **Network Health (`network-health.html`)**: 13 metric cards (Relay Counts, Bandwidth Capacity Availability, Relay Uptime, Operator Participation, Geographic Participation, Provider Participation, Bandwidth Utilization, Version Compliance, Unique Operating Systems, Happy Families Key Migration, Exit Policies, Exit DNS Health, PQC TLS `X25519MLKEM768` from the latest Margot scan published at ahf.me, including relays not in that scan) plus Network History charts
 - **Network Pressure (`network-pressure.html`)**: Daily series for overload share, Guard/HSDir counts, and directory bytes served against frozen baseline ranges
 - **API Diagnostics (`misc/diagnostics.html`)**: Cache age, freshness status, AROI diagnostics, and site-section dependency matrix
 - **Prometheus Metrics (`metrics`)**: Prometheus text exposition v2 for exit DNS health, upstream resolvers, AROI states, and source health

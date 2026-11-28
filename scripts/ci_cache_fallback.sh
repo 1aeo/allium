@@ -5,8 +5,8 @@
 # <api_name>.json. No timestamp file is written, so the live request is not a
 # conditional GET. workers.py then uses the fresh-cache budget (at most 90s,
 # no retries) and returns the seeded document when that request times out.
-# Bandwidth, AROI, exit DNS, and CollecTor skip the network when that cache
-# is fresh; details and uptime still try once.
+# Bandwidth, AROI, exit DNS, the TLS PQC scan, and CollecTor skip the network
+# when that cache is fresh; details and uptime still try once.
 
 # Cache keys for every API Coordinator enables with --apis all.
 # tests/fixtures/ci/<name>.json must match this list.
@@ -16,6 +16,7 @@ onionoo_uptime
 onionoo_bandwidth
 aroi_validation
 exit_dns_health
+tls_pqc
 collector_consensus
 collector_descriptors
 "

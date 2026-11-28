@@ -289,14 +289,15 @@ class TestContactDisplayData(unittest.TestCase):
                 self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', [], relays_no_intel
             )
         
-        # Should handle gracefully when no intelligence data exists
-        # Version-related fields and family_support_counts are always present
+        # Should handle gracefully when no intelligence data exists.
+        # Version fields, family support, and an empty PQC summary are always present.
         intelligence = result['operator_intelligence']
-        assert len(intelligence) == 4
+        assert len(intelligence) == 5
         assert 'version_compliance' in intelligence
         assert 'version_status' in intelligence
         assert 'version_status_tooltips' in intelligence
         assert 'family_support_counts' in intelligence
+        assert intelligence['tls_pqc'] == {'available': False}
         assert intelligence['version_compliance'] == '0 compliant'
         assert intelligence['version_status'] == 'none'
         # With empty members, all family support counts should be 0

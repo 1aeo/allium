@@ -277,6 +277,34 @@
                     {% endif %}
                 </li>
                 {% endif %}
+
+                {% if intelligence.tls_pqc and intelligence.tls_pqc.available %}
+                {% set pqc = intelligence.tls_pqc %}
+                <li id="tls-pqc"><strong><span title="Latest Margot TLS scan. X25519MLKEM768 is counted only when that scan negotiated the group. A relay whose fingerprint is absent is not in this scan. The Tor version string is not used.">PQC TLS</span>:</strong>
+                    {% if pqc.observed %}{{ pqc.saw }} of {{ pqc.observed }} relays with a negotiated group saw X25519MLKEM768{% if pqc.observed_percent is not none %} ({{ "%.0f"|format(pqc.observed_percent) }}%){% endif %}{% else %}No relay in this scan had a negotiated group{% endif %}.
+                    Scan {{ pqc.scan_time|e }}.
+                    {% if pqc.not_in_scan %} {{ pqc.not_in_scan }} not in this scan.{% endif %}
+                    {% if pqc.no_group %} {{ pqc.no_group }} in this scan with no negotiated group.{% endif %}
+                    {% if pqc.weight_observed_percent is not none %} Consensus weight: {{ "%.0f"|format(pqc.weight_observed_percent) }}% of relays with a negotiated group saw X25519MLKEM768{% if pqc.weight_share_percent is not none %} ({{ "%.0f"|format(pqc.weight_share_percent) }}% of this operator's consensus weight){% endif %}.{% endif %}
+                    {% if pqc.other_relays %}
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
+                        <li>Negotiated another group:
+                            {% for relay in pqc.other_relays %}<a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint|e }}/#tls-pqc">{{ relay.nickname|e }}</a> ({{ relay.group|e }}){% if not loop.last %}, {% endif %}{% endfor %}{% if pqc.other_more %} and {{ pqc.other_more }} more{% endif %}
+                        </li>
+                        {% if pqc.guidance_text %}
+                        <li>{{ pqc.guidance_text|e }}{% if pqc.guidance_url %} <a href="{{ pqc.guidance_url|e }}">tpo/core/tor#41300</a>{% endif %}</li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
+                    {% if pqc.absent_relays %}
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
+                        <li>not in this scan:
+                            {% for relay in pqc.absent_relays %}<a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint|e }}/#tls-pqc">{{ relay.nickname|e }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% if pqc.absent_more %} and {{ pqc.absent_more }} more{% endif %}
+                        </li>
+                    </ul>
+                    {% endif %}
+                </li>
+                {% endif %}
                 
                 {% if intelligence.family_support_counts %}
                 {% set fsc = intelligence.family_support_counts %}

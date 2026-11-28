@@ -164,6 +164,7 @@ class TestShortName:
         assert API_METADATA["aroi_validation"]["short_name"] == "AROI Validation"
         assert API_METADATA["collector_consensus"]["short_name"] == "Consensus"
         assert API_METADATA["collector_descriptors"]["short_name"] == "Descriptors"
+        assert API_METADATA["tls_pqc"]["short_name"] == "TLS PQC"
 
     def test_all_apis_have_short_name(self):
         for api_name, metadata in API_METADATA.items():
@@ -222,10 +223,11 @@ class TestIsApiEnabled:
 class TestMetadataRegistry:
     """Test API metadata registry structure."""
 
-    def test_all_six_apis_present(self):
+    def test_all_apis_present(self):
         expected = {
             "onionoo_details", "onionoo_uptime", "onionoo_bandwidth",
             "aroi_validation", "collector_consensus", "collector_descriptors",
+            "tls_pqc",
         }
         assert set(API_METADATA.keys()) == expected
 
@@ -284,6 +286,7 @@ class TestCollectApiDiagnostics:
             "all_seen_fingerprints": ["AAAA", "BBBB"],
             "family_cert_fingerprints": ["AAAA"],
         }
+        relay_set.tls_pqc_data = None
         return relay_set
 
     def _make_mock_args(self):
@@ -294,6 +297,7 @@ class TestCollectApiDiagnostics:
         args.onionoo_uptime_url = "https://onionoo.torproject.org/uptime"
         args.onionoo_bandwidth_url = "https://onionoo.torproject.org/bandwidth"
         args.aroi_url = "https://aroivalidator.1aeo.com/latest.json"
+        args.tls_pqc_url = "https://ahf.me/tor-tls-pqc/"
         return args
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
@@ -316,13 +320,13 @@ class TestCollectApiDiagnostics:
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
     @patch("allium.lib.api_diagnostics.get_cache_age")
-    def test_six_apis_returned(self, mock_cache_age, mock_status):
-        """Should return diagnostics for all 6 APIs."""
+    def test_all_apis_returned(self, mock_cache_age, mock_status):
+        """Should return diagnostics for every registered API."""
         mock_status.return_value = {}
         mock_cache_age.return_value = 60
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
-        assert len(result["apis"]) == 6
+        assert len(result["apis"]) == len(API_METADATA)
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
     @patch("allium.lib.api_diagnostics.get_cache_age")
@@ -1707,12 +1711,14 @@ class TestCollectorDocumentTimes:
             "family_cert_fingerprints": [],
             "source_latest_file_ts": "2024-05-01T00:00:00+00:00",
         }
+        relay_set.tls_pqc_data = None
         args = MagicMock()
         args.enabled_apis = "all"
         args.onionoo_details_url = "https://onionoo.torproject.org/details"
         args.onionoo_uptime_url = "https://onionoo.torproject.org/uptime"
         args.onionoo_bandwidth_url = "https://onionoo.torproject.org/bandwidth"
         args.aroi_url = "https://aroivalidator.1aeo.com/latest.json"
+        args.tls_pqc_url = "https://ahf.me/tor-tls-pqc/"
 
         result = collect_api_diagnostics(relay_set, args)
         by_name = {api["name"]: api for api in result["apis"]}

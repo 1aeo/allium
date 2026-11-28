@@ -12,8 +12,9 @@ import logging
 import os
 import random
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 import socket
 import ssl
 import threading
@@ -40,7 +41,8 @@ class TotalTimeoutError(Exception):
 
 
 def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
-                                  response_headers: dict = None) -> bytes:
+                                  response_headers: dict = None, opener=None,
+                                  max_bytes: int = None) -> bytes:
     """
     Fetch URL content with a guaranteed total timeout.
     
@@ -63,12 +65,15 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
         response_headers: Optional dict. When not None, copy the response
             Last-Modified header into it if the server sent one. Omit it
             to keep the previous call shape. The body is still returned.
+        opener: Optional urllib OpenerDirector to use instead of urlopen().
+        max_bytes: Optional maximum response size in bytes.
         
     Returns:
         bytes: Response content
         
     Raises:
         TotalTimeoutError: If the request exceeds the total timeout
+        ValueError: If response size exceeds max_bytes
         urllib.error.URLError: On network errors (not timeout)
         urllib.error.HTTPError: On HTTP errors (4xx, 5xx)
     """
@@ -82,7 +87,10 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
     # Phase 1: Open connection with socket timeout equal to total timeout
     # This ensures we don't wait forever for response headers from a hanging server
     try:
-        response = urllib.request.urlopen(req, timeout=timeout)
+        if opener is not None:
+            response = opener.open(req, timeout=timeout)
+        else:
+            response = urllib.request.urlopen(req, timeout=timeout)
     except socket.timeout:
         elapsed = time.monotonic() - start_time
         raise TotalTimeoutError(
@@ -105,8 +113,21 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
     # Phase 2: Read response in chunks, checking total elapsed time after each chunk
     chunks = []
     chunk_size = 64 * 1024  # 64KB chunks
+    received = 0
     
     try:
+        if max_bytes is not None and response.headers:
+            raw_length = response.headers.get("Content-Length")
+            if raw_length is not None:
+                try:
+                    declared_length = int(raw_length.strip())
+                except (TypeError, ValueError):
+                    declared_length = None
+                if declared_length is not None and declared_length > max_bytes:
+                    raise ValueError(
+                        f"Response from {url} exceeded size limit of {max_bytes} bytes"
+                    )
+
         while True:
             # Check total elapsed time before reading next chunk
             elapsed = time.monotonic() - start_time
@@ -114,7 +135,7 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
                 response.close()
                 raise TotalTimeoutError(
                     f"Request to {url} exceeded total timeout of {timeout}s "
-                    f"(elapsed: {elapsed:.1f}s, received: {sum(len(c) for c in chunks)} bytes)"
+                    f"(elapsed: {elapsed:.1f}s, received: {received} bytes)"
                 )
             
             # Calculate remaining time for this chunk read
@@ -129,12 +150,13 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
                 except (AttributeError, OSError):
                     pass  # Some response types don't support this
             
+            read_limit = chunk_size if max_bytes is None else min(chunk_size, max_bytes - received + 1)
             try:
                 # read() can make repeated socket reads to fill the chunk,
                 # resetting the inactivity timeout as bytes trickle in.
                 # read1() returns after one underlying read so the next loop
                 # iteration checks the deadline and updates the socket timeout.
-                chunk = response.read1(chunk_size)
+                chunk = response.read1(read_limit)
             except socket.timeout:
                 # The per-read timeout is the remaining total, so the limit is used up
                 response.close()
@@ -146,6 +168,11 @@ def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None,
                 # End of response
                 break
             
+            received += len(chunk)
+            if max_bytes is not None and received > max_bytes:
+                raise ValueError(
+                    f"Response from {url} exceeded size limit of {max_bytes} bytes"
+                )
             chunks.append(chunk)
 
         if response_headers is not None and pending_last_modified:
@@ -218,6 +245,13 @@ AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 EXIT_DNS_HEALTH_CACHE_MAX_AGE_HOURS = 12
 EXIT_DNS_HEALTH_TIMEOUT_FRESH_CACHE = 90
 EXIT_DNS_HEALTH_TIMEOUT_STALE_CACHE = 120
+
+# TLS PQC SCAN - Margot tls-ciphers results published at ahf.me.
+# Scans are irregular (months apart). A day between index checks is enough
+# to notice a new dated directory without refetching the HTML every run.
+TLS_PQC_CACHE_MAX_AGE_HOURS = 24
+TLS_PQC_TIMEOUT_FRESH_CACHE = 90
+TLS_PQC_TIMEOUT_STALE_CACHE = 120
 
 # COLLECTOR CONSENSUS API - Fetches authority votes from CollecTor
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
@@ -349,6 +383,21 @@ EXIT_DNS_HEALTH_CONFIG = APIConfig(
     custom_headers={'User-Agent': 'Allium/1.0'},
     count_field='results',
     retry_count=2,               # External API: retry up to 2 times
+    retry_delay_base=1.0,
+    allow_exit_on_304=False,
+    critical=False,
+)
+
+TLS_PQC_CONFIG = APIConfig(
+    api_name='tls_pqc',
+    display_name='TLS PQC scan',
+    cache_max_age_hours=TLS_PQC_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=TLS_PQC_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=TLS_PQC_TIMEOUT_STALE_CACHE,
+    use_conditional_requests=False,
+    custom_headers={'User-Agent': 'Allium/1.0'},
+    count_field='relays',
+    retry_count=2,
     retry_delay_base=1.0,
     allow_exit_on_304=False,
     critical=False,
@@ -1888,6 +1937,180 @@ def fetch_consensus_health(progress_logger=None):
         return None
 
 
+_TLS_PQC_MAX_BYTES = 20 * 1024 * 1024
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that confines redirects to the configured scan origin."""
+
+    def __init__(self, origin_url: str) -> None:
+        """Store the configured origin URL used to validate every redirect hop."""
+        self._origin_url = origin_url
+
+    def _validate_target(self, req, fp, raw_target: str) -> str:
+        """Verify ``raw_target`` resolves inside the configured scan origin."""
+        from .tls_pqc import is_safe_scan_url
+
+        resolved = urllib.parse.urljoin(req.full_url, raw_target)
+        if not (
+            is_safe_scan_url(resolved, self._origin_url)
+            and is_safe_scan_url(resolved, req.full_url)
+        ):
+            if fp is not None:
+                try:
+                    fp.close()
+                except Exception:
+                    pass
+            raise urllib.error.URLError(
+                "TLS PQC redirect blocked: target outside configured scan origin"
+            )
+        return resolved
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        """Reject non-HTTP(S) or off-origin redirect targets before urllib formats them."""
+        raw_target = headers.get("location") or headers.get("uri")
+        if raw_target is not None:
+            self._validate_target(req, fp, raw_target)
+        return super().http_error_302(req, fp, code, msg, headers)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Allow only same-origin (or http->https upgrade) HTTP(S) redirect targets."""
+        resolved = self._validate_target(req, fp, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
+
+
+def _build_http_only_opener(origin_url: str) -> urllib.request.OpenerDirector:
+    """Build an HTTP/HTTPS-only opener without FileHandler, FTPHandler, or DataHandler."""
+    opener = urllib.request.OpenerDirector()
+    handlers = [
+        urllib.request.ProxyHandler,
+        urllib.request.UnknownHandler,
+        urllib.request.HTTPHandler,
+        urllib.request.HTTPDefaultErrorHandler,
+        urllib.request.HTTPErrorProcessor,
+    ]
+    if hasattr(urllib.request, "HTTPSHandler"):
+        handlers.append(urllib.request.HTTPSHandler)
+    for klass in handlers:
+        opener.add_handler(klass())
+    opener.add_handler(_SameOriginRedirectHandler(origin_url))
+    return opener
+
+
+def _validate_tls_pqc_document(data, expected_url=None, require_start_url=False) -> bool:
+    """Validator for a parsed Margot TLS scan cached as JSON."""
+    from .tls_pqc import validate_tls_pqc_document
+    return validate_tls_pqc_document(
+        data, expected_url=expected_url, require_start_url=require_start_url
+    )
+
+
+def fetch_tls_pqc(tls_pqc_url="https://ahf.me/tor-tls-pqc/", progress_logger=None):
+    """
+    Fetch the latest Margot TLS cipher scan and cache the parsed document.
+
+    The default URL is the ahf.me index. A dated scan page or a Margot
+    ``cipher_suites.csv`` URL is parsed directly. Caching matches the other
+    non-Onionoo documents: a fresh file is returned without a request, and a
+    failed refresh falls back to the previous parsed scan.
+    """
+    from .tls_pqc import DEFAULT_INDEX_URL, is_safe_scan_url, load_tls_pqc_scan
+
+    api_name = TLS_PQC_CONFIG.api_name
+    display_name = TLS_PQC_CONFIG.display_name
+    url = tls_pqc_url or DEFAULT_INDEX_URL
+
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+
+    if not is_safe_scan_url(url):
+        _mark_stale(api_name, "error: invalid TLS PQC URL")
+        log_progress("error: invalid TLS PQC URL")
+        return None
+
+    cache_age = _cache_manager.get_cache_age(api_name)
+    cache_max_age_seconds = TLS_PQC_CACHE_MAX_AGE_HOURS * 3600
+    if cache_age is not None and cache_age < cache_max_age_seconds:
+        cached = _load_cache(api_name)
+        if cached and _validate_tls_pqc_document(cached, expected_url=url, require_start_url=True):
+            log_progress(
+                "using cached %s (less than %s hour(s) old)"
+                % (display_name, TLS_PQC_CACHE_MAX_AGE_HOURS))
+            _mark_ready(api_name)
+            log_progress("loaded %s relays from %s cache" % (
+                len(cached.get("relays") or {}), display_name))
+            return cached
+
+    cached_data = None
+    timeout_seconds = TLS_PQC_TIMEOUT_STALE_CACHE
+    retry_count = TLS_PQC_CONFIG.retry_count
+    try:
+        loaded = _load_cache(api_name)
+        if loaded and _validate_tls_pqc_document(loaded, expected_url=url, require_start_url=True):
+            cached_data = loaded
+            timeout_seconds = TLS_PQC_TIMEOUT_FRESH_CACHE
+            retry_count = 0
+            log_progress(
+                "cache is %.1f hours old (>=%sh), using %s second timeout to refresh..."
+                % ((cache_age or 0) / 3600, TLS_PQC_CACHE_MAX_AGE_HOURS, timeout_seconds))
+        else:
+            log_progress(
+                "no valid cache exists, using %s second timeout for initial fetch..."
+                % timeout_seconds)
+
+        headers = dict(TLS_PQC_CONFIG.custom_headers or {})
+        opener = _build_http_only_opener(url)
+
+        def fetch_body(one_url: str) -> bytes:
+            """Fetch one TLS PQC scan page or index document with redirect and size guards."""
+            if not is_safe_scan_url(one_url, url):
+                raise ValueError("TLS PQC URL outside configured scan origin")
+            log_progress(f"fetching {one_url}")
+            return _retry_with_backoff(
+                fetch_fn=_fetch_url_with_total_timeout,
+                args=(one_url, timeout_seconds, headers),
+                kwargs={"opener": opener, "max_bytes": _TLS_PQC_MAX_BYTES},
+                retry_count=retry_count,
+                retry_delay_base=TLS_PQC_CONFIG.retry_delay_base,
+                log_fn=log_progress,
+                operation_name=display_name,
+            )
+
+        data = load_tls_pqc_scan(fetch_body, url)
+        if isinstance(data, dict):
+            data["start_url"] = url
+        if not _validate_tls_pqc_document(data, expected_url=url, require_start_url=True):
+            log_progress("warning: invalid %s document" % display_name)
+            if cached_data:
+                log_progress("using cached %s due to invalid response" % display_name)
+                _mark_ready(api_name)
+                return cached_data
+            _mark_stale(api_name, "Invalid TLS PQC scan")
+            return None
+
+        log_progress("caching %s..." % display_name)
+        _save_cache(api_name, data)
+        _mark_ready(api_name)
+        log_progress(
+            "parsed %s relays from %s scan %s (%s)"
+            % (len(data.get("relays") or {}), data.get("artifact"),
+               data.get("scan_time"), data.get("source_url")))
+        return data
+    except Exception as exc:
+        reason = "timeout" if "timeout" in str(exc).lower() else "error"
+        log_progress("%s: %s" % (reason, exc))
+        if cached_data:
+            log_progress("using cached %s due to %s" % (display_name, reason))
+            _mark_ready(api_name)
+            return cached_data
+        _mark_stale(api_name, "%s: %s" % (reason, exc))
+        log_progress("no cached %s available after %s" % (display_name, reason))
+        return None
+
+
 # Initialize state on module import
 _load_state() 
 
@@ -1955,6 +2178,10 @@ EXIT_DNS_HEALTH_CONFIG.worker_fn = fetch_exit_dns_health
 EXIT_DNS_HEALTH_CONFIG.progress_name = 'Exit DNS Health API'
 EXIT_DNS_HEALTH_CONFIG.args_fn = lambda c: [c.exit_dns_health_url, c._noop_logger]
 
+TLS_PQC_CONFIG.worker_fn = fetch_tls_pqc
+TLS_PQC_CONFIG.progress_name = 'TLS PQC Scan'
+TLS_PQC_CONFIG.args_fn = lambda c: [c.tls_pqc_url, c._noop_logger]
+
 COLLECTOR_CONSENSUS_CONFIG.worker_fn = fetch_collector_consensus_data
 COLLECTOR_CONSENSUS_CONFIG.args_fn = lambda c: [None, c._noop_logger]
 
@@ -1970,6 +2197,7 @@ API_CONFIGS = [
     BANDWIDTH_CONFIG,
     AROI_CONFIG,
     EXIT_DNS_HEALTH_CONFIG,
+    TLS_PQC_CONFIG,
     COLLECTOR_CONSENSUS_CONFIG,
     COLLECTOR_DESCRIPTORS_CONFIG,
     CONSENSUS_HEALTH_CONFIG,

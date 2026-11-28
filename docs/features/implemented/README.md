@@ -7,13 +7,14 @@
 
 - [collector-descriptor-freshness-policy.md](collector-descriptor-freshness-policy.md) — Freshness and downgrade-protection policy for CollecTor server-descriptor-based Happy Families classification.
 - [history-charts.md](history-charts.md) — Build-time PNG/SVG history charts across relay, contact, network health, and network pressure pages, including caching, layouts, and CSS period switching.
+- [tls-pqc-scan.md](tls-pqc-scan.md) — Margot TLS cipher scan: CSV the scanner writes, HTML ahf.me publishes, and how absence from a scan is shown.
 
 ## Shipped Capabilities
 
-- **Multi-API parallel fetching & caching**: 7 enabled workers under `--apis all`, conditional requests, and graceful cache fallback (`allium/lib/coordinator.py`, `allium/lib/workers.py`).
+- **Multi-API parallel fetching & caching**: 8 enabled workers under `--apis all`, conditional requests, and graceful cache fallback (`allium/lib/coordinator.py`, `allium/lib/workers.py`).
 - **AROI v2 + v3 validation & 21 operator leaderboards**: CIISS v2/v3 validation, tiered v3 migration badges, and leaked-key security incident surfacing (`allium/lib/aroi_validation.py`, `allium/lib/aroileaders.py`).
 - **Multi-period reliability & uptime analytics**: 1M/6M/1Y/5Y tracking, flag-specific uptime priority (`Exit > Guard > Fast > Running`), network percentiles, `≥2σ` outlier detection, and `first_seen` repair from `/uptime` (`allium/lib/uptime_utils.py`, `allium/lib/operator_analysis.py`, `allium/lib/first_seen_correction.py`).
-- **Network Health Dashboard**: 12 metric cards plus whole-network bandwidth and uptime history charts (`network-health.html`, `allium/lib/network_health.py`).
+- **Network Health Dashboard**: 13 metric cards plus whole-network bandwidth and uptime history charts (`network-health.html`, `allium/lib/network_health.py`).
 - **Daily Network Pressure tracking**: Daily overload share, Guard count, HSDir count, and directory bytes served against frozen baseline bands (`network-pressure.html`, `allium/lib/pressure_history.py`, `allium/lib/charts/pressure.py`).
 - **Directory Authorities monitoring & per-relay consensus evaluation**: CollecTor vote parsing, flag thresholds, TCP latency probing, and centralized relay diagnostics (`misc/authorities.html`, `allium/lib/consensus/`, `allium/lib/relay_diagnostics.py`).
 - **7-layer Intelligence Engine & smart context summaries**: Precomputed relationship, concentration, performance, infrastructure, geography, capacity, and contact insights (`allium/lib/intelligence_engine.py`, `allium/lib/operator_analysis.py`).
@@ -26,6 +27,7 @@
 - **API Diagnostics page**: Data-source freshness, cache status, and section dependency reporting (`misc/diagnostics.html`, `allium/lib/api_diagnostics.py`).
 - **Fork-based multiprocessing page generation & precomputation**: Copy-on-write forked workers and precomputed contact/family data (`allium/lib/worker_pool.py`, `allium/lib/page_writer.py`).
 - **RouteFluxMap deep links**: Direct links from country (`#CC=`) and relay (`#relay=`) pages plus site navigation and footer (`allium/templates/country.html`, `allium/templates/relay-info.html`, `allium/templates/skeleton.html`).
+- **PQC TLS cipher scan (`X25519MLKEM768`)**: Latest Margot scan from `ahf.me` (HTML or CSV), showing negotiated groups and explicit absence on network health, relay, and contact pages (`allium/lib/tls_pqc.py`, [tls-pqc-scan.md](tls-pqc-scan.md)).
 
 ## How to Verify
 
