@@ -12,6 +12,8 @@
 - [Current Capabilities](reference/current-capabilities.md) - All working features
 - [Output Structure](reference/output-structure.md) - Generated files
 - [API Integration](reference/api-integration.md) - Data sources
+- [Implemented Features](features/implemented/README.md) - Behavior of shipped features
+- [Prometheus Metrics](prometheus/README.md) - Prometheus v2 exposition schema and alerts
 
 ## For Contributors
 
@@ -23,7 +25,6 @@
 ## Future Work
 
 - [Planned Features](features/planned/README.md) - Roadmap and proposals
-- [Feature shortlist status](features/planned/TOP_10_PRIORITIZED_FEATURES.md) - Which proposed items are in the generator
 
 ## Standards
 
