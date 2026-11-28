@@ -91,16 +91,28 @@ def test_prometheus_metrics_documented():
     assert not missing, f"undocumented emitted Prometheus metrics in docs/prometheus/README.md: {missing}"
 
 
+def _extract_inline_destination(raw_target):
+    """Return the destination portion of a Markdown inline (...) link target."""
+    trimmed = raw_target.strip()
+    if trimmed.startswith("<") and ">" in trimmed:
+        return trimmed[1:trimmed.index(">")].strip()
+    return trimmed.split()[0] if trimmed else ""
+
+
 def _iter_link_targets(cleaned):
-    """Yield raw link destinations from inline links and reference-style definitions."""
-    for target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", cleaned):
-        yield target
+    """Yield destination strings from inline links and reference-style definitions."""
+    for raw_target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", cleaned):
+        dest = _extract_inline_destination(raw_target)
+        if dest:
+            yield dest
     for angle_target, bare_target in re.findall(
         r"^[ \t]{0,3}\[[^\]]+\]:[ \t]*(?:<([^>\n]+)>|([^\s\n]+))",
         cleaned,
         flags=re.MULTILINE,
     ):
-        yield angle_target or bare_target
+        dest = (angle_target or bare_target).strip()
+        if dest:
+            yield dest
 
 
 def test_markdown_relative_links_resolve():
@@ -111,15 +123,14 @@ def test_markdown_relative_links_resolve():
     broken = []
     for md_path in md_files:
         cleaned = _strip_code(md_path.read_text(encoding="utf-8"))
-        for raw_target in _iter_link_targets(cleaned):
-            target = raw_target.strip().split()[0].strip("<>")
-            if not target or target.startswith(("#", "http://", "https://", "mailto:", "file://")):
+        for target in _iter_link_targets(cleaned):
+            if target.startswith(("#", "http://", "https://", "mailto:", "file://")):
                 continue
             target_path = target.split("#", 1)[0].split("?", 1)[0]
             if not target_path:
                 continue
             resolved = (md_path.parent / target_path).resolve()
             if not resolved.exists():
-                broken.append(f"{md_path.relative_to(_REPO_ROOT)} -> {raw_target}")
+                broken.append(f"{md_path.relative_to(_REPO_ROOT)} -> {target}")
 
     assert not broken, "broken relative Markdown links:\n" + "\n".join(broken)
