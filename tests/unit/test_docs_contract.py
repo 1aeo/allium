@@ -101,10 +101,54 @@ def _is_escaped(text, index):
     return (backslashes % 2) == 1
 
 
-def _skip_optional_inline_title(text, pos, end):
-    """Advance past optional inline link whitespace and '...', \"...\", or (...) title before ')'."""
-    while pos < end and text[pos] in " \t\r\n":
+_ESCAPABLE_PUNCT_RE = re.compile(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])")
+
+
+def _unescape_destination(dest):
+    """Decode CommonMark backslash escapes before filesystem path resolution."""
+    return _ESCAPABLE_PUNCT_RE.sub(r"\1", dest)
+
+
+def _skip_optional_newline_spaces(text, pos, end):
+    """Advance past spaces/tabs and at most one line ending followed by spaces/tabs."""
+    while pos < end and text[pos] in (" ", "\t"):
         pos += 1
+    if pos < end and text[pos] == "\r":
+        pos += 1
+    if pos < end and text[pos] == "\n":
+        pos += 1
+        while pos < end and text[pos] in (" ", "\t"):
+            pos += 1
+    return pos
+
+
+def _has_matching_open_bracket(text, close_idx):
+    """Return True when close_idx pairs with an unescaped opening '[' in the same paragraph."""
+    depth = 1
+    pos = close_idx - 1
+    while pos >= 0:
+        ch = text[pos]
+        if ch == "\n":
+            prev = pos - 1
+            if prev >= 0 and text[prev] == "\r":
+                prev -= 1
+            while prev >= 0 and text[prev] in (" ", "\t"):
+                prev -= 1
+            if prev >= 0 and text[prev] == "\n":
+                return False
+        if ch == "]" and not _is_escaped(text, pos):
+            depth += 1
+        elif ch == "[" and not _is_escaped(text, pos):
+            depth -= 1
+            if depth == 0:
+                return True
+        pos -= 1
+    return False
+
+
+def _skip_optional_inline_title(text, pos, end):
+    """Advance past optional inline link whitespace/newline and '...', \"...\", or (...) title before ')'."""
+    pos = _skip_optional_newline_spaces(text, pos, end)
     if pos >= end or text[pos] == ")":
         return pos
     opener = text[pos]
@@ -120,10 +164,7 @@ def _skip_optional_inline_title(text, pos, end):
         if opener == "(" and ch == "(":
             return -1
         if ch == closer:
-            pos += 1
-            while pos < end and text[pos] in " \t":
-                pos += 1
-            return pos
+            return _skip_optional_newline_spaces(text, pos + 1, end)
         pos += 1
     return -1
 
@@ -131,15 +172,7 @@ def _skip_optional_inline_title(text, pos, end):
 def _parse_inline_link(text, open_paren_pos):
     """Return (dest, end_pos) for an inline (...) link target or (None, open_paren_pos)."""
     n = len(text)
-    pos = open_paren_pos + 1
-    while pos < n and text[pos] in " \t":
-        pos += 1
-    if pos < n and text[pos] == "\r":
-        pos += 1
-    if pos < n and text[pos] == "\n":
-        pos += 1
-        while pos < n and text[pos] in " \t":
-            pos += 1
+    pos = _skip_optional_newline_spaces(text, open_paren_pos + 1, n)
     if pos >= n:
         return None, open_paren_pos
 
@@ -153,7 +186,7 @@ def _parse_inline_link(text, open_paren_pos):
             pos += 1
         if pos >= n or text[pos] != ">":
             return None, open_paren_pos
-        dest = text[start:pos].strip()
+        dest = _unescape_destination(text[start:pos].strip())
         pos += 1
     else:
         start = pos
@@ -174,12 +207,42 @@ def _parse_inline_link(text, open_paren_pos):
             pos += 1
         if depth != 0 or pos == start:
             return None, open_paren_pos
-        dest = text[start:pos].strip()
+        dest = _unescape_destination(text[start:pos].strip())
 
     pos = _skip_optional_inline_title(text, pos, n)
     if pos < 0 or pos >= n or text[pos] != ")":
         return None, open_paren_pos
     return dest, pos + 1
+
+
+def _parse_title_lines(lines, cur_idx, tail):
+    """Consume an optional single/multiline reference title, returning next index or -1 if invalid."""
+    if not tail:
+        return cur_idx + 1
+    opener = tail[0]
+    if opener not in ('"', "'", "("):
+        return -1
+    closer = ")" if opener == "(" else opener
+
+    pos = 1
+    line = tail
+    while cur_idx < len(lines):
+        while pos < len(line):
+            ch = line[pos]
+            if ch == "\\" and pos + 1 < len(line):
+                pos += 2
+                continue
+            if opener == "(" and ch == "(":
+                return -1
+            if ch == closer:
+                return cur_idx + 1 if line[pos + 1 :].strip() == "" else -1
+            pos += 1
+        cur_idx += 1
+        if cur_idx >= len(lines) or lines[cur_idx].strip() == "":
+            return -1
+        line = lines[cur_idx]
+        pos = 0
+    return -1
 
 
 def _parse_ref_definition(lines, idx):
@@ -205,12 +268,27 @@ def _parse_ref_definition(lines, idx):
             pos += 1
         if pos >= len(rest):
             return None, idx
-        dest = rest[1:pos].strip()
+        dest = _unescape_destination(rest[1:pos].strip())
+        tail = rest[pos + 1 :].strip()
     else:
-        dest = rest.split()[0] if rest else ""
+        parts = rest.split(None, 1)
+        dest = _unescape_destination(parts[0]) if parts else ""
+        tail = parts[1].strip() if len(parts) > 1 else ""
     if not dest:
         return None, idx
-    return dest, cur + 1
+
+    next_idx = cur + 1
+    if tail:
+        next_idx = _parse_title_lines(lines, cur, tail)
+        if next_idx == -1:
+            return None, idx
+    elif cur + 1 < len(lines) and re.match(r"^[ \t]*[\"'(\[]", lines[cur + 1]):
+        # Only consume optional title on following line if it starts with quote/paren
+        if re.match(r"^[ \t]*[\"'(]", lines[cur + 1]):
+            title_end = _parse_title_lines(lines, cur + 1, lines[cur + 1].strip())
+            if title_end != -1:
+                next_idx = title_end
+    return dest, next_idx
 
 
 def _iter_link_targets(cleaned):
@@ -220,7 +298,7 @@ def _iter_link_targets(cleaned):
         close_idx = cleaned.find("](", idx)
         if close_idx == -1:
             break
-        if _is_escaped(cleaned, close_idx):
+        if _is_escaped(cleaned, close_idx) or not _has_matching_open_bracket(cleaned, close_idx):
             idx = close_idx + 2
             continue
         dest, end_pos = _parse_inline_link(cleaned, close_idx + 1)
