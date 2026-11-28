@@ -91,16 +91,6 @@ def test_prometheus_metrics_documented():
     assert not missing, f"undocumented emitted Prometheus metrics in docs/prometheus/README.md: {missing}"
 
 
-_INLINE_LINK_RE = re.compile(
-    r"\[[^\]]*\]\([ \t]*(?:<([^>\n]+)>(?:[ \t]+(?:\"[^\"]*\"|'[^']*'|\([^)\n]*\)))?[ \t]*|"
-    r"((?:[^()\s\n]|\([^()\s\n]*\))+)(?:[ \t]+(?:\"[^\"]*\"|'[^']*'))?[ \t]*)\)"
-)
-_REF_DEF_RE = re.compile(
-    r"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:\r?\n[ \t]*)?(?:<([^>\n]+)>|([^\s\n]+))[^\n]*$",
-    flags=re.MULTILINE,
-)
-
-
 def _is_escaped(text, index):
     """Return True when the character at index is preceded by an odd number of backslashes."""
     backslashes = 0
@@ -111,20 +101,145 @@ def _is_escaped(text, index):
     return (backslashes % 2) == 1
 
 
+def _skip_optional_inline_title(text, pos, end):
+    """Advance past optional inline link whitespace and '...', \"...\", or (...) title before ')'."""
+    while pos < end and text[pos] in " \t\r\n":
+        pos += 1
+    if pos >= end or text[pos] == ")":
+        return pos
+    opener = text[pos]
+    if opener not in ('"', "'", "("):
+        return -1
+    closer = ")" if opener == "(" else opener
+    pos += 1
+    while pos < end:
+        ch = text[pos]
+        if ch == "\\" and pos + 1 < end:
+            pos += 2
+            continue
+        if opener == "(" and ch == "(":
+            return -1
+        if ch == closer:
+            pos += 1
+            while pos < end and text[pos] in " \t":
+                pos += 1
+            return pos
+        pos += 1
+    return -1
+
+
+def _parse_inline_link(text, open_paren_pos):
+    """Return (dest, end_pos) for an inline (...) link target or (None, open_paren_pos)."""
+    n = len(text)
+    pos = open_paren_pos + 1
+    while pos < n and text[pos] in " \t":
+        pos += 1
+    if pos < n and text[pos] == "\r":
+        pos += 1
+    if pos < n and text[pos] == "\n":
+        pos += 1
+        while pos < n and text[pos] in " \t":
+            pos += 1
+    if pos >= n:
+        return None, open_paren_pos
+
+    if text[pos] == "<":
+        pos += 1
+        start = pos
+        while pos < n and text[pos] not in (">", "\n"):
+            if text[pos] == "\\" and pos + 1 < n:
+                pos += 2
+                continue
+            pos += 1
+        if pos >= n or text[pos] != ">":
+            return None, open_paren_pos
+        dest = text[start:pos].strip()
+        pos += 1
+    else:
+        start = pos
+        depth = 0
+        while pos < n:
+            ch = text[pos]
+            if ch in (" ", "\t", "\r", "\n"):
+                break
+            if ch == "\\" and pos + 1 < n:
+                pos += 2
+                continue
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                if depth == 0:
+                    break
+                depth -= 1
+            pos += 1
+        if depth != 0 or pos == start:
+            return None, open_paren_pos
+        dest = text[start:pos].strip()
+
+    pos = _skip_optional_inline_title(text, pos, n)
+    if pos < 0 or pos >= n or text[pos] != ")":
+        return None, open_paren_pos
+    return dest, pos + 1
+
+
+def _parse_ref_definition(lines, idx):
+    """Parse a CommonMark reference definition at lines[idx], returning (dest, next_idx) or (None, idx)."""
+    m = re.match(r"^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(.*)$", lines[idx])
+    if not m or _is_escaped(lines[idx], lines[idx].index("[")):
+        return None, idx
+
+    cur = idx
+    rest = m.group(2).strip()
+    if not rest:
+        if cur + 1 >= len(lines) or not lines[cur + 1].strip():
+            return None, idx
+        cur += 1
+        rest = lines[cur].strip()
+
+    if rest.startswith("<"):
+        pos = 1
+        while pos < len(rest) and rest[pos] != ">":
+            if rest[pos] == "\\" and pos + 1 < len(rest):
+                pos += 2
+                continue
+            pos += 1
+        if pos >= len(rest):
+            return None, idx
+        dest = rest[1:pos].strip()
+    else:
+        dest = rest.split()[0] if rest else ""
+    if not dest:
+        return None, idx
+    return dest, cur + 1
+
+
 def _iter_link_targets(cleaned):
     """Yield destination strings from inline links and reference-style definitions."""
-    for match in _INLINE_LINK_RE.finditer(cleaned):
-        if _is_escaped(cleaned, match.start()):
+    idx = 0
+    while idx < len(cleaned):
+        close_idx = cleaned.find("](", idx)
+        if close_idx == -1:
+            break
+        if _is_escaped(cleaned, close_idx):
+            idx = close_idx + 2
             continue
-        dest = (match.group(1) or match.group(2) or "").strip()
-        if dest:
+        dest, end_pos = _parse_inline_link(cleaned, close_idx + 1)
+        if dest is not None:
+            if dest:
+                yield dest
+            idx = end_pos
+        else:
+            idx = close_idx + 2
+
+    lines = cleaned.splitlines()
+    line_idx = 0
+    while line_idx < len(lines):
+        dest, next_idx = _parse_ref_definition(lines, line_idx)
+        if dest is not None:
             yield dest
-    for match in _REF_DEF_RE.finditer(cleaned):
-        if _is_escaped(cleaned, match.start()):
-            continue
-        dest = (match.group(2) or match.group(3) or "").strip()
-        if dest:
-            yield dest
+            line_idx = next_idx
+        else:
+            line_idx += 1
 
 
 def test_markdown_relative_links_resolve():
