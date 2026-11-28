@@ -91,26 +91,38 @@ def test_prometheus_metrics_documented():
     assert not missing, f"undocumented emitted Prometheus metrics in docs/prometheus/README.md: {missing}"
 
 
-def _extract_inline_destination(raw_target):
-    """Return the destination portion of a Markdown inline (...) link target."""
-    trimmed = raw_target.strip()
-    if trimmed.startswith("<") and ">" in trimmed:
-        return trimmed[1:trimmed.index(">")].strip()
-    return trimmed.split()[0] if trimmed else ""
+_INLINE_LINK_RE = re.compile(
+    r"\[[^\]]*\]\([ \t]*(?:<([^>\n]+)>(?:[ \t]+(?:\"[^\"]*\"|'[^']*'|\([^)\n]*\)))?[ \t]*|"
+    r"((?:[^()\s\n]|\([^()\s\n]*\))+)(?:[ \t]+(?:\"[^\"]*\"|'[^']*'))?[ \t]*)\)"
+)
+_REF_DEF_RE = re.compile(
+    r"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:\r?\n[ \t]*)?(?:<([^>\n]+)>|([^\s\n]+))[^\n]*$",
+    flags=re.MULTILINE,
+)
+
+
+def _is_escaped(text, index):
+    """Return True when the character at index is preceded by an odd number of backslashes."""
+    backslashes = 0
+    pos = index - 1
+    while pos >= 0 and text[pos] == "\\":
+        backslashes += 1
+        pos -= 1
+    return (backslashes % 2) == 1
 
 
 def _iter_link_targets(cleaned):
     """Yield destination strings from inline links and reference-style definitions."""
-    for raw_target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", cleaned):
-        dest = _extract_inline_destination(raw_target)
+    for match in _INLINE_LINK_RE.finditer(cleaned):
+        if _is_escaped(cleaned, match.start()):
+            continue
+        dest = (match.group(1) or match.group(2) or "").strip()
         if dest:
             yield dest
-    for angle_target, bare_target in re.findall(
-        r"^[ \t]{0,3}\[[^\]]+\]:[ \t]*(?:<([^>\n]+)>|([^\s\n]+))",
-        cleaned,
-        flags=re.MULTILINE,
-    ):
-        dest = (angle_target or bare_target).strip()
+    for match in _REF_DEF_RE.finditer(cleaned):
+        if _is_escaped(cleaned, match.start()):
+            continue
+        dest = (match.group(2) or match.group(3) or "").strip()
         if dest:
             yield dest
 
