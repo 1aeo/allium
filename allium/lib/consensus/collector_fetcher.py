@@ -809,7 +809,7 @@ class CollectorFetcher:
             fingerprint = stored.strip().upper()
         else:
             fingerprint = fingerprint.strip().upper()
-        vote_count = len(_votes_by_name(relay))
+        vote_count = len(self._current_hour_votes(relay))
         
         # Tor consensus requires MAJORITY of authorities
         # Per dir-spec: relay appears in consensus if > half of authorities vote for it
@@ -1523,7 +1523,7 @@ class CollectorFetcher:
         found = set()
         index = self.relay_index if isinstance(self.relay_index, dict) else {}
         for relay in index.values():
-            for auth_name, vote in _votes_by_name(relay).items():
+            for auth_name, vote in self._current_hour_votes(relay).items():
                 measured = vote.get('measured')
                 if isinstance(measured, (int, float)) and not isinstance(measured, bool):
                     found.add(auth_name)
@@ -1565,7 +1565,7 @@ class CollectorFetcher:
         Only includes voting authorities (9) - excludes non-voting authorities like Serge.
         """
         authority_votes = []
-        relay_votes = _votes_by_name(relay)
+        relay_votes = self._current_hour_votes(relay)
         # An 'a' line proves the relay published an IPv6 ORPort even when Onionoo
         # has not been passed in. Omitting the line is a failed test only then.
         relay_has_ipv6 = published_ipv6 or any(
@@ -1652,7 +1652,7 @@ class CollectorFetcher:
         }
         
         thresholds_by_auth = self.flag_thresholds if isinstance(self.flag_thresholds, dict) else {}
-        votes = _votes_by_name(relay)
+        votes = self._current_hour_votes(relay)
         for auth_name in thresholds_by_auth:
             thresholds = self._authority_thresholds(auth_name)
             vote_info = votes.get(_authority_key(auth_name)) or {}
@@ -1822,25 +1822,19 @@ class CollectorFetcher:
         - bw_auth_total: Total number of BW authorities (denominator)
         - measurement_count: Number of Measured= values in the votes
         """
-        votes = _votes_by_name(relay)
+        votes = self._current_hour_votes(relay)
         # One consensus hour. A fetch can still hold an authority's previous vote;
         # mixing those hours produces a median no consensus computed.
         # Page generation must copy collector_data['votes'] onto this fetcher.
         # relay_index alone has no valid-after.
-        newest, times = self._document_hours()
-        hour_measuring = 0
-        for name in self.measuring_authorities:
-            when = times.get(_authority_key(name))
-            if newest is None or when in (None, newest):
-                hour_measuring += 1
+        hour_measuring = sum(
+            1 for name in self.measuring_authorities if self._is_current_hour(name)
+        )
 
         measured = {}
         measured_kb = []
         reported_kb = []
         for auth_name, vote in votes.items():
-            when = times.get(_authority_key(auth_name))
-            if newest and when and when != newest:
-                continue
             measured_value = _vote_kb(vote.get('measured'))
             reported_kb.append(_vote_kb(vote.get('bandwidth')))
             measured_kb.append(measured_value)
@@ -1851,7 +1845,10 @@ class CollectorFetcher:
             measured_kb, reported_kb, hour_measuring)
         median = None if median_kb is None else median_kb * VOTE_BW_KB_BYTES
         bw_authorities = self.bw_authorities if isinstance(self.bw_authorities, (list, tuple, set, frozenset)) else ()
-        bw_keys = _authority_keys(bw_authorities)
+        current_bw_authorities = [
+            name for name in bw_authorities if self._is_current_hour(name)
+        ]
+        bw_keys = _authority_keys(current_bw_authorities)
         measured_names = set(measured)
         return {
             'median': median,  # Consensus weight
@@ -1864,7 +1861,7 @@ class CollectorFetcher:
             'bw_auth_measured_count': len(bw_keys & measured_names),
             'bw_auth_total': len(bw_keys),
             'bw_auth_not_measured_names': sorted(
-                name for name in bw_authorities if _authority_key(name) not in measured_names),
+                name for name in current_bw_authorities if _authority_key(name) not in measured_names),
         }
 
     def _document_hours(self):
@@ -1879,6 +1876,24 @@ class CollectorFetcher:
         cached = vote_document_hours(self.votes)
         self.__dict__['_document_hour_cache'] = cached
         return cached
+
+    def _is_current_hour(self, auth_name) -> bool:
+        """True when ``auth_name`` matches the newest vote hour, or no vote hours exist."""
+        newest, times = self._document_hours()
+        if not newest:
+            return True
+        return times.get(_authority_key(auth_name)) in (None, newest)
+
+    def _current_hour_votes(self, relay: dict) -> dict:
+        """Relay votes belonging to the newest vote hour in ``self.votes``."""
+        votes = _votes_by_name(relay)
+        newest, times = self._document_hours()
+        if not newest:
+            return votes
+        return {
+            name: vote for name, vote in votes.items()
+            if times.get(_authority_key(name)) in (None, newest)
+        }
     
     def _format_reachability(self, relay: dict, published_ipv6: bool = False,
                              declared_unreachable: bool = False) -> dict:
@@ -1901,7 +1916,7 @@ class CollectorFetcher:
         - not_tested: an IPv6 ORPort was published and no vote contains a test
         - none: the relay has no IPv6 ORPort
         """
-        votes = _votes_by_name(relay)
+        votes = self._current_hour_votes(relay)
         
         ipv4_reachable = []
         ipv6_reachable = []

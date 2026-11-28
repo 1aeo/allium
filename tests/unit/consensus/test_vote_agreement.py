@@ -285,6 +285,63 @@ class TestAgreement:
         assert relays_no_votes[0]['vote_agreement']['unmeasured'] is False
         assert summary_all['unmeasured'] == 0
 
+    def test_lagged_authority_excluded_from_table_reachability_and_eligibility(self):
+        """Per-Authority Details, bandwidth, reachability, and agreement all filter lagged votes."""
+        lagged_flags = ['Fast', 'Running', 'Stable', 'Valid']
+        index = {
+            FP: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': 100, 'bandwidth': 100},
+                'longclaw': {'flags': FLAGS, 'measured': 120, 'bandwidth': 80},
+                'moria1': {'flags': lagged_flags, 'measured': 90, 'bandwidth': 60},
+            }},
+        }
+        votes_docs = {
+            'bastet': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'longclaw': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+            'moria1': {'valid_after': HOUR_1, 'vote_time': HOUR_1},
+        }
+        fetcher = CollectorFetcher()
+        fetcher.votes = votes_docs
+        fetcher.relay_index = index
+        fetcher.bw_authorities = {'bastet', 'longclaw', 'moria1'}
+        fetcher.flag_thresholds = {'bastet': {}, 'longclaw': {}, 'moria1': {}}
+
+        assert fetcher.measuring_authorities == {'bastet', 'longclaw'}
+        evaluation = fetcher.get_relay_consensus_evaluation(FP, authority_count=3)
+        assert evaluation['vote_count'] == 2
+
+        by_auth = {row['authority']: row for row in evaluation['authority_votes']}
+        assert by_auth['bastet']['voted'] is True and by_auth['bastet']['measured'] == 100
+        assert by_auth['longclaw']['voted'] is True and by_auth['longclaw']['measured'] == 120
+        assert by_auth['moria1']['voted'] is False
+        assert by_auth['moria1']['measured'] is None
+        assert by_auth['moria1']['flags'] == []
+
+        bw_info = evaluation['bandwidth']
+        assert bw_info['measurement_count'] == 2
+        assert bw_info['unmeasured'] is True
+        assert bw_info['bw_auth_measured_count'] == 2
+        assert bw_info['bw_auth_total'] == 2
+        assert bw_info['bw_auth_not_measured_names'] == []
+
+        reach = evaluation['reachability']
+        assert reach['ipv4_reachable_count'] == 2
+        assert 'moria1' not in reach['ipv4_reachable_authorities']
+
+        guard_details = [d['authority'] for d in evaluation['flag_eligibility']['guard']['details']]
+        assert sorted(guard_details) == ['bastet', 'longclaw']
+
+        relays = [{'fingerprint': FP, 'nickname': 'agreed-current-hour'}]
+        attach_vote_agreement(
+            relays, index,
+            bw_authorities=fetcher.measuring_authorities,
+            scanner_authorities=fetcher.bw_authorities,
+            votes=votes_docs,
+        )
+        assert relays[0]['vote_agreement']['agreed'] is True
+        assert relays[0]['vote_agreement']['measured_count'] == 2
+        assert relays[0]['vote_agreement']['unmeasured'] is True
+
 
 class TestVoteAgreementMacroRendering:
     """Rendered bandwidth-measurement sentences distinguish publishing and silent authorities."""
