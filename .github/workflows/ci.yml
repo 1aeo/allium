@@ -461,3 +461,31 @@ jobs:
             print(f'❌ Performance test failed: {e}')
             print('ℹ️  This is not a critical failure for CI')
         " 
+
+  docs-contract:
+    name: "Documentation Contract"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/config/requirements-dev.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-tests-
+
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r config/requirements-dev.txt
+
+    - name: Run documentation contract tests
+      run: python -m pytest tests/unit/test_docs_contract.py tests/unit/test_optional_deps.py tests/unit/test_prometheus_schema_contract.py -v
