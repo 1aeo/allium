@@ -29,7 +29,7 @@ def _file(scanner, country, relays, created='2026-10-24T04:45:06'):
     lines = [header.rstrip('\n')]
     for fingerprint, fields in relays:
         parts = ['bw=%s' % fields['bw'], 'node_id=%s' % fingerprint]
-        for key in ('bw_mean', 'bw_median', 'rtt', 'desc_bw_obs_last', 'error_stream', 'success'):
+        for key in ('bw_mean', 'bw_median', 'rtt', 'desc_bw_obs_last', 'error_stream', 'success', 'vote', 'unmeasured'):
             if key in fields:
                 parts.append('%s=%s' % (key, fields[key]))
         if fields.get('time'):
@@ -225,6 +225,35 @@ class TestBandwidthFileRows:
         assert 'al-status-success">8 ok' in html
         assert 'al-status-danger">2 stream errors' in html
 
+    def test_excluded_row_keeps_diagnostics_without_a_voted_value(self):
+        fetcher = CollectorFetcher()
+        scanners = [
+            fetcher._parse_bandwidth_file(_file(name, '', [(FP, fields)]))[FP]
+            for name, fields in [
+                ('bastet', {'bw': 100, 'success': 0}),
+                ('gabelmoo', {'bw': 200, 'vote': 1, 'unmeasured': 0, 'success': 0}),
+                ('moria1', {'bw': 1, 'vote': 0, 'unmeasured': 1, 'error_stream': 2, 'success': 0}),
+            ]
+        ]
+        assert 'vote' not in scanners[0]
+        assert (scanners[1]['vote'], scanners[1]['unmeasured']) == (1, 0)
+        assert (scanners[2]['vote'], scanners[2]['unmeasured']) == (0, 1)
+
+        details = format_scanner_measurements({'scanners': scanners})
+        assert [row['bw_tone'] for row in details['rows']] == ['agree', 'agree', 'unknown']
+        excluded = details['rows'][2]
+        assert excluded['excluded'] is True
+        assert excluded['bw_value'] is None
+        assert excluded['error_count'] == 2
+
+        excluded_only = format_scanner_measurements({'scanners': scanners[2:]})
+        assert excluded_only['all_failed'] is True
+        assert excluded_only['failed_bw_display'] == ''
+        env = Environment(loader=FileSystemLoader('allium/templates'), autoescape=True)
+        html = env.get_template('bandwidth-file.html').render(relay={'bandwidth_file_details': excluded_only})
+        assert 'Excluded from vote' in html
+        assert '2 stream errors' in html
+
     def test_scanner_links_require_matching_vote_row_target(self):
         """Scanner #vote- links appear only when the authority row exists on relay-info."""
         from pathlib import Path
@@ -296,7 +325,8 @@ class TestBandwidthFileRows:
         assert _column_tones([8, 2100]) == ['disagree', 'disagree']
         assert _column_tones([0, 0]) == ['agree', 'agree']
         assert _column_tones([0, 10]) == ['disagree', 'disagree']
-        assert _column_tones([100, 110, 500]) == ['agree', 'agree', 'disagree']
+        assert _column_tones([100, 110, 400]) == ['disagree', 'agree', 'disagree']
+        assert _column_tones([100, 100, 400]) == ['agree', 'agree', 'disagree']
         assert _column_tones([100, 100, 1000, 1000]) == [
             'disagree', 'disagree', 'disagree', 'disagree',
         ]

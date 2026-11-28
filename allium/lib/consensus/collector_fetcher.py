@@ -11,7 +11,6 @@ Data sources:
 """
 
 import re
-import math
 import base64
 import urllib.request
 import urllib.error
@@ -333,6 +332,8 @@ MAX_RESPONSE_SIZE = 100 * 1024 * 1024  # 100MB limit
 # optional: sbws 1.9 files omit it.
 _BW_ROW_INTS = {
     'bw': 'bw',
+    'vote': 'vote',
+    'unmeasured': 'unmeasured',
     'bw_mean': 'bw_mean',
     'bw_median': 'bw_median',
     'rtt': 'rtt',
@@ -506,41 +507,30 @@ def _stream_count(value):
 
 
 def _column_tones(values):
-    """Green when a value is within 2× of the column midpoint, red outside.
+    """Green within 2× of the median of the other scanners' published values.
 
-    One published value, or a missing value, stays unknown: black on the page.
-    Two values compare directly so neither sits artificially close to a shared
-    arithmetic mean. Four or more even-count values use the geometric midpoint
-    of the middle pair for symmetric ratio comparison.
+    An even number of peers uses the geometric midpoint for symmetric ratio
+    comparison. A middle pair that mixes zero and positive values disagrees.
     """
-    present = sorted(value for value in values if value is not None)
+    present = sorted((value, index) for index, value in enumerate(values) if value is not None)
+    tones = ['unknown'] * len(values)
     if len(present) < 2:
-        return ['unknown'] * len(values)
-    if len(present) == 2:
-        low, high = present[0], present[1]
-        agree = (low == 0 and high == 0) or (low > 0 and high / float(low) <= 2)
-        tone = 'agree' if agree else 'disagree'
-        return ['unknown' if value is None else tone for value in values]
-    middle = len(present) // 2
-    if len(present) % 2:
-        median = float(present[middle])
-    else:
-        lo, hi = present[middle - 1], present[middle]
-        if lo == 0 and hi > 0:
-            return ['unknown' if value is None else 'disagree' for value in values]
-        median = math.sqrt(lo) * math.sqrt(hi)
-    tones = []
-    for value in values:
-        if value is None:
-            tones.append('unknown')
-        elif median == 0:
-            tones.append('agree' if value == 0 else 'disagree')
-        elif value == 0:
-            tones.append('disagree')
-        else:
-            high = value if value >= median else median
-            low = median if value >= median else value
-            tones.append('agree' if high / float(low) <= 2 else 'disagree')
+        return tones
+    upper = (len(present) - 1) // 2
+    lower = (len(present) - 2) // 2
+    for position, (value, index) in enumerate(present):
+        # Shift each median index past the current scanner if necessary.
+        lo = present[lower + (position <= lower)][0]
+        hi = present[upper + (position <= upper)][0]
+        # Compare squares so geometric midpoint rounding cannot affect the 2× boundary.
+        midpoint_squared = lo * hi
+        value_squared = value * value
+        agrees = (
+            (lo != 0 or hi == 0)
+            and midpoint_squared <= 4 * value_squared
+            and value_squared <= 4 * midpoint_squared
+        )
+        tones[index] = 'agree' if agrees else 'disagree'
     return tones
 
 
@@ -556,7 +546,8 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
     """Template rows for one relay's bandwidth-file scanners, or None.
 
     ``measurements`` is the relay-index value: ``{'scanners': [row, ...]}``.
-    ``bw`` is the voted value in KB/s. ``bw_mean``, ``bw_median``, and
+    ``bw`` is the voted value in KB/s unless the row has ``vote=0``.
+    ``bw_mean``, ``bw_median``, and
     ``obs_last`` are bytes/s, as sbws writes them. ``rtt`` is milliseconds
     when the file published it.
     """
@@ -568,8 +559,13 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
     rows = []
     any_rtt = False
     for item in scanners:
-        if not isinstance(item, dict) or _vote_kb(item.get('bw')) is None:
+        if not isinstance(item, dict):
             continue
+        bw = _vote_kb(item.get('bw'))
+        if bw is None:
+            continue
+        excluded = item.get('vote') == 0
+        voted_bw = None if excluded else bw
         rtt = _rtt_ms(item.get('rtt'))
         if rtt is not None:
             any_rtt = True
@@ -579,12 +575,13 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
         rows.append({
             'scanner': item.get('scanner') or 'unknown',
             'country': item.get('scanner_country') or '',
-            'bw_value': _vote_kb(item.get('bw')),
+            'excluded': excluded,
+            'bw_value': voted_bw,
             'mean_value': _vote_kb(item.get('bw_mean')),
             'median_value': _vote_kb(item.get('bw_median')),
             'obs_value': _vote_kb(item.get('obs_last')),
             'rtt_value': rtt,
-            'bw_display': _display_rate(item.get('bw'), VOTE_BW_KB_BYTES, use_bits),
+            'bw_display': _display_rate(voted_bw, VOTE_BW_KB_BYTES, use_bits),
             'mean_display': _display_rate(item.get('bw_mean'), 1, use_bits),
             'median_display': _display_rate(item.get('bw_median'), 1, use_bits),
             'rtt_display': '—' if rtt is None else '%d ms' % int(rtt),
@@ -605,7 +602,7 @@ def format_scanner_measurements(measurements, use_bits: bool = False):
             row[tone_key] = tone
     # Unpublished success is not a recorded failure. Only an explicit 0 counts.
     failed = all(row['ok_count'] == 0 for row in rows)
-    bw_values = {row['bw_display'] for row in rows}
+    bw_values = {row['bw_display'] for row in rows if not row['excluded']}
     return {
         'rows': rows,
         'any_rtt': any_rtt,

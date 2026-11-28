@@ -341,6 +341,36 @@ class TestVoteAgreementMacroRendering:
         assert "No Measured= published in the votes from 2 of 4 authorities" in text
         assert "bastet did not publish Measured= on 2 relays." in text
 
+    def test_all_silent_authorities_are_reported_on_both_pages(self):
+        from types import SimpleNamespace
+        from allium.lib import page_writer
+
+        vote_sum = {
+            'compared': 1, 'agreed': 1, 'split': 0, 'unmeasured': 1, 'flag_rows': [],
+            'bandwidth': {
+                'full_count': 0, 'missing_count': 1, 'compared': 1, 'publishing': [],
+                'silent': ['bastet', 'moria1'], 'scanners': ['bastet', 'moria1'], 'misses': [],
+            },
+        }
+        text = self._render_block(vote_sum)
+        assert 'Bandwidth measurements: No Measured= published in the votes from 2 of 2 authorities' in text
+        assert 'bastet and moria1' in text
+        assert 'publishing authorities' not in text
+
+        env = page_writer.ENV
+        source = env.loader.get_source(env, 'network-health-dashboard.html')[0]
+        start = source.index('    {% if relays.vote_agreement_summary and relays.vote_agreement_summary.compared %}')
+        end = source.index('    <!-- FIRST ROW -->', start)
+        snippet = "{% from 'macros.html' import authority_list %}" + source[start:end]
+        html = env.from_string(snippet).render(
+            relays=SimpleNamespace(vote_agreement_summary=vote_sum),
+            page_ctx=SimpleNamespace(path_prefix=''),
+        )
+        notice = html[html.index('<p class="vote-silent">'):].split('</p>', 1)[0]
+        assert 'Not publishing Measured=:' in notice
+        assert 'bastet' in notice and 'moria1' in notice
+        assert 'Missing values by authority' not in html
+
     def test_dashboard_bandwidth_card_uses_missing_count_including_zeros(self):
         """Network health Bandwidth measurements card shows missing_count rather than measurement_split."""
         import re

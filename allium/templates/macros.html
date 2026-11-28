@@ -695,17 +695,18 @@ On {{ line.count }}, {% if line.only %}only {% endif %}{{ authority_list(line.na
         {% endif %}
     {%- endif %}
     {% set bw = vote_sum.bandwidth %}
-    {% if bw and bw.publishing %}
+    {% if bw and (bw.publishing or bw.silent) %}
     <br><strong>Bandwidth measurements:</strong>
+    {% endif %}
+    {% if bw and bw.publishing %}
     {% if bw.full_count == bw.compared %}
     {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published in the votes from all {{ bw.publishing|length }} of {{ bw.scanners|length }} publishing authorities ({{ authority_list(bw.publishing, page_ctx) }}); no relays are missing Measured= from them.
-    {% if bw.silent %} No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
     {% else %}
     {{ bw.full_count }} of {{ bw.compared }} relays have Measured= published in the votes from all {{ bw.publishing|length }} of {{ bw.scanners|length }} publishing authorities ({{ authority_list(bw.publishing, page_ctx) }}).
-    {% if bw.silent %} No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
     {% for miss in bw.misses %} {{ authority_list([miss.name], page_ctx) }} did not publish Measured= on {{ miss.count }} relay{{ 's' if miss.count != 1 else '' }}.{% endfor %}
     {% endif %}
     {% endif %}
+    {% if bw and bw.silent %} No Measured= published in the votes from {{ bw.silent|length }} of {{ bw.scanners|length }} authorities ({{ authority_list(bw.silent, page_ctx) }}).{% endif %}
     {% if vote_sum.unmeasured %}
     {{ vote_sum.unmeasured }} relay{{ 's' if vote_sum.unmeasured != 1 else '' }} {{ 'have' if vote_sum.unmeasured != 1 else 'has' }} fewer than 3 Measured= values, so the consensus weight uses relay-reported bandwidth.
     {% endif %}

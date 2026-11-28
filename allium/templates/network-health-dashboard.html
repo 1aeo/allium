@@ -96,11 +96,11 @@ Network Health Dashboard
                     </tbody>
                 </table>
                 {% endif %}
-                {% if bw.silent %}
+                {% endif %}
+                {% if bw and bw.silent %}
                 <p class="vote-silent">Not publishing Measured=:
                     {%- for name in bw.silent %} {{ authority_list([name], page_ctx) }}{% if not loop.last %} ·{% endif %}{% endfor %}
                 </p>
-                {% endif %}
                 {% endif %}
             </div>
         </div>

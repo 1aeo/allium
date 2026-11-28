@@ -8,7 +8,7 @@
 <p class="text-muted" style="font-size: 12px; margin-bottom: 8px;">
 Latest bandwidth file each directory authority included in its vote
 (<a href="https://collector.torproject.org/recent/relay-descriptors/bandwidths/" target="_blank" rel="noopener">CollecTor</a>).
-<strong>Bandwidth Voted Value</strong> is <code>bw=</code>, the scanner's vote in kilobytes per second.
+<strong>Bandwidth Voted Value</strong> is <code>bw=</code>, the scanner's vote in kilobytes per second for eligible rows.
 Mean and median (<code>bw_mean</code>, <code>bw_median</code>) and observed (<code>desc_bw_obs_last</code>) are bytes per second, as sbws writes them.
 RTT is the scanner's round-trip time when the file publishes <code>rtt</code>.
 <span class="al-status-success">Green</span> values agree with the other scanners in that column (within 2× of the median).
@@ -35,7 +35,7 @@ Successful stream counts are green and stream errors are red.
 {% set scanner_key = (row.scanner or '')|lower %}
 <tr>
     <td title="Bandwidth file created {{ row.file_created }}. Scanner country {{ row.country }}.">{% if vote_row_authorities is defined and scanner_key and scanner_key in vote_row_authorities %}<a href="#vote-{{ scanner_key }}">{{ row.scanner }}</a>{% else %}{{ row.scanner }}{% endif %}{% if row.country %} <span class="al-text-small-muted">({{ row.country }})</span>{% endif %}</td>
-    <td><span class="{% if row.bw_tone == 'agree' %}al-status-success{% elif row.bw_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.bw_display }}</span></td>
+    <td>{% if row.excluded %}Excluded from vote{% else %}<span class="{% if row.bw_tone == 'agree' %}al-status-success{% elif row.bw_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.bw_display }}</span>{% endif %}</td>
     <td><span class="{% if row.mean_tone == 'agree' %}al-status-success{% elif row.mean_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.mean_display }}</span></td>
     <td><span class="{% if row.median_tone == 'agree' %}al-status-success{% elif row.median_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.median_display }}</span></td>
     <td><span class="{% if row.rtt_tone == 'agree' %}al-status-success{% elif row.rtt_tone == 'disagree' %}al-status-danger{% endif %}">{{ row.rtt_display }}</span></td>
