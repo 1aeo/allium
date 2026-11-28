@@ -1,6 +1,6 @@
 """Deterministic documentation-contract checks against code and CLI output."""
 
-import html
+from html.entities import html5 as _HTML5_ENTITIES
 import os
 import re
 import subprocess
@@ -118,7 +118,7 @@ def _unescape_destination(dest):
             if code == 0 or code > 0x10FFFF or 0xD800 <= code <= 0xDFFF:
                 return "\uFFFD"
             return chr(code)
-        return html.unescape(f"&{named};")
+        return _HTML5_ENTITIES.get(f"{named};", match.group(0))
 
     return _DEST_UNESCAPE_RE.sub(_replace, dest)
 
@@ -165,6 +165,8 @@ def _parse_inline_link(text, open_paren_pos):
     pos = _skip_optional_newline_spaces(text, open_paren_pos + 1, n)
     if pos >= n:
         return None, open_paren_pos
+    if text[pos] == ")":
+        return "", pos + 1
 
     if text[pos] == "<":
         pos += 1
@@ -237,7 +239,7 @@ def _parse_title_lines(lines, cur_idx, tail):
 
 def _normalize_label(label):
     """Return CommonMark-normalized reference link label."""
-    return re.sub(r"\s+", " ", label.strip()).lower()
+    return re.sub(r"\s+", " ", label.strip()).casefold()
 
 
 def _find_closing_bracket(text, start_pos):
@@ -271,7 +273,8 @@ def _parse_ref_definition(lines, idx):
         cur += 1
         rest = lines[cur].strip()
 
-    if rest.startswith("<"):
+    is_angle = rest.startswith("<")
+    if is_angle:
         pos = 1
         while pos < len(rest) and rest[pos] != ">":
             if rest[pos] == "\\" and pos + 1 < len(rest):
@@ -284,9 +287,9 @@ def _parse_ref_definition(lines, idx):
         tail = rest[pos + 1 :].strip()
     else:
         parts = rest.split(None, 1)
-        dest = _unescape_destination(parts[0]) if parts else ""
+        dest = _unescape_destination(parts[0]) if parts else None
         tail = parts[1].strip() if len(parts) > 1 else ""
-    if not key or not dest:
+    if not key or dest is None or (not is_angle and not dest):
         return None, None, idx
 
     next_idx = cur + 1
@@ -377,7 +380,8 @@ def _iter_link_targets(cleaned):
             i += 1
 
     for dest in defs.values():
-        yield dest
+        if dest:
+            yield dest
 
 
 def test_markdown_relative_links_resolve():
