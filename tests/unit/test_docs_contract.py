@@ -1,5 +1,6 @@
 """Deterministic documentation-contract checks against code and CLI output."""
 
+import html
 import os
 import re
 import subprocess
@@ -101,12 +102,25 @@ def _is_escaped(text, index):
     return (backslashes % 2) == 1
 
 
-_ESCAPABLE_PUNCT_RE = re.compile(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])")
+_DEST_UNESCAPE_RE = re.compile(
+    r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])|&#(\d{1,7});|&#[xX]([0-9a-fA-F]{1,6});|&([A-Za-z][A-Za-z0-9]{1,31});"
+)
 
 
 def _unescape_destination(dest):
-    """Decode CommonMark backslash escapes before filesystem path resolution."""
-    return _ESCAPABLE_PUNCT_RE.sub(r"\1", dest)
+    """Decode CommonMark backslash escapes and character references before path resolution."""
+    def _replace(match):
+        punct, dec, hex_val, named = match.groups()
+        if punct:
+            return punct
+        if dec or hex_val:
+            code = int(dec or hex_val, 10 if dec else 16)
+            if code == 0 or code > 0x10FFFF or 0xD800 <= code <= 0xDFFF:
+                return "\uFFFD"
+            return chr(code)
+        return html.unescape(f"&{named};")
+
+    return _DEST_UNESCAPE_RE.sub(_replace, dest)
 
 
 def _skip_optional_newline_spaces(text, pos, end):
@@ -120,30 +134,6 @@ def _skip_optional_newline_spaces(text, pos, end):
         while pos < end and text[pos] in (" ", "\t"):
             pos += 1
     return pos
-
-
-def _has_matching_open_bracket(text, close_idx):
-    """Return True when close_idx pairs with an unescaped opening '[' in the same paragraph."""
-    depth = 1
-    pos = close_idx - 1
-    while pos >= 0:
-        ch = text[pos]
-        if ch == "\n":
-            prev = pos - 1
-            if prev >= 0 and text[prev] == "\r":
-                prev -= 1
-            while prev >= 0 and text[prev] in (" ", "\t"):
-                prev -= 1
-            if prev >= 0 and text[prev] == "\n":
-                return False
-        if ch == "]" and not _is_escaped(text, pos):
-            depth += 1
-        elif ch == "[" and not _is_escaped(text, pos):
-            depth -= 1
-            if depth == 0:
-                return True
-        pos -= 1
-    return False
 
 
 def _skip_optional_inline_title(text, pos, end):
@@ -245,17 +235,39 @@ def _parse_title_lines(lines, cur_idx, tail):
     return -1
 
 
+def _normalize_label(label):
+    """Return CommonMark-normalized reference link label."""
+    return re.sub(r"\s+", " ", label.strip()).lower()
+
+
+def _find_closing_bracket(text, start_pos):
+    """Return index of matching unescaped ']' or -1."""
+    pos = start_pos
+    while pos < len(text):
+        ch = text[pos]
+        if ch == "\\" and pos + 1 < len(text):
+            pos += 2
+            continue
+        if ch == "[":
+            return -1
+        if ch == "]":
+            return pos
+        pos += 1
+    return -1
+
+
 def _parse_ref_definition(lines, idx):
-    """Parse a CommonMark reference definition at lines[idx], returning (dest, next_idx) or (None, idx)."""
+    """Parse a CommonMark reference definition at lines[idx], returning (label, dest, next_idx) or (None, None, idx)."""
     m = re.match(r"^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(.*)$", lines[idx])
     if not m or _is_escaped(lines[idx], lines[idx].index("[")):
-        return None, idx
+        return None, None, idx
 
+    key = _normalize_label(m.group(1))
     cur = idx
     rest = m.group(2).strip()
     if not rest:
         if cur + 1 >= len(lines) or not lines[cur + 1].strip():
-            return None, idx
+            return None, None, idx
         cur += 1
         rest = lines[cur].strip()
 
@@ -267,57 +279,103 @@ def _parse_ref_definition(lines, idx):
                 continue
             pos += 1
         if pos >= len(rest):
-            return None, idx
+            return None, None, idx
         dest = _unescape_destination(rest[1:pos].strip())
         tail = rest[pos + 1 :].strip()
     else:
         parts = rest.split(None, 1)
         dest = _unescape_destination(parts[0]) if parts else ""
         tail = parts[1].strip() if len(parts) > 1 else ""
-    if not dest:
-        return None, idx
+    if not key or not dest:
+        return None, None, idx
 
     next_idx = cur + 1
     if tail:
         next_idx = _parse_title_lines(lines, cur, tail)
         if next_idx == -1:
-            return None, idx
-    elif cur + 1 < len(lines) and re.match(r"^[ \t]*[\"'(\[]", lines[cur + 1]):
-        # Only consume optional title on following line if it starts with quote/paren
-        if re.match(r"^[ \t]*[\"'(]", lines[cur + 1]):
-            title_end = _parse_title_lines(lines, cur + 1, lines[cur + 1].strip())
-            if title_end != -1:
-                next_idx = title_end
-    return dest, next_idx
+            return None, None, idx
+    elif cur + 1 < len(lines) and re.match(r"^[ \t]*[\"'(]", lines[cur + 1]):
+        title_end = _parse_title_lines(lines, cur + 1, lines[cur + 1].strip())
+        if title_end != -1:
+            next_idx = title_end
+    return key, dest, next_idx
+
+
+def _deactivate_outer_links(openers):
+    """Mark lower non-image openers inactive after an inner link succeeds (CommonMark §6.6)."""
+    for entry in openers:
+        if not entry[0]:
+            entry[2] = False
 
 
 def _iter_link_targets(cleaned):
     """Yield destination strings from inline links and reference-style definitions."""
-    idx = 0
-    while idx < len(cleaned):
-        close_idx = cleaned.find("](", idx)
-        if close_idx == -1:
-            break
-        if _is_escaped(cleaned, close_idx) or not _has_matching_open_bracket(cleaned, close_idx):
-            idx = close_idx + 2
-            continue
-        dest, end_pos = _parse_inline_link(cleaned, close_idx + 1)
-        if dest is not None:
-            if dest:
-                yield dest
-            idx = end_pos
-        else:
-            idx = close_idx + 2
-
+    defs = {}
+    body_lines = []
     lines = cleaned.splitlines()
     line_idx = 0
     while line_idx < len(lines):
-        dest, next_idx = _parse_ref_definition(lines, line_idx)
+        key, dest, next_idx = _parse_ref_definition(lines, line_idx)
         if dest is not None:
-            yield dest
+            if key not in defs:
+                defs[key] = dest
             line_idx = next_idx
         else:
+            body_lines.append(lines[line_idx])
             line_idx += 1
+
+    for para in re.split(r"\n[ \t]*\n", "\n".join(body_lines)):
+        openers = []  # list of [is_image, content_start, active]
+        i = 0
+        n = len(para)
+        while i < n:
+            if para[i] == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if para[i : i + 2] == "![":
+                openers.append([True, i + 2, True])
+                i += 2
+                continue
+            if para[i] == "[":
+                openers.append([False, i + 1, True])
+                i += 1
+                continue
+            if para[i] == "]":
+                if not openers:
+                    i += 1
+                    continue
+                is_image, content_start, active = openers.pop()
+                if not active:
+                    i += 1
+                    continue
+                if i + 1 < n and para[i + 1] == "(":
+                    dest, end_pos = _parse_inline_link(para, i + 1)
+                    if dest is not None:
+                        if dest:
+                            yield dest
+                        if not is_image:
+                            _deactivate_outer_links(openers)
+                        i = end_pos
+                        continue
+                if i + 1 < n and para[i + 1] == "[":
+                    close2 = _find_closing_bracket(para, i + 2)
+                    if close2 != -1:
+                        raw_label = para[i + 2 : close2] or para[content_start:i]
+                        if _normalize_label(raw_label) in defs:
+                            if not is_image:
+                                _deactivate_outer_links(openers)
+                            i = close2 + 1
+                            continue
+                if i + 1 >= n or para[i + 1] not in ("(", "["):
+                    if _normalize_label(para[content_start:i]) in defs:
+                        if not is_image:
+                            _deactivate_outer_links(openers)
+                i += 1
+                continue
+            i += 1
+
+    for dest in defs.values():
+        yield dest
 
 
 def test_markdown_relative_links_resolve():
