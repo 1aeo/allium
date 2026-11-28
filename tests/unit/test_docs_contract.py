@@ -86,8 +86,21 @@ def test_prometheus_metrics_documented():
     assert len(emitted) >= 20, f"expected >=20 emitted metrics, got {sorted(emitted)}"
 
     prom_readme = (_REPO_ROOT / "docs" / "prometheus" / "README.md").read_text(encoding="utf-8")
-    missing = sorted(metric for metric in emitted if metric not in prom_readme)
+    documented = set(re.findall(r"\baeo1_[a-zA-Z0-9_]+\b", prom_readme))
+    missing = sorted(emitted - documented)
     assert not missing, f"undocumented emitted Prometheus metrics in docs/prometheus/README.md: {missing}"
+
+
+def _iter_link_targets(cleaned):
+    """Yield raw link destinations from inline links and reference-style definitions."""
+    for target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", cleaned):
+        yield target
+    for angle_target, bare_target in re.findall(
+        r"^[ \t]{0,3}\[[^\]]+\]:[ \t]*(?:<([^>\n]+)>|([^\s\n]+))",
+        cleaned,
+        flags=re.MULTILINE,
+    ):
+        yield angle_target or bare_target
 
 
 def test_markdown_relative_links_resolve():
@@ -98,7 +111,7 @@ def test_markdown_relative_links_resolve():
     broken = []
     for md_path in md_files:
         cleaned = _strip_code(md_path.read_text(encoding="utf-8"))
-        for raw_target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", cleaned):
+        for raw_target in _iter_link_targets(cleaned):
             target = raw_target.strip().split()[0].strip("<>")
             if not target or target.startswith(("#", "http://", "https://", "mailto:", "file://")):
                 continue
