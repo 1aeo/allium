@@ -357,16 +357,18 @@ def _iter_link_targets(cleaned):
                             _deactivate_outer_links(openers)
                         i = end_pos
                         continue
+                has_bracketed_ref = False
                 if i + 1 < n and para[i + 1] == "[":
                     close2 = _find_closing_bracket(para, i + 2)
                     if close2 != -1:
+                        has_bracketed_ref = True
                         raw_label = para[i + 2 : close2] or para[content_start:i]
                         if _normalize_label(raw_label) in defs:
                             if not is_image:
                                 _deactivate_outer_links(openers)
                             i = close2 + 1
                             continue
-                if i + 1 >= n or para[i + 1] not in ("(", "["):
+                if not has_bracketed_ref:
                     if _normalize_label(para[content_start:i]) in defs:
                         if not is_image:
                             _deactivate_outer_links(openers)
