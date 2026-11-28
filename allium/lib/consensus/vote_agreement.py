@@ -316,7 +316,7 @@ def _authority_set(names, key):
 
 
 def _stale_authorities(votes):
-    """Return normalized authority names whose vote document trails the newest hour."""
+    """Return normalized authority names whose vote document is outside the majority consensus hour."""
     from .collector_fetcher import vote_document_hours
     newest, times = vote_document_hours(votes)
     if not newest:

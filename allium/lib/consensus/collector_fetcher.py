@@ -462,17 +462,29 @@ def document_time(vote):
 
 
 def vote_document_hours(votes):
-    """Newest valid-after in ``votes``, and each authority's normalized hour map."""
-    newest, times = None, {}
+    """Consensus hour held by a majority of timed ``votes``, and per-authority hours.
+
+    Selects the newest hour with at least ``(len(times) // 2) + 1`` timed vote
+    documents so an incomplete minority of early next-hour votes cannot drop a
+    complete prior round. Returns ``(None, times)`` when no single hour holds a
+    majority so callers do not discard half of the fetched votes.
+    """
+    times = {}
     source = votes if isinstance(votes, dict) else {}
     for name, vote in source.items():
         when = document_time(vote) if isinstance(vote, dict) else None
         key = _authority_key(name)
         if key and when:
             times[key] = when
-            if newest is None or when > newest:
-                newest = when
-    return newest, times
+    if not times:
+        return None, times
+    counts = {}
+    for when in times.values():
+        counts[when] = counts.get(when, 0) + 1
+    majority = (len(times) // 2) + 1
+    quorum_hours = [when for when, count in counts.items() if count >= majority]
+    target = max(quorum_hours) if quorum_hours else None
+    return target, times
 
 
 def _vote_kb(value):
@@ -1865,10 +1877,10 @@ class CollectorFetcher:
         }
 
     def _document_hours(self):
-        """Newest valid-after in ``self.votes``, and each authority's own hour.
+        """Majority consensus hour in ``self.votes``, and each authority's own hour.
 
-        Computed once. An empty vote map means the caller did not attach the
-        documents, and the median keeps every measurement.
+        Computed once. An empty vote map or unsplit tie means no filter applies
+        and callers keep every vote.
         """
         cached = self.__dict__.get('_document_hour_cache')
         if cached is not None:
@@ -1878,14 +1890,14 @@ class CollectorFetcher:
         return cached
 
     def _is_current_hour(self, auth_name) -> bool:
-        """True when ``auth_name`` matches the newest vote hour, or no vote hours exist."""
+        """True when ``auth_name`` matches the majority consensus hour, or no quorum exists."""
         newest, times = self._document_hours()
         if not newest:
             return True
         return times.get(_authority_key(auth_name)) in (None, newest)
 
     def _current_hour_votes(self, relay: dict) -> dict:
-        """Relay votes belonging to the newest vote hour in ``self.votes``."""
+        """Relay votes belonging to the majority consensus hour in ``self.votes``."""
         votes = _votes_by_name(relay)
         newest, times = self._document_hours()
         if not newest:

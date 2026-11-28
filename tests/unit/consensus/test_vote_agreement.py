@@ -4,6 +4,7 @@ from allium.lib.consensus.collector_fetcher import (
     CollectorFetcher,
     consensus_weight_median,
     document_time,
+    vote_document_hours,
 )
 from allium.lib.consensus.vote_agreement import (
     attach_vote_agreement,
@@ -341,6 +342,62 @@ class TestAgreement:
         assert relays[0]['vote_agreement']['agreed'] is True
         assert relays[0]['vote_agreement']['measured_count'] == 2
         assert relays[0]['vote_agreement']['unmeasured'] is True
+
+    def test_incomplete_early_next_hour_does_not_drop_complete_round(self):
+        """An incomplete early next-hour vote keeps the complete prior round until majority catches up."""
+        index = {
+            FP: {'votes': {
+                'bastet': {'flags': FLAGS, 'measured': 100, 'bandwidth': 100},
+                'longclaw': {'flags': FLAGS, 'measured': 120, 'bandwidth': 80},
+                'moria1': {'flags': FLAGS, 'measured': 90, 'bandwidth': 60},
+            }},
+        }
+        votes_early = {
+            'bastet': {'valid_after': HOUR_1, 'vote_time': HOUR_1},
+            'longclaw': {'valid_after': HOUR_1, 'vote_time': HOUR_1},
+            'moria1': {'valid_after': HOUR_2, 'vote_time': HOUR_2},
+        }
+        assert vote_document_hours(votes_early)[0] == HOUR_1
+
+        fetcher = CollectorFetcher()
+        fetcher.votes = votes_early
+        fetcher.relay_index = index
+        fetcher.bw_authorities = {'bastet', 'longclaw', 'moria1'}
+        evaluation = fetcher.get_relay_consensus_evaluation(FP, authority_count=3)
+        assert evaluation['vote_count'] == 2
+        assert evaluation['in_consensus'] is True
+        by_auth = {row['authority']: row for row in evaluation['authority_votes']}
+        assert by_auth['bastet']['voted'] is True
+        assert by_auth['longclaw']['voted'] is True
+        assert by_auth['moria1']['voted'] is False
+
+        relays = [{'fingerprint': FP, 'nickname': 'early-next-hour'}]
+        attach_vote_agreement(
+            relays, index,
+            bw_authorities=fetcher.measuring_authorities,
+            scanner_authorities=fetcher.bw_authorities,
+            votes=votes_early,
+        )
+        assert relays[0]['vote_agreement']['voted'] == 2
+        assert relays[0]['vote_agreement']['voters'] == ['bastet', 'longclaw']
+
+        names = ['a%d' % i for i in range(9)]
+        five_at_one = {
+            name: {'valid_after': HOUR_1 if i < 5 else HOUR_2}
+            for i, name in enumerate(names)
+        }
+        five_at_two = {
+            name: {'valid_after': HOUR_1 if i < 4 else HOUR_2}
+            for i, name in enumerate(names)
+        }
+        assert vote_document_hours(five_at_one)[0] == HOUR_1
+        assert vote_document_hours(five_at_two)[0] == HOUR_2
+
+        tie_votes = {
+            name: {'valid_after': HOUR_1 if i < 4 else HOUR_2}
+            for i, name in enumerate(names[:8])
+        }
+        assert vote_document_hours(tie_votes)[0] is None
 
 
 class TestVoteAgreementMacroRendering:
