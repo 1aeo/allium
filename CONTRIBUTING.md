@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to Allium! This guide explains how to set up your development environment and contribute to the project.
 
-## 🚀 Quick Developer Setup
+## Quick Developer Setup
 
 For contributors who want to run tests and use development tools:
 
@@ -25,11 +25,11 @@ source venv/bin/activate
 # Install development dependencies (includes all testing tools)
 pip install -r config/requirements-dev.txt
 
-# Run allium
-cd allium && python3 allium.py --progress
+# Run allium (fast local build)
+python3 allium/allium.py --progress --no-pressure-history
 ```
 
-## 📦 Dependency Structure
+## Dependency Structure
 
 ### Production Dependencies (`config/requirements.txt`)
 - **Jinja2 ≥2.11.2** - Template engine
@@ -39,6 +39,7 @@ cd allium && python3 allium.py --progress
 ### Development Dependencies (`config/requirements-dev.txt`)
 - **pytest ≥6.0.0** - Unit testing framework
 - **pytest-cov ≥2.10.0** - Coverage reporting
+- **pytest-timeout ≥2.0.0** - Test execution timeouts
 - **flake8 ≥3.8.0** - Code style checker
 - **bandit ≥1.7.0** - Security vulnerability scanner
 - **safety ≥1.10.0** - Dependency vulnerability checker
@@ -52,7 +53,7 @@ cd allium && python3 allium.py --progress
 3. For a `FEATURES` entry, call `optional_deps.check()` where `allium.py` resolves that feature's options, before fetching anything, so a missing package is announced with the commands that install it. A missing `REQUIRED` package stops `allium.py` at import with Python's `No module named` error, so step 4 is where people find its install commands.
 4. Name its install commands in the README's Requirements and in the comments of `config/requirements.txt`.
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 # Activate virtual environment
@@ -65,7 +66,7 @@ pytest
 pytest --cov=. --cov-report=html
 
 # Run specific test file
-pytest tests/test_utils.py
+pytest tests/unit/test_optional_deps.py
 
 # Run linting
 flake8 .
@@ -77,7 +78,7 @@ bandit -r .
 safety check
 ```
 
-## 🏗️ Development vs Production
+## Development vs Production
 
 ### For Production Users (Default)
 - Use `curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash`
@@ -89,7 +90,7 @@ safety check
 - Installs all testing and development tools
 - Includes linting, security scanning, and testing frameworks
 
-## 🛠️ Development Workflow
+## Development Workflow
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally
@@ -102,19 +103,19 @@ safety check
 9. **Push to your fork**: `git push origin feature/your-feature`
 10. **Create a Pull Request** on GitHub
 
-## 🔍 Output Comparison (Major Changes)
+## Output Comparison (Major Changes)
 
 For any change that affects HTML output (templates, data processing, page
-generation), run a before/after comparison to verify nothing unexpected broke:
+generation), run a baseline/candidate comparison to verify nothing unexpected broke:
 
 ```bash
-# 1. Generate baseline BEFORE your change.
+# 1. Generate baseline output.
 #    --no-pressure-history skips the CollecTor archive backfill.
 python3 allium/allium.py --out allium/www_baseline --apis all --progress --no-pressure-history
 
 # 2. Make your code changes
 
-# 3. Generate output AFTER your change
+# 3. Generate candidate output
 python3 allium/allium.py --out allium/www_after --apis all --progress --no-pressure-history
 
 # 4. Compare (~8 seconds for ~22k files)
@@ -127,8 +128,8 @@ cache that already contains days. An empty cache makes both runs omit the charts
 An archive-parsing change omits the flag. Move any existing
 `allium/data/cache/pressure_history.json` and `pressure_descriptor_files.json`
 aside, then delete them so both runs backfill. Delete them again before the
-after run. A file the baseline writes lists its months in `processed_months`,
-and the after run skips those months. Put the saved copies back when the
+candidate run. A file the baseline writes lists its months in `processed_months`,
+and the candidate run skips those months. Put the saved copies back when the
 comparison is finished, and delete a file that had no copy. Each run's log
 must not contain `pressure history unavailable`: that line means the run
 loaded the cache and did not parse the archives. Each month under test must
@@ -153,7 +154,7 @@ Options: `--quiet` for summary only, `--max-diffs N` to limit output,
 
 The `allium/www_baseline/` and `allium/www_after/` directories are gitignored.
 
-## 📝 Code Style
+## Code Style
 
 - Follow PEP 8 guidelines
 - Use `flake8` for linting
@@ -161,14 +162,14 @@ The `allium/www_baseline/` and `allium/www_after/` directories are gitignored.
 - Add docstrings for new functions and classes
 - Use type hints where appropriate
 
-## 🔒 Security
+## Security
 
 - Run `bandit -r .` to check for security issues
 - Use `safety check` to verify dependencies are secure
 - Follow secure coding practices
 - Sanitize all user inputs in templates
 
-## 📋 Pull Request Guidelines
+## Pull Request Guidelines
 
 - Include tests for new features
 - Update documentation if needed
@@ -176,7 +177,7 @@ The `allium/www_baseline/` and `allium/www_after/` directories are gitignored.
 - Write clear commit messages
 - Reference related issues in your PR description
 
-## 🐛 Reporting Issues
+## Reporting Issues
 
 When reporting bugs, please include:
 - Python version
@@ -185,14 +186,14 @@ When reporting bugs, please include:
 - Expected vs actual behavior
 - Error messages and logs
 
-## 💡 Feature Requests
+## Feature Requests
 
 - Check existing issues first
 - Explain the use case
 - Provide implementation ideas if possible
 - Consider backward compatibility
 
-## 🤝 Getting Help
+## Getting Help
 
 - Open an issue for questions
 - Check the documentation in `docs/`

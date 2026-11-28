@@ -10,17 +10,19 @@ Allium is a static site generator with minimal attack surface:
 | Threat | Mitigation |
 |--------|------------|
 | XSS | Jinja2 autoescape enabled globally |
-| HTML Injection | Centralized escaping utilities |
-| Path Traversal | Output directory validation |
+| HTML Injection | Centralized escaping utilities (`lib/html_escape_utils.py`) |
+| SSRF / Unsafe URLs | CLI URL scheme and `--base-url` validation (`allium.py::validate_url_arguments`) |
+| Path Traversal | Output directory and sanitized path-component validation |
 | SQL Injection | N/A (no database) |
 | CSRF | N/A (no forms/sessions) |
 | Supply Chain | Few dependencies: Jinja2, plus cairocffi, numpy and (optional) zlib-ng for PNG charts |
 
 ## Security Features
 
-- **Global autoescape**: All Jinja2 output escaped by default
-- **Centralized escaping**: `lib/html_escape_utils.py` for consistent sanitization
-- **IP validation**: `ipaddress` module for safe parsing
+- **Global autoescape**: All Jinja2 output escaped by default (`lib/page_writer.py`)
+- **Centralized escaping**: `lib/html_escape_utils.py` (`safe_html_escape`, `escape_relay_fields`) for consistent sanitization
+- **URL scheme and `--base-url` validation**: `allium.py::validate_url_arguments()` parses `--onionoo-details-url`, `--onionoo-uptime-url`, `--onionoo-bandwidth-url`, `--aroi-url`, `--exit-dns-health-url`, and `--base-url` with `urllib.parse.urlsplit`, rejecting non-`http`/`https` schemes (e.g., `file://`, `ftp://`) and rejecting scheme-relative `//...` or bare `/` `--base-url` values (including browser-normalized whitespace/backslash variants)
+- **IP validation**: Python `ipaddress` module via `lib/ip_utils.py` for safe parsing
 - **Static output**: No server-side code execution
 
 ## Running Security Checks
@@ -36,7 +38,7 @@ safety check -r config/requirements.txt
 djlint allium/templates/ --check
 
 # All checks
-bandit -r allium/ && safety check && djlint allium/templates/
+bandit -r allium/ && safety check -r config/requirements.txt && djlint allium/templates/ --check
 ```
 
 ## Best Practices
@@ -48,9 +50,9 @@ bandit -r allium/ && safety check && djlint allium/templates/
 from lib.html_escape_utils import safe_html_escape
 escaped = safe_html_escape(user_input)
 
-# DO: Validate IP addresses
-from lib.aroileaders import _safe_parse_ip_address
-ip, version = _safe_parse_ip_address(address_string)
+# DO: Validate IP addresses via canonical helper
+from lib.ip_utils import safe_parse_ip_address
+ip, version = safe_parse_ip_address(address_string)
 
 # DON'T: Trust external data without escaping
 display_name = onionoo_data['nickname']  # UNSAFE
@@ -116,9 +118,11 @@ the bucketing logic and `allium/templates/macros.html::aroi_validation_badge`
 ## How to Verify
 
 ```bash
-# Check security tools are installed
-bandit --version
-safety --version
+# Run CLI URL validation tests
+pytest tests/unit/infrastructure/test_cli_url_validation.py
+
+# Run template escaping tests
+pytest tests/unit/templates/test_escaping.py
 
 # Run full security scan
 bandit -r allium/ -f json -o /tmp/security-report.json

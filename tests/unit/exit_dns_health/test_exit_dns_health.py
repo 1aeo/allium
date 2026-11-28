@@ -178,6 +178,29 @@ def test_attach_first_hop_info():
     assert relays[0]['exit_dns_health_first_hop_country'] == 'DE'
 
 
+def test_attach_exit_success_clears_stale_error():
+    relays = [
+        _make_relay('AAA', ['Exit']),
+        _make_relay('BBB', ['Exit']),
+    ]
+    health_map = {
+        'AAA': _make_health_entry(
+            'success',
+            error='DNS Error: Timeout after 45s (first_hop=GUARD1)',
+            timing_ms=500,
+        ),
+        'BBB': _make_health_entry(
+            'dns_fail',
+            error='DNS Error: SOCKS 4 - Domain not found (NXDOMAIN)',
+        ),
+    }
+    attach_exit_dns_health_to_relays(relays, health_map)
+    assert relays[0]['exit_dns_health_status'] == 'success'
+    assert relays[0]['exit_dns_health_error'] is None
+    assert relays[1]['exit_dns_health_status'] == 'fail'
+    assert relays[1]['exit_dns_health_error'] == 'DNS Error: SOCKS 4 - Domain not found (NXDOMAIN)'
+
+
 # ---------------------------------------------------------------------------
 # calculate_exit_dns_health_metrics
 # ---------------------------------------------------------------------------

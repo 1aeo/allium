@@ -354,6 +354,8 @@ def _build_exit_dns_rows(relays: List[dict],
         failed = 0 if detail in ("success", "untested") else 1
         if detail in _DNS_STATUS_VALUES:
             status = detail
+        elif detail in ("hard_timeout", "ttl_expired"):
+            status = "timeout"
         else:
             status = "dns_fail" if failed else "success"
         rows.append({
